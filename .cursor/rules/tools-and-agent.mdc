@@ -1,0 +1,61 @@
+---
+description: Guidelines for the agent system and tool implementations
+globs: "src/agent/**/*.ts,src/tools/**/*.ts,src/grok/**/*.ts,src/providers/**/*.ts"
+alwaysApply: false
+---
+
+# Agent & Tools System
+
+## Agent
+
+`Agent` (`src/agent/agent.ts`) is the core orchestrator. It owns:
+
+- A provider-neutral `ProviderAdapter` (OpenRouter cloud by default, or the
+  explicit managed local llama.cpp mode). **No AI-SDK / vendor object leaves the
+  agent boundary** — enforced by `src/providers/architecture.test.ts`.
+- The tool set built by `createTools` (`src/grok/tools.ts`) plus MCP tools from
+  `buildMcpToolSet` (`src/mcp/runtime.ts`).
+- Conversation state, context compaction (`src/agent/compaction.ts`), bounded
+  repository context (`src/context/compiler.ts`), sub-agent delegation.
+- Abort/cancellation and an observer contract that yields `StreamChunk` events
+  to the UI / headless output.
+
+### Agent loop
+
+`processMessage` (async generator) streams model output, executes tool calls
+via the AI SDK tool runner (bounded by `maxToolRounds`), appends results, and
+repeats until no tool calls remain. Observer callbacks
+(`onStepStart/onStepFinish/onToolStart/onToolFinish`) drive UI updates.
+
+## Tool interface
+
+AI SDK tools are declared with `tool({ description, inputSchema: z.object(...),
+execute })` in `src/grok/tools.ts`. Internal executors return a `ToolResult`
+(`src/types/index.ts`: `{ success, output?, error?, diff?, plan?, ... }`) and
+**never throw** — wrap failures in `{ success: false, error }`.
+
+## Built-in tools (grouped)
+
+| Group | Examples |
+|-------|----------|
+| Shell / process | `bash`, `process_logs`, `process_stop`, `process_list` |
+| Files | `read_file`, `write_file`, `edit_file`, `grep` |
+| Code intelligence | `lsp` (when enabled) |
+| Sub-agents / tasks | `task`, `delegate`, `delegation_read`, `delegation_list` |
+| Schedules / daemon | `schedule_create`, `schedule_list`, `schedule_daemon_*` |
+| Computer use | `computer_snapshot`, `computer_click`, `computer_type`, … |
+| Media (provider-dependent) | `generate_image`, `generate_video` |
+| Search / research | `search_web`, `open_web`, `search_x` |
+| Wallet (compat) | `wallet_info`, `wallet_history`, `fetch_payment_info` |
+
+Many tools are gated by capability / settings and only appear when supported.
+`search_web` is provider-neutral and the agent performs one bounded research
+pass before every task; `open_web` is restricted to public HTTP(S) references.
+
+## Adding a tool
+
+1. Add `name: tool({ description, inputSchema, execute })` in `createTools`
+   (`src/grok/tools.ts`), gating it if it needs a capability.
+2. Implement the executor in `src/tools/` returning a `ToolResult`.
+3. If the model needs to know about it, update the system prompt in `Agent`.
+4. Add a test; keep `bun run typecheck` / `lint` / `test` green.

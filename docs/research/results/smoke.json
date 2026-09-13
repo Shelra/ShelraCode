@@ -1,0 +1,1255 @@
+{
+  "startedAt": "2026-09-08T01:31:22.736Z",
+  "finishedAt": "2026-09-08T01:45:33.515Z",
+  "armModel": "sonnet",
+  "judgeModel": "opus",
+  "samples": 3,
+  "cases": [
+    {
+      "caseId": "booking-massage",
+      "domain": "booking",
+      "decisions": [
+        {
+          "id": "bk-1",
+          "question": "When two clients try to book the same therapist and time at the same moment, who gets it?",
+          "options": [
+            "First commit wins, the other is rejected",
+            "Both are held pending staff resolution",
+            "The slot is double-booked"
+          ],
+          "discriminator": "Two clients submit a booking for Ana at 14:00 within the same second.",
+          "category": "concurrency",
+          "consequence": "Determines whether a uniqueness constraint and a rejection path exist at all."
+        },
+        {
+          "id": "bk-2",
+          "question": "How late may a client cancel without penalty?",
+          "options": ["Any time", "24 hours before", "6 hours before"],
+          "discriminator": "A client cancels 3 hours before their appointment.",
+          "category": "temporal",
+          "consequence": "Decides whether a deadline is stored and evaluated at all."
+        },
+        {
+          "id": "bk-3",
+          "question": "What happens to money when a client cancels late or does not turn up?",
+          "options": ["Full refund", "Partial forfeit", "No refund", "Credit for future use"],
+          "discriminator": "A client who paid in advance cancels 3 hours before.",
+          "category": "money",
+          "consequence": "Determines whether refunds, partial captures and credit balances exist."
+        },
+        {
+          "id": "bk-4",
+          "question": "Is there unbookable turnaround time between two appointments for the same therapist?",
+          "options": ["None, back to back", "A fixed buffer", "A per-treatment buffer"],
+          "discriminator": "A 60-minute massage ends at 15:00; can another client book 15:00?",
+          "category": "temporal",
+          "consequence": "Changes the availability computation, not just the display."
+        },
+        {
+          "id": "bk-5",
+          "question": "How far ahead, and how close to the start, may a booking be made?",
+          "options": ["No limits", "A maximum horizon and a minimum notice", "Minimum notice only"],
+          "discriminator": "A client tries to book a slot starting in 10 minutes, and another 8 months out.",
+          "category": "boundary",
+          "consequence": "Without bounds the calendar is infinite and same-minute bookings are accepted."
+        },
+        {
+          "id": "bk-6",
+          "question": "If payment succeeds but the booking cannot be written, what happens to the money?",
+          "options": ["Automatically voided", "Held and resolved by staff", "Kept as credit", "Lost silently"],
+          "discriminator": "The card is charged, then the slot write fails because the slot was just taken.",
+          "category": "partial_failure",
+          "consequence": "Determines whether a compensating transaction path is built."
+        },
+        {
+          "id": "bk-7",
+          "question": "What happens if the client submits the same booking twice?",
+          "options": ["One booking", "Two bookings", "The second is rejected as a duplicate"],
+          "discriminator": "The client double-clicks Confirm, or retries after a timeout.",
+          "category": "idempotency",
+          "consequence": "Decides whether requests carry an idempotency key."
+        },
+        {
+          "id": "bk-8",
+          "question": "Do clients see the whole therapist diary or only free slots?",
+          "options": ["Only bookable slots", "The full diary including who booked", "Free and busy without names"],
+          "discriminator": "A client opens the availability of Ana for tomorrow.",
+          "category": "visibility",
+          "consequence": "A privacy decision about other clients, not a display preference."
+        },
+        {
+          "id": "bk-9",
+          "question": "What happens to future bookings when a therapist leaves or is deactivated?",
+          "options": [
+            "Cancelled and refunded with notice",
+            "Reassigned automatically to another therapist",
+            "Left pointing at an inactive therapist"
+          ],
+          "discriminator": "Ana leaves on the 1st; she has 30 appointments booked through the month.",
+          "category": "lifecycle",
+          "consequence": "Determines whether deactivation is a flag or a cascading process."
+        },
+        {
+          "id": "bk-10",
+          "question": "Is rescheduling a distinct operation, or a cancellation followed by a new booking?",
+          "options": [
+            "Distinct, keeps the original terms",
+            "Cancel plus rebook, so penalties apply",
+            "Free before the deadline, otherwise cancel plus rebook"
+          ],
+          "discriminator": "A client moves a booking from 09:00 to 11:00 tomorrow, two hours before it starts.",
+          "category": "reversal",
+          "consequence": "Changes whether the cancellation penalty applies to a move."
+        },
+        {
+          "id": "bk-11",
+          "question": "Whose timezone are appointment times expressed in?",
+          "options": ["The local time of the centre", "The device time of the client", "UTC"],
+          "discriminator": "A client books from a device set to a different timezone.",
+          "category": "temporal",
+          "consequence": "Determines whether times are stored with a zone and how they are rendered."
+        },
+        {
+          "id": "bk-12",
+          "question": "May staff create bookings that violate the client-facing rules?",
+          "options": ["Yes, staff may overbook", "No, the same rules apply", "Yes with a recorded reason"],
+          "discriminator": "Reception adds a walk-in on top of an already-booked slot.",
+          "category": "authority",
+          "consequence": "Splits validation into two rule sets rather than one."
+        }
+      ],
+      "divergence": [
+        {
+          "decisionId": "bk-1",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-2",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-3",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-4",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-5",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-6",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-7",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-8",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-9",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-10",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-11",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        },
+        {
+          "decisionId": "bk-12",
+          "answers": [],
+          "unanimous": false,
+          "distinct": 0
+        }
+      ],
+      "arms": [
+        {
+          "arm": "direct",
+          "caseId": "booking-massage",
+          "items": [
+            {
+              "text": "At the moment of booking, does the client pay online (full amount or a deposit), or do they always pay at the centre after the treatment? — Online payment adds a payment provider integration, deposit/refund logic, failed-payment and abandoned-payment flows, reconciliation, and compliance obligations. It roughly doubles the size of the booking flow and interacts with the cancellation rules. It cannot be bolted on cleanly later, so the data model and flow must be designed for it from the start."
+            },
+            {
+              "text": "The request says staff \"see\" the day schedule. Do staff also need to create, reschedule, cancel, or block out bookings themselves (for phone and walk-in clients, sick days, breaks)? — A staff booking/management interface is a large additional surface: booking forms with the same availability logic, override/force-book behaviour, permissions, and audit of who changed what. Building view-only and later discovering staff need to manage bookings means reworking the schedule screen and the booking model. This needs to be settled before design."
+            },
+            {
+              "text": "Can clients change or cancel their own booking online, and what exactly is the cancellation policy — cut-off time, and any fee or forfeited deposit? — This determines whether reschedule is a first-class feature, what the management link does, which emails exist, and — if there is online payment — whether and how refunds are issued. I have assumed cancel-only up to 12 hours before with no fee; if that is wrong the flow and emails change."
+            },
+            {
+              "text": "Should clients have accounts (login, saved details, booking history, repeat booking), or is one-off guest booking identified only by email acceptable for this version? — Accounts bring registration, login, password reset, email verification, and data-retention/GDPR handling, and they change the booking flow and schema. Adding accounts after launch means migrating guest bookings to users. I have assumed guest booking only."
+            },
+            {
+              "text": "Does the centre have a limited number of treatment rooms or shared equipment, so that the number of simultaneous appointments is capped independently of how many therapists are working? — If rooms are a constraint, availability must allocate a room as well as a therapist, and \"is this slot free\" becomes a bin-packing check across a shared resource pool. This is a core change to the availability algorithm and data model, not an add-on. I have assumed therapist availability is the only constraint."
+            },
+            {
+              "text": "In this version, do staff need a self-service admin area to manage therapists, treatments, prices, photos, working hours, and closed dates themselves — or is it acceptable for us to configure these and apply changes on request? — A full admin interface (CRUD screens, working-hours editor, validation, permissions) is a substantial slice of the build. Assuming it is included when it is not wastes effort; assuming it is not when the client expects to run the centre unaided ships something they cannot operate."
+            }
+          ],
+          "costUsd": 0.09285200000000002,
+          "costAvailable": true,
+          "calls": 1,
+          "durationMs": 132101
+        },
+        {
+          "arm": "ask",
+          "caseId": "booking-massage",
+          "items": [
+            {
+              "text": "Must a client always choose a named therapist, or can they select \"no preference / first available\"? If no preference is allowed, what rule assigns the therapist (round-robin/load balancing, seniority, revenue, random), and at what moment is that assignment locked and shown to the client? — \"Any therapist\" widens the set of bookable slots and requires an assignment algorithm and tie-break rule; it also changes the search flow and what the confirmation shows."
+            },
+            {
+              "text": "Can every therapist perform every treatment, or does each therapist have a defined set of services they are qualified and willing to do? Should the system hide therapists who can't perform the chosen treatment, and hide treatments a chosen therapist can't do? — Requires a therapist–service capability matrix and drives which options and slots are offered depending on selection order."
+            },
+            {
+              "text": "Please provide the full treatment list with, for each: the duration(s) offered, price, any required room or equipment, required buffer/clean-down time before or after, and whether the price varies by therapist seniority or time of day. — Duration plus buffers define the length of each booked block; per-therapist or peak pricing changes quoting and the schedule grid."
+            },
+            {
+              "text": "Can a client choose the length of a treatment (e.g. 30/60/90 min) or add paid extras (hot stones, aromatherapy) that change duration and price? Can they book multiple treatments in a single visit, and if so are they strictly sequential with the same or different therapists? — Determines whether a booking is one block or several linked blocks, and how duration and price are computed."
+            },
+            {
+              "text": "How many treatment rooms exist, and do specific treatments require specific rooms or equipment? Should the system refuse a booking when the therapist is free but no suitable room/equipment is, and vice versa? — If rooms/equipment are limited, availability must be the intersection of therapist + room + equipment; otherwise only therapist time is checked."
+            },
+            {
+              "text": "What are the centre's opening hours for each day of the week (including seasonal or holiday variations), and on what increments can appointments start (every 15/30 min on a fixed grid, or immediately back-to-back after the previous booking)? — Defines the bookable time grid, how many slots exist, and utilisation; a fixed grid and back-to-back packing behave very differently."
+            },
+            {
+              "text": "Does each therapist have their own recurring working pattern (shift start/end, days off, alternating weeks), and how are one-off changes entered (holiday, sickness, training)? Who is allowed to edit these? — Per-therapist availability is the basis of slot generation, and ad-hoc absence handling affects both future availability and existing bookings."
+            },
+            {
+              "text": "Should the system enforce mandatory breaks between appointments, a lunch break, or a maximum number of treatments/hours per therapist per day? — Each rule removes otherwise-bookable slots and must be modelled explicitly in availability calculation."
+            },
+            {
+              "text": "How far in advance can clients book (e.g. up to 60 days)? What is the minimum notice before an appointment start for online bookings (e.g. none within 2 hours)? Are same-day online bookings allowed at all? — Bounds the availability window and prevents impractical last-minute or far-future bookings."
+            },
+            {
+              "text": "Is online booking available 24/7, or only during set hours? Is there a limit on how many active future bookings a single client may hold at once? — Controls when the system accepts booking requests and provides basic abuse prevention."
+            },
+            {
+              "text": "Does the centre operate more than one branch now or in the near future? If so, do clients pick a location first, and can therapists, treatments, rooms and hours differ per location? — Multiple sites change the data model, scope availability per location, and change staff schedule views."
+            },
+            {
+              "text": "Do clients need to create an account to book, or is guest booking allowed with just contact details? How is a returning client recognised and matched (email, phone, name), and how are duplicates handled? — Determines authentication requirements, client history features, and duplicate-record behaviour."
+            },
+            {
+              "text": "What information must a client provide to complete a booking (name, phone, email, date of birth, address)? Is a health/intake questionnaire required, and is it completed at booking time, before arrival, or in the centre? — Sets mandatory fields and decides whether a booking can exist in an \"incomplete/pending intake\" state."
+            },
+            {
+              "text": "Are there medical or other conditions that block or gate specific treatments (pregnancy, recent surgery, certain ages)? Should the system automatically refuse, or flag for staff review, based on questionnaire answers? — Introduces validation rules that can prevent a booking or route it to manual approval."
+            },
+            {
+              "text": "Is there a minimum age to book, and can appointments for minors be made with parental consent? Does that add steps or restrictions to the flow? — Adds legal gating and additional consent capture that alters the booking path."
+            },
+            {
+              "text": "Do first-time clients need a longer appointment (added consultation time) or a mandatory in-person consultation before certain treatments? — Changes appointment duration and eligibility automatically for new clients."
+            },
+            {
+              "text": "Do clients pay online at the time of booking, pay a deposit, or pay in the centre? If a deposit is used, is it a fixed amount or percentage, and is it credited against the final bill? — Decides whether a booking is only confirmed after payment and defines the money flow and booking states."
+            },
+            {
+              "text": "Can clients cancel or reschedule online, and up to how long before the appointment? What fee or forfeit applies to late cancellations and no-shows, and should the system charge it automatically? — Defines available self-service actions, booking state transitions, and automated charging logic."
+            },
+            {
+              "text": "How long after the scheduled start is a client treated as a no-show? Is there a grace period after which the slot is released for others, and who marks a no-show? — Affects schedule status, fee triggering, and when capacity is freed."
+            },
+            {
+              "text": "If a wanted slot is full, should clients be able to join a waitlist and be notified or auto-booked when it frees? Is it first-come or a manual offer by staff, and how long does an offer stay open? — Adds a distinct feature with its own notification, expiry, and race-condition rules."
+            },
+            {
+              "text": "Do you need standing/recurring bookings (e.g. same therapist, same time, weekly) for regular clients, and how should a change or cancellation to one occurrence versus the whole series behave? — Recurring appointments change booking creation, editing, and cancellation semantics."
+            },
+            {
+              "text": "Do you offer couples treatments (two therapists and two rooms simultaneously) or group/corporate bookings? Can one person book for several people in a single transaction? — Requires reserving multiple resources at the same time and managing linked bookings as a unit."
+            },
+            {
+              "text": "Which messages must be sent, to whom, and by which channel (email/SMS): booking confirmation, reminders (how many and how far ahead), change and cancellation notices, post-visit follow-up? Should therapists be notified of new, changed, or cancelled bookings? — Defines every notification trigger, its timing, channel, and recipients."
+            },
+            {
+              "text": "Do you sell gift vouchers, prepaid packages (e.g. 10 sessions), or memberships that must be redeemable during booking? Do loyalty points or promotional codes apply, and can they be combined? — Adds redemption, balance tracking, and price-adjustment logic at booking time."
+            },
+            {
+              "text": "Are there off-peak/happy-hour prices, seasonal rates, or discounts that only staff can apply? Is gratuity captured through the system? What currency is used and are displayed prices tax-inclusive? — Affects the quoted price, order totals, tax handling, and reporting."
+            },
+            {
+              "text": "What staff roles exist (e.g. receptionist, therapist, manager, admin) and what may each do: create/edit/cancel bookings for clients, view client contact details and health notes, edit schedules/prices/services, run reports? Can a therapist see only their own day or the whole centre's? — Defines the permissions matrix and controls who sees sensitive client data."
+            },
+            {
+              "text": "Should staff be able to enter phone and walk-in bookings, block out time for non-appointment reasons, and overbook or bypass the lead-time and eligibility rules that the client-facing flow enforces? — The internal booking flow usually needs override capabilities the public flow must forbid."
+            },
+            {
+              "text": "On the staff day schedule, what must be shown per appointment (client name, contact, treatment, duration, room, status, client notes/health flags, price and payment status)? Do you also need week/month views, filtering by therapist or room, and printing or export? — Specifies the data, grouping, and interactions of the primary staff screen."
+            },
+            {
+              "text": "What statuses should an appointment pass through (e.g. booked, confirmed, checked-in, in progress, completed, no-show, cancelled), who or what triggers each transition, and is there a reception check-in step? — The status lifecycle drives the schedule display, automation, and reporting."
+            },
+            {
+              "text": "When a therapist becomes unavailable for a shift or day, what should happen to their existing bookings: auto-cancel with notice, automatically offer reassignment to another qualified therapist, or leave everything for staff to resolve manually? — Defines bulk-change behaviour and the client communication that accompanies it."
+            },
+            {
+              "text": "When two clients attempt to book the last remaining slot at the same time, the system must hold the slot during checkout and reject the second attempt — how long should a slot be held before release if the booking isn't completed? — Determines the reservation locking model and hold-timeout behaviour."
+            },
+            {
+              "text": "Can clients add notes at booking (pressure preference, areas to focus on or avoid, allergies, reason for visit)? Should these be visible to the assigned therapist only or to all staff? — Adds a data field and a visibility rule that affects the schedule and therapist view."
+            },
+            {
+              "text": "Should clients see therapist profiles, specialities, and photos, and can they leave ratings or reviews? If ratings exist, do they influence the \"any therapist\" assignment or the order therapists are listed? — Adds content management and may feed into the assignment/ordering logic."
+            },
+            {
+              "text": "Should staff be able to block specific clients from booking online (e.g. for repeated no-shows or misconduct)? — Introduces an extra validation check that can reject a booking attempt."
+            },
+            {
+              "text": "What reports do you need (daily takings, therapist utilisation, no-show rate, revenue by treatment, new vs returning clients)? Is therapist pay commission-based on treatments performed, requiring a payroll export? — Determines which events and figures must be recorded and made exportable."
+            },
+            {
+              "text": "Do staff need their appointments synced to an external calendar (Google/Outlook)? Are there required integrations with accounting software, a point-of-sale/retail system, or a mailing-list tool? — Integration points add outbound events and data-sync behaviour that must be designed in."
+            },
+            {
+              "text": "Are all times in the centre's single local time zone, and do any clients book from other time zones? How should appointments and reminders behave across daylight-saving changes? — Affects how slots are rendered and when reminders actually fire."
+            },
+            {
+              "text": "Do the client-facing booking flow and the automated messages need to support more than one language? — Requires multiple message templates and content variants, changing messaging behaviour."
+            },
+            {
+              "text": "How long must client personal data and health information be retained? Must clients accept terms/privacy and give marketing consent at booking, and do you need a right-to-erasure workflow? — Adds consent capture, scheduled retention/deletion jobs, and data-removal behaviour."
+            },
+            {
+              "text": "When a client reschedules, may they also change the therapist and the treatment, or only the time slot? Does rescheduling re-run eligibility checks and re-price the booking? — Defines how much of a booking is mutable after creation and what is re-validated on change."
+            }
+          ],
+          "costUsd": 0.114842,
+          "costAvailable": true,
+          "calls": 1,
+          "durationMs": 152824
+        },
+        {
+          "arm": "ask10",
+          "caseId": "booking-massage",
+          "items": [
+            {
+              "text": "Must a client always select a specific named therapist, or can they choose \"no preference / first available\"? If no preference is allowed, how should the system assign one (earliest free, load-balancing across staff, most senior, random, client's previous therapist)? — Determines whether therapist is a required input and defines the assignment algorithm, which changes which slots are offered and who ends up with each booking.",
+              "origin": "run:0"
+            },
+            {
+              "text": "In what order are treatment, therapist and time chosen, and should each choice filter the others (e.g. only show therapists qualified for the chosen treatment, only show times when the therapist AND a suitable room are free)? — Defines the core availability query and prevents offering slots that cannot actually be fulfilled.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Can a client book multiple treatments in a single visit (sequential or with the same/different therapists), and should the system chain them back-to-back without gaps? — Multi-treatment visits require composite bookings, combined duration calculation, and multi-resource availability checks rather than a single slot lookup.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you offer couples or group bookings that need two or more therapists and rooms simultaneously, reserved as one booking? — Requires simultaneous multi-resource allocation and all-or-nothing booking logic that a single-slot model cannot express.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Can one person book on behalf of other people (partner, children, friends), and should those bookings sit under the booker's account or separate client records? — Affects identity model, who receives notifications, whose history/intake form applies, and consent handling.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Please provide the full treatment catalogue with exact durations. Do any treatments have multiple selectable duration options (e.g. 30/60/90 min) that change price and slot length? — Duration drives slot length and available start times; variable durations mean duration is a booking input, not a fixed attribute.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Are there add-ons or upgrades (hot stones, aromatherapy, extended time) that increase the price and/or lengthen the appointment? — Add-ons change the booked duration and total price and must be factored into availability and payment.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Does any treatment need extra non-client time before or after the visible appointment (room setup, cleanup, consultation, paperwork), and how much for each? — This time must be blocked on the therapist/room even though the client doesn't see it, affecting adjacent slot availability.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Are any treatments restricted — requiring a specifically qualified therapist, a prior consultation or patch test, or excluded for certain clients (pregnancy, minors, specific medical conditions)? — Introduces eligibility checks, therapist-skill matching, and pre-conditions that can block or gate a booking.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Should prices be shown to the client before they confirm, and is price fixed per treatment or does it vary by therapist seniority, time of day/week (peak/off-peak), or client type (member vs non-member)? — Determines whether a pricing engine is needed and what inputs feed the quoted total at booking time.",
+              "origin": "run:0"
+            },
+            {
+              "text": "How is each therapist's working time defined — fixed weekly pattern, rotating shifts, or manually entered per day — and who maintains it? — This is the source of all bookable availability; the model (recurring vs manual) and ownership change the whole scheduling core.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What are the centre's opening hours, can appointments start or run outside them, and how are public holidays and one-off closures handled? — Defines the outer bounds of bookable time and requires a closures/exceptions mechanism.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What granularity should bookable start times use (every 15, 30, 60 minutes), and must start times align to a fixed grid regardless of the previous appointment's end? — Controls how many start times are generated and whether gaps/fragmentation between appointments are allowed.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Is there a mandatory turnaround/cleaning gap between a therapist's consecutive appointments, and how long? — Reduces effective availability and must be enforced when checking adjacency of slots.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do treatments require a treatment room or other limited resource? How many rooms exist, and are any treatments tied to specific rooms or equipment? — If rooms are constrained, availability is the intersection of therapist AND room, not therapist alone, and double-booking prevention must cover rooms.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Is it ever acceptable for a therapist (or room) to be booked for two clients at overlapping times, or is overlap always forbidden? — Defines the fundamental conflict rule the booking engine enforces.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What is the minimum notice for an online booking (e.g. nothing within 2 hours of start), and how far in advance can clients book (e.g. up to 60 days)? — Sets the bookable time window and prevents last-minute or far-future bookings the centre can't honour.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Should therapists have non-bookable blocks within their working day (lunch, breaks, admin, training), and who creates them? — These carve holes in availability and need a blocking mechanism distinct from client bookings.",
+              "origin": "run:0"
+            },
+            {
+              "text": "If no slot matches the client's chosen therapist + treatment + time, should the system suggest alternatives (nearby times, other therapists), or simply show no availability? — Changes the search behaviour and the booking funnel from exact-match to recommendation.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you need recurring or standing appointments (e.g. the same slot every week for N weeks) created in one action? — Requires series generation, partial-failure handling when some occurrences conflict, and series-level edit/cancel.",
+              "origin": "run:0"
+            },
+            {
+              "text": "While a client is completing a booking, should the chosen slot be held/locked so others can't take it, and for how long before it's released? — Determines whether temporary reservations exist and their expiry, affecting perceived availability and abandoned-booking cleanup.",
+              "origin": "run:0"
+            },
+            {
+              "text": "If two clients submit for the same slot at nearly the same moment, what should happen to the second one? — Defines concurrency handling and the error/recovery experience for lost races.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Must clients create an account, or can they book as a guest with only contact details? If accounts are required, what login method is used and must email or phone be verified before booking? — Affects identity, duplicate-client handling, whether bookings can be tied to history, and the friction in the booking flow.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What information must be captured at booking (name, phone, email, date of birth, reason for visit, pressure preference, first-visit flag, accessibility needs, referral source)? — Defines required vs optional fields and validation, and whether a booking can proceed without certain data.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you require a health/intake questionnaire or consent form? Must it be completed before the appointment is confirmed, and does it expire and need re-completion periodically? — May make form completion a blocking pre-condition of a confirmed booking and adds a per-client document lifecycle.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Are there age restrictions for booking or for specific treatments, and do minors require recorded guardian consent? — Introduces eligibility validation and consent capture that can block bookings.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Can a client request a therapist of a specific gender, and should that preference filter the therapists and slots shown? — Adds a filter dimension to availability and to the \"first available\" assignment logic.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What are your data-retention and privacy requirements (marketing opt-in/out, consent records, deletion on request, how long booking history and treatment notes are kept)? — Drives data lifecycle behaviour, what can be deleted/anonymised, and consent gating.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Can clients cancel and/or reschedule their own bookings online, and up to what cut-off time before the appointment? — Defines self-service capabilities and the time-based rules governing them.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Is there a cancellation, late-cancellation or no-show fee or penalty, and how is it enforced (card on file, forfeited deposit, account restriction, manual by staff)? — Requires storing payment methods, charging logic, and policy windows tied to appointment time.",
+              "origin": "run:0"
+            },
+            {
+              "text": "How should no-shows be recorded, and does a history of no-shows or late cancellations restrict a client's ability to book online (e.g. require deposit or staff approval)? — Adds client status/flags that alter what booking options are offered.",
+              "origin": "run:0"
+            },
+            {
+              "text": "When staff cancel or move an appointment, what should the client receive, and should the system offer them a self-service rebooking option? — Defines the staff-initiated change flow and downstream client notifications/actions.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you want a waitlist for fully booked slots with automatic notification when one opens, and how is the freed slot claimed (first to respond, staff assigns, time-limited offer)? — Waitlist is a separate queue with its own notification and claiming rules that change what happens on cancellation.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Is payment required at the time of booking (full amount or deposit) or paid in person, and which methods? Should refunds for eligible cancellations be automatic? — Determines whether a payment step is part of booking confirmation and whether unpaid bookings are valid.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you sell gift vouchers, prepaid packages/bundles, memberships or class passes that must be redeemable against a booking? What are their rules (expiry, transferability, what they cover)? — Redemption changes the payment path, requires balance tracking, and adds validation at booking.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you use promo codes, loyalty points or client-type discounts that affect the price at booking, and what are their stacking/eligibility rules? — Adds discount validation and calculation to the booking total.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Should tax/VAT and gratuities be included in the amount handled at booking, and in what currency (single or multiple)? — Affects amount calculation, receipts, and whether currency is a factor in pricing and payment.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What confirmations, reminders and follow-ups should be sent, to whom (client and/or therapist), via which channels (email, SMS), and at what timing (e.g. reminder 24h and 2h before)? — Defines the full notification schedule, triggers, and recipients, which is core behaviour.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Should a booking generate a calendar invite (.ics) for the client and/or sync to an external calendar (e.g. Google Calendar) for therapists? — External calendar sync introduces two-way updates and conflict considerations beyond the internal schedule.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Beyond viewing the day schedule, can staff create, edit, reassign and cancel bookings (for phone and walk-in clients), shorten/extend sessions, and override rules such as lead time, capacity, or therapist qualification? — Determines whether the staff side is read-only or a full booking console with override permissions.",
+              "origin": "run:0"
+            },
+            {
+              "text": "What staff roles exist (receptionist, therapist, manager, admin) and what can each do? Can an individual therapist see only their own schedule or the whole centre's? — Defines the permissions model and what data each user can view and change.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Can therapists or staff block out time for sickness, training, holiday or personal reasons, and does this require manager approval? — Adds a time-off / unavailability workflow that directly removes availability, possibly with an approval state.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Should staff be able to mark appointment progress (checked-in, in progress, completed, no-show) and attach notes to the appointment or to the client's record? — Introduces appointment lifecycle states and note storage that other behaviour (no-show fees, reporting) depends on.",
+              "origin": "run:0"
+            },
+            {
+              "text": "For the \"day schedule\" view, which date boundary applies (centre local day), how should appointments that cross midnight or span shift changes be shown, and should it be filterable by therapist and room? — Defines what the primary staff view actually queries and displays.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you need reports (therapist utilisation, revenue, popular treatments, cancellation/no-show rates) and an audit trail of who created or changed each booking? — Requires capturing and retaining historical/audit data from the start rather than only current state.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Who maintains the catalogue of therapists, treatments, prices, rooms and working hours, and when these change, how are already-booked appointments affected (kept as booked, flagged, re-priced)? — Defines admin capabilities and the rules for reconciling existing bookings with catalogue changes.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Is this a single centre or multiple branches? If multiple, do clients choose a location, and are therapists, rooms, hours and pricing all per-location? — Multi-location makes location a required booking dimension and partitions availability, staff and resources.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Which time zone(s) and languages must the system support, and how should daylight-saving transitions be handled for bookings made across the change? — Time zone and DST handling directly affect slot generation and the actual time an appointment occurs.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Do you want post-visit ratings or reviews of therapists, and should those be visible to clients when choosing a therapist? — Adds a review capture and moderation flow and can influence therapist selection behaviour.",
+              "origin": "run:0"
+            },
+            {
+              "text": "Is this for a single massage centre or multiple branches? If multiple, do therapists, treatments, opening hours and prices differ per branch, and must the client pick a branch before anything else? — A multi-branch model forces a location dimension on every entity (therapists, rooms, availability, pricing) and adds a branch-selection step that filters all subsequent choices.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can clients add extras to a treatment (e.g. aromatherapy, hot stones, extended time, scalp add-on) that change the price and/or the duration of the appointment? — Add-ons make the catalogue a composite of base treatment plus options, and the slot-length and price calculations must account for the selected extras.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Does each treatment have one fixed duration, or several duration options (e.g. 30 / 60 / 90 minutes) each with its own price? — Variable durations change how bookable slots are generated and how price is looked up, and require the client to choose a duration during booking.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can every therapist perform every treatment, or does each therapist have a defined list of treatments they are qualified and willing to do? — A skills matrix determines which therapists appear as options for a chosen treatment and which slots are actually bookable.",
+              "origin": "run:1"
+            },
+            {
+              "text": "In what order do clients make their choices — therapist then treatment then time, treatment first, or time first — and can they start from any of these? — The entry point defines the availability query; e.g. ‘time first’ requires searching across all therapists and rooms simultaneously rather than one therapist's calendar.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can a client choose ‘no preference / any available therapist’, and if so how should the system pick one (least-busy, round-robin, most senior, random)? — This needs an explicit assignment algorithm and affects how evenly work is distributed across staff.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Is setup/cleanup/turnaround time required between appointments (room reset, linen change, therapist rest), and does it vary by treatment? — The engine must block extra minutes before and/or after each appointment so back-to-back slots are not offered when they physically can't be served.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Are there a limited number of treatment rooms or shared pieces of equipment (hot-stone heater, hydro table) that also constrain availability, and must every booking be assigned a specific room? — Availability becomes a function of therapist AND room/equipment; couples and simultaneous bookings depend entirely on this.",
+              "origin": "run:1"
+            },
+            {
+              "text": "What time increments can appointments start on (every 15 or 30 minutes, on the hour), and must they align to a fixed grid or start whenever a therapist happens to be free? — This defines how the list of offered start times is generated and whether gaps between bookings can be reused.",
+              "origin": "run:1"
+            },
+            {
+              "text": "What is the minimum notice required before an appointment (e.g. no bookings within 2 hours of now), and how far into the future can clients book (e.g. up to 60 days)? — These bounds constrain the availability window and stop last-minute or far-future bookings the centre can't honour.",
+              "origin": "run:1"
+            },
+            {
+              "text": "What are the centre's opening hours for each weekday, and how are public holidays, seasonal closures and one-off closed days handled? — No slots may be offered outside operating times, so the system needs an opening-hours schedule plus a closures/holiday calendar.",
+              "origin": "run:1"
+            },
+            {
+              "text": "How are individual therapists' working hours, shifts, recurring days off, holidays, sick days, lunch and breaks defined, and how far ahead is the staff rota known? — Availability is computed per therapist, so the system needs a reliable source of each therapist's bookable and non-bookable time.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can a client book more than one treatment in a single visit (e.g. massage then facial), possibly with different therapists, as one linked booking? — This requires chaining and sequencing appointments and treating them as a unit for confirmation, payment and cancellation.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Do you offer couples or group bookings that need two or more therapists and rooms at the same time, booked together? — Availability must find multiple matching resources for the same time window and manage the group as a single reservation.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Are online bookings confirmed instantly, or do they stay ‘pending’ until a staff member approves them? — This fundamentally changes the booking state machine, the slot-holding behaviour, and which notifications are sent when.",
+              "origin": "run:1"
+            },
+            {
+              "text": "While a client is completing a booking (including any payment), should the chosen slot be temporarily reserved, and for how long before it is released? — A hold/expiry mechanism prevents two people booking the same slot during checkout and defines what happens on abandonment.",
+              "origin": "run:1"
+            },
+            {
+              "text": "If two clients try to book the same therapist and time at the same moment, the first to complete wins — is that correct? And should staff ever be able to deliberately double-book/overbook? — This determines the locking strategy and whether an override path exists that bypasses normal availability rules.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Must clients create an account to book, or is guest booking (name and contact details only) allowed? Should the system recognise and link returning clients? — This drives whether authentication, saved history and stored payment details exist, and how duplicate client records are handled.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Exactly which client details are required at booking (name, phone, email, date of birth, address, emergency contact) and which are optional? — This defines mandatory form fields, validation, and what a client record must store.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Do clients complete a health/medical questionnaire or consent form? Is it required before the first appointment only or every appointment, and must a therapist review or approve it before the booking is confirmed? — A mandatory intake can block auto-confirmation, adds a review workflow, and creates sensitive data that must be captured and protected.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Are bookings for under-18s allowed, and if so do they require recorded parent/guardian consent or the guardian's presence? — This adds age checks and consent capture, and may prevent minors from booking online at all.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can clients state a preference for a male or female therapist, and should that preference filter the therapists and slots shown? — It adds a filter attribute to therapists and changes how the ‘any therapist’ assignment works.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Is payment taken online at the time of booking (full amount or deposit), or do clients pay at the centre after the treatment? — This decides whether a payment step is part of the booking flow and whether an unpaid booking is considered valid.",
+              "origin": "run:1"
+            },
+            {
+              "text": "If deposits are used, what amount or percentage, does it apply to all treatments or only some, and is it deducted from the final bill or non-refundable? — Deposit rules affect the amount charged at booking, the balance owed at the centre, and refund calculations.",
+              "origin": "run:1"
+            },
+            {
+              "text": "On an eligible cancellation, are refunds automatic to the original payment method, issued as account credit, or processed manually by staff? — This defines the refund workflow, timing, and the financial records the system must keep.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Do you charge for late cancellations or no-shows? If so, how much (fixed or percentage), and is it charged automatically to a stored card or handled manually? — Automatic fees require storing payment details, a fee-calculation rule, and a charging workflow triggered by status or timing.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can clients cancel their own booking online, and up to what cut-off (e.g. 24 hours before)? What happens if they try to cancel after the cut-off? — This sets the self-service cancellation rules and the point at which fees or staff-only handling kick in.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can clients reschedule online, is there a cut-off, and is there a limit on how many times a booking can be moved? — Reschedule is effectively cancel-plus-rebook and needs its own cut-off, availability check and abuse limits.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Do you sell and redeem gift vouchers online? Can they be partially redeemed across multiple bookings, and do they expire? — Vouchers require a stored balance, redemption at checkout, and expiry handling.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Do you offer prepaid multi-session packages or memberships? Should clients be able to buy them and redeem sessions when booking, and do members get priority access or different prices? — This adds entitlement tracking, session decrementing, and possibly per-client pricing and booking-priority rules.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Should the system support promo codes, loyalty points, or time-based pricing such as off-peak discounts? — Each of these adds a pricing-rules layer and validation logic at checkout.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Does the price of a treatment ever depend on the therapist (e.g. senior vs junior), the day of week, or the time of day, or is it always fixed per treatment? — This decides whether price is a simple lookup or the result of a rules calculation that depends on the chosen therapist and slot.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Should displayed prices include tax, should clients be able to add a gratuity during booking, and do you need to issue receipts or invoices? — These affect how the total is calculated and whether the system must generate financial documents.",
+              "origin": "run:1"
+            },
+            {
+              "text": "What staff roles exist (e.g. receptionist, therapist, manager/admin) and what may each do — see all schedules vs only their own, create/edit/cancel bookings, manage rotas, view client health notes, issue refunds, run reports? — ‘Staff can see the day schedule’ understates this; the permissions model shapes almost every staff-facing behaviour.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can staff create and modify bookings on behalf of phone or walk-in clients, including overriding availability, lead-time and payment rules? — An internal booking path typically needs looser validation and an override capability that the public path must not have.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Should the staff schedule be day-only as stated, or also offer a week view? Should it be grouped by therapist or by room, and should it show statuses such as booked, arrived, in progress, completed, no-show, and paid/unpaid? — This determines what data the schedule screen must load and which interactions it must support.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Should staff mark check-in, completion and no-show on each appointment, and should marking a no-show automatically trigger a fee and flag the client's record? — An appointment status workflow feeds fees, client history and reporting, and must be defined explicitly.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can staff block out a therapist's time for breaks, training, holiday or sickness, and can they block an entire day or the whole centre? — These blocks must remove slots from availability exactly like real bookings do.",
+              "origin": "run:1"
+            },
+            {
+              "text": "If a therapist becomes unavailable at short notice, what should happen to their existing bookings — auto-notify affected clients, attempt reassignment to another qualified therapist, or leave staff to resolve each one manually? — This defines a bulk-disruption workflow, including client communication and reassignment logic.",
+              "origin": "run:1"
+            },
+            {
+              "text": "When a client's preferred slot or therapist is fully booked, should they be able to join a waitlist and be notified or auto-booked if it frees up? — A waitlist adds its own data, matching rules on cancellations, and notification behaviour.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Can clients book a standing recurring appointment (e.g. same time every week), and how should exceptions, holidays and therapist absences be handled for the series? — Recurrence requires a rule plus per-occurrence editing and conflict handling.",
+              "origin": "run:1"
+            },
+            {
+              "text": "If a client arrives late, is the treatment shortened to end at the original time or run its full length, and after how many minutes late does it count as a no-show? — This affects schedule integrity, the following appointment, and when the no-show rule and fee apply.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Is there a cap on how many upcoming bookings one client can hold, and should clients with prior no-shows or unpaid fees be blocked or restricted from booking online? — These are validation rules applied at booking time that change who can book what.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Which events should trigger client notifications (confirmation, reminder, change, cancellation, refund), by which channels (email, SMS), and how many reminders and how long before the appointment? — This defines every trigger, channel and schedule the messaging component must implement.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Should appointment reminders let the client confirm or cancel? If a client does not confirm by a deadline, is the booking kept or automatically released? — Two-way reminders with auto-release change the booking lifecycle and free up slots without staff action.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Should therapists (and reception) be notified of new, changed or cancelled bookings, and by which channel? — Staff-side notifications are separate triggers that must be specified alongside the client-facing ones.",
+              "origin": "run:1"
+            },
+            {
+              "text": "In which country/jurisdiction does the centre operate, how long should client and health data be retained, must clients be able to request access to or deletion of their data, and must they opt in or out of marketing messages separately from booking messages? — This drives consent capture, retention/auto-deletion rules, and data-subject request handling (e.g. GDPR).",
+              "origin": "run:1"
+            },
+            {
+              "text": "What operational reports do you need — daily appointment list, revenue, therapist utilisation and hours worked, no-show and cancellation rates, new vs returning clients — and which roles may view them? — Reporting needs determine what data must be recorded, how it is aggregated, and access control on it.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Do you need an audit history of who created, changed, cancelled or refunded each booking, and when? — An audit requirement means every booking mutation must be logged immutably, which affects the data model.",
+              "origin": "run:1"
+            },
+            {
+              "text": "Are all bookings and reminders in the centre's local time zone, including across daylight-saving changes, and can clients booking from another time zone see times in their own? — Ambiguous time-zone handling causes appointments and reminders to be off by an hour around DST transitions.",
+              "origin": "run:1"
+            },
+            {
+              "text": "How is each therapist's working availability defined — fixed weekly hours, rotating shifts entered per week, or individually set days — and do they have unpaid/paid breaks or blocked periods within a shift? — Determines whether a roster/shift editor is needed and how bookable slots are computed; fixed hours and per-week rosters produce very different scheduling behaviour.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Is each treatment's duration fixed, or does it vary by therapist or by variant (e.g. 30/60/90 minutes), and does the client choose the duration? — Affects slot calculation, the treatment catalogue structure, and pricing; variable durations change how therapist time is blocked.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Do you need setup/cleanup (turnaround) time between appointments, does it differ by treatment, and is it therapist time, room time, or both? — Changes how consecutive slots are generated and whether a therapist/room appears free immediately after an appointment ends.",
+              "origin": "run:2"
+            },
+            {
+              "text": "On what interval can appointments start (every 15/30 minutes, on the hour), and must start times align to a fixed grid or to the treatment length? — Defines the exact set of times offered to clients and how efficiently the day can be packed.",
+              "origin": "run:2"
+            },
+            {
+              "text": "How many treatment rooms exist, do specific treatments require a particular room or equipment, and should the system assign rooms and prevent room clashes? — Centre concurrency is limited by rooms as well as therapists; without room modelling the system can overbook the premises.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can every therapist perform every treatment, or does each therapist have a defined list of treatments they are qualified and willing to do? — Controls which therapist/treatment combinations are offered and prevents invalid bookings.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can a client book without choosing a specific therapist ('first available'), and if so how should the system pick one (least busy, rotation, the client's previous therapist, random)? — The assignment rule affects fairness, utilisation, and which slots are shown as available.",
+              "origin": "run:2"
+            },
+            {
+              "text": "What is the minimum notice for an online booking (e.g. nothing within 2 hours) and how far in advance can clients book? — Directly bounds the bookable window and blocks last-minute or far-future bookings.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Must a treatment finish by the therapist's shift end and the centre's closing time, or may it run over? What are the opening hours per weekday and the planned closures/holidays? — Determines which end-of-day slots are offered and the business-calendar logic.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Are online bookings confirmed instantly, or must staff approve them before they are final? — Introduces a pending state, approval workflow, rejection handling, and additional notifications.",
+              "origin": "run:2"
+            },
+            {
+              "text": "While a client is completing a booking, should the chosen slot be temporarily held, for how long, and what happens if two clients try to take the same slot simultaneously? — Defines race-condition handling and whether double-booking is possible under concurrent load.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Must clients create an account to book, or is guest booking allowed, and how are returning clients recognised (email, phone, name)? — Changes the booking flow, the data model, and whether history/rebooking features exist.",
+              "origin": "run:2"
+            },
+            {
+              "text": "What client information is required to complete a booking (name, email, phone, date of birth, address, emergency contact), and which fields are mandatory versus optional? — Determines form validation and what constitutes a valid booking record.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Is a health/intake questionnaire or consent form required before the first appointment or before every appointment, and should certain answers (pregnancy, injury, medical conditions) block or flag specific treatments? — Adds a gating step to the booking flow and rules that restrict which treatments can be selected.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Is there a minimum age to book, and do minors require a named consenting adult or guardian on record? — Adds validation and potentially a distinct flow for under-age clients.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Is payment taken online at booking, as a deposit only, via card-on-file for no-show protection, or entirely in the centre? — This is the biggest single driver of the booking flow and determines whether a payment integration is in scope at all.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Do prices vary by therapist seniority, by time of day or day of week (peak/off-peak), or by client type (new vs member), and are taxes shown separately? — Determines the pricing engine and what price is displayed and charged for each specific slot.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can clients add extras to a treatment during booking (aromatherapy, extended time, hot stones), and do these change the duration as well as the price? — Add-ons that extend time affect slot blocking and availability, not just the total charged.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can a client book several treatments in one visit as a single combined appointment, or multiple separate appointments in one checkout, and must they be with the same therapist? — Affects duration stacking, therapist continuity, cart behaviour, and conflict checking.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Do you offer couples or group sessions that need two or more therapists and/or a specific room at the same time, and what is the maximum party size? — Requires simultaneous multi-resource allocation, which is a fundamentally different booking path from single bookings.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Do you sell gift vouchers, prepaid packages, or memberships that clients redeem when booking, and should any discounts apply automatically? — Adds redemption logic, balance tracking, and rules about what can be booked using stored credit.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Are discount/promo codes required, and what limits apply (expiry, single-use, one per client, minimum spend, specific treatments)? — Defines checkout validation and how the final price is adjusted.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can clients cancel online, up to what point before the appointment, and is there a cancellation fee or forfeited deposit within that cutoff? — Determines self-service cancellation, refund behaviour, and any automatic charging.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can clients reschedule online, and may they change only the time or also the therapist and treatment? Does the same cutoff as cancellation apply? — Rescheduling and cancel-then-rebook behave differently for payments, availability release, and notifications.",
+              "origin": "run:2"
+            },
+            {
+              "text": "After how many minutes is a client marked a no-show, and if a client arrives late is the treatment shortened to finish on time or run full length and delay the next booking? — Affects schedule integrity, downstream appointments, and any automatic no-show charge.",
+              "origin": "run:2"
+            },
+            {
+              "text": "If a desired slot or therapist is fully booked, can clients join a waitlist, and should slots freed by cancellations be offered automatically — to whom, and for how long before moving on? — Waitlist auto-fill is substantial additional behaviour triggered around cancellations.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Do regular clients need standing/recurring bookings (e.g. the same time every week), and how should holidays or one-off conflicts in a series be handled? — Recurrence generation and per-occurrence exception handling is a distinct feature set.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Is there a cap on how many upcoming bookings one client may hold, and what protection is needed against duplicate or spam bookings? — Defines validation rules that prevent abuse and accidental double-bookings.",
+              "origin": "run:2"
+            },
+            {
+              "text": "What staff roles exist (therapist, receptionist, manager/admin) and what may each do — view all schedules vs only their own, create/edit/cancel bookings, edit client records, view health notes, manage the treatment catalogue and rosters? — The permission model changes what every screen allows and what sensitive data is exposed to whom.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can staff create bookings on behalf of clients (phone or walk-in), and may they override rules such as double-booking, booking outside opening hours, or ignoring the minimum lead time? — Internal booking usually needs to bypass constraints that bind online clients, which requires explicit override behaviour.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Can staff block out time for breaks, admin, training, or leave, and should that immediately remove the affected slots from online availability? — Defines a non-appointment calendar entry type and its effect on what clients can book.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Should the day schedule show all therapists side by side for a chosen date, be filterable by therapist or room, and what details should each entry display (client name, treatment, phone, notes, status)? What daily time range does it cover? — Specifies the content, filtering, and scope of the core staff-facing screen.",
+              "origin": "run:2"
+            },
+            {
+              "text": "What lifecycle states should a booking have (e.g. confirmed, checked-in, in progress, completed, cancelled, no-show), and who is allowed to set each? — Drives allowed status transitions, schedule filtering, and any reporting.",
+              "origin": "run:2"
+            },
+            {
+              "text": "If a therapist becomes unavailable at short notice (illness), what should happen to their existing bookings — bulk cancel, offer reassignment to other therapists, and notify affected clients automatically? — This is a common operational event that needs defined, possibly automated, handling.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Which messages should be sent, to whom, and by email or SMS: booking confirmation, reminders (how many and when), changes and cancellations, no-show notices, post-visit follow-up? Should therapists be notified of new or changed bookings? — Defines the entire notification subsystem, its triggers, and its recipients.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Should a guest's email or phone be verified (e.g. via a one-time code) before the booking is accepted? — Affects the booking flow and the rate of fake or mistaken bookings.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Is this a single centre or multiple branches, do therapists or clients move between branches, and is availability and booking handled per branch? — Multi-site operation changes the data model and every availability query.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Are all clients and staff in a single time zone, and how should bookings and reminders near a daylight-saving transition be handled? — Prevents appointments and reminders being scheduled at the wrong wall-clock time.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Should clients be able to add free-text special requests (preferred pressure, allergies) and structured accessibility needs (wheelchair access, ground-floor room), and should any of these influence room or therapist assignment? — Structured accessibility requirements can constrain resource allocation, unlike free-text notes.",
+              "origin": "run:2"
+            },
+            {
+              "text": "How long should client and health records be retained, do you need to capture marketing consent separately, and must clients be able to request export or deletion of their data? — Retention periods and consent rules change data handling and require specific supporting flows.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Do you need an audit history of who created, modified, cancelled, or rescheduled each booking and when? — Determines whether every booking mutation must be recorded and made viewable.",
+              "origin": "run:2"
+            },
+            {
+              "text": "Should a portion of capacity or specific slots be held back from online booking for walk-ins and phone clients? — Changes the availability calculation to deliberately withhold otherwise-bookable slots.",
+              "origin": "run:2"
+            }
+          ],
+          "costUsd": 0.338251,
+          "costAvailable": true,
+          "calls": 3,
+          "durationMs": 171120
+        },
+        {
+          "arm": "divergence",
+          "caseId": "booking-massage",
+          "items": [
+            {
+              "text": "A returning client enters an email address that already has three upcoming bookings and attempts to add a fourth appointment on the same day at overlapping times with therapist Luis Ortega. — interpretations differ: Statement (2) rejects the fourth booking partly because it exceeds a limit of 3 upcoming bookings per email address, implying a hard per-email cap that would block even a non-overlapping fourth booking. Statements (1) and (3) reject only due to the time overlap/scheduling conflict and treat three existing bookings as acceptable, implying no such cap.",
+              "origin": "scenario:6"
+            },
+            {
+              "text": "A walk-in customer asks the front-desk staff member to enter a booking directly into the system for therapist Marta Ncube at 13:00 today, a slot currently shown as free. — interpretations differ: Statement (1) says the confirmation email is sent only if an address was entered, implying a walk-in booking can be completed with no email address. Statements (2) and (3) say the booking is created exactly as an online booking would be, implying the same required fields (including email) as the online flow.",
+              "origin": "scenario:11"
+            }
+          ],
+          "costUsd": 0.20584300000000003,
+          "costAvailable": true,
+          "calls": 5,
+          "durationMs": 132462
+        },
+        {
+          "arm": "probe",
+          "caseId": "booking-massage",
+          "items": [
+            {
+              "text": "When two online bookings for the same therapist and overlapping time arrive at nearly the same moment, what decides which one succeeds (database uniqueness constraint, first request to reach commit, a lock/hold taken at slot selection, or manual staff resolution of both)? — This is the core contention rule. If it is left implicit, the code will pick one by accident: either both bookings get written and the therapist is double-booked, or one is rejected non-deterministically depending on request timing and server load. The choice also dictates how much of the stack (schema, transaction isolation, queueing) has to be built.",
+              "origin": "concurrency"
+            },
+            {
+              "text": "What is the losing booker shown and given? A bare failure, the page re-rendered with that slot now gone, a list of alternative times or other therapists, or a waitlist entry that promises the slot if the winner cancels? — The request says clients book online but never states the failure path. A generic error, an auto-suggested alternative, and a waitlist are all defensible and produce very different client-visible behaviour and abandonment rates. It also determines whether waitlist/notification machinery exists at all.",
+              "origin": "concurrency"
+            },
+            {
+              "text": "Is a slot provisionally held while a client is still choosing options or completing payment, for how long, is it shown as unavailable to other clients during that window, and what happens if the client abandons or the hold expires after payment has already been taken? — This is the read-decide-write gap. With no hold, two clients can both pass the availability check and only collide at final submit; with a hold, you must define its duration, visibility, expiry, and the payment-succeeded-but-slot-gone case. Each answer changes what clients see mid-booking and whether refunds/retries are needed.",
+              "origin": "concurrency"
+            },
+            {
+              "text": "When a client confirms a slot in the same window that staff block that therapist's time, cancel/reassign an appointment, or enter a walk-in into that slot, which action prevails, and is the side that loses notified or bumped? — Online booking and the staff schedule edit the same resource from two channels. Without a rule, a client can get a confirmation for a slot staff just removed, or a walk-in and an online booking can both land. Deciding whether staff edits override in-flight bookings, or vice versa, changes both the client's outcome and what appears on the day schedule.",
+              "origin": "concurrency"
+            },
+            {
+              "text": "When two staff members edit the same appointment or the same part of the day schedule concurrently (e.g. both reassign a therapist or move a time), does the last write silently win, or is the second editor warned that the record changed since they opened it? — Staff viewing 'the day schedule' implies editing it. Silent last-write-wins can erase a colleague's change with no trace; optimistic-concurrency detection forces a visible conflict prompt. The two produce different observable results for the same sequence of clicks.",
+              "origin": "concurrency"
+            },
+            {
+              "text": "Is contention detected on the full time range a treatment occupies (including any cleanup/turnaround buffer between appointments), or only on an exact start-time slot match, allowing a 30-minute and a 60-minute booking to partially overlap? — Treatments have different durations, so two bookings can conflict without sharing a start time. If the overlap check is only slot-exact, back-to-back or partially overlapping bookings for one therapist will both be accepted. Whether buffer time is also a reserved, contended resource changes which booking pairs are allowed.",
+              "origin": "concurrency"
+            },
+            {
+              "text": "When a therapist is deactivated (leaves, goes on long-term leave, is suspended) while they still have future confirmed bookings, what happens to those bookings? Options include: block deactivation until the calendar is clear, auto-cancel the appointments and notify clients, or keep the appointments and require staff to manually reassign or contact each client. — Each path produces different observable outcomes: clients may arrive to no therapist, receive cancellation messages, be silently moved to someone else, or an admin may be unable to deactivate at all. It also determines whether the day schedule shows orphaned appointments with no assigned staff.",
+              "origin": "lifecycle"
+            },
+            {
+              "text": "If future bookings are moved off a deactivated therapist, is the reassignment automatic (system picks another qualified therapist) or manual (staff choose), and does the client get to review, approve, or decline the substitute therapist before the appointment stands? — Clients often book a specific person. Auto-reassignment keeps the slot but may deliver an unwanted therapist; requiring client confirmation may leave the slot in limbo. The two designs differ in what the client sees and whether the booking is still valid.",
+              "origin": "lifecycle"
+            },
+            {
+              "text": "If a therapist or treatment the client has selected becomes unavailable (deactivated, retired, fully booked out, or the held slot expires) while the client is mid-booking but has not yet confirmed, how does the flow respond — hard error and restart, silently drop the invalid selection, or let the booking complete anyway? — A referenced item withdrawn inside someone's in-progress state must be handled explicitly. Silent completion can create a booking against a deactivated therapist; a hard reset loses the client's other choices; behaviour must be defined to avoid inconsistent bookings.",
+              "origin": "lifecycle"
+            },
+            {
+              "text": "If an online payment or deposit is captured but the booking record then fails to save, what survives — is the charge refunded automatically, kept while staff create the booking out-of-band, or is the booking write retried against the successful payment? — Determines whether a client can be charged with no booking on the schedule, and whether staff must hunt for and reconcile orphaned payments by hand.",
+              "origin": "partial_failure"
+            },
+            {
+              "text": "If the booking record commits but the payment step then fails, times out, or is abandoned by the client, does the slot stay reserved as pending/unpaid, get released immediately, or get held for a fixed window before release? — Controls whether other clients and staff see the slot as taken, and whether unpaid or half-finished bookings can silently occupy the day schedule.",
+              "origin": "partial_failure"
+            },
+            {
+              "text": "If the booking commits but the confirmation to the client (email/SMS) cannot be delivered, is the booking still treated as confirmed, rolled back, or left in a 'confirmed but unnotified' state — and is delivery retried, queued, or dropped? — A client holding a committed slot with no confirmation may not turn up, or may assume the booking failed and book again, changing no-show and duplicate rates.",
+              "origin": "partial_failure"
+            },
+            {
+              "text": "On cancellation or reschedule, if the slot is freed locally but the refund or external calendar/notification step fails (or the refund succeeds but the local cancellation does not), which record is authoritative and how is the mismatch resolved? — Determines whether a released slot can be rebooked while the client is still unrefunded, or whether a refunded client still blocks a slot on the therapist's schedule.",
+              "origin": "partial_failure"
+            },
+            {
+              "text": "When a client's booking submission is retried (slow response, lost reply, or double-click), does the system replay the original result and return the same confirmation, reject the second arrival as a slot conflict, or attempt a second independent booking? — A slot for one therapist at one time can hold only one appointment, so a naive second write either fails a uniqueness check or races. The client who actually got the booking could see 'this time is no longer available' and rebook elsewhere, or see a clean confirmation, or end up holding two slots. The three answers produce visibly different client experiences and different schedule contents.",
+              "origin": "idempotency"
+            },
+            {
+              "text": "What identifies two arrivals as 'the same' booking request, and over what window: a client-supplied idempotency token, an inferred tuple of (client, therapist, treatment, start time), or any booking by the same client within N minutes/for the same day? — The matching rule decides whether a fast double-submit collapses to one booking. Too loose and a legitimate second booking (a client genuinely wanting two treatments the same day, or a couple booking back-to-back) is silently swallowed or blocked; too tight and retries slip through as duplicates. Different keys and windows yield different sets of accepted bookings for identical user actions.",
+              "origin": "idempotency"
+            },
+            {
+              "text": "If a booking submission arrives twice, are confirmation and reminder messages sent once per resulting booking or once per received request? — Without a sent-state check tied to the booking rather than the request, a retry produces a second confirmation email/SMS to the client (and possibly a second notification to the therapist). One answer gives one message, the other gives duplicates for the same appointment.",
+              "origin": "idempotency"
+            },
+            {
+              "text": "If the online payment attempt fails or times out, how many times and on what schedule is the charge re-attempted, is it automatic or staff-triggered, is the slot held meanwhile, and what prevents the same booking obligation being charged twice if an earlier attempt actually succeeded? — Retry policy is the difference between a lost booking, a held slot with no payment, and a client charged two or three times for one appointment. Duplicate captures require refunds, trigger chargebacks, and must be provably guarded against with an idempotency rule that the request does not specify.",
+              "origin": "money"
+            },
+            {
+              "text": "If a cancellation or reschedule request arrives twice, is the second a silent no-op, an error ('already cancelled'), and are side effects (releasing the slot, issuing a refund, notifying the therapist or a waitlisted client) performed once or once per request? — A double-click on cancel could trigger a second refund, re-release a slot that someone else has since taken (then re-cancel that person's booking), or send a second 'your appointment was cancelled' message. Making cancellation idempotent versus not produces different money movements and different final schedule state.",
+              "origin": "idempotency"
+            },
+            {
+              "text": "If a background job that acts on bookings (sending day-before reminders, marking no-shows, releasing unconfirmed holds) re-runs after a crash, overlapping cron, or manual re-trigger, does it skip work already done or repeat it? — A reminder job with no per-booking 'reminded' flag sends clients a second reminder on each run; a hold-release or no-show job that does not re-check current state can free a slot that has since become a valid paid booking, or mark a client as no-show after they arrived. Tracking completion versus not gives observably different messages sent and bookings cancelled.",
+              "origin": "idempotency"
+            },
+            {
+              "text": "In whose timezone is the chosen \"time\" interpreted, stored, and displayed — the massage centre's local timezone, or the client's device/browser timezone? — A client booking from a phone set to another timezone (travelling, expat, VPN) could see and confirm a slot that resolves to a different wall-clock time at the centre. If the centre reads it as local time and the client read it as their own, one party shows up an hour (or more) off, and the staff day schedule shows the appointment in the wrong slot.",
+              "origin": "temporal"
+            },
+            {
+              "text": "How are daylight-saving-time transitions handled for slots on the changeover days — nonexistent times (spring forward) and doubled times (fall back)? — A slot at 02:30 on a spring-forward day does not exist, and a 01:30 slot on a fall-back day occurs twice. Choosing to skip, shift, or offer both instances changes which appointments can be booked, how long a treatment spanning the transition is billed/blocked, and whether two clients can be booked into the \"same\" 01:30.",
+              "origin": "temporal"
+            },
+            {
+              "text": "What defines \"the day\" in the staff day schedule — calendar midnight-to-midnight in the centre timezone, the centre's business hours, or something else — and on which day does an appointment that starts before midnight and ends after it appear? — A treatment starting 23:30 could show on the starting day, the ending day, or both. Staff viewing \"today\" near opening or closing time see a different set of appointments depending on the boundary rule, which affects preparation and handover.",
+              "origin": "temporal"
+            },
+            {
+              "text": "How far into the future can clients book, and at exactly what instant (and in which timezone) does a newly eligible day open for booking? — A rolling horizon that opens \"30 days ahead\" behaves differently depending on whether the new day becomes bookable at centre-local midnight, UTC midnight, or on a rolling 720-hour basis. Clients competing for popular slots get different results, and the set of selectable dates changes at different moments.",
+              "origin": "temporal"
+            },
+            {
+              "text": "Is there a minimum lead time before a slot's start after which online booking for that slot closes (e.g. no bookings within 2 hours / 30 minutes / 0 minutes of start)? — With no cutoff a client can book a slot that starts in one minute, giving the therapist no notice; with a cutoff, that same attempt is rejected. The boundary determines exactly which slots appear bookable as the current time advances.",
+              "origin": "temporal"
+            },
+            {
+              "text": "Is there a maximum number of outstanding or future bookings a single client may hold at once? — Without a limit, one account can reserve many slots across therapists and days, which is a denial-of-service and no-show vector. A cap of 1, 3, or unlimited is directly observable when a client tries to book again.",
+              "origin": "boundary"
+            },
+            {
+              "text": "Until what moment before the appointment can a client cancel or reschedule online, and what happens to attempts after that point? — Before the deadline a cancellation frees the slot and (presumably) incurs no charge; after it the slot may stay blocked, a fee may apply, or the action may be refused entirely. The exact cut-off point decides the financial and scheduling outcome for identical requests made minutes apart.",
+              "origin": "temporal"
+            },
+            {
+              "text": "How long after an appointment's start time, with no client arrival, before it counts as a no-show — and does that automatically free the slot and/or trigger a charge? — A grace period of 0, 10, or 15 minutes changes whether a late-arriving client is still honoured, when the therapist's time is released for walk-ins, and whether a no-show fee is applied. The same late arrival produces opposite outcomes on either side of the threshold.",
+              "origin": "temporal"
+            },
+            {
+              "text": "If a treatment's price (or a tax/discount/promotion) changes between the moment of booking and the moment of service, which date's price applies? — Locking the price at booking time versus charging the price effective on the appointment date produces different amounts owed for the same booking. It also determines whether a promotion is judged by the booking date or the service date.",
+              "origin": "temporal"
+            },
+            {
+              "text": "Is \"staff\" a single role, or are therapists, front-desk/reception, and a manager/owner distinct roles with different powers? — If they are one role, any staff login can view and act on everything. If they are distinct, a therapist might see only their own column while reception sees the whole floor and a manager alone can change settings. The set of actions each login can perform differs observably.",
+              "origin": "authority"
+            },
+            {
+              "text": "Who creates staff accounts and assigns the therapist / reception / manager role, and can that be done through self-signup? — The power to grant staff access is distinct from using it. If there is no controlled provisioning step, someone could obtain staff-level schedule access improperly; if there is, an admin user-management screen must exist and be the only path to elevated roles.",
+              "origin": "authority"
+            },
+            {
+              "text": "Does a staff member's \"day schedule\" show only their own appointments, or the whole centre's bookings including other therapists' clients? — If it is centre-wide, every therapist sees the client names, treatments and contact details of clients who booked a different therapist. If it is per-therapist, a therapist observes only their own clients. Both are defensible and produce visibly different schedule views.",
+              "origin": "visibility"
+            },
+            {
+              "text": "Can staff create, reschedule, or cancel bookings on behalf of a client (phone bookings, walk-ins, no-shows), or is the schedule strictly read-only for staff with all changes made by the client? — The request grants staff only \"see\". If staff can also write, the system needs staff-side booking and cancellation actions and rules for when they may use them; if not, those controls are absent and a phoned-in booking cannot be entered.",
+              "origin": "authority"
+            },
+            {
+              "text": "Can staff perform actions that clients cannot — e.g. double-book a slot, book outside published hours, or book an appointment for their own client account — and are any of those restricted to avoid self-dealing? — If staff can override the constraints enforced on clients, the booking engine needs a privileged path and rules for when overrides are allowed; a staff member booking their own or a friend's slot outside availability is a conflict-of-interest case the request does not address.",
+              "origin": "authority"
+            },
+            {
+              "text": "Can clients cancel their own booking after confirming it, or must cancellation go through staff (or a phone call)? — Determines whether the client-facing UI needs a cancel action, authentication to reach past bookings, and a self-service flow at all. If only staff can cancel, the observable system has no client cancel path and every cancellation is a staff action.",
+              "origin": "reversal"
+            },
+            {
+              "text": "Must a client authenticate with a registered account to book, or can anyone book anonymously by entering name and contact details? — This defines whose data the booking is attached to. With accounts, a client can return to see and manage their bookings and history; without, each booking is an unlinked record and there is no \"my bookings\" view. It also changes whether identity at booking time is verified at all.",
+              "origin": "authority"
+            },
+            {
+              "text": "Who sets and edits each therapist's bookable hours, breaks, and days off — the therapist for their own calendar, or only a manager/admin? — The power to define availability controls which slots clients can ever book. If therapists self-manage, a therapist can unilaterally close their day; if reserved to a manager, therapists cannot, and the system needs a manager-only availability screen.",
+              "origin": "authority"
+            },
+            {
+              "text": "Are booking creation and cancellation attributed to a specific identity (which client, or which staff member acted for them) and recorded in a visible log or \"booked by\" field? — Without attribution, a cancelled or altered appointment cannot be traced to a person, which matters for disputes, no-show policy, and staff accountability. Presence or absence of an audit trail and a \"booked/cancelled by\" field is directly observable.",
+              "origin": "authority"
+            },
+            {
+              "text": "Which staff may view a client's stored contact details and treatment history or intake/health notes — all staff, or only the therapist assigned to that appointment? — Massage intake often includes health information. Restricting it to the assigned therapist versus exposing it to all staff (including reception) produces different screens and different data on each staff role's view of a booking.",
+              "origin": "authority"
+            },
+            {
+              "text": "Which client fields appear on the staff day schedule — just first name, treatment and time, or also phone/email, address, health-intake answers, and notes from previous visits? — This decides how much of one party's (the client's) data is exposed in another party's (staff's) view. A minimal card versus a full client record are both plausible and observably different, and health/intake data is sensitive.",
+              "origin": "visibility"
+            },
+            {
+              "text": "Can staff see a client's other appointments (past history and future bookings, including with other therapists) from the day schedule, or only the single appointment in view? — Exposing a client's full booking record to any staff member is more visibility of that party's data than showing just today's slot. Both scopes are plausible and lead to different staff views.",
+              "origin": "visibility"
+            },
+            {
+              "text": "Does the client-facing time picker let a client infer that a specific therapist is already booked at a given slot, and does it distinguish \"booked\" from \"therapist not working\"? — Showing per-therapist unavailable slots reveals the existence of other clients' bookings; showing only \"next available\" times or a generic \"unavailable\" hides them. The two options leak different amounts about other clients' records.",
+              "origin": "visibility"
+            },
+            {
+              "text": "When a chosen therapist has no free time on the selected day (fully booked, day off, or outside working hours), what does the client see — an empty slot list, an explanatory message, the next available day, or is the therapist hidden entirely? — The empty-availability case is the most common real interaction after launch. Silently showing a blank list reads as a broken page; hiding the therapist changes who appears selectable; offering the next day changes the booking flow. Each is a different product.",
+              "origin": "boundary"
+            },
+            {
+              "text": "Before any therapists or treatments have been configured, what does the booking page present to a client? — On day one the collections are empty. The system can show an empty dropdown, a 'no online booking available' notice, or error. This determines whether the centre can expose the page before setup is complete.",
+              "origin": "boundary"
+            },
+            {
+              "text": "When a client picks a therapist/treatment pair the therapist does not perform, which selection takes precedence — is the treatment list filtered by the chosen therapist, the therapist list filtered by the chosen treatment, or is any combination accepted and validated later? — Two configurations conflict and one must win. The choice determines the order of the booking steps, what options are visible, and whether an invalid pair can even be submitted.",
+              "origin": "boundary"
+            },
+            {
+              "text": "For the staff day schedule, which day is shown by default and how far into the past and future can staff navigate; and what is displayed for a day with zero bookings? — 'Today' vs 'next working day' as the default, and whether historical days are viewable, changes the primary staff view. An empty day rendering as a blank page versus an explicit 'no appointments' state affects whether staff trust the tool.",
+              "origin": "boundary"
+            },
+            {
+              "text": "When a client books or cancels online, does it appear on the staff day schedule immediately, or only after a manual refresh / periodic sync / staff confirmation step? — A change made by one party (client) either does or does not become promptly visible to another (staff). If staff are mid-treatment relying on a stale schedule, a delayed update changes what they observe and act on.",
+              "origin": "visibility"
+            },
+            {
+              "text": "When staff reschedule, cancel, or reassign a booking to a different therapist, is the client notified/shown the change immediately, silently updated, or not surfaced at all? — This governs whether a staff-side change to the client's own record becomes observable to the client, and how promptly. Silent reassignment versus immediate notification are both reasonable and behave differently.",
+              "origin": "visibility"
+            },
+            {
+              "text": "When a booking is changed (time, therapist, or treatment), is the existing appointment edited in place or is the original voided and a new appointment created? — Edit-in-place keeps one identifier and history; void-and-recreate leaves a cancelled record and a new one. This affects what staff see in the day schedule, what any confirmation reference points to, and whether the change is auditable.",
+              "origin": "reversal"
+            },
+            {
+              "text": "When a booking is cancelled, does the freed slot immediately become bookable by other clients, or is it held/blocked for some period? — Immediate release means a race for the slot and possible loss of a mistaken cancellation; a hold gives a grace window. The two produce visibly different availability behaviour right after a cancellation.",
+              "origin": "reversal"
+            },
+            {
+              "text": "Are cancelled bookings retained as visible records (in the day schedule, in client history, counted toward no-shows), or removed entirely? — Staff planning, no-show tracking, and dispute handling all depend on whether a cancelled appointment still appears. Hard delete versus a 'cancelled' state are both defensible and look different on screen.",
+              "origin": "reversal"
+            },
+            {
+              "text": "Can a cancellation itself be undone (the appointment reinstated), and what happens if the slot was taken by someone else in the meantime? — A mis-click cancel is common. Whether the system offers 'restore', and whether it refuses because the slot is gone or bumps the new booking, are distinct behaviours with no default in the request.",
+              "origin": "reversal"
+            },
+            {
+              "text": "When a client reschedules only one attribute (e.g. the time), does the system keep the previously chosen therapist and treatment, or force the client to re-select everything? — Defines what a partial change deliberately leaves alone. Keeping the rest may silently produce an invalid combination (therapist not working the new time); forcing re-selection is safer but more friction. Both are reasonable and behave differently.",
+              "origin": "reversal"
+            },
+            {
+              "text": "When a session is shorter or longer than the treatment's standard block (client arrives late, leaves early, therapist ends early, or the session overruns), how is the actual time priced: full advertised price regardless, pro-rata per minute, or rounded up/down to the nearest duration tier? — The same appointment can produce three different invoice totals. Pro-rata favours the client on short sessions; block/round-up favours the centre. This is a stated policy with tax-invoice and consumer-law consequences, and staff and clients will observe different amounts charged for identical clock time.",
+              "origin": "money"
+            },
+            {
+              "text": "In which direction, and to whose benefit, are derived money amounts rounded (percentage discounts, promo codes, tax added or extracted, loyalty credit, splitting one total across payment methods)? — Round-half-up, round-half-down, round-to-nearest-5-cents, and round-per-line vs round-on-total all yield different final charges and different tax remitted. The cent that appears or disappears is either the centre's gain or the client's, and it must reconcile against the payment processor and the tax return.",
+              "origin": "money"
+            },
+            {
+              "text": "If a client cancels, is money already taken refunded in full, refunded partially, converted to non-refundable credit toward a future booking, or kept entirely — and how does this vary with how far ahead the cancellation is made? — Refund vs credit vs forfeit are distinct observable outcomes with different accounting entries and different chargeback/consumer-protection exposure. The notice thresholds (e.g. 24h, 48h) are arbitrary until chosen, and each choice changes what the client gets back.",
+              "origin": "money"
+            },
+            {
+              "text": "If a client does not show up, is the amount already taken kept as a no-show fee, offered as credit, or refunded — and if kept, is it the full price or a capped fee? — A no-show can be treated as a completed sale, a partial penalty, or a wash. Each produces a different revenue figure, a different tax treatment, and a different dispute risk, and the client visibly either loses their money or does not.",
+              "origin": "money"
+            },
+            {
+              "text": "At the moment of online booking, does the system charge the full treatment price, a deposit (and if so, what fraction, rounded how), or nothing until after the session — and is any deposit later applied to the balance, refundable, or forfeited on cancellation? — This determines how much money enters the centre's account before service is rendered, what liability it represents on the books, and what the client is owed if the booking falls through. A 'deposit' of 30% of an odd price also forces a rounding-direction choice.",
+              "origin": "money"
+            },
+            {
+              "text": "When a booking is modified and the new price differs — client swaps to a cheaper or dearer treatment, reschedules into a differently priced slot, or the centre reassigns them to a therapist on a different rate — is the difference refunded, issued as credit, charged additionally, or simply absorbed, and does the answer depend on whether the client or the centre initiated the change? — A downgrade can hand the client cash, a credit, or nothing; an upgrade can trigger a second charge or be given away. Making it depend on who initiated the change is a fairness policy with real revenue impact, and each rule produces a visibly different balance owed or returned.",
+              "origin": "money"
+            },
+            {
+              "text": "When a client asks to close/delete their account (or is deactivated for non-payment/abuse) while they have upcoming appointments, are those appointments cancelled first, is deletion blocked until after they pass, or do the appointments remain on the staff schedule with the client's identity retained, anonymised, or replaced by a placeholder? — This decides whether staff still see who is coming in, whether the slot is freed, and how personal-data erasure requests are reconciled with keeping an operational schedule and historical records.",
+              "origin": "lifecycle"
+            },
+            {
+              "text": "Are therapists and treatments hard-deleted, soft-deleted (recoverable/reactivatable), or archived, and how are past bookings that reference a now-removed therapist or treatment displayed in the day schedule, history and any reporting? — Historical appointments point at these records. Hard deletion breaks past-schedule views and revenue history; soft delete vs. archive determines whether a returning therapist's old data reconnects and whether removed treatments still render correctly in past-day views.",
+              "origin": "lifecycle"
+            },
+            {
+              "text": "If deactivating a therapist leaves a treatment with no qualified provider, does the system automatically hide that treatment from online booking, leave it bookable with no assignable therapist, or flag it for an admin to resolve? — The treatment offering effectively has no owner once its sole provider departs. Leaving it bookable lets clients reserve appointments no one can perform; auto-hiding silently reduces the visible menu; each is observably different for clients and staff.",
+              "origin": "lifecycle"
+            },
+            {
+              "text": "If the selected treatment's duration runs past the therapist's shift end or the centre's closing time (or into a scheduled break), is the booking blocked, allowed with overrun, or is the slot simply never offered? — The last bookable start time depends entirely on this. A 90-minute treatment with 60 minutes left before closing either disappears from the list, is rejected on submit, or is accepted and creates unpaid overtime.",
+              "origin": "boundary"
+            },
+            {
+              "text": "When the same real-world appointment is entered by two routes - the client books online and staff also enter it by phone, or staff enter it twice - does the system detect that this client already has an appointment at or near that time and warn, merge, or block, or does it create two independent appointments? — The two routes cannot both occupy the identical slot, so one path is a visible conflict error to staff or client; but near-miss times (3:00 and 3:15, or the same treatment twice that day) create two appointments that both consume capacity and both generate reminders. Whether the system flags the apparent duplicate changes what staff see on the day schedule and how many slots are consumed.",
+              "origin": "idempotency"
+            }
+          ],
+          "costUsd": 0.414383,
+          "costAvailable": true,
+          "calls": 10,
+          "durationMs": 88524
+        }
+      ],
+      "matches": [
+        {
+          "caseId": "booking-massage",
+          "arm": "direct",
+          "matched": [],
+          "unmatchedItems": 6,
+          "totalItems": 6,
+          "totalDecisions": 12
+        },
+        {
+          "caseId": "booking-massage",
+          "arm": "ask",
+          "matched": [],
+          "unmatchedItems": 40,
+          "totalItems": 40,
+          "totalDecisions": 12
+        },
+        {
+          "caseId": "booking-massage",
+          "arm": "ask10",
+          "matched": [],
+          "unmatchedItems": 141,
+          "totalItems": 141,
+          "totalDecisions": 12
+        },
+        {
+          "caseId": "booking-massage",
+          "arm": "divergence",
+          "matched": [],
+          "unmatchedItems": 2,
+          "totalItems": 2,
+          "totalDecisions": 12
+        },
+        {
+          "caseId": "booking-massage",
+          "arm": "probe",
+          "matched": [],
+          "unmatchedItems": 63,
+          "totalItems": 63,
+          "totalDecisions": 12
+        }
+      ]
+    }
+  ],
+  "totalCostUsd": 1.4957600000000002,
+  "costAvailable": false
+}

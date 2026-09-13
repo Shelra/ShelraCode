@@ -1,0 +1,62 @@
+---
+description: Development workflow and common commands
+globs: "**/*"
+alwaysApply: true
+---
+
+# Development Workflow
+
+## Prerequisites
+
+- Bun 1.3+ (required for build **and** runtime)
+
+## Common Commands
+
+```bash
+bun install            # deps + Husky pre-commit (Biome on staged files)
+bun run src/index.ts   # dev run from source
+bun run typecheck      # tsc --noEmit
+bun run lint           # biome check src/
+bun run format         # biome format src/   (fix: bun run format:fix)
+bun run test           # vitest
+bun run build          # scripts/build.ts → dist/index.js + dist/shelra.exe (+ per-user install)
+SHELRA_BUILD_SKIP_INSTALL=1 bun run build   # build artifacts only
+bun run dist/index.js  # run the built CLI (Bun only; node fails on bun:sqlite)
+```
+
+## Environment Variables
+
+The default path is cloud-first OpenRouter Free and needs an OpenRouter key.
+The managed local path is explicit through `--local`; copy `.env.example` to
+`.env` for the full list.
+
+| Variable | Purpose |
+|----|----|
+| `OPENROUTER_API_KEY` | Primary cloud provider key; activates dynamic Free catalog and routing. |
+| `SHELRA_API_KEY` / `SHELRA_BASE_URL` | Optional generic OpenAI-compatible provider (`--remote`). Legacy `GROK_*` still read. |
+| `SHELRA_MODEL` | Force a model id for every turn |
+| `SHELRA_RUNTIME_BACKEND` | `cpu` or `cuda` for the managed llama.cpp engine (auto-detected) |
+| `TELEGRAM_BOT_TOKEN` | Enable the Telegram bridge |
+
+Every agent task also performs bounded web research, prioritizing Google when
+available and falling back only when Google cannot return usable results.
+
+## Git hooks
+
+`bun install` sets up **Husky** → **lint-staged**, which runs
+`biome check --write` on staged `*.{ts,tsx,js,mjs,cjs,json}` and re-stages fixes.
+
+## Before submitting changes
+
+1. `bun run format` and `bun run lint` — CI blocks on both (Biome).
+2. `bun run typecheck` — CI enforces.
+3. `bun run test`.
+4. `bun run build` — CI runs `build:binary`.
+5. No secrets or `.env` files committed.
+
+## Project structure conventions
+
+- Source in `src/`, compiled output in `dist/` (gitignored unless built locally).
+- CLI entry is `src/index.ts` (Commander) → OpenTUI React shell in `src/ui/`.
+- `ShelraCode/` is a gitignored migration reference checkout — do not edit it.
+- Line endings are CRLF repo-wide (`biome.json` + `.gitattributes`).

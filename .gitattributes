@@ -1,0 +1,24 @@
+# Line endings
+# --------------------------------------------------------------------------
+# This repository's tracked source is stored with CRLF endings, and
+# `biome.json` (formatter.lineEnding = "crlf") is configured to match so that
+# `bun run format` / `bun run lint` and the CI check pass on every platform.
+# No repo-wide renormalization to LF is applied here on purpose: that is a
+# deliberate, separate cleanup that should land in its own commit.
+
+# Binary assets — never run text or line-ending filters over these.
+*.exe   binary
+*.dll   binary
+*.wasm  binary
+*.node  binary
+*.gguf  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+
+# Generated lockfile — keep it out of diffs and language stats.
+bun.lock  -diff linguist-generated

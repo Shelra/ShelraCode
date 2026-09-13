@@ -1,0 +1,37 @@
+INTENT GAP MEASUREMENT
+cases 1  decisions 12  samples 3
+arms on sonnet, judged by opus
+
+RECALL OF GROUND-TRUTH DECISIONS
+arm         found/total   recall   raised  precision   cost     per decision
+direct        0/12        0.0%       6       0.0%    $0.093           n/a
+ask           0/12        0.0%      40       0.0%    $0.115           n/a
+ask10         0/12        0.0%     141       0.0%    $0.338           n/a
+divergence    0/12        0.0%       2       0.0%    $0.206           n/a
+probe         0/12        0.0%      63       0.0%    $0.414           n/a
+
+SILENT CONSENSUS
+0/12 decisions (0.0%) drew the same behaviour from every independent interpretation.
+No sampling-based detector can reach these, however it is implemented.
+
+arm          recall on silent   recall on divergent
+direct               0.0% (0/0)            0.0% (0/12)
+ask                  0.0% (0/0)            0.0% (0/12)
+ask10                0.0% (0/0)            0.0% (0/12)
+divergence           0.0% (0/0)            0.0% (0/12)
+probe                0.0% (0/0)            0.0% (0/12)
+
+RECALL BY DECISION CATEGORY
+category           direct     ask   ask10   diverg    probe
+authority            0.0%    0.0%     0.0%     0.0%
+boundary             0.0%    0.0%     0.0%     0.0%
+concurrency          0.0%    0.0%     0.0%     0.0%
+idempotency          0.0%    0.0%     0.0%     0.0%
+lifecycle            0.0%    0.0%     0.0%     0.0%
+money                0.0%    0.0%     0.0%     0.0%
+partial_failure      0.0%    0.0%     0.0%     0.0%
+reversal             0.0%    0.0%     0.0%     0.0%
+temporal             0.0%    0.0%     0.0%     0.0%
+visibility           0.0%    0.0%     0.0%     0.0%
+
+total spend $1.496 (incomplete: some calls did not report cost)

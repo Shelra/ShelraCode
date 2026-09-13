@@ -1,0 +1,45 @@
+---
+description: TypeScript coding conventions and style guidelines
+globs: "**/*.ts,**/*.tsx"
+alwaysApply: false
+---
+
+# TypeScript Conventions
+
+## Module system
+
+- ESM project (`"type": "module"`). Use `import`/`export` only, never `require()`.
+- `moduleResolution: "Bundler"` — import local modules **without** a file
+  extension (`import { Agent } from "./agent/agent"`).
+
+## Compiler configuration (`tsconfig.json`)
+
+- Target ES2022, module ESNext, `"jsx": "react-jsx"` with
+  `jsxImportSource: "@opentui/react"`.
+- **`strict: true`.** New code must typecheck under strict mode.
+- `bun run typecheck` (`tsc --noEmit`) must stay green; CI enforces it.
+
+## Type practices
+
+- Explicit interfaces for public boundaries (`ToolResult`, `ProviderAdapter`,
+  `LocalRuntimeAdapter`, startup/context types).
+- `import type { ... }` for type-only imports.
+- Biome forbids `any` (`noExplicitAny: "error"`); model it or use `unknown` and
+  narrow. Shared types live in `src/types/index.ts`.
+
+## Naming
+
+- Files: kebab-case. Classes/interfaces/types: PascalCase.
+  Functions/variables: camelCase. True constants: UPPER_SNAKE_CASE.
+
+## Error handling
+
+- Tool/executor functions return result objects (`{ success, output?/error? }`)
+  rather than throwing.
+- `process.exit(1)` for fatal CLI errors; the entry point releases the managed
+  runtime child on every exit path.
+
+## Lint / format
+
+- Biome only (`biome.json`) — there is no ESLint config. Run `bun run lint` and
+  `bun run format`; both are CI gates.

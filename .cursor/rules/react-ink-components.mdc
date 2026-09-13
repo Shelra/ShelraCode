@@ -1,0 +1,41 @@
+---
+description: Guidelines for React components in the OpenTUI terminal UI
+globs: "src/ui/**/*.tsx,src/ui/**/*.ts"
+alwaysApply: false
+---
+
+# React + OpenTUI Terminal UI
+
+## Framework
+
+The UI renders React components to the terminal with
+[OpenTUI](https://github.com/anomalyco/opentui) (`@opentui/react` +
+`@opentui/core`) — **not Ink**. Primitives are OpenTUI elements (`<box>`,
+`<text>`, `<scrollbox>`, …), lowercase intrinsic elements.
+
+## Component patterns
+
+- Functional components with hooks only.
+- JSX uses the automatic runtime: `tsconfig.json` sets `"jsx": "react-jsx"` and
+  `"jsxImportSource": "@opentui/react"`. **Do not** `import React` just for JSX.
+- Components live in `src/ui/` and `src/ui/components/`, kebab-case files.
+- The root is mounted via `createRoot(renderer)` / `root.render(...)` in
+  `src/index.ts`; `createCliRenderer` from `@opentui/core` owns the terminal.
+
+## Key surfaces
+
+| Area | File |
+|------|------|
+| Main chat shell + keyboard + slash menu | `src/ui/app.tsx` |
+| Explicit local-mode startup / onboarding screen | `src/ui/startup.tsx` |
+| Markdown / transcript rendering | `src/ui/markdown.tsx` |
+| Modals (MCP, schedule, agents, plan) | `src/ui/*-modal.tsx`, `src/ui/agents-modal.tsx` |
+| Composer input | `src/ui/startup-input.ts`, `src/ui/components/` |
+
+## Guidelines
+
+- Keyboard handling goes through OpenTUI's `useKeyboard`; keep `handleKey`
+  dependency arrays exhaustive (Biome `useExhaustiveDependencies` is on).
+- State/streaming events flow from the `Agent` observer into React state; keep
+  provider objects out of components (see `src/providers/architecture.test.ts`).
+- Theme/colours: `src/ui/theme.ts`.

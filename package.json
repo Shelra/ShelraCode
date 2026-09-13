@@ -1,0 +1,87 @@
+{
+  "name": "shelra",
+  "version": "1.1.7",
+  "description": "A cloud-first AI coding agent with an explicit managed local mode, built with Bun and OpenTUI.",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "shelra": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun run scripts/build.ts",
+    "build:binary": "bun run scripts/build.ts",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "bunx vitest run --pool=forks --exclude=\"ShelraCode/**\" --exclude=\"ShelraCode/node_modules/**\" --exclude=\"src/storage/sessions.test.ts\" --exclude=\"src/storage/objectives.test.ts\" --exclude=\"src/tools/checkpoint.test.ts\" --exclude=\"src/ui/workspace-layout.test.tsx\" --exclude=\"src/ui/runtime-activity-tree.test.tsx\" --exclude=\"src/agent/sandbox.test.ts\" --exclude=\"src/agent/delegations.test.ts\" --exclude=\"src/agent/recap.test.ts\" --exclude=\"src/verify/runtime-prep.test.ts\" && bunx vitest run --pool=forks --no-file-parallelism src/agent/sandbox.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/delegations.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/recap.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/verify/runtime-prep.test.ts",
+    "test:watch": "bunx vitest --pool=forks --exclude=\"ShelraCode/**\" --exclude=\"ShelraCode/node_modules/**\" --exclude=\"src/storage/sessions.test.ts\" --exclude=\"src/storage/objectives.test.ts\" --exclude=\"src/tools/checkpoint.test.ts\" --exclude=\"src/ui/workspace-layout.test.tsx\" --exclude=\"src/ui/runtime-activity-tree.test.tsx\"",
+    "lint": "biome check src/",
+    "format": "biome format src/",
+    "format:fix": "biome format --write src/",
+    "lint:fix": "biome check --fix src/",
+    "pre-commit": "lint-staged",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,json}": "biome check --write --no-errors-on-unmatched"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "shelra",
+    "ai",
+    "coding",
+    "terminal",
+    "opentui"
+  ],
+  "author": "Vibe Kit",
+  "license": "MIT",
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.25",
+    "@ai-sdk/openai-compatible": "^2.0.35",
+    "@ai-sdk/provider": "^3.0.8",
+    "@ai-sdk/provider-utils": "^4.0.21",
+    "@ai-sdk/xai": "^3.0.67",
+    "@coinbase/agentkit": "^0.10.4",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@npmcli/arborist": "^9.4.2",
+    "@opentui/core": "^0.1.88",
+    "@opentui/react": "^0.1.88",
+    "agent-desktop": "^0.1.11",
+    "ai": "^6.0.116",
+    "commander": "^12.1.0",
+    "chromium-bidi": "12.1.0",
+    "diff": "^8.0.3",
+    "dotenv": "^16.6.1",
+    "grammy": "^1.41.1",
+    "playwright": "^1.63.0",
+    "react": "^19.2.4",
+    "ripgrep": "^0.3.1",
+    "semver": "^7.7.4",
+    "vscode-jsonrpc": "^8.2.1",
+    "vscode-languageserver-types": "^3.17.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.8",
+    "@types/diff": "^8.0.0",
+    "@types/node": "^22.19.15",
+    "@types/npmcli__arborist": "^6.3.3",
+    "@types/react": "^19.2.14",
+    "@types/semver": "^7.7.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "preferGlobal": true
+}
