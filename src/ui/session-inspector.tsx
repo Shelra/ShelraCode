@@ -69,17 +69,7 @@ export function SessionStatusStrip({
   const elapsed = elapsedMs !== null && elapsedMs !== undefined ? formatElapsed(elapsedMs) : null;
 
   return (
-    <box
-      width="100%"
-      flexShrink={0}
-      paddingLeft={2}
-      paddingRight={2}
-      paddingTop={1}
-      paddingBottom={1}
-      flexDirection="row"
-      border={["top", "bottom"]}
-      borderColor={t.border}
-    >
+    <box width="100%" flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} flexDirection="row">
       <text fg={statusColor}>
         <b>{`${marker} ${truncate(title, available)}`}</b>
       </text>

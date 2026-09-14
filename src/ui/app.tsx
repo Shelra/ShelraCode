@@ -70,7 +70,6 @@ import {
   SubagentEditorModal,
   SubagentsBrowserModal,
 } from "./agents-modal";
-import { AuroraEdge } from "./aurora";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
 import { type TypeaheadState, useTypeahead } from "./hooks/useTypeahead.js";
@@ -3983,8 +3982,18 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
             <SessionHeader t={t} modeInfo={modeInfo} sessionTitle={sessionTitle} sessionId={sessionId} />
             <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
               {/* Scrollable messages */}
-              {/* biome-ignore lint/suspicious/noExplicitAny: OpenTUI type mismatch for stickyStart */}
-              <scrollbox ref={scrollRef} flexGrow={1} stickyScroll={true} stickyStart={"bottom" as any}>
+              <scrollbox
+                ref={scrollRef}
+                flexGrow={1}
+                stickyScroll={true}
+                // biome-ignore lint/suspicious/noExplicitAny: OpenTUI type mismatch for stickyStart
+                stickyStart={"bottom" as any}
+                // A short conversation must hug the composer, not float at the top with a dead
+                // gap below it — the scrollbox's internal content box has a forced 100% min
+                // height (so scrollbar math works), so without this the empty leftover space
+                // lands below the messages instead of above them.
+                contentOptions={{ justifyContent: "flex-end" }}
+              >
                 {transcriptItems.map((item) =>
                   item.kind === "message" ? (
                     <MessageView
@@ -4010,10 +4019,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   title={isProcessing ? currentActivity : null}
                   elapsedMs={currentActivityElapsedMs}
                   activities={liveActivityItems}
-                  now={nowTick}
                   found={liveActivityItems.length > 0 ? streamContent || null : null}
                   next={liveActivityItems.length > 0 ? nextPlanStepLabel(inspectorPlan) : null}
                   isProcessing={isProcessing}
+                  reducedMotion={reducedMotion}
                 />
                 {/* Streaming assistant content — only when there's no live activity tree to fold it into */}
                 {streamContent && liveActivityItems.length === 0 && (
@@ -4043,8 +4052,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 />
                 <PromptBox
                   t={t}
-                  width={chatWidth}
-                  reducedMotion={reducedMotion}
                   inputRef={inputRef}
                   isProcessing={isProcessing}
                   showModelPicker={showModelPicker}
@@ -4125,8 +4132,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
             <box width="100%" maxWidth={75} flexShrink={0}>
               <PromptBox
                 t={t}
-                width={Math.min(width, 75)}
-                reducedMotion={reducedMotion}
                 inputRef={inputRef}
                 isProcessing={isProcessing}
                 showModelPicker={showModelPicker}
@@ -4461,8 +4466,6 @@ function ContextMeter({ t, stats }: { t: Theme; stats: ContextStats }) {
 
 function PromptBox({
   t,
-  width,
-  reducedMotion,
   inputRef,
   isProcessing,
   showModelPicker,
@@ -4485,8 +4488,6 @@ function PromptBox({
   typeahead,
 }: {
   t: Theme;
-  width: number;
-  reducedMotion: boolean;
   inputRef: React.RefObject<TextareaRenderable | null>;
   isProcessing: boolean;
   showModelPicker: boolean;
@@ -4523,11 +4524,10 @@ function PromptBox({
   return (
     <box
       backgroundColor={t.backgroundPanel}
-      border={["left", "right", "bottom"]}
+      border={["top", "left", "right", "bottom"]}
       borderColor={composerBorder}
       flexDirection="column"
     >
-      <AuroraEdge t={t} width={width} active={isProcessing} focused={inputFocused} reducedMotion={reducedMotion} />
       <box>
         {hasQueue && (
           <box
@@ -4853,18 +4853,16 @@ function TranscriptActivityView({ t, item }: { t: Theme; item: TranscriptActivit
 
   return (
     <box paddingLeft={3} marginTop={1} marginBottom={1} flexShrink={0} flexDirection="column">
-      <text fg={tone}>
-        <b>{`${marker} ${item.title}`}</b>
-      </text>
+      <text fg={tone}>{`${marker} ${item.title}`}</text>
       {visibleDetails.map((detail, index) => (
         <text
           key={`${item.id}:detail:${detail}`}
           fg={failed && index === visibleDetails.length - 1 ? t.danger : t.textMuted}
         >
-          {`${index === visibleDetails.length - 1 && hidden === 0 ? "└─" : "├─"} ${truncateLine(detail, 110)}`}
+          {`  ${truncateLine(detail, 110)}`}
         </text>
       ))}
-      {hidden > 0 ? <text fg={t.textDim}>{`└─ ${hidden} more operation${hidden === 1 ? "" : "s"}`}</text> : null}
+      {hidden > 0 ? <text fg={t.textDim}>{`  +${hidden} more operation${hidden === 1 ? "" : "s"}`}</text> : null}
     </box>
   );
 }
@@ -4878,10 +4876,31 @@ interface ActivityTreeNode {
   continuation?: string[];
 }
 
+/** Classic braille dots spinner — the same glyph set most CLI spinners (Vercel's included) use. */
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const SPINNER_INTERVAL_MS = 90;
+
+/** A single animated glyph in place of a static marker — proof of life for the current action. */
+function Spinner({ color, reducedMotion }: { color: string; reducedMotion: boolean }) {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    const interval = setInterval(
+      () => setFrame((current) => (current + 1) % SPINNER_FRAMES.length),
+      SPINNER_INTERVAL_MS,
+    );
+    return () => clearInterval(interval);
+  }, [reducedMotion]);
+
+  return <span style={{ fg: color }}>{reducedMotion ? "●" : SPINNER_FRAMES[frame]}</span>;
+}
+
 /**
- * Live, in-progress activity as a branch tree — the same visual grammar
- * `TranscriptActivityView` already uses for completed history (├─/└─), so a still-running
- * phase reads as the natural in-progress version of what it collapses into once done.
+ * Live, in-progress activity as flat, indented lines — the same calm grammar
+ * `TranscriptActivityView` uses for completed history, so a still-running phase reads as the
+ * natural in-progress version of what it collapses into once done. No box-drawing connectors:
+ * a marker (✓/●/×, spinning while active) plus indentation carries the hierarchy, not tree glyphs.
  * "Found" reuses the model's own real streamed text (never invented); "Next" reuses the
  * real next plan step (never invented) — see `nextPlanStepLabel` in observability.ts.
  */
@@ -4890,71 +4909,69 @@ export function RuntimeActivityTree({
   title,
   elapsedMs,
   activities,
-  now,
   found,
   next,
   isProcessing,
+  reducedMotion,
 }: {
   t: Theme;
   title: string | null;
   elapsedMs: number | null;
   activities: UiActivityEvent[];
-  now: number;
   found: string | null;
   next: string | null;
   isProcessing: boolean;
+  reducedMotion: boolean;
 }) {
   const failedEvent = [...activities].reverse().find((event) => event.status === "failed");
   const counts = groupLiveActivity(activities);
-  // Each group is rendered with a blank "│" spacer before it (except the first) — sibling
-  // lines within a group (the count lines) are NOT separated, matching the mandated format:
-  // "Explored N files" / "Searched N symbols" sit directly under each other, while "Found"
-  // and "Next" are their own groups with a spacer above.
+  // Each group gets a blank line before it (except the first) — sibling lines within a group
+  // (the count lines) stay tight together, while "Found" and "Next" are their own groups with
+  // a little more room above them.
   const groups: ActivityTreeNode[][] = [];
   if (counts.length > 0) groups.push(counts.map((line) => ({ key: line.key, branch: line.text })));
   if (found) groups.push([{ key: "found", branch: "Found", continuation: found.split("\n"), branchTone: t.text }]);
   if (!failedEvent && next) groups.push([{ key: "next", branch: "Next", continuation: [next] }]);
 
   if (!title && groups.length === 0) return null;
-  const marker = failedEvent ? "×" : isProcessing ? "●" : "✓";
+  const spinning = isProcessing && !failedEvent;
+  const marker = failedEvent ? "×" : isProcessing ? null : "✓";
   const tone = failedEvent ? t.danger : isProcessing ? t.accent : t.success;
   const elapsed = isProcessing && elapsedMs !== null ? formatActivityElapsed(elapsedMs) : null;
-  const totalNodes = groups.reduce((sum, group) => sum + group.length, 0);
-  let nodeIndex = -1;
 
   return (
     <box paddingLeft={3} marginTop={1} marginBottom={1} flexShrink={0} flexDirection="column">
       {title ? (
         <box flexDirection="row">
           <text fg={tone}>
-            <b>{`${marker} ${title}`}</b>
+            {isProcessing ? (
+              <b>
+                {spinning ? <Spinner color={tone} reducedMotion={reducedMotion} /> : marker}
+                {` ${title}`}
+              </b>
+            ) : (
+              `${marker} ${title}`
+            )}
           </text>
           <box flexGrow={1} />
           {elapsed ? <text fg={t.textMuted}>{elapsed}</text> : null}
         </box>
       ) : null}
       {failedEvent ? (
-        <text fg={t.danger}>{`├─ ${truncateLine(failedEvent.detail || failedEvent.label, 110)}`}</text>
+        <text fg={t.danger}>{`  ${truncateLine(failedEvent.detail || failedEvent.label, 110)}`}</text>
       ) : null}
       {groups.map((group, groupIndex) => (
-        <box key={`group:${groupIndex}`} flexDirection="column">
-          {groupIndex > 0 ? <text fg={t.textDim}>{"│"}</text> : null}
-          {group.map((node) => {
-            nodeIndex += 1;
-            const isLastOverall = nodeIndex === totalNodes - 1;
-            const glyph = isLastOverall ? "└─" : "├─";
-            const continuationPrefix = isLastOverall ? "  " : "│ ";
-            return (
-              <box key={node.key} flexDirection="column">
-                <text fg={node.branchTone ?? t.textMuted}>{`${glyph} ${truncateLine(node.branch, 110)}`}</text>
-                {node.continuation?.map((line, lineIndex) => (
-                  <text key={`${node.key}:${lineIndex}`} fg={t.textMuted}>
-                    {`${continuationPrefix} ${truncateLine(line, 108)}`}
-                  </text>
-                ))}
-              </box>
-            );
-          })}
+        <box key={`group:${groupIndex}`} flexDirection="column" marginTop={groupIndex > 0 ? 1 : 0}>
+          {group.map((node) => (
+            <box key={node.key} flexDirection="column">
+              <text fg={node.branchTone ?? t.textMuted}>{`  ${truncateLine(node.branch, 110)}`}</text>
+              {node.continuation?.map((line, lineIndex) => (
+                <text key={`${node.key}:${lineIndex}`} fg={t.textMuted}>
+                  {`  ${truncateLine(line, 108)}`}
+                </text>
+              ))}
+            </box>
+          ))}
         </box>
       ))}
     </box>
@@ -5019,34 +5036,20 @@ function MessageView({
           border={["left"]}
           customBorderChars={SPLIT}
           borderColor={entryColor}
+          paddingLeft={2}
           marginTop={index === 0 ? 0 : 1}
           marginBottom={1}
+          flexDirection="column"
         >
-          <box
-            paddingTop={1}
-            paddingBottom={1}
-            paddingLeft={2}
-            backgroundColor={t.backgroundPanel}
-            flexShrink={0}
-            flexDirection="column"
-          >
-            <text fg={entryColor}>
-              <b>{"USER"}</b>
-            </text>
-            {entry.sourceLabel ? <text fg={t.textMuted}>{entry.sourceLabel}</text> : null}
-            <box paddingTop={1} flexDirection="column">
-              <UserMessageContent content={entry.content} t={t} expanded={expandedMessages?.has(index) ?? false} />
-            </box>
-          </box>
+          {entry.sourceLabel ? <text fg={t.textDim}>{entry.sourceLabel}</text> : null}
+          <UserMessageContent content={entry.content} t={t} expanded={expandedMessages?.has(index) ?? false} />
         </box>
       );
 
     case "assistant":
       return (
         <box paddingLeft={3} marginTop={1} flexShrink={0} flexDirection="column">
-          <text fg={t.primary}>
-            <b>{"SHELRA"}</b>
-          </text>
+          <text fg={t.textDim}>{"Shelra"}</text>
           {entry.sourceLabel ? <text fg={t.textMuted}>{entry.sourceLabel}</text> : null}
           <box paddingTop={1} flexDirection="column">
             <Markdown content={entry.content} t={t} />
@@ -6718,6 +6721,33 @@ function isEscapeKey(key: KeyEvent): boolean {
   );
 }
 
+/**
+ * Best-effort read of one string field out of a tool call's arguments while they may still be
+ * mid-stream (the model emits `function.arguments` token by token, so it's often incomplete,
+ * unterminated JSON for a beat). Regex-extracts the field's value directly so an in-progress
+ * label like "Writing" can go dynamic — "Writing index.html" — the moment the real target has
+ * streamed in, rather than staying a blank placeholder until the whole call finishes.
+ */
+function extractStreamingArg(rawArguments: string, key: string): string {
+  const match = rawArguments.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`));
+  if (!match) return "";
+  try {
+    return JSON.parse(`"${match[1]}"`);
+  } catch {
+    return match[1];
+  }
+}
+
+function streamingArgKey(name: string): string {
+  if (name === "bash") return "command";
+  if (name === "read_file" || name === "write_file" || name === "edit_file" || name === "delete_file") return "path";
+  if (name === "generate_image" || name === "generate_video") return "prompt";
+  if (name === "task" || name === "delegate") return "description";
+  if (name === "delegation_read" || name === "process_logs" || name === "process_stop") return "id";
+  if (name === "lsp") return "filePath";
+  return "query";
+}
+
 function toolArgs(tc?: ToolCall): string {
   if (!tc) return "";
   try {
@@ -6739,7 +6769,7 @@ function toolArgs(tc?: ToolCall): string {
       return a.id != null ? String(a.id) : "";
     return a.query || "";
   } catch {
-    return "";
+    return extractStreamingArg(tc.function.arguments, streamingArgKey(tc.function.name));
   }
 }
 function tryParseArg(tc: ToolCall | undefined, key: string): string {

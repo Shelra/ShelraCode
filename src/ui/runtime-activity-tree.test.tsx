@@ -15,33 +15,38 @@ function exploring(): UiActivityEvent[] {
 }
 
 describe("RuntimeActivityTree", () => {
-  it("renders grouped counts, Found, and Next as a branch tree — the mandated live-activity format", async () => {
+  it("renders grouped counts, Found, and Next as flat, calm lines — no box-drawing connectors", async () => {
     const screen = await testRender(
       <RuntimeActivityTree
         t={dark}
         title="Investigating session restoration"
         elapsedMs={42_000}
         activities={exploring()}
-        now={NOW}
         found="Task state isn't restored on resume."
         next="Patch hydration and run restart test."
         isProcessing
+        reducedMotion={false}
       />,
       { width: 100, height: 20 },
     );
     await screen.renderOnce();
     const frame = screen.captureCharFrame();
 
-    expect(frame).toContain("● Investigating session restoration");
+    // The marker spins (a braille dots glyph) instead of a static "●" while active.
+    expect(frame).toContain("⠋ Investigating session restoration");
     expect(frame).toContain("42s");
-    expect(frame).toContain("├─ Explored 2 files");
-    expect(frame).toContain("├─ Searched 1 symbol");
-    expect(frame).toContain("├─ Found");
+    expect(frame).toContain("Explored 2 files");
+    expect(frame).toContain("Searched 1 symbol");
+    expect(frame).toContain("Found");
     expect(frame).toContain("Task state isn't restored on resume.");
-    expect(frame).toContain("└─ Next");
+    expect(frame).toContain("Next");
     expect(frame).toContain("Patch hydration and run restart test.");
     // Raw per-file rows must never appear — only the collapsed counts.
     expect(frame).not.toContain("Reading");
+    // No terminal-tree box-drawing characters anywhere in the frame.
+    expect(frame).not.toContain("├─");
+    expect(frame).not.toContain("└─");
+    expect(frame).not.toContain("│");
     screen.renderer.destroy();
   });
 
@@ -55,10 +60,10 @@ describe("RuntimeActivityTree", () => {
         title="Running restart test"
         elapsedMs={11_000}
         activities={events}
-        now={NOW}
         found={null}
         next="Should never appear when a check just failed"
         isProcessing={false}
+        reducedMotion={false}
       />,
       { width: 100, height: 20 },
     );
@@ -78,10 +83,10 @@ describe("RuntimeActivityTree", () => {
         title={null}
         elapsedMs={null}
         activities={[]}
-        now={NOW}
         found={null}
         next={null}
         isProcessing={false}
+        reducedMotion={false}
       />,
       { width: 100, height: 20 },
     );
@@ -89,6 +94,27 @@ describe("RuntimeActivityTree", () => {
     const frame = screen.captureCharFrame();
 
     expect(frame.trim()).toBe("");
+    screen.renderer.destroy();
+  });
+
+  it("falls back to a static marker when reduced motion is on", async () => {
+    const screen = await testRender(
+      <RuntimeActivityTree
+        t={dark}
+        title="Writing index.html"
+        elapsedMs={3_000}
+        activities={[]}
+        found={null}
+        next={null}
+        isProcessing
+        reducedMotion={true}
+      />,
+      { width: 100, height: 20 },
+    );
+    await screen.renderOnce();
+    const frame = screen.captureCharFrame();
+
+    expect(frame).toContain("● Writing index.html");
     screen.renderer.destroy();
   });
 });
