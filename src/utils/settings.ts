@@ -177,6 +177,22 @@ export function loadValidSubAgents(): CustomSubagentConfig[] {
   return parseSubAgentsRawList(loadUserSettings().subAgents);
 }
 
+/**
+ * Tool groups that are off by default. Every enabled tool costs schema tokens on every model
+ * request (measured 2026-09-17: 48 tools cost ~8.4K tokens per request, of which desktop,
+ * schedule, payment, and media tools were ~40% and irrelevant to ordinary coding turns).
+ */
+export interface ToolGroupSettings {
+  /** Host desktop automation (`computer_*`). The `computer` sub-agent always has them. */
+  desktop?: boolean;
+  /** Scheduled headless runs (`schedule_*`). */
+  schedules?: boolean;
+  /** x402 wallet and paid requests; implied by `payments.enabled`. */
+  payments?: boolean;
+  /** Image and video generation tools even when the provider does not advertise them. */
+  media?: boolean;
+}
+
 export interface UserSettings {
   apiKey?: string;
   defaultModel?: string;
@@ -195,6 +211,7 @@ export interface UserSettings {
   subAgents?: CustomSubagentConfig[];
   hooks?: HooksConfig;
   payments?: PaymentSettings;
+  tools?: ToolGroupSettings;
   modeModels?: Partial<Record<AgentMode, string>>;
   /** Terminal interface appearance; system follows the renderer when it reports a scheme. */
   appearance?: "system" | "dark" | "light";
@@ -727,6 +744,16 @@ export function loadMcpServers(): McpServerConfig[] {
 
 export function saveMcpServers(servers: McpServerConfig[]): void {
   saveUserSettings({ mcp: { servers } });
+}
+
+export function loadToolGroupSettings(): ToolGroupSettings {
+  const tools = loadUserSettings().tools ?? {};
+  return {
+    desktop: tools.desktop === true,
+    schedules: tools.schedules === true,
+    payments: tools.payments === true || loadPaymentSettings().enabled === true,
+    media: tools.media === true,
+  };
 }
 
 export function loadPaymentSettings(): Required<PaymentSettings> {

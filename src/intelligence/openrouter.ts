@@ -12,7 +12,6 @@ import type {
   IntelligenceUsage,
 } from "./types";
 
-const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_RETRIES = 0;
 const INPUT_TOKEN_CHARS = 4;
 const MAX_MODEL_ATTEMPTS = 3;
@@ -21,10 +20,20 @@ const ROLE_OUTPUT_LIMITS: Record<IntelligenceRole, number> = {
   interpret: 6_000,
   acceptance: 6_000,
   plan: 6_000,
-  implement: 12_000,
-  diagnose: 12_000,
+  implement: 6_000,
+  diagnose: 6_000,
   judge: 2_000,
   summarize: 2_000,
+};
+
+const ROLE_TIMEOUT_MS: Record<IntelligenceRole, number> = {
+  interpret: 60_000,
+  acceptance: 60_000,
+  plan: 60_000,
+  implement: 120_000,
+  diagnose: 120_000,
+  judge: 60_000,
+  summarize: 60_000,
 };
 
 export interface OpenRouterIntelligenceOptions {
@@ -34,6 +43,8 @@ export interface OpenRouterIntelligenceOptions {
   policy?: ModelPolicy;
   /** Preferred runtime model. The router may replace it when it lacks required capabilities. */
   modelId?: string;
+  /** Keep every autonomy role on this exact model; required for controlled benchmark runs. */
+  strictModel?: boolean;
   /** Cumulative USD ceiling for this objective. Zero is strict zero-cost. */
   maxCostUsd?: number;
   maxRetries?: number;
@@ -171,6 +182,7 @@ export class OpenRouterIntelligenceProvider implements IntelligenceProvider {
   private readonly entries: readonly CatalogEntry[];
   private readonly policy: ModelPolicy;
   private readonly preferredModelId?: string;
+  private readonly strictModel: boolean;
   private readonly maxCostUsd?: number;
   private readonly maxRetries: number;
   private reservedCostUsd = 0;
@@ -181,6 +193,7 @@ export class OpenRouterIntelligenceProvider implements IntelligenceProvider {
     this.entries = options.entries;
     this.policy = options.policy ?? "free";
     this.preferredModelId = options.modelId?.trim() || undefined;
+    this.strictModel = options.strictModel === true;
     this.maxCostUsd = options.maxCostUsd;
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   }
@@ -243,7 +256,7 @@ export class OpenRouterIntelligenceProvider implements IntelligenceProvider {
       // crossing the configured objective budget.
       if (Number.isFinite(estimatedCost)) this.reservedCostUsd += estimatedCost;
       const provider = this.createProvider(attemptRoute);
-      const timeoutMs = request.timeoutMs && request.timeoutMs > 0 ? request.timeoutMs : DEFAULT_TIMEOUT_MS;
+      const timeoutMs = request.timeoutMs && request.timeoutMs > 0 ? request.timeoutMs : ROLE_TIMEOUT_MS[request.role];
       const reservedBefore = this.reservedCostUsd;
       try {
         const result = await withTimeout(request.signal, timeoutMs, async (signal) => {
@@ -340,6 +353,13 @@ export class OpenRouterIntelligenceProvider implements IntelligenceProvider {
     }
 
     if (preferredRoute && (preferredRoute.entry || this.preferredModelId === "openrouter/free")) {
+      if (this.strictModel) {
+        return {
+          ...preferredRoute,
+          candidates: preferredRoute.entry ? [preferredRoute.entry] : [],
+          reasons: [...preferredRoute.reasons, "strict model control enabled"],
+        };
+      }
       let alternatives: ReturnType<typeof routeCatalogModel> | undefined;
       try {
         alternatives = routeCatalogModel(this.entries, {

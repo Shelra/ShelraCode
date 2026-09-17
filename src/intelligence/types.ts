@@ -86,6 +86,9 @@ export interface IntelligenceLedger {
   calls: number;
   inputTokens: number;
   outputTokens: number;
+  /** False when at least one provider response omitted the corresponding usage field. */
+  inputTokensComplete: boolean;
+  outputTokensComplete: boolean;
   costUsd: number;
   costAvailable: boolean;
   byRole: Record<string, { calls: number; costUsd: number }>;
@@ -93,11 +96,27 @@ export interface IntelligenceLedger {
 }
 
 export function emptyLedger(): IntelligenceLedger {
-  return { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, costAvailable: true, byRole: {}, models: [] };
+  return {
+    calls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    inputTokensComplete: true,
+    outputTokensComplete: true,
+    costUsd: 0,
+    costAvailable: true,
+    byRole: {},
+    models: [],
+  };
 }
 
 export function recordUsage(ledger: IntelligenceLedger, role: IntelligenceRole, usage: IntelligenceUsage): void {
   ledger.calls += 1;
+  // Older persisted objectives do not carry completeness flags; stay conservative
+  // rather than upgrading an unknown historical total into a measured one.
+  ledger.inputTokensComplete ??= false;
+  ledger.outputTokensComplete ??= false;
+  if (typeof usage.inputTokens !== "number") ledger.inputTokensComplete = false;
+  if (typeof usage.outputTokens !== "number") ledger.outputTokensComplete = false;
   ledger.inputTokens += usage.inputTokens ?? 0;
   ledger.outputTokens += usage.outputTokens ?? 0;
   ledger.models ??= [];

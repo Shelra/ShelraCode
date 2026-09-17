@@ -1,0 +1,2688 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Shelra Bench: historial persistente, evolución y comparación de agentes de coding."
+    />
+    <title>Shelra Bench · Coding Agent Benchmark</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071016;
+        --bg-deep: #050a0e;
+        --panel: rgba(12, 24, 31, 0.86);
+        --panel-solid: #0d1a21;
+        --panel-raised: #11242c;
+        --panel-hover: #15313a;
+        --line: rgba(160, 205, 209, 0.16);
+        --line-strong: rgba(160, 205, 209, 0.3);
+        --text: #e7f1ef;
+        --text-soft: #b0c5c3;
+        --text-muted: #78908f;
+        --text-dim: #4e6869;
+        --green: #36e39a;
+        --green-soft: rgba(54, 227, 154, 0.14);
+        --cyan: #38d9e8;
+        --cyan-soft: rgba(56, 217, 232, 0.13);
+        --violet: #9b8cff;
+        --amber: #f3be63;
+        --red: #f27683;
+        --red-soft: rgba(242, 118, 131, 0.13);
+        --shadow: 0 24px 90px rgba(0, 0, 0, 0.28);
+        --radius: 18px;
+        --radius-sm: 11px;
+        --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f4f8f7;
+        --bg-deep: #e9f0ee;
+        --panel: rgba(255, 255, 255, 0.88);
+        --panel-solid: #ffffff;
+        --panel-raised: #edf5f2;
+        --panel-hover: #e4f0ec;
+        --line: rgba(33, 74, 73, 0.14);
+        --line-strong: rgba(33, 74, 73, 0.28);
+        --text: #112321;
+        --text-soft: #42605c;
+        --text-muted: #65807b;
+        --text-dim: #8da5a0;
+        --green: #087d4c;
+        --green-soft: rgba(8, 125, 76, 0.1);
+        --cyan: #087e8f;
+        --cyan-soft: rgba(8, 126, 143, 0.1);
+        --violet: #5e4edb;
+        --amber: #9b6500;
+        --red: #c1333d;
+        --red-soft: rgba(193, 51, 61, 0.1);
+        --shadow: 0 24px 70px rgba(47, 83, 78, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          radial-gradient(circle at 12% 0%, rgba(54, 227, 154, 0.1), transparent 28rem),
+          radial-gradient(circle at 93% 10%, rgba(155, 140, 255, 0.08), transparent 28rem),
+          var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        line-height: 1.45;
+        transition: background 180ms ease, color 180ms ease;
+      }
+
+      body::before {
+        position: fixed;
+        z-index: -1;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        background-image: linear-gradient(rgba(151, 205, 202, 0.025) 1px, transparent 1px);
+        background-size: 100% 5px;
+        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.28), transparent 75%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button,
+      select,
+      input {
+        color: inherit;
+        font: inherit;
+      }
+
+      button,
+      select {
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      a:focus-visible,
+      select:focus-visible,
+      input:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid var(--cyan);
+        outline-offset: 3px;
+      }
+
+      .shell {
+        width: min(1440px, calc(100% - 48px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--bg) 86%, transparent);
+        backdrop-filter: blur(20px);
+      }
+
+      .topbar-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: min(1440px, calc(100% - 48px));
+        min-height: 72px;
+        margin: 0 auto;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        min-width: max-content;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border: 1px solid rgba(54, 227, 154, 0.6);
+        border-radius: 9px;
+        background:
+          linear-gradient(135deg, rgba(54, 227, 154, 0.35), rgba(56, 217, 232, 0.12)),
+          var(--panel-raised);
+        color: var(--green);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: -0.12em;
+        box-shadow: 0 0 30px rgba(54, 227, 154, 0.15);
+      }
+
+      .brand-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+
+      .brand-copy strong {
+        font-size: 14px;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-copy span,
+      .eyebrow,
+      .section-kicker,
+      .table-kicker,
+      .meta-label,
+      .status-pill,
+      .tag,
+      .source-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .brand-copy span {
+        color: var(--text-muted);
+        font-size: 9px;
+        letter-spacing: 0.08em;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .nav a {
+        padding: 8px 10px;
+        border-radius: 8px;
+      }
+
+      .nav a:hover {
+        background: var(--panel-raised);
+        color: var(--text);
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .connection {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      .signal-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 4px var(--green-soft), 0 0 16px var(--green);
+      }
+
+      .signal-dot.offline {
+        background: var(--amber);
+        box-shadow: 0 0 0 4px rgba(243, 190, 99, 0.12);
+      }
+
+      .theme-toggle {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-soft);
+      }
+
+      .theme-toggle:hover {
+        border-color: var(--line-strong);
+        background: var(--panel-raised);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.78fr);
+        align-items: end;
+        gap: clamp(36px, 8vw, 130px);
+        min-height: 470px;
+        padding: 94px 0 74px;
+      }
+
+      .hero-copy {
+        max-width: 790px;
+      }
+
+      .eyebrow,
+      .section-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--green);
+      }
+
+      .eyebrow::before {
+        width: 26px;
+        height: 1px;
+        background: var(--green);
+        content: "";
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 800px;
+        margin-top: 20px;
+        font-size: clamp(42px, 6.3vw, 86px);
+        font-weight: 680;
+        letter-spacing: -0.075em;
+        line-height: 0.98;
+      }
+
+      h1 span {
+        background: linear-gradient(105deg, var(--green), var(--cyan) 47%, var(--violet));
+        background-clip: text;
+        -webkit-background-clip: text;
+        color: transparent;
+      }
+
+      .hero-lede {
+        max-width: 640px;
+        margin-top: 24px;
+        color: var(--text-soft);
+        font-size: clamp(16px, 1.65vw, 20px);
+        line-height: 1.55;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 11px;
+        margin-top: 32px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0 15px;
+        border: 1px solid var(--line-strong);
+        border-radius: 9px;
+        background: var(--panel-raised);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .button:hover {
+        border-color: var(--cyan);
+        background: var(--panel-hover);
+      }
+
+      .button-primary {
+        border-color: rgba(54, 227, 154, 0.55);
+        background: linear-gradient(135deg, var(--green-soft), var(--cyan-soft));
+        color: var(--green);
+      }
+
+      .button-quiet {
+        border-color: var(--line);
+        background: transparent;
+        color: var(--text-soft);
+      }
+
+      .hero-proof {
+        position: relative;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(145deg, rgba(54, 227, 154, 0.08), transparent 42%),
+          var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-proof::before {
+        position: absolute;
+        top: -1px;
+        right: 22px;
+        left: 22px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--green), var(--cyan), transparent);
+        content: "";
+      }
+
+      .proof-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .proof-title strong {
+        color: var(--text);
+        font-size: 11px;
+        letter-spacing: 0.03em;
+        text-transform: none;
+      }
+
+      .proof-graph {
+        display: flex;
+        height: 150px;
+        flex-direction: column;
+        justify-content: center;
+        margin-top: 22px;
+        padding: 12px 0;
+        gap: 9px;
+        border-bottom: 1px solid var(--line);
+        background: repeating-linear-gradient(
+          to bottom,
+          transparent 0,
+          transparent 35px,
+          var(--line) 36px,
+          transparent 37px
+        );
+      }
+
+      .proof-run {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) 72px;
+        align-items: center;
+        gap: 9px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 9px;
+      }
+
+      .proof-run-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: var(--panel-raised);
+      }
+
+      .proof-run-fill {
+        height: 100%;
+        min-width: 0;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green), var(--cyan));
+      }
+
+      .proof-run-fill.diagnostic {
+        background: var(--text-dim);
+      }
+
+      .proof-run-fill.failed {
+        background: var(--red);
+      }
+
+      .proof-run-status {
+        color: var(--text-muted);
+        text-align: right;
+        text-transform: uppercase;
+      }
+
+      .proof-run-status.eligible {
+        color: var(--green);
+      }
+
+      .proof-run-status.diagnostic {
+        color: var(--text-dim);
+      }
+
+      .proof-empty {
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .proof-foot {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 13px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .proof-foot strong {
+        color: var(--green);
+        font-weight: 700;
+      }
+
+      .subject-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px 16px;
+        margin-top: 30px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .subject-line b {
+        color: var(--text-soft);
+        font-weight: 700;
+      }
+
+      .subject-line span {
+        color: var(--green);
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        padding-bottom: 26px;
+      }
+
+      .metric-card,
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        box-shadow: 0 12px 45px rgba(0, 0, 0, 0.08);
+      }
+
+      .metric-card {
+        min-height: 150px;
+        padding: 19px;
+      }
+
+      .metric-card:hover,
+      .panel:hover {
+        border-color: var(--line-strong);
+      }
+
+      .metric-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .metric-index {
+        color: var(--text-dim);
+        font-size: 9px;
+      }
+
+      .metric-value {
+        display: block;
+        margin-top: 20px;
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: clamp(27px, 3vw, 42px);
+        font-weight: 600;
+        letter-spacing: -0.07em;
+        line-height: 1;
+      }
+
+      .metric-card:first-child .metric-value {
+        color: var(--green);
+      }
+
+      .metric-detail {
+        display: block;
+        min-height: 18px;
+        margin-top: 11px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin: 0 0 28px;
+        padding: 14px 16px;
+        border: 1px solid rgba(56, 217, 232, 0.22);
+        border-radius: var(--radius-sm);
+        background: var(--cyan-soft);
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .notice strong {
+        color: var(--cyan);
+      }
+
+      .notice[data-kind="warning"] {
+        border-color: rgba(243, 190, 99, 0.28);
+        background: rgba(243, 190, 99, 0.1);
+      }
+
+      .notice[data-kind="warning"] strong {
+        color: var(--amber);
+      }
+
+      .section {
+        margin-top: 28px;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 13px;
+      }
+
+      .section-heading h2 {
+        margin-top: 6px;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.04em;
+      }
+
+      .section-heading p {
+        max-width: 610px;
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .section-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
+        gap: 12px;
+      }
+
+      .panel {
+        overflow: hidden;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 21px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-header h3 {
+        font-size: 14px;
+        font-weight: 680;
+        letter-spacing: -0.025em;
+      }
+
+      .panel-header p {
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+
+      .panel-tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 7px;
+      }
+
+      .control,
+      .search {
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-solid);
+        color: var(--text-soft);
+        font-size: 11px;
+      }
+
+      .control {
+        padding: 0 10px;
+      }
+
+      .search {
+        width: min(300px, 100%);
+        padding: 0 11px;
+      }
+
+      .control:hover,
+      .search:hover {
+        border-color: var(--line-strong);
+      }
+
+      .chart-body {
+        padding: 17px 20px 20px;
+      }
+
+      .chart-wrap {
+        position: relative;
+        min-height: 310px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(to bottom, rgba(54, 227, 154, 0.025), transparent 62%);
+      }
+
+      #trendChart {
+        display: block;
+        width: 100%;
+        height: 310px;
+        overflow: visible;
+      }
+
+      .chart-grid {
+        stroke: var(--line);
+        stroke-width: 1;
+      }
+
+      .chart-axis {
+        fill: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .chart-line {
+        fill: none;
+        stroke: var(--green);
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 3;
+      }
+
+      .chart-point {
+        fill: var(--panel-solid);
+        stroke: var(--cyan);
+        stroke-width: 3;
+      }
+
+      .chart-point:focus,
+      .chart-point:hover {
+        fill: var(--green);
+        outline: none;
+      }
+
+      .chart-point-label {
+        fill: var(--green);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .chart-empty {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 30px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-align: center;
+      }
+
+      .chart-caption {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .chart-caption strong {
+        color: var(--text-soft);
+      }
+
+      .readout {
+        display: flex;
+        flex-direction: column;
+        gap: 17px;
+        padding: 19px 20px 21px;
+      }
+
+      .readout-line {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 15px;
+        padding-bottom: 13px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .readout-line:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      .readout-line span {
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .readout-line strong {
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .readout-line strong.positive {
+        color: var(--green);
+      }
+
+      .readout-line strong.negative {
+        color: var(--red);
+      }
+
+      .readout-note {
+        margin-top: 2px;
+        color: var(--text-muted);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .registry-panel {
+        margin-top: 28px;
+      }
+
+      .registry-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .registry-filters {
+        display: flex;
+        flex: 1;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+
+      th,
+      td {
+        padding: 13px 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th:first-child,
+      td:first-child {
+        padding-left: 20px;
+      }
+
+      th:last-child,
+      td:last-child {
+        padding-right: 20px;
+      }
+
+      th {
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      td {
+        color: var(--text-soft);
+        font-family: var(--font-mono);
+      }
+
+      tbody tr {
+        transition: background 120ms ease;
+      }
+
+      tbody tr:hover,
+      tbody tr:focus {
+        background: var(--panel-hover);
+        outline: none;
+      }
+
+      .run-number {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .agent-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .agent-cell strong {
+        color: var(--text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .agent-cell span {
+        max-width: 220px;
+        overflow: hidden;
+        color: var(--text-muted);
+        text-overflow: ellipsis;
+      }
+
+      .score {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .score-good {
+        color: var(--green);
+      }
+
+      .score-mid {
+        color: var(--amber);
+      }
+
+      .score-low {
+        color: var(--red);
+      }
+
+      .status-pill,
+      .eligibility {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 7px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--text-muted);
+        font-size: 9px;
+        letter-spacing: 0.06em;
+      }
+
+      .status-pill::before {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        content: "";
+      }
+
+      .status-completed {
+        border-color: rgba(54, 227, 154, 0.25);
+        color: var(--green);
+      }
+
+      .status-failed,
+      .status-invalid,
+      .status-interrupted {
+        border-color: rgba(242, 118, 131, 0.25);
+        color: var(--red);
+      }
+
+      .status-running,
+      .status-preparing,
+      .status-verifying,
+      .status-queued {
+        border-color: rgba(56, 217, 232, 0.25);
+        color: var(--cyan);
+      }
+
+      .eligibility {
+        border-color: rgba(54, 227, 154, 0.25);
+        color: var(--green);
+      }
+
+      .eligibility.no {
+        color: var(--text-dim);
+      }
+
+      .registry-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        min-height: 52px;
+        padding: 10px 20px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .registry-footer button {
+        border: 0;
+        background: transparent;
+        color: var(--cyan);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .compare-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.55fr);
+        gap: 12px;
+      }
+
+      .compare-controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+        align-items: end;
+        gap: 10px;
+        padding: 17px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .field label {
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .field select {
+        width: 100%;
+        height: 36px;
+        padding: 0 9px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-solid);
+        color: var(--text-soft);
+        font-size: 11px;
+      }
+
+      .compare-result {
+        min-height: 236px;
+      }
+
+      .compare-state {
+        padding: 24px 20px;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .compare-state strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--text-soft);
+      }
+
+      .compare-state.warning strong {
+        color: var(--amber);
+      }
+
+      .delta-positive {
+        color: var(--green) !important;
+      }
+
+      .delta-negative {
+        color: var(--red) !important;
+      }
+
+      .compare-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 23px;
+        padding: 14px 20px 17px;
+        border-top: 1px solid var(--line);
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .compare-summary strong {
+        color: var(--text-soft);
+      }
+
+      .agent-section {
+        margin-top: 28px;
+      }
+
+      .agent-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .agent-card {
+        display: flex;
+        min-height: 154px;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+      }
+
+      .agent-card.subject {
+        border-color: rgba(54, 227, 154, 0.34);
+        background:
+          linear-gradient(140deg, var(--green-soft), transparent 65%),
+          var(--panel);
+      }
+
+      .agent-card-head,
+      .agent-card-foot {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .agent-card h3 {
+        font-size: 13px;
+        font-weight: 680;
+      }
+
+      .agent-card p {
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+
+      .tag {
+        padding: 5px 6px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--text-muted);
+        font-size: 8px;
+        letter-spacing: 0.08em;
+      }
+
+      .subject .tag {
+        border-color: rgba(54, 227, 154, 0.27);
+        color: var(--green);
+      }
+
+      .agent-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        text-transform: uppercase;
+      }
+
+      .agent-stat strong {
+        color: var(--text);
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: -0.05em;
+        text-transform: none;
+      }
+
+      .agent-card-foot a {
+        align-self: end;
+        color: var(--cyan);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .agent-card-foot a:hover {
+        color: var(--green);
+      }
+
+      .methodology {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(290px, 0.8fr);
+        gap: 12px;
+        margin: 28px 0 74px;
+      }
+
+      .method-copy,
+      .method-sources {
+        padding: 21px;
+      }
+
+      .method-copy h2 {
+        font-size: 18px;
+        letter-spacing: -0.04em;
+      }
+
+      .method-copy p {
+        max-width: 670px;
+        margin-top: 11px;
+        color: var(--text-soft);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .dimension-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .dimension {
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .dimension.active {
+        border-color: rgba(54, 227, 154, 0.28);
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .method-sources h3 {
+        margin-bottom: 14px;
+        color: var(--text-soft);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .source-list {
+        display: grid;
+        gap: 9px;
+      }
+
+      .source-list a {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 9px;
+        border-bottom: 1px solid var(--line);
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+
+      .source-list a:hover {
+        color: var(--cyan);
+      }
+
+      .source-list a span {
+        color: var(--text-dim);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 18px 0 28px;
+        border-top: 1px solid var(--line);
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .drawer-backdrop {
+        position: fixed;
+        z-index: 30;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 22px;
+        background: rgba(3, 9, 12, 0.66);
+        backdrop-filter: blur(9px);
+      }
+
+      .drawer-backdrop[hidden] {
+        display: none;
+      }
+
+      .drawer {
+        width: min(900px, 100%);
+        max-height: min(820px, calc(100vh - 44px));
+        overflow: auto;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        background: var(--panel-solid);
+        box-shadow: 0 30px 120px rgba(0, 0, 0, 0.45);
+      }
+
+      .drawer-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 21px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .drawer-header h2 {
+        font-size: 20px;
+        letter-spacing: -0.04em;
+      }
+
+      .drawer-header p {
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .close-button {
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-muted);
+      }
+
+      .drawer-body {
+        display: grid;
+        gap: 18px;
+        padding: 20px 21px 25px;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .detail-item {
+        min-height: 61px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--panel-raised);
+      }
+
+      .detail-item span {
+        display: block;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        text-transform: uppercase;
+      }
+
+      .detail-item strong {
+        display: block;
+        margin-top: 6px;
+        overflow: hidden;
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .detail-section h3 {
+        margin-bottom: 9px;
+        color: var(--text-soft);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .dimension-bars {
+        display: grid;
+        gap: 8px;
+      }
+
+      .dimension-bar {
+        display: grid;
+        grid-template-columns: 100px minmax(0, 1fr) 46px;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .bar-track {
+        height: 6px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: var(--panel-raised);
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--green), var(--cyan));
+      }
+
+      .task-list,
+      .event-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .task-detail,
+      .event-detail {
+        padding: 11px 12px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--panel-raised);
+      }
+
+      .task-detail-head,
+      .event-detail-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .task-detail-head strong {
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .task-detail-meta,
+      .event-detail-meta {
+        margin-top: 5px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .criteria {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 9px;
+      }
+
+      .criterion {
+        padding: 4px 6px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 9px;
+      }
+
+      .criterion.passed {
+        border-color: rgba(54, 227, 154, 0.24);
+        color: var(--green);
+      }
+
+      .criterion.failed {
+        border-color: rgba(242, 118, 131, 0.24);
+        color: var(--red);
+      }
+
+      .criterion.partial {
+        border-color: rgba(243, 190, 99, 0.24);
+        color: var(--amber);
+      }
+
+      .loading {
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .muted {
+        color: var(--text-muted);
+      }
+
+      .mobile-only {
+        display: none;
+      }
+
+      @media (max-width: 1050px) {
+        .hero {
+          grid-template-columns: minmax(0, 1fr) minmax(280px, 0.66fr);
+          gap: 32px;
+        }
+
+        .section-grid,
+        .compare-layout,
+        .methodology {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .agent-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 760px) {
+        .shell,
+        .topbar-inner {
+          width: min(100% - 28px, 1440px);
+        }
+
+        .topbar-inner {
+          min-height: 62px;
+        }
+
+        .nav {
+          display: none;
+        }
+
+        .connection {
+          padding: 7px 8px;
+          font-size: 9px;
+        }
+
+        .hero {
+          display: block;
+          min-height: auto;
+          padding: 65px 0 52px;
+        }
+
+        h1 {
+          font-size: clamp(42px, 13vw, 66px);
+        }
+
+        .hero-proof {
+          max-width: 520px;
+          margin-top: 38px;
+        }
+
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metric-card {
+          min-height: 130px;
+          padding: 15px;
+        }
+
+        .metric-value {
+          margin-top: 17px;
+          font-size: 29px;
+        }
+
+        .section-heading {
+          display: block;
+        }
+
+        .section-heading .panel-tools {
+          justify-content: flex-start;
+          margin-top: 13px;
+        }
+
+        .panel-header {
+          display: block;
+        }
+
+        .panel-header .panel-tools {
+          justify-content: flex-start;
+          margin-top: 13px;
+        }
+
+        .compare-controls {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .compare-controls .button {
+          width: 100%;
+        }
+
+        .agent-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .detail-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .drawer-backdrop {
+          padding: 10px;
+        }
+
+        .drawer {
+          max-height: calc(100vh - 20px);
+        }
+
+        .dimension-bar {
+          grid-template-columns: 85px minmax(0, 1fr) 40px;
+        }
+
+        .footer {
+          display: block;
+        }
+
+        .footer span {
+          display: block;
+          margin-top: 8px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.001ms !important;
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="#top" aria-label="Shelra Bench inicio">
+          <span class="brand-mark" aria-hidden="true">SB</span>
+          <span class="brand-copy">
+            <strong>Shelra Bench</strong>
+            <span>Coding Agent Benchmark</span>
+          </span>
+        </a>
+        <nav class="nav" aria-label="Navegación principal">
+          <a href="#evolution">Evolución</a>
+          <a href="#registry">Historial</a>
+          <a href="#compare">Comparar</a>
+          <a href="#landscape">Agentes</a>
+          <a href="#methodology">Método</a>
+        </nav>
+        <div class="topbar-actions">
+          <div class="connection" id="connectionBadge" role="status">
+            <span class="signal-dot offline" aria-hidden="true"></span>
+            <span id="connectionText">Conectando a SQLite</span>
+          </div>
+          <button class="theme-toggle" id="themeToggle" type="button" aria-label="Cambiar tema" aria-pressed="false">
+            ◐
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="top" class="shell">
+      <section class="hero" aria-labelledby="pageTitle">
+        <div class="hero-copy">
+          <div class="eyebrow">Registro vivo de ejecución</div>
+          <h1 id="pageTitle">Mejora el <span>harness.</span><br />Demuestra el resultado.</h1>
+          <p class="hero-lede">
+            Shelra Bench convierte cada ejecución en evidencia histórica: qué entendió el agente,
+            qué cambió, qué verificó y si el software final coincide con la intención humana.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#registry">Explorar historial <span aria-hidden="true">↓</span></a>
+            <a class="button button-quiet" href="#compare">Comparar dos runs <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="subject-line" aria-label="Alcance del benchmark">
+            <span>Subject</span> <b>Shelra harness</b>
+            <span>Control</span> <b>modelo + provider</b>
+            <span>Evidence</span> <b>SQLite persistente</b>
+          </div>
+        </div>
+        <aside class="hero-proof" aria-label="Principio del producto">
+          <div class="proof-title">
+            <strong>Performance history</strong>
+            <span>no snapshot</span>
+          </div>
+          <div class="proof-graph" id="proofGraph" aria-label="Últimos runs reales">
+            <span class="proof-empty">esperando registro…</span>
+          </div>
+          <div class="proof-foot">
+            <span>cada run permanece</span>
+            <strong>latest ≠ best</strong>
+          </div>
+        </aside>
+      </section>
+
+      <section class="summary-grid" aria-label="Resumen del benchmark">
+        <article class="metric-card">
+          <div class="metric-label"><span>Último run elegible</span><span class="metric-index">01</span></div>
+          <strong class="metric-value" id="kpiLatest">—</strong>
+          <span class="metric-detail" id="kpiLatestDetail">Cargando historial real…</span>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label"><span>Mejor run</span><span class="metric-index">02</span></div>
+          <strong class="metric-value" id="kpiBest">—</strong>
+          <span class="metric-detail" id="kpiBestDetail">No se inventan resultados</span>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label"><span>Resolución</span><span class="metric-index">03</span></div>
+          <strong class="metric-value" id="kpiResolved">—</strong>
+          <span class="metric-detail" id="kpiResolvedDetail">Tareas pasadas / total</span>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label"><span>Runs históricos</span><span class="metric-index">04</span></div>
+          <strong class="metric-value" id="kpiRuns">—</strong>
+          <span class="metric-detail" id="kpiRunsDetail">Incluye fallidos e inválidos</span>
+        </article>
+      </section>
+
+      <div class="notice" id="dataNotice" data-kind="info" role="status">
+        <strong>REAL DATA</strong>
+        <span id="dataNoticeText">La página está leyendo el registro local. Los agentes externos no muestran score hasta tener un run real.</span>
+      </div>
+
+      <section class="section" id="evolution" aria-labelledby="evolutionTitle">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">01 / evolución de Shelra</div>
+            <h2 id="evolutionTitle">La línea de tiempo del harness</h2>
+            <p>Compara el run de hoy con los siguientes runs sin perder versión, commit, modelo ni metodología.</p>
+          </div>
+        </div>
+        <div class="section-grid">
+          <article class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <h3 id="chartTitle">Overall por run</h3>
+                <p id="chartSubtitle">Solo ejecuciones completadas y elegibles para comparación.</p>
+              </div>
+              <div class="panel-tools">
+                <label class="mobile-only" for="metricSelect">Métrica</label>
+                <select class="control" id="metricSelect" aria-label="Seleccionar métrica">
+                  <option value="overall">Overall</option>
+                  <option value="coding">Coding</option>
+                  <option value="intent">Intent fidelity</option>
+                  <option value="verification">Verification</option>
+                  <option value="agentic">Agentic</option>
+                  <option value="repair">Repair</option>
+                  <option value="memory">Memory</option>
+                  <option value="research">Research</option>
+                  <option value="efficiency">Efficiency</option>
+                  <option value="cost">Coste</option>
+                  <option value="duration">Duración</option>
+                </select>
+                <button class="button button-quiet" id="refreshButton" type="button">Actualizar</button>
+              </div>
+            </div>
+            <div class="chart-body">
+              <div class="chart-wrap">
+                <svg id="trendChart" viewBox="0 0 900 310" role="img" aria-labelledby="chartTitle chartSubtitle"></svg>
+                <div class="chart-empty" id="chartEmpty" hidden></div>
+              </div>
+              <div class="chart-caption">
+                <span><strong id="chartPointCount">0 puntos</strong> · cada punto es un run persistido</span>
+                <span id="chartScale">Escala 0–100</span>
+              </div>
+              <div class="chart-caption" id="chartTextual" aria-label="Equivalente textual de la gráfica"></div>
+            </div>
+          </article>
+          <aside class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Shelra evolution</h3>
+                <p>Latest, previous, baseline y best son señales distintas.</p>
+              </div>
+            </div>
+            <div class="readout" id="evolutionReadout">
+              <div class="readout-line"><span>Latest</span><strong>—</strong></div>
+              <div class="readout-line"><span>Previous</span><strong>—</strong></div>
+              <div class="readout-line"><span>Baseline</span><strong>—</strong></div>
+              <div class="readout-line"><span>Best</span><strong>—</strong></div>
+              <p class="readout-note">Se necesita historial compatible para afirmar una mejora o una regresión.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section registry-panel" id="registry" aria-labelledby="registryTitle">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="section-kicker">02 / run registry</div>
+              <h3 id="registryTitle">Historial inmutable</h3>
+              <p>Todos los runs permanecen visibles: completados, fallidos, inválidos e interrumpidos.</p>
+            </div>
+            <div class="panel-tools">
+              <span class="table-kicker" id="registryScope">Workspace actual</span>
+            </div>
+          </div>
+          <div class="registry-toolbar">
+            <div class="registry-filters">
+              <input class="search" id="runSearch" type="search" placeholder="Buscar run, commit, agente, modelo…" aria-label="Buscar en historial" />
+              <select class="control" id="statusFilter" aria-label="Filtrar por estado">
+                <option value="all">Todos los estados</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="interrupted">Interrupted</option>
+                <option value="invalid">Invalid</option>
+              </select>
+              <select class="control" id="agentFilter" aria-label="Filtrar por agente">
+                <option value="all">Todos los agentes</option>
+              </select>
+            </div>
+            <span class="table-kicker" id="registryCount">0 runs</span>
+          </div>
+          <div class="table-wrap">
+            <table aria-describedby="registryTitle">
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>Agente / modelo</th>
+                  <th>Versión / commit</th>
+                  <th>Overall</th>
+                  <th>Intent</th>
+                  <th>Verify</th>
+                  <th>Resuelto</th>
+                  <th>Coste</th>
+                  <th>Tiempo</th>
+                  <th>Estado</th>
+                  <th>Scope</th>
+                </tr>
+              </thead>
+              <tbody id="runTableBody">
+                <tr><td colspan="11" class="loading">Leyendo historial persistente…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="registry-footer">
+            <span id="registryFooterText">Haz click en un run para inspeccionar tareas, criterios y eventos.</span>
+            <button id="loadMoreButton" type="button" hidden>Cargar más</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="compare" aria-labelledby="compareTitle">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">03 / comparación temporal</div>
+            <h2 id="compareTitle">Hoy vs. el siguiente run</h2>
+            <p>Selecciona cualquier par de ejecuciones reales. Si cambió la metodología, el delta queda bloqueado y se explica.</p>
+          </div>
+        </div>
+        <div class="compare-layout">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Matriz de runs</h3>
+                <p>La comparación incluye métricas y tareas mejoradas/regresadas.</p>
+              </div>
+            </div>
+            <div class="compare-controls">
+              <div class="field">
+                <label for="compareBase">Run base</label>
+                <select id="compareBase" aria-label="Run base"></select>
+              </div>
+              <div class="field">
+                <label for="compareCandidate">Run candidato</label>
+                <select id="compareCandidate" aria-label="Run candidato"></select>
+              </div>
+              <button class="button button-primary" id="compareButton" type="button">Comparar</button>
+            </div>
+            <div class="compare-result" id="compareResult">
+              <div class="compare-state">
+                <strong>Selecciona dos runs reales</strong>
+                La página no rellena huecos con benchmarks de ejemplo.
+              </div>
+            </div>
+          </article>
+          <aside class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Reglas de lectura</h3>
+                <p>Comparar no es confundir correlación con causa.</p>
+              </div>
+            </div>
+            <div class="readout">
+              <div class="readout-line"><span>Compatible</span><strong class="positive">Δ visible</strong></div>
+              <div class="readout-line"><span>Version changed</span><strong>Δ N/A</strong></div>
+              <div class="readout-line"><span>Dirty repo</span><strong>Advertencia</strong></div>
+              <p class="readout-note">
+                Para medir una mejora de Shelra fija el modelo, conserva el mismo suite/config y registra el commit.
+                Un cambio de modelo se analiza como una nueva configuración.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section agent-section" id="landscape" aria-labelledby="landscapeTitle">
+        <div class="section-heading">
+          <div>
+            <div class="section-kicker">04 / agent landscape</div>
+            <h2 id="landscapeTitle">Shelra primero. Comparables reales después.</h2>
+            <p>Claude Code, Codex y otros agentes están registrados como calibración. No reciben score hasta ejecutar este mismo contrato.</p>
+          </div>
+        </div>
+        <div class="agent-grid" id="agentGrid">
+          <div class="agent-card"><span class="loading">Cargando registro de agentes…</span></div>
+        </div>
+      </section>
+
+      <section class="methodology" id="methodology" aria-labelledby="methodologyTitle">
+        <article class="panel method-copy">
+          <div class="section-kicker">05 / metodología</div>
+          <h2 id="methodologyTitle">Medir el sistema, no solo el modelo.</h2>
+          <p>
+            Cada run conserva el agente, modelo, benchmark version, suite, commit, entorno, coste,
+            tokens, tiempo, criterios de aceptación, comportamiento y evidencia. Coding, intent y
+            verification dominan el core; eficiencia nunca compensa una implementación incorrecta.
+          </p>
+          <div class="dimension-list" aria-label="Dimensiones del benchmark">
+            <span class="dimension active">overall</span>
+            <span class="dimension active">coding</span>
+            <span class="dimension active">intent</span>
+            <span class="dimension active">verification</span>
+            <span class="dimension">agentic</span>
+            <span class="dimension">repair</span>
+            <span class="dimension">memory</span>
+            <span class="dimension">research</span>
+            <span class="dimension">efficiency</span>
+          </div>
+        </article>
+        <aside class="panel method-sources">
+          <h3>Registro de fuentes de agentes</h3>
+          <div class="source-list">
+            <a href="https://code.claude.com/docs/en/how-claude-code-works" target="_blank" rel="noreferrer">Claude Code <span>docs ↗</span></a>
+            <a href="https://github.com/openai/codex" target="_blank" rel="noreferrer">OpenAI Codex <span>github ↗</span></a>
+            <a href="https://opencode.ai/en/docs" target="_blank" rel="noreferrer">OpenCode <span>docs ↗</span></a>
+            <a href="https://goose-docs.ai/" target="_blank" rel="noreferrer">Goose <span>docs ↗</span></a>
+            <a href="https://aider.chat/" target="_blank" rel="noreferrer">Aider <span>site ↗</span></a>
+            <a href="https://github.com/Cline/Cline" target="_blank" rel="noreferrer">Cline <span>github ↗</span></a>
+            <a href="https://roocodeinc.github.io/Roo-Code/" target="_blank" rel="noreferrer">Roo Code <span>docs ↗</span></a>
+            <a href="https://docs.cloud.google.com/gemini/docs/codeassist/gemini-cli" target="_blank" rel="noreferrer">Gemini CLI <span>docs ↗</span></a>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="footer">
+        <span>Shelra Bench · Real tasks. Real execution. Real verification.</span>
+        <span id="footerSource">Fuente: local SQLite benchmark history · N/A no significa cero.</span>
+      </footer>
+    </main>
+
+    <div class="drawer-backdrop" id="runDrawer" hidden>
+      <article class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+        <header class="drawer-header">
+          <div>
+            <h2 id="drawerTitle">Run detail</h2>
+            <p id="drawerSubtitle">Historial persistente</p>
+          </div>
+          <button class="close-button" id="drawerClose" type="button" aria-label="Cerrar detalle">×</button>
+        </header>
+        <div class="drawer-body" id="drawerBody">
+          <span class="loading">Cargando detalle…</span>
+        </div>
+      </article>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var state = {
+          data: null,
+          runs: [],
+          offset: 0,
+          metric: "overall",
+          selectedBase: "",
+          selectedCandidate: "",
+          loading: false,
+        };
+
+        var metricLabels = {
+          overall: "Overall",
+          coding: "Coding",
+          intent: "Intent fidelity",
+          verification: "Verification",
+          agentic: "Agentic",
+          repair: "Repair",
+          memory: "Memory",
+          research: "Research",
+          efficiency: "Efficiency",
+          cost: "Coste",
+          duration: "Duración",
+        };
+
+        var dimensionKeys = [
+          "overall",
+          "coding",
+          "agentic",
+          "intent",
+          "verification",
+          "research",
+          "memory",
+          "repair",
+          "efficiency",
+        ];
+
+        function byId(id) {
+          return document.getElementById(id);
+        }
+
+        function escapeHtml(value) {
+          return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        }
+
+        function finite(value) {
+          return typeof value === "number" && Number.isFinite(value);
+        }
+
+        function score(value) {
+          return finite(value) ? value.toFixed(1) : "—";
+        }
+
+        function scoreClass(value) {
+          if (!finite(value)) return "";
+          if (value >= 90) return "score-good";
+          if (value >= 70) return "score-mid";
+          return "score-low";
+        }
+
+        function date(value) {
+          if (!value) return "—";
+          return new Intl.DateTimeFormat("es-ES", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          }).format(new Date(value));
+        }
+
+        function dateTime(value) {
+          if (!value) return "—";
+          return new Intl.DateTimeFormat("es-ES", {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date(value));
+        }
+
+        function duration(milliseconds) {
+          if (!finite(milliseconds)) return "—";
+          var seconds = Math.max(0, Math.round(milliseconds / 1000));
+          var minutes = Math.floor(seconds / 60);
+          var remainder = seconds % 60;
+          if (minutes > 0) return minutes + "m " + String(remainder).padStart(2, "0") + "s";
+          return remainder + "s";
+        }
+
+        function durationLong(milliseconds) {
+          if (!finite(milliseconds)) return "—";
+          var totalSeconds = Math.max(0, Math.round(milliseconds / 1000));
+          var hours = Math.floor(totalSeconds / 3600);
+          var minutes = Math.floor((totalSeconds % 3600) / 60);
+          var seconds = totalSeconds % 60;
+          if (hours > 0) return hours + "h " + minutes + "m";
+          return minutes + "m " + String(seconds).padStart(2, "0") + "s";
+        }
+
+        function money(cost) {
+          if (!cost || cost.micros === null || !finite(cost.micros)) return "—";
+          var amount = cost.micros / 1000000;
+          var suffix = cost.kind === "estimated" ? " est." : "";
+          return "$" + amount.toFixed(3) + suffix;
+        }
+
+        function tokens(value) {
+          if (!finite(value)) return "—";
+          if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
+          if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+          return String(Math.round(value));
+        }
+
+        function commit(value) {
+          return value ? String(value).slice(0, 8) : "commit N/A";
+        }
+
+        function runLabel(run) {
+          return (
+            "#" + run.runNumber + " · " +
+            run.agentName + " · " +
+            (run.benchmarkVersion || "version N/A") + " · " +
+            score(run.scores && run.scores.overall)
+          );
+        }
+
+        function statusLabel(status) {
+          var labels = {
+            completed: "Completed",
+            failed: "Failed",
+            invalid: "Invalid",
+            interrupted: "Interrupted",
+            cancelled: "Cancelled",
+            queued: "Queued",
+            preparing: "Preparing",
+            running: "Running",
+            verifying: "Verifying",
+          };
+          return labels[status] || status || "N/A";
+        }
+
+        function metricValue(run, metric) {
+          if (metric === "cost") {
+            return run.cost && finite(run.cost.micros) ? run.cost.micros / 1000000 : null;
+          }
+          if (metric === "duration") {
+            return finite(run.durationMs) ? run.durationMs / 60000 : null;
+          }
+          return run.scores && finite(run.scores[metric]) ? run.scores[metric] : null;
+        }
+
+        function metricFormatted(value, metric) {
+          if (!finite(value)) return "—";
+          if (metric === "cost") return "$" + value.toFixed(3);
+          if (metric === "duration") return value.toFixed(1) + " min";
+          return value.toFixed(1);
+        }
+
+        function sameScope(first, second) {
+          if (!first || !second) return false;
+          return (
+            first.agentName === second.agentName &&
+            first.benchmarkVersion === second.benchmarkVersion &&
+            first.suite === second.suite &&
+            first.model === second.model &&
+            first.modelProvider === second.modelProvider &&
+            first.modelVersion === second.modelVersion &&
+            first.configurationFingerprint === second.configurationFingerprint
+          );
+        }
+
+        function setConnection(online, message) {
+          var badge = byId("connectionBadge");
+          var dot = badge.querySelector(".signal-dot");
+          dot.classList.toggle("offline", !online);
+          byId("connectionText").textContent = message;
+        }
+
+        function showNotice(kind, text) {
+          var notice = byId("dataNotice");
+          notice.dataset.kind = kind;
+          byId("dataNoticeText").textContent = text;
+        }
+
+        function api(path) {
+          return fetch(path, { headers: { Accept: "application/json" } }).then(function (response) {
+            return response.json().then(function (body) {
+              if (!response.ok) throw new Error(body.error || "Request failed");
+              return body;
+            });
+          });
+        }
+
+        function loadDashboard(append) {
+          if (state.loading) return;
+          state.loading = true;
+          if (window.location.protocol === "file:") {
+            state.loading = false;
+            setConnection(false, "Servidor requerido");
+            showNotice(
+              "warning",
+              "Este archivo necesita el servidor local para leer SQLite. Ejecuta bun run bench:dashboard y abre http://127.0.0.1:4173.",
+            );
+            byId("runTableBody").innerHTML =
+              '<tr><td colspan="11" class="loading">Abre esta landing desde http://127.0.0.1:4173.</td></tr>';
+            byId("chartEmpty").hidden = false;
+            byId("chartEmpty").textContent = "El dashboard necesita el servidor local para consultar Shelra SQLite.";
+            return Promise.resolve();
+          }
+          var offset = append ? state.runs.length : 0;
+          var query = "/api/bench/dashboard?limit=500&offset=" + offset;
+          return api(query)
+            .then(function (payload) {
+              state.data = payload;
+              state.offset = offset;
+              state.runs = append ? state.runs.concat(payload.runs || []) : payload.runs || [];
+              setConnection(true, "SQLite · " + (payload.workspace && payload.workspace.name ? payload.workspace.name : "local"));
+              showNotice(
+                "info",
+                "Datos reales desde SQLite. " +
+                  (payload.summary && payload.summary.eligibleRuns
+                    ? payload.summary.eligibleRuns + " run(s) elegible(s); "
+                    : "Sin runs elegibles; ") +
+                  "los agentes externos permanecen sin score hasta una ejecución real.",
+              );
+              renderAll();
+            })
+            .catch(function (error) {
+              setConnection(false, "SQLite no disponible");
+              showNotice("warning", "No se pudo leer el historial local: " + error.message + ". Inicia el servidor del dashboard.");
+              byId("runTableBody").innerHTML =
+                '<tr><td colspan="11" class="loading">Sin conexión a datos reales. Ejecuta bun run bench:dashboard.</td></tr>';
+              byId("chartEmpty").hidden = false;
+              byId("chartEmpty").textContent = "El dashboard necesita el servidor local para consultar Shelra SQLite.";
+              state.data = null;
+            })
+            .finally(function () {
+              state.loading = false;
+            });
+        }
+
+        function renderAll() {
+          if (!state.data) return;
+          renderSummary();
+          renderProof();
+          renderAgentFilter();
+          renderRegistry();
+          renderEvolution();
+          renderReadout();
+          renderCompareSelectors();
+          renderAgents();
+          byId("registryScope").textContent =
+            (state.data.workspace && state.data.workspace.name ? state.data.workspace.name : "Workspace") +
+            " · " +
+            (state.data.source || "SQLite");
+          byId("footerSource").textContent =
+            "Fuente: " + (state.data.source || "local SQLite benchmark history") + " · N/A no significa cero.";
+          byId("loadMoreButton").hidden = !(state.data.page && state.data.page.hasMore);
+        }
+
+        function renderSummary() {
+          var summary = state.data.summary || {};
+          var latest = summary.latest;
+          var best = summary.best;
+          byId("kpiLatest").textContent = latest ? score(latest.scores.overall) : "—";
+          byId("kpiLatestDetail").textContent = latest
+            ? "#" + latest.runNumber + " · " + latest.benchmarkVersion + " · " + date(latest.createdAt)
+            : "Aún no hay run elegible";
+          byId("kpiBest").textContent = best ? score(best.scores.overall) : "—";
+          byId("kpiBestDetail").textContent = best ? "#" + best.runNumber + " · " + commit(best.repositoryCommit) : "No hay mejor run calculable";
+          byId("kpiResolved").textContent = latest ? (finite(latest.resolvedRate) ? latest.resolvedRate.toFixed(1) + "%" : "—") : "—";
+          byId("kpiResolvedDetail").textContent = latest
+            ? latest.resolvedTaskCount + " / " + latest.taskCount + " tareas"
+            : "Tareas pasadas / total";
+          byId("kpiRuns").textContent = finite(summary.totalRuns) ? String(summary.totalRuns) : "—";
+          byId("kpiRunsDetail").textContent = summary.eligibleRuns
+            ? summary.eligibleRuns + " elegibles · resto diagnóstico"
+            : "Incluye fallidos e inválidos";
+        }
+
+        function renderProof() {
+          var recent = state.runs.slice(0, 5).reverse();
+          if (!recent.length) {
+            byId("proofGraph").innerHTML = '<span class="proof-empty">sin runs persistidos</span>';
+            return;
+          }
+          byId("proofGraph").innerHTML = recent.map(function (run) {
+            var value = run.scores && finite(run.scores.overall) ? Math.max(0, Math.min(100, run.scores.overall)) : 0;
+            var scope = run.leaderboardEligible ? "eligible" : "diagnostic";
+            var fill = run.status === "failed" || run.status === "interrupted" || run.status === "invalid" ? "failed" : scope;
+            return '<div class="proof-run"><span>#' + run.runNumber + '</span><span class="proof-run-track"><span class="proof-run-fill ' +
+              fill + '" style="width:' + value + '%"></span></span><span class="proof-run-status ' + scope + '">' +
+              (finite(run.scores && run.scores.overall) ? score(run.scores.overall) : statusLabel(run.status)) + "</span></div>";
+          }).join("");
+        }
+
+        function renderAgentFilter() {
+          var select = byId("agentFilter");
+          var current = select.value;
+          var names = [];
+          state.runs.forEach(function (run) {
+            if (names.indexOf(run.agentName) === -1) names.push(run.agentName);
+          });
+          names.sort();
+          select.innerHTML = '<option value="all">Todos los agentes</option>' +
+            names.map(function (name) {
+              return '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + "</option>";
+            }).join("");
+          if (names.indexOf(current) !== -1) select.value = current;
+        }
+
+        function filteredRuns() {
+          var search = byId("runSearch").value.trim().toLowerCase();
+          var status = byId("statusFilter").value;
+          var agent = byId("agentFilter").value;
+          return state.runs.filter(function (run) {
+            if (status !== "all" && run.status !== status) return false;
+            if (agent !== "all" && run.agentName !== agent) return false;
+            if (!search) return true;
+            var haystack = [
+              run.runId,
+              run.runNumber,
+              run.agentName,
+              run.agentVersion,
+              run.model,
+              run.modelProvider,
+              run.benchmarkVersion,
+              run.suite,
+              run.repositoryCommit,
+              run.status,
+            ].join(" ").toLowerCase();
+            return haystack.indexOf(search) !== -1;
+          });
+        }
+
+        function renderRegistry() {
+          var runs = filteredRuns();
+          byId("registryCount").textContent = runs.length + " / " + state.runs.length + " runs";
+          byId("registryFooterText").textContent = runs.length
+            ? "Haz click en un run para inspeccionar tareas, criterios y eventos."
+            : "No hay resultados con estos filtros.";
+          if (!runs.length) {
+            byId("runTableBody").innerHTML =
+              '<tr><td colspan="11" class="loading">No hay runs que coincidan con el filtro.</td></tr>';
+            return;
+          }
+          byId("runTableBody").innerHTML = runs.map(function (run) {
+            var scores = run.scores || {};
+            var eligible = run.leaderboardEligible
+              ? '<span class="eligibility">Eligible</span>'
+              : '<span class="eligibility no">Diagnostic</span>';
+            var model = run.model || "modelo N/A";
+            var version = run.agentVersion ? "v" + run.agentVersion : "agent vN/A";
+            return (
+              '<tr tabindex="0" data-run-id="' + escapeHtml(run.runId) + '" aria-label="Inspeccionar run ' + run.runNumber + '">' +
+              '<td><span class="run-number">#' + run.runNumber + "</span><br /><span class='muted'>" + date(run.createdAt) + "</span></td>" +
+              '<td><div class="agent-cell"><strong>' + escapeHtml(run.agentName) + " · " + escapeHtml(version) + '</strong><span title="' + escapeHtml(model) + '">' + escapeHtml(model) + "</span></div></td>" +
+              "<td>" + escapeHtml(run.benchmarkVersion || "version N/A") + "<br /><span class='muted'>" + escapeHtml(commit(run.repositoryCommit)) + (run.repositoryDirty ? " · dirty" : "") + "</span></td>" +
+              '<td class="score ' + scoreClass(scores.overall) + '">' + score(scores.overall) + "</td>" +
+              '<td class="score ' + scoreClass(scores.intent) + '">' + score(scores.intent) + "</td>" +
+              '<td class="score ' + scoreClass(scores.verification) + '">' + score(scores.verification) + "</td>" +
+              "<td>" + (finite(run.resolvedRate) ? run.resolvedRate.toFixed(1) + "%" : "—") + "<br /><span class='muted'>" + run.resolvedTaskCount + "/" + run.taskCount + "</span></td>" +
+              "<td>" + money(run.cost) + "</td>" +
+              "<td>" + duration(run.durationMs) + "</td>" +
+              '<td><span class="status-pill status-' + escapeHtml(run.status) + '">' + escapeHtml(statusLabel(run.status)) + "</span></td>" +
+              "<td>" + eligible + "</td>" +
+              "</tr>"
+            );
+          }).join("");
+          Array.prototype.forEach.call(byId("runTableBody").querySelectorAll("tr[data-run-id]"), function (row) {
+            row.addEventListener("click", function () { openRun(row.dataset.runId); });
+            row.addEventListener("keydown", function (event) {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openRun(row.dataset.runId);
+              }
+            });
+          });
+        }
+
+        function evolutionRuns() {
+          return state.runs
+            .filter(function (run) {
+              return (
+                run.agentName.toLowerCase() === "shelra" &&
+                run.status === "completed" &&
+                run.leaderboardEligible &&
+                metricValue(run, state.metric) !== null
+              );
+            })
+            .slice()
+            .sort(function (first, second) {
+              return new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime();
+            });
+        }
+
+        function renderEvolution() {
+          var metric = state.metric;
+          var label = metricLabels[metric] || metric;
+          byId("chartTitle").textContent = label + " por run";
+          byId("chartSubtitle").textContent =
+            "Shelra · solo runs completados y elegibles · el histórico diagnóstico queda en el registro.";
+          var points = evolutionRuns().map(function (run) {
+            return { run: run, value: metricValue(run, metric) };
+          });
+          byId("chartPointCount").textContent = points.length + (points.length === 1 ? " punto" : " puntos");
+          byId("chartScale").textContent = metric === "cost"
+            ? "Escala: USD"
+            : metric === "duration"
+              ? "Escala: minutos"
+              : "Escala: 0–100";
+          var svg = byId("trendChart");
+          var empty = byId("chartEmpty");
+          svg.innerHTML = "";
+          if (!points.length) {
+            empty.hidden = false;
+            empty.textContent = "No hay datos reales para " + label + " en runs elegibles.";
+            byId("chartTextual").textContent = "";
+            return;
+          }
+          empty.hidden = true;
+          var width = 900;
+          var height = 310;
+          var left = 56;
+          var right = 18;
+          var top = 24;
+          var bottom = 42;
+          var chartWidth = width - left - right;
+          var chartHeight = height - top - bottom;
+          var values = points.map(function (point) { return point.value; });
+          var min = metric === "overall" || dimensionKeys.indexOf(metric) !== -1 ? 0 : Math.min.apply(Math, values);
+          var max = metric === "overall" || dimensionKeys.indexOf(metric) !== -1 ? 100 : Math.max.apply(Math, values);
+          if (max === min) {
+            if (max === 0) max = 1;
+            else min = Math.max(0, min - Math.abs(min) * 0.3);
+          } else if (metric !== "overall" && dimensionKeys.indexOf(metric) === -1) {
+            var padding = (max - min) * 0.18;
+            min = Math.max(0, min - padding);
+            max += padding;
+          }
+          function x(index) {
+            return points.length === 1 ? left + chartWidth / 2 : left + (index / (points.length - 1)) * chartWidth;
+          }
+          function y(value) {
+            return top + (1 - (value - min) / (max - min)) * chartHeight;
+          }
+          function svgNode(name, attributes) {
+            var node = document.createElementNS("http://www.w3.org/2000/svg", name);
+            Object.keys(attributes).forEach(function (key) { node.setAttribute(key, attributes[key]); });
+            svg.appendChild(node);
+            return node;
+          }
+          for (var grid = 0; grid <= 4; grid += 1) {
+            var gy = top + (grid / 4) * chartHeight;
+            svgNode("line", { x1: left, y1: gy, x2: width - right, y2: gy, class: "chart-grid" });
+            var gridValue = max - (grid / 4) * (max - min);
+            var gridLabel = svgNode("text", { x: left - 10, y: gy + 4, "text-anchor": "end", class: "chart-axis" });
+            gridLabel.textContent = metricFormatted(gridValue, metric);
+          }
+          var path = points.map(function (point, index) {
+            return (index === 0 ? "M " : "L ") + x(index).toFixed(1) + " " + y(point.value).toFixed(1);
+          }).join(" ");
+          svgNode("path", { d: path, class: "chart-line" });
+          points.forEach(function (point, index) {
+            var circle = svgNode("circle", {
+              cx: x(index),
+              cy: y(point.value),
+              r: points.length < 10 ? 5 : 4,
+              class: "chart-point",
+              tabindex: "0",
+            });
+            var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+            title.textContent =
+              runLabel(point.run) + " · " + date(point.run.createdAt) + " · " + metricFormatted(point.value, metric);
+            circle.appendChild(title);
+            if (index === points.length - 1) {
+              svgNode("text", { x: x(index), y: y(point.value) - 13, "text-anchor": "middle", class: "chart-point-label" }).textContent =
+                metricFormatted(point.value, metric);
+            }
+          });
+          var textual = points.map(function (point) {
+            return "#" + point.run.runNumber + " · " + point.run.benchmarkVersion + " · " +
+              date(point.run.createdAt) + " · " + metricFormatted(point.value, metric);
+          });
+          byId("chartTextual").textContent = textual.join("  |  ");
+        }
+
+        function renderReadout() {
+          var summary = state.data.summary || {};
+          var eligible = state.runs.filter(function (run) {
+            return run.agentName.toLowerCase() === "shelra" &&
+              run.status === "completed" &&
+              run.leaderboardEligible &&
+              finite(run.scores && run.scores.overall);
+          });
+          var latest = summary.latest || eligible[0] || null;
+          var previous = eligible.length > 1 ? eligible[1] : null;
+          var best = summary.best || null;
+          var baseline = summary.baseline || null;
+          var delta = latest && previous && sameScope(latest, previous)
+            ? latest.scores.overall - previous.scores.overall
+            : null;
+          var lines = [
+            ["Latest", latest ? score(latest.scores.overall) : "—", latest ? "#" + latest.runNumber : "sin run"],
+            ["Previous", previous ? score(previous.scores.overall) : "—", previous ? "#" + previous.runNumber : "necesario para delta"],
+            ["Baseline", baseline ? score(baseline.scores.overall) : "—", baseline ? "#" + baseline.runNumber : "no seleccionado"],
+            ["Best", best ? score(best.scores.overall) : "—", best ? "#" + best.runNumber : "sin run"],
+          ];
+          byId("evolutionReadout").innerHTML = lines.map(function (line) {
+            return '<div class="readout-line"><span>' + line[0] + '</span><strong>' + line[1] + '<small class="muted"> · ' + escapeHtml(line[2]) + "</small></strong></div>";
+          }).join("") +
+            '<p class="readout-note">' +
+            (delta === null
+              ? "No hay dos runs compatibles suficientes para afirmar una mejora. Un cambio de versión, suite, modelo o configuración bloquea el delta directo."
+              : "Cambio vs previous: " + (delta >= 0 ? "+" : "") + delta.toFixed(1) + " puntos.") +
+            "</p>";
+          var strong = byId("evolutionReadout").querySelectorAll("strong");
+          if (delta !== null && strong[0]) strong[0].classList.add(delta >= 0 ? "positive" : "negative");
+        }
+
+        function renderCompareSelectors() {
+          var base = byId("compareBase");
+          var candidate = byId("compareCandidate");
+          var previousBase = state.selectedBase || base.value;
+          var previousCandidate = state.selectedCandidate || candidate.value;
+          var options = state.runs.map(function (run) {
+            return '<option value="' + escapeHtml(run.runId) + '">' + escapeHtml(runLabel(run) + " · " + date(run.createdAt)) + "</option>";
+          }).join("");
+          base.innerHTML = options;
+          candidate.innerHTML = options;
+          if (state.runs.length > 1) {
+            if (state.runs.some(function (run) { return run.runId === previousBase; })) base.value = previousBase;
+            else base.value = state.runs[1].runId;
+            if (state.runs.some(function (run) { return run.runId === previousCandidate; })) candidate.value = previousCandidate;
+            else candidate.value = state.runs[0].runId;
+          }
+          state.selectedBase = base.value;
+          state.selectedCandidate = candidate.value;
+        }
+
+        function renderCompareTable(comparison) {
+          var runs = comparison.runs || [];
+          var first = runs[0];
+          var second = runs[1];
+          var reason = comparison.comparable ? "" : (comparison.reason || "Scope incompatible.");
+          var metrics = comparison.metrics || [];
+          var html = "";
+          if (!comparison.comparable) {
+            html += '<div class="compare-state warning"><strong>Delta bloqueado: runs no comparables</strong>' +
+              escapeHtml(reason) + " Selecciona runs de la misma suite, versión, agente, modelo y configuración.</div>";
+          }
+          html += '<div class="table-wrap"><table><thead><tr><th>Métrica</th><th>' +
+            escapeHtml(first ? "#" + first.runNumber : "Base") + '</th><th>' +
+            escapeHtml(second ? "#" + second.runNumber : "Candidato") + '</th><th>Δ</th></tr></thead><tbody>';
+          metrics.forEach(function (metric) {
+            var firstValue = metric.values[0];
+            var secondValue = metric.values[1];
+            var delta = comparison.comparable && finite(firstValue) && finite(secondValue) ? secondValue - firstValue : null;
+            var deltaText = delta === null ? "N/A" : (delta >= 0 ? "+" : "") + delta.toFixed(1);
+            var deltaClass = delta === null ? "" : delta >= 0 ? "delta-positive" : "delta-negative";
+            html += "<tr><td>" + escapeHtml(metricLabels[metric.dimension] || metric.dimension) + "</td>" +
+              '<td class="score">' + score(firstValue) + "</td>" +
+              '<td class="score">' + score(secondValue) + '</td><td class="score ' + deltaClass + '">' + deltaText + "</td></tr>";
+          });
+          html += "</tbody></table></div>";
+          if (comparison.comparable) {
+            var costDelta = finite(comparison.costDeltaMicros) ? comparison.costDeltaMicros / 1000000 : null;
+            var durationDelta = finite(comparison.durationDeltaMs) ? comparison.durationDeltaMs : null;
+            html += '<div class="compare-summary"><span>Tareas mejoradas <strong>' +
+              comparison.taskChanges.improved.length + "</strong></span><span>Tareas regresadas <strong>" +
+              comparison.taskChanges.regressed.length + "</strong></span><span>Sin cambio <strong>" +
+              comparison.taskChanges.unchanged.length + "</strong></span><span>Coste Δ <strong>" +
+              (costDelta === null ? "N/A" : (costDelta >= 0 ? "+" : "") + "$" + costDelta.toFixed(3)) +
+              "</strong></span><span>Tiempo Δ <strong>" +
+              (durationDelta === null ? "N/A" : (durationDelta >= 0 ? "+" : "") + duration(durationDelta)) +
+              "</strong></span></div>";
+          }
+          byId("compareResult").innerHTML = html;
+        }
+
+        function compareSelected() {
+          var base = byId("compareBase").value;
+          var candidate = byId("compareCandidate").value;
+          state.selectedBase = base;
+          state.selectedCandidate = candidate;
+          if (!base || !candidate || base === candidate) {
+            byId("compareResult").innerHTML =
+              '<div class="compare-state warning"><strong>Selecciona dos runs distintos</strong>La comparación necesita dos IDs reales e independientes.</div>';
+            return;
+          }
+          byId("compareResult").innerHTML = '<div class="compare-state"><strong>Calculando comparación…</strong>Consultando la persistencia local.</div>';
+          api("/api/bench/compare?ids=" + encodeURIComponent(base + "," + candidate))
+            .then(renderCompareTable)
+            .catch(function (error) {
+              byId("compareResult").innerHTML =
+                '<div class="compare-state warning"><strong>No se pudo comparar</strong>' + escapeHtml(error.message) + "</div>";
+            });
+        }
+
+        function renderAgents() {
+          var agents = (state.data.agents || []);
+          if (!agents.length) {
+            byId("agentGrid").innerHTML = '<div class="agent-card"><span class="loading">No hay registro de agentes.</span></div>';
+            return;
+          }
+          byId("agentGrid").innerHTML = agents.map(function (agent) {
+            var measured = agent.measuredRunCount || 0;
+            var best = agent.bestRun;
+            var status = measured
+              ? (agent.eligibleRunCount || 0) + " eligible run(s)"
+              : "Sin ejecución real";
+            return '<article class="agent-card ' + (agent.kind === "subject" ? "subject" : "") + '">' +
+              '<div class="agent-card-head"><div><h3>' + escapeHtml(agent.name) + "</h3><p>" + escapeHtml(agent.description) +
+              '</p></div><span class="tag">' + (agent.kind === "subject" ? "subject" : "calibration") + "</span></div>" +
+              '<div class="agent-card-foot"><div class="agent-stat"><span>Mejor score</span><strong>' +
+              (best ? score(best.scores.overall) : "—") + '</strong><span>' + escapeHtml(status) + " · " + measured + " total</span></div>" +
+              (agent.sourceUrl
+                ? '<a href="' + escapeHtml(agent.sourceUrl) + '" target="_blank" rel="noreferrer">Fuente ↗</a>'
+                : '<a href="#methodology">Contrato local</a>') +
+              "</div></article>";
+          }).join("");
+        }
+
+        function renderRunDetail(detail) {
+          var run = detail.run;
+          byId("drawerTitle").textContent = "Run #" + run.runNumber + " · " + run.agentName;
+          byId("drawerSubtitle").textContent =
+            run.benchmarkVersion + " · " + run.suite + " · " + statusLabel(run.status) + " · " + dateTime(run.createdAt);
+          var scoreRows = dimensionKeys.map(function (dimension) {
+            var value = run.scores && run.scores[dimension];
+            return '<div class="dimension-bar"><span>' + escapeHtml(metricLabels[dimension]) + '</span><span class="bar-track"><span class="bar-fill" style="width:' +
+              (finite(value) ? Math.max(0, Math.min(100, value)) : 0) + '%"></span></span><strong>' + score(value) + "</strong></div>";
+          }).join("");
+          var taskRows = (detail.tasks || []).map(function (task) {
+            var criteria = (task.acceptance || []).map(function (criterion) {
+              return '<span class="criterion ' + escapeHtml(criterion.status) + '">' +
+                escapeHtml(criterion.id) + " " + escapeHtml(criterion.status) + "</span>";
+            }).join("");
+            return '<article class="task-detail"><div class="task-detail-head"><strong>' + escapeHtml(task.taskId) +
+              '</strong><span class="status-pill status-' + escapeHtml(task.status) + '">' + escapeHtml(statusLabel(task.status)) +
+              "</span></div><div class='task-detail-meta'>" + escapeHtml(task.category) + " · " + escapeHtml(task.difficulty) +
+              " · " + duration(task.durationMs) + " · intent " + score(task.scores && task.scores.intent) + "</div>" +
+              (criteria ? '<div class="criteria">' + criteria + "</div>" : "") + "</article>";
+          }).join("");
+          var eventRows = (detail.events || []).slice(-8).reverse().map(function (event) {
+            return '<article class="event-detail"><div class="event-detail-head"><strong>' + escapeHtml(event.type) +
+              '</strong><span class="muted">' + escapeHtml(dateTime(event.at)) + "</span></div><div class='event-detail-meta'>" +
+              escapeHtml(event.message) + (event.taskId ? " · " + escapeHtml(event.taskId) : "") + "</div></article>";
+          }).join("");
+          byId("drawerBody").innerHTML =
+            '<div class="detail-grid">' +
+            detailItem("Overall", score(run.scores.overall)) +
+            detailItem("Resuelto", (finite(run.resolvedRate) ? run.resolvedRate.toFixed(1) + "%" : "—") + " · " + run.resolvedTaskCount + "/" + run.taskCount) +
+            detailItem("Coste", money(run.cost) + " · " + (run.cost && run.cost.kind ? run.cost.kind : "N/A")) +
+            detailItem("Duración", durationLong(run.durationMs)) +
+            detailItem("Modelo", run.model || "N/A") +
+            detailItem("Agent version", run.agentVersion || "N/A") +
+            detailItem("Commit", commit(run.repositoryCommit) + (run.repositoryDirty ? " · dirty" : "")) +
+            detailItem("Tokens", tokens(run.tokens && run.tokens.totalTokens)) +
+            "</div>" +
+            '<section class="detail-section"><h3>Score breakdown</h3><div class="dimension-bars">' + scoreRows + "</div></section>" +
+            '<section class="detail-section"><h3>Tasks and acceptance criteria</h3><div class="task-list">' +
+            (taskRows || '<span class="muted">No hay tareas persistidas.</span>') + "</div></section>" +
+            '<section class="detail-section"><h3>Operational events</h3><div class="event-list">' +
+            (eventRows || '<span class="muted">No hay eventos operativos.</span>') + "</div></section>";
+        }
+
+        function detailItem(label, value) {
+          return '<div class="detail-item"><span>' + escapeHtml(label) + '</span><strong title="' + escapeHtml(value) + '">' + escapeHtml(value) + "</strong></div>";
+        }
+
+        function openRun(runId) {
+          var drawer = byId("runDrawer");
+          drawer.hidden = false;
+          byId("drawerBody").innerHTML = '<span class="loading">Cargando detalle real…</span>';
+          api("/api/bench/runs/" + encodeURIComponent(runId))
+            .then(renderRunDetail)
+            .catch(function (error) {
+              byId("drawerBody").innerHTML = '<span class="loading">' + escapeHtml(error.message) + "</span>";
+            });
+          byId("drawerClose").focus();
+        }
+
+        function closeRun() {
+          byId("runDrawer").hidden = true;
+        }
+
+        function initTheme() {
+          var saved = localStorage.getItem("shelra-bench-theme");
+          if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+          byId("themeToggle").addEventListener("click", function () {
+            var next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+            document.documentElement.dataset.theme = next;
+            localStorage.setItem("shelra-bench-theme", next);
+            byId("themeToggle").setAttribute("aria-pressed", next === "light" ? "true" : "false");
+          });
+        }
+
+        byId("metricSelect").addEventListener("change", function (event) {
+          state.metric = event.target.value;
+          renderEvolution();
+        });
+        byId("refreshButton").addEventListener("click", function () { loadDashboard(false); });
+        byId("runSearch").addEventListener("input", renderRegistry);
+        byId("statusFilter").addEventListener("change", renderRegistry);
+        byId("agentFilter").addEventListener("change", renderRegistry);
+        byId("compareBase").addEventListener("change", function (event) { state.selectedBase = event.target.value; });
+        byId("compareCandidate").addEventListener("change", function (event) { state.selectedCandidate = event.target.value; });
+        byId("compareButton").addEventListener("click", compareSelected);
+        byId("loadMoreButton").addEventListener("click", function () { loadDashboard(true); });
+        byId("drawerClose").addEventListener("click", closeRun);
+        byId("runDrawer").addEventListener("click", function (event) {
+          if (event.target === byId("runDrawer")) closeRun();
+        });
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape" && !byId("runDrawer").hidden) closeRun();
+        });
+
+        initTheme();
+        loadDashboard(false).then(function () {
+          if (state.runs.length > 1) compareSelected();
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "shelra-bench-config-pipeline",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}

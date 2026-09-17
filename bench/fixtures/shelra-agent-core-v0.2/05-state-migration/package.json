@@ -1,0 +1,7 @@
+{
+  "name": "shelra-bench-state-migration",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}

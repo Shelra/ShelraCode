@@ -13,7 +13,7 @@ import { upsertObjectiveIndex } from "../storage/objectives";
 import { ensureWorkspace } from "../storage/workspaces";
 import { objectiveRunDir } from "./journal";
 import { AutonomyKernel, type KernelDeps, type RuntimeEvent } from "./kernel";
-import type { Objective } from "./types";
+import type { AcceptanceCriterion, Objective } from "./types";
 
 /**
  * Composition root for the autonomy runtime.
@@ -30,6 +30,10 @@ export interface RunObjectiveOptions {
   maxCostUsd?: number;
   maxRequestCostUsd?: number;
   maxRepairAttempts?: number;
+  /** Immutable benchmark-owned checks; these replace model-derived criteria when supplied. */
+  acceptanceCriteria?: AcceptanceCriterion[];
+  /** Repository root used to resolve benchmark-owned external oracle commands. */
+  benchmarkRoot?: string;
   /** Override the provider, primarily for tests and benchmarks. */
   intelligence?: IntelligenceProvider;
   /** Injected research for tests; production runs perform host-side research first. */
@@ -67,7 +71,13 @@ export function createKernelDeps(intelligence: IntelligenceProvider, processes: 
     onObjectiveChange: indexObjective,
     intelligence,
     runCommand: (command, options) =>
-      runCommand({ command, cwd: options.cwd, timeoutMs: options.timeoutMs, signal: options.signal }),
+      runCommand({
+        command,
+        cwd: options.cwd,
+        timeoutMs: options.timeoutMs,
+        signal: options.signal,
+        env: options.env,
+      }),
     writeFile: (workspace, path, content) => applyFileWrite(workspace, path, content),
     editFile: (workspace, path, oldText, newText) => applyFileEdit(workspace, path, oldText, newText),
     deleteFile: (workspace, path) => removeFile(workspace, path),
@@ -139,6 +149,8 @@ export async function* runObjective(options: RunObjectiveOptions): AsyncGenerato
     maxCostUsd: options.maxCostUsd,
     maxRequestCostUsd: options.maxRequestCostUsd,
     maxRepairAttempts: options.maxRepairAttempts,
+    acceptanceCriteria: options.acceptanceCriteria,
+    benchmarkRoot: options.benchmarkRoot,
     researchContext: formatResearchForPrompt(research),
   });
 

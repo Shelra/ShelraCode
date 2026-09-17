@@ -34,6 +34,8 @@ let nextBgId = 1;
 
 export class BashTool {
   private cwd: string;
+  /** The workspace the tool was created for; `cd` may move within it but never out of it. */
+  private readonly rootCwd: string;
   private bgProcesses = new Map<number, BackgroundProcess>();
   private tmpDir: string | null = null;
   private sandboxMode: SandboxMode;
@@ -41,6 +43,7 @@ export class BashTool {
 
   constructor(initialCwd = process.cwd(), options: BashToolOptions = {}) {
     this.cwd = initialCwd;
+    this.rootCwd = path.resolve(initialCwd);
     this.sandboxMode = options.sandboxMode ?? "off";
     this.sandboxSettings = options.sandboxSettings ?? {};
   }
@@ -54,13 +57,21 @@ export class BashTool {
 
   async execute(command: string, timeout = 30_000, abortSignal?: AbortSignal): Promise<ToolResult> {
     try {
-      if (command.startsWith("cd ")) {
-        const dir = command
-          .substring(3)
-          .trim()
-          .replace(/^["']|["']$/g, "");
+      const standaloneCd = parseStandaloneCd(command);
+      if (standaloneCd !== null) {
+        const dir = standaloneCd;
         try {
           const nextCwd = path.resolve(this.cwd, dir);
+          // The file tools resolve paths against this cwd, so a `cd` above the workspace would
+          // let the agent read and write anywhere on the machine (seen live 2026-09-17: a model
+          // ran `cd ../../../` and wrote artifacts into an unrelated repository).
+          const escapePath = path.relative(this.rootCwd, nextCwd);
+          if (escapePath.startsWith("..") || path.isAbsolute(escapePath)) {
+            return {
+              success: false,
+              error: `Cannot change directory outside the workspace root (${this.rootCwd}). Use paths relative to the workspace instead.`,
+            };
+          }
           const info = await stat(nextCwd);
           if (!info.isDirectory()) {
             return { success: false, error: `Cannot change directory: ${nextCwd} is not a directory` };
@@ -360,7 +371,7 @@ export class BashTool {
       return `Execute a bash command inside a Shuru sandbox. Use for find, ls, git inspection, build tools, test runners, and other shell commands that should stay isolated. For content search, prefer the dedicated grep tool. The current workspace is mounted inside the sandbox at /workspace, ${netStatus}, and shell-side workspace file changes do not persist back to the host in this version, so prefer the dedicated file tools for durable edits.${hostBrowserNote} Set background=true for long-running processes like dev servers or watchers.`;
     }
     if (process.platform === "win32") {
-      return "Execute a Windows PowerShell command. Use for Get-ChildItem, Get-Content, git, build tools, package managers, running tests, and other shell commands. Do not use POSIX paths or syntax such as /d/..., ls -la, find, or &&. For content search, prefer the dedicated grep tool. Set background=true for long-running processes like dev servers or watchers. For file read/write/edit, prefer the dedicated file tools instead.";
+      return "Execute a Windows PowerShell command. Use for Get-ChildItem, Get-Content, git, build tools, package managers, running tests, and other shell commands. Do not use POSIX paths or syntax such as /d/..., ls -la, find, or &&. For content search, prefer the dedicated grep tool. Set background=true for long-running processes like dev servers or watchers. Never create or modify files here (no >, echo, Set-Content, Out-File): PowerShell writes UTF-16/BOM that corrupts JSON and source files — use write_file/edit_file for every file change.";
     }
     return "Execute a POSIX shell command. Use for find, ls, git, build tools, package managers, running tests, and any other shell command. For content search, prefer the dedicated grep tool. Set background=true for long-running processes like dev servers, watchers, or anything that should keep running while you continue working. For file read/write/edit, prefer the dedicated file tools instead.";
   }
@@ -395,6 +406,18 @@ export class BashTool {
     }
     return null;
   }
+}
+
+/**
+ * Only a bare `cd <dir>` changes the tool's persistent working directory. Anything else that
+ * merely starts with `cd` (`cd src && bun test`, `cd a; ls`) runs through the shell as written —
+ * treating everything after `cd ` as a directory name turned those into "no such directory"
+ * failures (observed live 2026-09-17).
+ */
+export function parseStandaloneCd(command: string): string | null {
+  const match = /^\s*cd\s+(?:"([^"]*)"|'([^']*)'|([^\s;&|<>]+))\s*$/u.exec(command);
+  if (!match) return null;
+  return match[1] ?? match[2] ?? match[3] ?? null;
 }
 
 function truncCmd(cmd: string, max: number): string {

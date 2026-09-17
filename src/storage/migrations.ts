@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "./db";
 
-const LATEST_DB_VERSION = 4;
+const LATEST_DB_VERSION = 8;
 
 export function applyMigrations(db: SQLiteDatabase): void {
   const version = Number(db.pragma("user_version", { simple: true })) || 0;
@@ -199,6 +199,193 @@ function createAutonomyLedgerSchema(db: SQLiteDatabase): void {
 
 function ensureLatestSchema(db: SQLiteDatabase): void {
   createSessionRecapSchema(db);
+  createBenchmarkSchema(db);
+}
+
+/**
+ * Cross-run benchmark index. The autonomy journal remains the detailed per-task source of
+ * truth; these rows are the durable query surface for history, comparison, and the TUI.
+ * Scores are duplicated into typed columns for indexed leaderboard queries and retained as
+ * JSON so new dimensions can be added without another migration.
+ */
+function createBenchmarkSchema(db: SQLiteDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS benchmark_runs (
+      run_number INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT NOT NULL UNIQUE,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      started_at TEXT,
+      finished_at TEXT,
+      heartbeat_at TEXT,
+      finalized_at TEXT,
+      benchmark_version TEXT NOT NULL,
+      benchmark_suite TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      leaderboard_eligible INTEGER NOT NULL DEFAULT 0,
+      agent_version TEXT,
+      agent_config_json TEXT NOT NULL DEFAULT '{}',
+      configuration_fingerprint TEXT NOT NULL,
+      model TEXT,
+      model_provider TEXT,
+      model_version TEXT,
+      repository_commit TEXT,
+      repository_dirty INTEGER NOT NULL DEFAULT 0,
+      repository_diff_hash TEXT,
+      shelra_version TEXT,
+      environment_json TEXT NOT NULL DEFAULT '{}',
+      benchmark_config_json TEXT NOT NULL DEFAULT '{}',
+      seed_text TEXT,
+      task_count INTEGER NOT NULL DEFAULT 0,
+      completed_task_count INTEGER NOT NULL DEFAULT 0,
+      resolved_task_count INTEGER NOT NULL DEFAULT 0,
+      resolved_rate REAL,
+      overall_score REAL,
+      coding_score REAL,
+      agentic_score REAL,
+      intent_score REAL,
+      verification_score REAL,
+      research_score REAL,
+      memory_score REAL,
+      repair_score REAL,
+      efficiency_score REAL,
+      scores_json TEXT NOT NULL DEFAULT '{}',
+      confidence_json TEXT,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      cached_tokens INTEGER,
+      reasoning_tokens INTEGER,
+      total_tokens INTEGER,
+      cost_micros INTEGER,
+      cost_kind TEXT,
+      cost_source TEXT,
+      duration_ms INTEGER,
+      failure_reason TEXT,
+      failure_type TEXT,
+      process_id INTEGER
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS benchmark_task_results (
+      run_id TEXT NOT NULL REFERENCES benchmark_runs(id) ON DELETE CASCADE,
+      task_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      difficulty TEXT NOT NULL,
+      task_definition_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL,
+      started_at TEXT,
+      finished_at TEXT,
+      duration_ms INTEGER,
+      llm_duration_ms INTEGER,
+      tool_duration_ms INTEGER,
+      verification_duration_ms INTEGER,
+      repair_duration_ms INTEGER,
+      scores_json TEXT NOT NULL DEFAULT '{}',
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      cached_tokens INTEGER,
+      reasoning_tokens INTEGER,
+      total_tokens INTEGER,
+      cost_micros INTEGER,
+      cost_kind TEXT,
+      cost_source TEXT,
+      behavior_json TEXT NOT NULL DEFAULT '{}',
+      acceptance_json TEXT NOT NULL DEFAULT '[]',
+      final_result_json TEXT,
+      failure_reason TEXT,
+      failure_type TEXT,
+      evidence_json TEXT NOT NULL DEFAULT '[]',
+      objective_run_dir TEXT,
+      PRIMARY KEY (run_id, task_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS benchmark_acceptance_results (
+      run_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      criterion_id TEXT NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT NOT NULL,
+      required INTEGER,
+      detail TEXT,
+      evidence_json TEXT NOT NULL DEFAULT '[]',
+      PRIMARY KEY (run_id, task_id, criterion_id),
+      FOREIGN KEY (run_id, task_id) REFERENCES benchmark_task_results(run_id, task_id) ON DELETE CASCADE
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS benchmark_events (
+      run_id TEXT NOT NULL REFERENCES benchmark_runs(id) ON DELETE CASCADE,
+      sequence INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      at TEXT NOT NULL,
+      task_id TEXT,
+      message TEXT NOT NULL,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      PRIMARY KEY (run_id, sequence)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS benchmark_artifacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL REFERENCES benchmark_runs(id) ON DELETE CASCADE,
+      task_id TEXT,
+      kind TEXT NOT NULL,
+      path TEXT NOT NULL,
+      label TEXT,
+      sha256 TEXT,
+      bytes INTEGER,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS benchmark_baselines (
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      benchmark_suite TEXT NOT NULL,
+      benchmark_version TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      run_id TEXT NOT NULL REFERENCES benchmark_runs(id) ON DELETE CASCADE,
+      set_at TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, benchmark_suite, benchmark_version, agent_name)
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS idx_benchmark_runs_workspace_created
+      ON benchmark_runs(workspace_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_benchmark_runs_workspace_status
+      ON benchmark_runs(workspace_id, status, run_number DESC);
+    CREATE INDEX IF NOT EXISTS idx_benchmark_runs_agent_version
+      ON benchmark_runs(workspace_id, agent_name, agent_version, benchmark_version, benchmark_suite);
+    CREATE INDEX IF NOT EXISTS idx_benchmark_runs_configuration
+      ON benchmark_runs(
+        workspace_id, benchmark_suite, benchmark_version, agent_name, agent_version,
+        model, model_provider, model_version, configuration_fingerprint, run_number DESC
+      );
+    CREATE INDEX IF NOT EXISTS idx_benchmark_runs_commit
+      ON benchmark_runs(repository_commit);
+    CREATE INDEX IF NOT EXISTS idx_benchmark_tasks_run_status_category
+      ON benchmark_task_results(run_id, status, category);
+    CREATE INDEX IF NOT EXISTS idx_benchmark_events_run_at
+      ON benchmark_events(run_id, at, sequence);
+    CREATE INDEX IF NOT EXISTS idx_benchmark_artifacts_run_task
+      ON benchmark_artifacts(run_id, task_id, created_at);
+
+    CREATE TRIGGER IF NOT EXISTS benchmark_runs_immutable_after_finalize
+      BEFORE UPDATE ON benchmark_runs
+      WHEN OLD.finalized_at IS NOT NULL
+      BEGIN
+        SELECT RAISE(ABORT, 'finalized benchmark runs are immutable');
+      END;
+
+    CREATE TRIGGER IF NOT EXISTS benchmark_tasks_immutable_after_finish
+      BEFORE UPDATE ON benchmark_task_results
+      WHEN OLD.finished_at IS NOT NULL
+      BEGIN
+        SELECT RAISE(ABORT, 'finished benchmark task results are immutable');
+    END;
+  `);
+  addColumnIfMissing(db, "benchmark_task_results", "task_definition_json", "TEXT NOT NULL DEFAULT '{}'");
+  addColumnIfMissing(db, "benchmark_runs", "resolved_task_count", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "benchmark_runs", "resolved_rate", "REAL");
+  addColumnIfMissing(db, "benchmark_runs", "failure_type", "TEXT");
+  addColumnIfMissing(db, "benchmark_task_results", "failure_type", "TEXT");
+  addColumnIfMissing(db, "benchmark_runs", "leaderboard_eligible", "INTEGER NOT NULL DEFAULT 0");
 }
 
 function addColumnIfMissing(db: SQLiteDatabase, table: string, column: string, definition: string): void {

@@ -5,12 +5,20 @@ import { describe, expect, it } from "vitest";
 import { classifyTurn, compileContextPacket } from "./compiler";
 
 describe("host context compiler", () => {
-  it("keeps ordinary conversation tool-free", () => {
+  it("classifies without ever carrying a tool policy", () => {
     expect(classifyTurn("What is a closure?")).toEqual({
       kind: "conversation",
-      toolPolicy: "none",
       reason: "no repository or mutation signal",
     });
+    expect(classifyTurn("Fix parser.ts in the repository")).toEqual({
+      kind: "coding",
+      reason: "mutation request with repository scope",
+    });
+    for (const prompt of ["Make the tests pass", "git status", "Why does the login page crash?"]) {
+      // These read as "conversation" to a keyword heuristic; the classification is informational
+      // only and must never be able to remove tools from the turn.
+      expect(classifyTurn(prompt)).not.toHaveProperty("toolPolicy");
+    }
   });
 
   it("compiles bounded repository evidence and ranks objective paths", () => {
@@ -22,7 +30,6 @@ describe("host context compiler", () => {
     const packet = compileContextPacket(root, "Fix parser.ts in the repository", 3_000);
 
     expect(packet.classification.kind).toBe("coding");
-    expect(packet.classification.toolPolicy).toBe("mutate");
     expect(packet.files).toContain("src/parser.ts");
     expect(packet.promptAppendix).toContain("package.json");
     expect(packet.promptAppendix.length).toBeLessThanOrEqual(3_000 + 30);
@@ -32,13 +39,22 @@ describe("host context compiler", () => {
     "revisa el proyecto",
     "analiza el repositorio",
     "lee los archivos de la carpeta src",
-  ])("classifies Spanish repository requests as read-only work: %s", (prompt) => {
-    expect(classifyTurn(prompt)).toMatchObject({ kind: "repository", toolPolicy: "read" });
+  ])("classifies Spanish repository requests as repository turns: %s", (prompt) => {
+    expect(classifyTurn(prompt)).toMatchObject({ kind: "repository" });
   });
 
-  it("marks a broad review as host-evidence-only and keeps explicit file reads tool-enabled", () => {
-    expect(classifyTurn("revisa el proyecto")).toMatchObject({ hostEvidenceOnly: true });
-    expect(classifyTurn("lee package.json y src/index.ts")).not.toHaveProperty("hostEvidenceOnly");
+  it("does not inject README or instruction files as evidence, only the manifest", () => {
+    const root = mkdtempSync(join(tmpdir(), "shelra-context-manifest-"));
+    writeFileSync(join(root, "package.json"), '{"name":"fixture","scripts":{"test":"bun test"}}');
+    writeFileSync(join(root, "README.md"), "README BODY SHOULD NOT BE INJECTED");
+    writeFileSync(join(root, "AGENTS.md"), "AGENTS BODY SHOULD NOT BE INJECTED");
+
+    const packet = compileContextPacket(root, "revisa el proyecto");
+
+    expect(packet.files).toEqual(expect.arrayContaining(["package.json", "README.md", "AGENTS.md"]));
+    expect(packet.promptAppendix).toContain('"test":"bun test"');
+    expect(packet.promptAppendix).not.toContain("README BODY");
+    expect(packet.promptAppendix).not.toContain("AGENTS BODY");
   });
 
   it("terminates on a directory symlink cycle", () => {

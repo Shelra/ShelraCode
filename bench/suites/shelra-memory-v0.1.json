@@ -1,0 +1,101 @@
+{
+  "benchmarkVersion": "memory-0.1.0",
+  "suite": "shelra-memory",
+  "oracleMode": "benchmark-owned",
+  "seed": "shelra-memory-v0.1",
+  "config": {
+    "purpose": "Prove that persistent project memory improves a later session: phase A discovers an undocumented codegen step; phase B must apply it after a schema change, once with the memory phase A produced and once with it wiped.",
+    "subject": "agent_memory",
+    "modelRole": "controlled_variable",
+    "workspaceMode": "phase_b_copies_phase_a_workspace",
+    "oracle": "external_deterministic_oracle",
+    "leaderboardEligible": false,
+    "minimumTaskCount": 3,
+    "note": "Compare b-recall-with-memory against b-recall-without-memory on oracle pass, steps, and tokens. One run is one sample; repeat runs before drawing conclusions."
+  },
+  "scorePolicy": {
+    "id": "shelra-memory-provisional",
+    "version": "1",
+    "weights": {
+      "coding": 0.45,
+      "intent": 0.35,
+      "verification": 0.2
+    },
+    "requiredDimensions": ["coding", "intent", "verification"],
+    "correctnessFloor": 70,
+    "note": "Same provisional policy as the core suite so task rows stay comparable."
+  },
+  "tasks": [
+    {
+      "id": "a-learn",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-memory-v0.1/schema-codegen",
+      "prompt": "Implement formatUser in src/user.ts: return the user's fields in schema order as key=value pairs joined by '; ' (for example id=u1; name=Ada; createdAt=2026-01-01), using USER_FIELDS from the generated schema module. Do not modify tests or schema/model.json. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external oracle verifies the generated schema matches schema/model.json and formatUser produces the documented format.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-memory-v0.1.ts a-learn",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": { "kind": "command_succeeds", "command": "bun test", "timeoutMs": 60000 }
+        }
+      ]
+    },
+    {
+      "id": "b-recall-with-memory",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceFrom": "a-learn",
+      "memoryPolicy": "keep",
+      "prompt": "Add a trailing string field named email to the User type in schema/model.json and make sure formatUser includes it in its output. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external oracle verifies the schema gained email, the generated module was regenerated (hash matches), and formatUser includes email.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-memory-v0.1.ts b-recall-with-memory",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": { "kind": "command_succeeds", "command": "bun test", "timeoutMs": 60000 }
+        }
+      ]
+    },
+    {
+      "id": "b-recall-without-memory",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceFrom": "a-learn",
+      "memoryPolicy": "wipe",
+      "prompt": "Add a trailing string field named email to the User type in schema/model.json and make sure formatUser includes it in its output. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "Same oracle as the with-memory variant; this task starts from the same workspace with .shelra/memory and .agents/skills removed.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-memory-v0.1.ts b-recall-without-memory",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": { "kind": "command_succeeds", "command": "bun test", "timeoutMs": 60000 }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import type {
+  ProcessMessageMemory,
   ProcessMessageObserver,
-  ProcessMessageResearch,
   ProcessMessageStepFinish,
   ProcessMessageStepStart,
 } from "../agent/agent";
@@ -33,13 +33,11 @@ export type HeadlessJsonEvent =
       timestamp: number;
     }
   | {
-      type: "research";
+      type: "memory";
       sessionID?: string;
-      query: string;
-      provider: ProcessMessageResearch["provider"];
-      success: boolean;
-      sourceCount: number;
-      sources: { title: string; url: string }[];
+      qualified: boolean;
+      written: string[];
+      decisions: Array<{ slug: string; action: string; reason: string }>;
       timestamp: number;
     }
   | {
@@ -243,15 +241,13 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
         }) as HeadlessJsonEvent,
       );
     },
-    onResearch(info: ProcessMessageResearch) {
+    onMemory(info: ProcessMessageMemory) {
       pending += jsonLine(
         withSession({
-          type: "research",
-          query: info.query,
-          provider: info.provider,
-          success: info.success,
-          sourceCount: info.sourceCount,
-          sources: info.sources,
+          type: "memory",
+          qualified: info.qualified,
+          written: info.written,
+          decisions: info.decisions,
           timestamp: info.timestamp,
         }) as HeadlessJsonEvent,
       );

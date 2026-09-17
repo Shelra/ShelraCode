@@ -1,0 +1,8 @@
+{
+  "name": "shelra-bench-schema-codegen",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "prepare:schema": "bun run scripts/build-schema.ts"
+  }
+}

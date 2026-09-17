@@ -27,7 +27,9 @@ import {
   SYSTEM_PLAN,
 } from "./prompts";
 import {
+  type AcceptanceCriterion,
   type Action,
+  type CheckSpec,
   type ExecutableSpecification,
   type Objective,
   type ObjectiveOutcome,
@@ -93,7 +95,7 @@ export interface KernelDeps {
   intelligence: IntelligenceProvider;
   runCommand(
     command: string,
-    options: { cwd: string; timeoutMs?: number; signal?: AbortSignal },
+    options: { cwd: string; timeoutMs?: number; signal?: AbortSignal; env?: Record<string, string> },
   ): Promise<CommandOutcome>;
   writeFile(workspace: string, path: string, content: string): Promise<FileChange>;
   editFile(workspace: string, path: string, oldText: string, newText: string): Promise<FileChange>;
@@ -128,6 +130,10 @@ export interface KernelOptions {
   maxRequestCostUsd?: number;
   /** Bounded, host-collected external research; never treated as executable instructions. */
   researchContext?: string;
+  /** Immutable benchmark-owned checks. When present, model-derived criteria are ignored. */
+  acceptanceCriteria?: AcceptanceCriterion[];
+  /** Repository root used to resolve benchmark-owned oracle commands. */
+  benchmarkRoot?: string;
   maxTaskAttempts?: number;
 }
 
@@ -216,7 +222,7 @@ export class AutonomyKernel {
       updatedAt: Date.now(),
       phase: "interpreting",
       requirements: [],
-      acceptance: [],
+      acceptance: cloneAcceptanceCriteria(options.acceptanceCriteria),
       plan: [],
       actions: [],
       observations: [],
@@ -315,6 +321,7 @@ export class AutonomyKernel {
         yield* this.phase("running");
         await this.ensureAppRunning();
         if (this.objective.app.url) yield this.detail(`Application serving at ${this.objective.app.url}`);
+        await this.runDeclaredSelfChecks();
 
         yield* this.phase("verifying");
         const report = await this.verify(attempt);
@@ -383,6 +390,21 @@ export class AutonomyKernel {
   // ---------------------------------------------------------------- phases
 
   private async interpret(): Promise<boolean> {
+    const providedAcceptance = this.options.acceptanceCriteria;
+    if (providedAcceptance && providedAcceptance.length > 0) {
+      this.objective.requirements = [this.objective.request];
+      this.objective.acceptance = cloneAcceptanceCriteria(providedAcceptance);
+      this.journal.record("requirements_derived", "1 requirement from supplied contract", {
+        source: "supplied",
+        requirements: this.objective.requirements,
+      });
+      this.journal.record("acceptance_derived", `${this.objective.acceptance.length} supplied criteria`, {
+        source: "supplied",
+        criteria: this.objective.acceptance,
+      });
+      return true;
+    }
+
     const snapshot = scanWorkspace(this.objective.workspace);
     const existing = snapshot.files.length > 0;
     const response = await this.think<{ requirements: string[]; criteria: RawCriterion[] }>({
@@ -415,20 +437,43 @@ export class AutonomyKernel {
 
     if (!response.ok || !response.data) return false;
     this.objective.requirements = response.data.requirements ?? [];
-    this.objective.acceptance = narrowCriteria(response.data.criteria ?? []);
-    if (this.objective.acceptance.length > 0 && !this.objective.acceptance.some((criterion) => criterion.required)) {
-      this.objective.acceptance = this.objective.acceptance.map((criterion) => ({ ...criterion, required: true }));
+    const benchmarkAcceptance = this.options.acceptanceCriteria;
+    if (benchmarkAcceptance && benchmarkAcceptance.length > 0) {
+      this.objective.acceptance = cloneAcceptanceCriteria(benchmarkAcceptance);
+    } else {
+      this.objective.acceptance = narrowCriteria(response.data.criteria ?? []);
+      if (this.objective.acceptance.length > 0 && !this.objective.acceptance.some((criterion) => criterion.required)) {
+        this.objective.acceptance = this.objective.acceptance.map((criterion) => ({ ...criterion, required: true }));
+      }
     }
     this.journal.record("requirements_derived", `${this.objective.requirements.length} requirements`, {
       requirements: this.objective.requirements,
     });
     this.journal.record("acceptance_derived", `${this.objective.acceptance.length} criteria`, {
+      source: benchmarkAcceptance && benchmarkAcceptance.length > 0 ? "benchmark" : "agent",
       criteria: this.objective.acceptance,
     });
     return this.objective.acceptance.length > 0;
   }
 
   private async buildPlan(): Promise<void> {
+    if (this.options.acceptanceCriteria && this.options.acceptanceCriteria.length > 0) {
+      this.objective.plan = [
+        {
+          id: "T1",
+          description: this.objective.request,
+          satisfies: this.objective.acceptance.map((criterion) => criterion.id),
+          status: "pending",
+          attempts: 0,
+        },
+      ];
+      this.journal.record("plan_created", "1 deterministic task from supplied contract", {
+        source: "supplied",
+        plan: this.objective.plan,
+      });
+      return;
+    }
+
     const snapshot = scanWorkspace(this.objective.workspace);
     const response = await this.think<{ tasks: Array<{ id: string; description: string; satisfies: string[] }> }>({
       role: "plan",
@@ -507,8 +552,13 @@ export class AutonomyKernel {
           : "") +
         (this.options.researchContext ? `${this.options.researchContext}\n\n` : "") +
         `${renderTaskContext(this.objective, task, snapshot)}\n\n` +
+        (task.attempts > 1 && task.lastError
+          ? `PREVIOUS ATTEMPT FAILED:\n${task.lastError}\nCorrect that failure; do not repeat the same response.\n\n`
+          : "") +
         "Emit the complete file contents for every file you create or change. " +
         "For an edit, give oldText exactly as it appears in the file. " +
+        "Do not emit read-only inspection commands; the relevant files are already included above. " +
+        "If the objective says tests are protected, never modify test files. " +
         "If the project needs a command to serve it, set startCommand.",
       schema: CHANGESET_SCHEMA,
       tier: "deep",
@@ -532,6 +582,7 @@ export class AutonomyKernel {
     const applied = await this.applyChangeSet(response.data, task.id);
     task.status = applied.attempted > 0 && applied.failed === 0 ? "done" : "failed";
     if (applied.changed === 0) task.lastError = "change set applied no changes";
+    else if (task.status === "done") delete task.lastError;
     if (response.data.startCommand) this.detectedStartCommand = response.data.startCommand;
     this.journal.record("task_finished", `${task.status}: ${applied.changed} file change(s)`, { taskId: task.id });
   }
@@ -548,7 +599,18 @@ export class AutonomyKernel {
       const t0 = Date.now();
       let change: FileChange;
       try {
-        if (file.action === "write") {
+        const protectedReason = this.protectedPathReason(file.path);
+        if (protectedReason) {
+          change = {
+            path: file.path,
+            operation: "noop",
+            changed: false,
+            linesAdded: 0,
+            linesRemoved: 0,
+            bytesAfter: 0,
+            error: protectedReason,
+          };
+        } else if (file.action === "write") {
           change = await this.deps.writeFile(this.objective.workspace, file.path, file.content ?? "");
         } else if (file.action === "edit") {
           change = await this.deps.editFile(
@@ -607,6 +669,51 @@ export class AutonomyKernel {
     }
 
     return { changed, attempted, failed };
+  }
+
+  /**
+   * Run deterministic, user-visible verification commands before the independent
+   * acceptance gate. This is Shelra checking its own work; benchmark-owned oracle
+   * commands remain excluded and are still executed only by the acceptance engine.
+   */
+  private async runDeclaredSelfChecks(): Promise<void> {
+    const checks = this.objective.acceptance
+      .map((criterion) => criterion.check)
+      .filter((check): check is Extract<CheckSpec, { kind: "command_succeeds" }> => check.kind === "command_succeeds")
+      .filter((check) => !check.command.includes("{{benchmarkRoot}}"));
+    const seen = new Set<string>();
+    for (const check of checks) {
+      if (seen.has(check.command)) continue;
+      seen.add(check.command);
+      const startedAt = Date.now();
+      const outcome = await this.deps.runCommand(check.command, {
+        cwd: this.objective.workspace,
+        timeoutMs: check.timeoutMs ?? 180_000,
+        signal: this.options.signal,
+      });
+      const expectedExitCode = check.expectExitCode ?? 0;
+      const ok = outcome.state === "completed" && outcome.exitCode === expectedExitCode && !outcome.timedOut;
+      this.addAction({
+        kind: "run_command",
+        summary: `self-check: ${check.command}`,
+        startedAt,
+        ok,
+        command: outcome,
+        detail: ok ? undefined : `Expected exit ${expectedExitCode}; observed ${outcome.exitCode ?? outcome.state}.`,
+      });
+      if (!ok) this.observe(`Self-check failed: ${summarizeCommand(outcome, 600)}`);
+    }
+  }
+
+  private protectedPathReason(relativePath: string): string | undefined {
+    if (!/(?:do not|don't|never)\s+(?:modify|edit|change)\s+(?:the\s+)?tests?/iu.test(this.objective.request)) {
+      return undefined;
+    }
+    const normalized = relativePath.replaceAll("\\", "/").replace(/^\.\//u, "");
+    const isTest =
+      /(^|\/)(?:test|tests|__tests__)(\/|$)/iu.test(normalized) ||
+      /(^|\/)[^/]+\.(?:test|spec)\.[^/]+$/iu.test(normalized);
+    return isTest ? `Protected by the objective: test file ${relativePath} must not be modified.` : undefined;
   }
 
   /**
@@ -696,7 +803,13 @@ export class AutonomyKernel {
     };
     return evaluateAcceptance(
       this.objective.acceptance,
-      { workspace: this.objective.workspace, appUrl: this.objective.app.url, attempt, signal: this.options.signal },
+      {
+        workspace: this.objective.workspace,
+        benchmarkRoot: this.options.benchmarkRoot,
+        appUrl: this.objective.app.url,
+        attempt,
+        signal: this.options.signal,
+      },
       deps,
     );
   }
@@ -912,4 +1025,19 @@ export class AutonomyKernel {
   private async cleanup(): Promise<void> {
     await this.stopApp();
   }
+}
+
+function cloneAcceptanceCriteria(criteria: readonly AcceptanceCriterion[] | undefined): AcceptanceCriterion[] {
+  return (criteria ?? []).map((criterion) => ({
+    ...criterion,
+    check: cloneCheckSpec(criterion.check),
+  }));
+}
+
+function cloneCheckSpec(check: AcceptanceCriterion["check"]): AcceptanceCriterion["check"] {
+  if (check.kind === "files_exist" || check.kind === "no_external_urls") {
+    return { ...check, ...(check.paths ? { paths: [...check.paths] } : {}) };
+  }
+  if (check.kind === "dom") return { ...check, assertion: { ...check.assertion } };
+  return { ...check };
 }

@@ -1443,9 +1443,9 @@ finishes last, to avoid redundant concurrent builds.
   the way the completion gate blocks an unverified "Done." claim. Only the delegated-verification
   evidence fix (§13) and the memory tools' existence are hard/mechanical; the "do this before
   planning" and "check twice" instructions rely on the model following the system prompt.
-- Memory tools are project-scoped only; nothing yet prompts the model to consult memory
-  automatically at context-assembly time the way `resolvePlanState`-style code does for plans —
-  it's on the model to call `memory_list` itself per the workflow instruction.
+- Memory tools are project-scoped only. The memory index is injected automatically for coding
+  turns, while full topic bodies remain on-demand through `memory_read`; purely conversational
+  turns still do not receive project memory.
 
 ---
 
@@ -1453,3 +1453,302 @@ finishes last, to avoid redundant concurrent builds.
 2026-09-12), corrected and re-verified by direct grep/read against `src/agent/kernel.ts`,
 `src/agent/agent.ts` (lines 115, 693, 857-859, 2299-2832, 2670-2704), and
 `src/storage/migrations.ts` (lines 99-133) in this session; implementation evidence in §8 above.*
+
+## 21. Restart-safe session intent and executable-plan recovery (2026-09-14)
+
+The model remains stateless. Shelra owns continuity by reopening an explicit session
+(`--session latest` or `--session <id>`) and loading its effective transcript from SQLite. Raw
+messages and tool results remain durable even when the model-facing transcript has been compacted.
+
+Previously, `activeAcceptanceCriteria` and `activePlanSteps` survived later turns only while the
+same `Agent` process remained alive. A restart loaded the transcript but left those host-owned
+fields empty. Compaction made this worse: the old structured `generate_plan` tool result could be
+outside the effective transcript, leaving only summary prose. The model might remember the gist,
+but Shelra's completion gate could no longer enforce the original criteria.
+
+The recovery path is now deterministic:
+
+1. `loadPersistedPlanState(sessionId)` reads the complete ordered tool-result history from SQLite,
+   independently of the compaction boundary.
+2. `resolvePlanResults()` selects the latest successful plan and replays later successful
+   `update_plan_step` results, preserving status and evidence.
+3. `Agent` hydrates acceptance criteria and plan steps during construction, before another turn can
+   run. The workspace inspector reads the same durable plan state.
+4. `startNewSession()` explicitly clears plan, criteria, verification, and linkage state so intent
+   cannot leak between unrelated sessions.
+
+Verification covers in-process cross-turn continuity, process reconstruction, new-session
+isolation, compaction before the stored plan, and a real SQLite close/reopen cycle. Automatic
+resumption is intentionally not enabled: a fresh invocation starts a fresh session unless the user
+selects one, preventing accidental context leakage between unrelated tasks.
+
+## 22. Bounded model waiting and visible turn stages (2026-09-14)
+
+The chat turn now has a provider-neutral timeout policy instead of waiting forever for a
+provider, local `llama.cpp` server, or streamed response that stopped making progress. The
+defaults are 15 minutes for the complete model turn, 5 minutes for one model step, and 90
+seconds of silence between stream chunks. The policy is forwarded to the AI SDK runtime and is
+also combined with the caller's cancellation signal. A long-running task can still continue
+while it produces tokens or completes tool work; only a stalled request is cancelled. The
+values can be tuned in milliseconds with `SHELRA_MODEL_TIMEOUT_MS`,
+`SHELRA_MODEL_STEP_TIMEOUT_MS`, and `SHELRA_MODEL_IDLE_TIMEOUT_MS`.
+
+MCP connection and `tools/list` discovery are separately bounded to 20 seconds by default via
+`SHELRA_MCP_TIMEOUT_MS`. A failed MCP server is reported as unavailable and does not hold the
+whole turn indefinitely. Close operations are bounded as well.
+
+The TUI publishes structured operational stages while a turn is pending: hooks, notifications,
+context, research, MCP, model, and recap. This makes a real wait distinguishable from a frozen
+UI without exposing private chain-of-thought. A stalled model request is recorded through the
+existing error/kernel path, so it is visible as a failed turn rather than silently left in a
+processing state. The timeout behavior is covered by an integration test using a provider whose
+request never resolves. Auxiliary session-title generation is scheduled after the main turn and
+cancelled when a new turn starts, preventing a local single-threaded runtime from queueing two
+model requests at the same time.
+
+## 23. Measuring the product path, and what it found (2026-09-17)
+
+The bench harness (§14 Phase 5, `src/bench/`) had been driving every task through
+`AutonomyKernel` — the engine `--autonomous` uses, which shares none of §9-§22's hardening
+(research/lanes/15-shelracode-forensic-audit.md §5.1). Its scores therefore described a path
+almost nobody runs. This section records the first measurements of the path people do run,
+`Agent.processMessage()`, and the defects those measurements exposed. Every number below is a
+persisted run in `benchmark_runs` (`shelra bench` on `bench/suites/shelra-agent-core-v0.2.json`,
+model pinned to `qwen/qwen3-coder-30b-a3b-instruct`, the same model as the best autonomy-path run
+#6, so the harness is the only variable).
+
+### 23.1 A benchmark executor for the real turn loop
+
+`src/bench/agent-executor.ts` (`--agent shelra`, now the default) constructs a real `Agent` bound to
+the task workspace (new `AgentOptions.cwd`), streams `processMessage(prompt)`, counts what the
+turn actually did (tool calls, files changed, verification-shaped commands, plan publication,
+empty steps, per-step finish reasons, quarantined upstream providers), and only then grades the
+finished workspace with the benchmark-owned `CheckSpec`s through the same `evaluateAcceptance`
+engine the autonomy path uses. The agent never sees the oracle. The old executor remains as
+`--agent shelra-autonomy`. Verification is scored as the share of the task's own runnable checks
+(`bun test`) the agent executed successfully itself; hidden `{{benchmarkRoot}}` oracles are
+excluded from that denominator.
+
+### 23.2 Baseline: the product path scored 0
+
+Run #8 (product path, unchanged code): overall **0**, coding 50, resolved **1 of 8**, 1.87M tokens.
+Run #6 (autonomy path, same model): overall **80**, coding 75, 692 s. The transcripts, not the
+scores, explained the gap:
+
+- **Silent empty steps.** Seven of eight tasks ended after a model step that produced neither
+  text nor a tool call yet consumed 23-90 completion tokens, finish reason `stop`. The raw wire
+  trace (new `SHELRA_DEBUG_STREAM=2`) showed the upstream provider Novita returning
+  `delta:{content:""}` with `finish_reason:"stop"` after 47 completion tokens — it had consumed
+  the model's tool call. The harness accepted that as a finished turn: no error, no retry, and
+  nothing persisted (an empty round never reached `appendCompletedTurn`).
+- **`bun test` was not verification.** The completion gate's `VERIFICATION_BASH_RE` listed
+  `npm test`, `cargo test`, `pytest` and a dozen others but not `bun test`, the runner of this very
+  repository and of every bench fixture. Task 06 ran its tests eight times, was nudged three
+  times, re-published its plan six times, and burned 1.6M tokens across 50 steps before being
+  marked "Not verified".
+- **Cost accounting was zero.** OpenRouter reports exact cost per step (`usage.raw.cost`) but not
+  on the aggregated total the turn recorded, so the whole run's spend was logged as $0.0006 while
+  `--max-cost` believed it.
+
+Two defects unrelated to the bench prompts were found the same day and are recorded here because
+they sat on the same code path:
+
+- **The keyword turn classifier stripped tools.** `classifyTurn` routed prompts to tool-less or
+  read-only prompts by regex. Of 30 realistic coding prompts, 24 ("make the tests pass", "git
+  status", "install zod and use it", "why does the login page crash?") received zero tools and a
+  system prompt saying "do not call tools", and "run the test suite and summarize failures" — the
+  README's own example — received read-only tools with no shell. For most requests Shelra was a
+  chatbot. Only a model's declared capability may remove tools now; the classification survives as
+  an informational field on the context packet.
+- **Forced web research on every turn.** `processMessage` performed a Google search before every
+  prompt, including "hello", and injected the untrusted snippets into the system prompt. Lane 14
+  had already caught a live prompt-injection attempt in exactly such fetched content. Research is
+  now the model's decision through `search_web`/`open_web`.
+
+### 23.3 What changed
+
+1. **Empty-step retry** (`agent.ts`): a step with no text and no tool call is a provider/model
+   failure, not a result. The round's real work (tool calls and results) is kept, the empty reply
+   is dropped, and the request is re-issued — first silently, then with an explicit continuation —
+   up to `MAX_EMPTY_RESPONSE_RETRIES`. Exhaustion ends the turn *visibly* ("[No response …]") and
+   marks the kernel blocked. `appendCompletedTurn` now persists each turn's messages exactly once
+   (it used to re-insert the user message on every nudge round and never store the nudge).
+2. **Upstream provider quarantine** (`providers/openrouter.ts`): the adapter sniffs the upstream
+   `provider` from the response stream, and a content-less `stop` step with completion tokens adds
+   that upstream to `provider.ignore` for the rest of the process (capped at 4). Three traced
+   reproductions showed the failure only under Novita and clean 9-12 step runs under SiliconFlow.
+3. **Shared verification detector** (`agent/verification-evidence.ts`): one broad, multi-ecosystem
+   regex used by both the completion gate and the bench, so product and measurement cannot drift.
+4. **Verification, not planning, is enforced.** `write_file`/`edit_file`/`delete_file` no longer
+   refuse until `generate_plan` runs; mid-tier models fumbled the nested plan schema after being
+   blocked and gave up (run #8 task 03). The completion gate now nudges any turn that changed files
+   without a verification command, listing criteria when a plan exists and the changed files when
+   not. `generate_plan` accepts bare-string criteria and steps and fills ids/verification; the
+   repair hook (`providers/messages.ts`) rebuilds arrays that an upstream flattened into
+   `<item>…</item>` strings (Qwen's native tool format leaking through a provider parser — the exact
+   payload from run #9 task 05, which was rejected three times in a row).
+5. **Per-request overhead halved.** System prompt 14.5K → 4.6K characters (the tool list that
+   duplicated every schema description, the mandatory-research policy, the schedule/payment/media
+   examples are gone); tool schemas 48 → 22 tools, ~8.4K → ~4.4K tokens. Desktop, schedule,
+   payment, and media tools are opt-in groups (`ToolGroupSettings`), and the `computer` sub-agent
+   always gets the desktop group. Measured ~12.4K → ~5.7K tokens of fixed overhead per model call.
+6. **Shell robustness on Windows** (`exec/shell.ts`, `tools/bash.ts`): only a bare `cd <dir>`
+   changes the tool's cwd (`cd src && bun test` used to become "no such directory: src && bun
+   test"), and a top-level `&&` chain is rewritten into a `$?`-guarded sequence for Windows
+   PowerShell 5.1, which has no chain operators.
+7. **Exact cost**: per-step `raw.cost` is summed into the turn's usage when the total lacks it.
+8. `SHELRA_DEBUG_STREAM=1|2` traces provider stream parts / raw bodies for the next such hunt.
+
+### 23.4 Results
+
+| Run | Harness | Overall | Coding | Resolved | Tokens | Notes |
+|---|---|---|---|---|---|---|
+| #6 | autonomy kernel | 80 | 75 | 6/8 | n/a | prior best, 692 s |
+| #8 | product path, before | 0 | 50 | 1/8 | 1.87M | 7 empty-step deaths, gate loop on task 06 |
+| #9 | product path, after items 1, 3, 4, 5 | interrupted | 64 (7 tasks) | 2/7 | 1.14M (7 tasks) | empty steps in 5 of 7 tasks, retried; 3 tasks still died when every retry came back empty |
+| #10 | product path, all items | interrupted | 90 (5 tasks) | 4/5 | 1.06M (5 tasks) | zero empty steps in all five tasks; verification 100 in all five |
+| #11 | product path, final code (+ memory ceiling) | **85** (coding 81) | 81 | **5/8** | 3.40M | one empty step in task 01 quarantined Novita for the rest of the run; none afterwards; verification 100 in all eight; task 08 ran 40 steps / 1.5M tokens under the ceiling |
+
+Per-task coding scores (oracle pass = 100, one of two required checks = 50, none = 0), tasks 01-08:
+
+```
+#6  autonomy   100 100 100 100  50  50  50  50   -> 4/8
+#8  product      0  50  50  50  50 100  50  50   -> 1/8
+#9  product      0 100  50  50  50 100  50  --   -> 2/7 (interrupted)
+#10 product    100 100 100 100  50  --  --  --   -> 4/5 (interrupted)
+#11 product    100 100 100 100  50 100  50  50   -> 5/8 (complete, final code)
+```
+
+Run #11 is the definitive number for this section's changes: same model, same eight tasks, the
+product path now resolves 5 of 8 where it resolved 1 of 8 in the morning and where the autonomy
+kernel resolved 4 of 8. The three remaining failures (05, 07, 08) all passed their own visible tests
+and ran verification — they are implementation-quality failures of a 30B model on hard tasks, the
+place where a stronger model or better planning, not the harness, is the lever.
+
+Runs #9 and #10 did not finish. Run #9's oracle for task 08 executes the agent's `src/workflow.ts`
+in-process; the implementation the model produced made that oracle process grow past 22 GB, the
+machine ran out of memory, and both benchmark processes (run #10 was on task 06 at the time) died
+before the 60 s command timeout could kill the oracle tree. Their per-task rows were persisted as
+they completed, so the partial numbers above are real, and `recoverInterruptedBenchmarkRuns` marked
+both runs interrupted. Two conclusions survive the interruption: the product path went from 1
+oracle pass in 8 tasks to 4 in 5 on the same model, and the fixed per-request overhead halved. What
+does not survive: a run-level overall score, and any claim about tasks 06-08 on the final code.
+
+The incident is itself a finding: a benchmark oracle that runs untrusted agent output in-process
+needs a memory ceiling and an orphan sweep, not only a wall-clock timeout, because the parent that
+would enforce the timeout can be the first casualty of the memory pressure.
+
+### 23.5 Known limitations (real, not disguised as done)
+
+- Quarantine is per process. A provider that mangles a model's tool calls today will do so
+  tomorrow; persisting the ignore list per model in `~/.shelra/catalog/` is the obvious next step.
+- The bench still has one model and eight tasks; a single run is not statistically stable. The
+  numbers above are only trustworthy for large effects (0 → non-zero, 1.6M → 0.3M tokens).
+- Fixed after the incident in 23.4: `runCommand` now measures the resident memory of a command's
+  whole process tree every 2 s and kills the tree above a ceiling (6 GB by default,
+  `maxMemoryMb`), and kills any still-running children when the process exits. The bench and the
+  agent's `bash` tool both go through it. Verified by a test that runs a real allocation loop under
+  a 400 MB ceiling. Run #11 is the first full run on the final code.
+- The two execution kernels still exist. `--autonomous` runs `AutonomyKernel`; unification (route
+  it through `Agent`, port `CheckSpec`/`StopReason` into the chat vocabulary) remains the largest
+  structural item on the roadmap.
+- The `intent` experiment (`src/intent/`, pre-empted per the research mission) was deleted as dead
+  code; its only importer was a one-off script.
+
+## 24. Persistent learning: the memory engine and its proof (2026-09-17)
+
+The user made persistent learning a hard rule: Shelra must not behave like a stateless agent, and
+must prove by benchmark that long-term recall improves coding performance. The engine lives in
+`src/memory/` and is described in `docs/design/shelra-memory-engine.md`; this section records what
+was built against the evidence in `research/lanes/11-14` and what the proof suite measured.
+
+### 24.1 What changed
+
+- **Schema with provenance and time** (`types.ts`, `store.ts`): every entry carries `source`
+  (human > observed > inference > web), `confidence`, `created/modified/lastConfirmed`, `relatedFiles`,
+  `tags`, `uses/lastUsed`, `supersedes`, `revision`; the store appends an event-sourced
+  `history.jsonl` and a `reflections.jsonl` audit of every automatic capture. The index/topic-file
+  layout and its caps are unchanged and backward compatible.
+- **One deterministic write gate** (`gate.ts`) in front of every writer, including the model's own
+  `memory_write`: rejects credential-shaped and instruction-shaped text and web-derived directives,
+  refuses to let an inference overwrite a human statement, merges near-duplicates (token Jaccard)
+  into the existing slug when the newcomer is more confident or more trusted, caps entries per type.
+- **Retrieval before acting** (`retrieval.ts`): lexical ranking (relevance + path overlap, weighted by
+  provenance, recency, and a staleness penalty computed from `relatedFiles` mtimes) expands up to four
+  bodies within 3,000 characters and lists the rest, for every turn and every sub-agent brief. No
+  embeddings, per lane 13's production evidence.
+- **Learning after acting** (`reflection.ts`): a turn that changed and verified files, worked
+  through a failure, or made ≥8 tool calls triggers one bounded reflection call over a compact
+  digest; malformed JSON gets one retry; when the model extracts nothing, a deterministic fallback
+  still records any command that failed before a later success. Standing user rules ("always …",
+  "never …") are captured with no model call; task-local "do not …" constraints deliberately are not.
+- **Knowledge → skill** (`skills.ts`): a `procedure` used in ≥2 turns from a trusted source becomes
+  `.agents/skills/<slug>/SKILL.md`, regenerated when the memory changes.
+- **Surface**: `/memory` in the TUI (`memory/report.ts`), a `memory` event in headless JSON, and
+  per-task `memoryExpanded/memoryWritten/memoryQualified/memoryError` in the bench.
+
+### 24.2 The proof suite
+
+`bench/suites/shelra-memory-v0.1.json` (fixture `bench/fixtures/shelra-memory-v0.1/schema-codegen`):
+phase A implements a function whose tests import a generated module that only `scripts/build-schema.ts`
+produces (undocumented); phase B edits the schema, which silently requires regenerating — the
+oracle checks a hash of the schema embedded in the generated module. Phase B runs twice from a
+copy of phase A's finished workspace (`workspaceFrom`), once with its memory kept and once with
+`.shelra/memory` and `.agents/skills` wiped (`memoryPolicy`). Same model as every other run here.
+
+### 24.3 Results
+
+| Run | A learned? | B with memory | B without memory | Note |
+|---|---|---|---|---|
+| #12 | no (reflection returned nothing that time) | fail | fail | invalid for the question; led to the retry + deterministic fallback |
+| #13 | yes (`schema-generation`) | fail, `expanded: []` | pass | invalid: the copy filter skipped `.shelra` before descending into `.shelra/memory`, so the with-memory arm started blind (fixed, tested) |
+| #14 | yes (`schema-generation-workflow`, 2 more) | **pass**, all 3 entries expanded, 22 steps, 75 s | **fail** (stale generated schema), 23 steps, 133 s | first valid sample: the learned procedure was retrieved and applied |
+
+| #15 | yes (`schema-generation` + 2) | **fail** despite retrieving all 3 entries: 58 steps, 927K tokens | fail, 55 steps | the model knew to regenerate but could not write `schema/model.json`: it passed JSON objects where `write_file`/`edit_file` want strings (six rejected calls), fell back to PowerShell redirection, which writes UTF-16/BOM, and thrashed on "encoding issues" before hand-editing the generated file |
+| #16 | no (reflection JSON malformed twice; fallback stored only an `ls` failure) | fail after **1 step**: the model's `<function=read_file>` markup came back as text and was accepted as the answer | fail (same encoding trap) | two more harness defects |
+
+Reading the transcripts rather than the scores turned the null results into four deterministic,
+model-agnostic fixes, all applied and unit-tested before the next runs:
+
+1. **Schema-aware argument coercion** (`providers/messages.ts`, wired into the AI SDK repair hook):
+   a JSON value handed to a string parameter is serialized instead of rejected.
+2. **Leaked tool-call markup is a failed step** (`agent.ts`): `<function=…>`/`<tool_call>` text with no
+   parsed tool call is retried like an empty step, and the leaked reply is dropped from the transcript.
+3. **Windows file-writing guidance** (`ENVIRONMENT` and the bash tool description): never create or
+   change files through PowerShell redirection, `echo`, `Set-Content` or `Out-File` — they emit
+   UTF-16/BOM — always `write_file`/`edit_file`.
+4. **Schema-enforced reflection** (`memory/reflection.ts`): the reflection call asks the provider for
+   structured output against `REFLECTION_SCHEMA` first and falls back to the tolerant text path.
+5. **`cd` cannot leave the workspace** (`tools/bash.ts`): the file tools resolve paths against the
+   shell's current directory, so a bare `cd ../../../` (seen in run #18) had let an agent write
+   artifacts into an unrelated repository on the machine; the tool now keeps its root and refuses.
+
+| #17 | partially (stored the implementation, not the codegen step) | **pass**, 19 steps | fail | with the tool fixes in place both arms edited the schema cleanly; only the with-memory arm regenerated |
+| #18 | partially (same) | fail: regenerated correctly but inserted `email` before `createdAt` (the task said trailing) | fail, 59 steps / 613 s | an instruction-precision miss, not a recall failure |
+
+| #19 | partially (implementation) | **pass**, 20 steps | fail, 15 steps | with the always-on fallback |
+| #20 | yes — 6 entries incl. `test-schema-prerequisite` and the mechanical failure record | **pass**, 13 steps / 133K tokens (fastest phase B of the series) | fail, 20 steps / 240K tokens | the richest phase-A memory produced the shortest phase B |
+
+Tally over the valid samples: with memory **4 of 6** phase-B arms pass (#14, #17, #19, #20; #15 was
+a tool defect since fixed, #18 an ordering slip after a correct regeneration); without memory
+**1 of 9** (#13 only). Same model, same tasks, same starting workspace per pair; the only variable
+is whether phase A's memory was present.
+The mechanism is proven end to end by the traces (learned in A → retrieved in B → applied). The
+effect size is not yet statistically established, and the weakest link is extraction *content*: in
+#17 and #18 the model recorded the implementation and skipped the codegen step, and the mechanical
+fallback did not fire because the model had extracted something. That fallback now always records
+a failed-then-recovered command unless the model's candidates already mention the recovering
+command; runs #19-#20 were started with that change. Every null result was attributable from the
+recorded `memoryWritten`/`memoryExpanded` fields and the reflection audit, which is the point of
+recording them.
+
+### 24.4 Known limitations
+
+- One fixture, one trap, a handful of runs: enough to show the mechanism end to end, not to
+  quantify the effect size. More traps (a hidden env var, a flaky command needing a flag) belong
+  in the suite before any percentage is quoted.
+- Retrieval is lexical; entries written with vocabulary disjoint from a later request stay as index
+  lines. Tags from the reflection step mitigate this; the model can still `memory_read` them.
+- Memory is per workspace; cross-project user preferences are not stored globally yet.
+- Reflection quality is bounded by the turn's model; the gate limits the damage of a poor
+  extraction but cannot improve one. The audit trail (`reflections.jsonl`) makes each decision reviewable.

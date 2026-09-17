@@ -145,11 +145,15 @@ evidence remain inspectable after the process exits. Autonomous `--format json`
 uses structured `specification`, `plan`, `task`, `verification`, and `complete`
 events rather than reducing the plan to prose or counters.
 
-The normal interactive Agent mode also exposes `generate_plan`. Before its
-canonical `write_file` or `edit_file` tools may change the workspace, it must
-publish the goal, requirements, acceptance criteria, verification methods, and
-task-to-criterion mapping. The existing Plan-mode view renders the same fields;
-plans without questions are retained when switching from Plan to Agent mode.
+The normal interactive Agent mode also exposes `generate_plan`. For work that
+spans several files or acceptance conditions the agent publishes the goal,
+requirements, acceptance criteria, verification methods, and task-to-criterion
+mapping before editing; a one-file, obvious change may skip it. What the host
+enforces is verification, not planning: a turn that changed files but ran no
+real check (tests, build, type-check, a request against the running app) is
+asked to verify before it may complete, and is marked "Not verified" if it
+never does. The existing Plan-mode view renders the same fields; plans without
+questions are retained when switching from Plan to Agent mode.
 Autonomous mode begins executing after publishing its plan; use `Ctrl+C` to
 cancel. An explicit `--sandbox` autonomous run is currently refused instead of
 pretending that host execution is sandboxed.
@@ -244,7 +248,8 @@ surface while each capability is being replaced or removed.
 | Thing | What it means |
 | --- | --- |
 | **OpenRouter first** | Discovers the live cloud catalog, routes to capable Free models by default, and keeps local inference available through `--local`. |
-| **Web research** | Every agent task performs a bounded web research pass and can use `search_web` plus `open_web` to inspect documentation and references. Results are treated as untrusted leads and the agent is instructed to verify them. |
+| **Persistent project memory** | Every turn retrieves the project memory under `.shelra/memory/` ranked against the request (lexical, no embeddings) and injects the relevant entries; after a turn that changed and verified files or worked through a failure, one bounded reflection call proposes durable facts and a deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text, human statements never overwritten by inferences). Standing rules the user states are captured directly; procedures used repeatedly become `.agents/skills`. See `docs/design/shelra-memory-engine.md`. |
+| **Web research** | The agent uses `search_web` plus `open_web` when a task depends on an external library, API, or protocol; nothing is fetched for turns that do not need it. Results are treated as untrusted leads and the agent is instructed to verify them. |
 | **X + web search** | `search_x` remains provider-specific; `search_web` and `open_web` are provider-neutral and available to the real agent loop. |
 | **Media generation** | `generate_image` and `generate_video` tools for text-to-image, image editing, text-to-video, and image-to-video. Capability-gated; generated files are saved locally under `.grok/generated-media/` (compatibility path). |
 | **Sub-agents (default behavior)** | Foreground `task` delegation (explore, plan, general, vision, verify, or computer) plus background `delegate` for read-only deep dives. Every delegated task follows intent -> context -> plan -> verify -> deliver: gather context before acting, plan non-trivial changes (directly or via `plan`), and verify results before reporting done. |
@@ -259,10 +264,50 @@ surface while each capability is being replaced or removed.
 | **Headless** | `--prompt` / `-p` for non-interactive runs — pipe it, script it, bench it. |
 | **Hackable** | TypeScript, a clear agent loop, and typed tools — fork it. |
 
+### Shelra Bench
+
+Shelra Bench is the persistent development benchmark for improving Shelra as
+an autonomous coding agent. It evaluates the harness across real task
+execution, technical correctness, intent fidelity, and self-verification. The
+model and provider are recorded controlled variables; this is not primarily a
+model leaderboard.
+
+Every invocation creates a new immutable historical run, persists task
+progress incrementally, and keeps failed or interrupted runs visible. The
+primary leaderboard accepts only explicitly eligible completed runs with real
+scores. Diagnostic fixtures never create production entries.
+
+Technical documentation:
+
+- [Shelra Bench technical reference](docs/design/shelra-bench-reference.md)
+- [Shelra Bench UI design](docs/design/shelra-bench-ui.md)
+- [Shelra Bench task ladder](bench/README.md)
+
+Run the current real suite with a fixed model when measuring a Shelra change:
+
+~~~text
+bun run src/index.ts bench \
+  --manifest bench/suites/shelra-agent-core-v0.2.json \
+  --model <fixed-model>
+~~~
+
+The POSIX wrapper is:
+
+~~~text
+./shelra-bench.sh --manifest bench/suites/shelra-agent-core-v0.2.json --model <fixed-model>
+~~~
+
+Open the persistent HTML registry locally with:
+
+~~~text
+bun run bench:dashboard
+open http://127.0.0.1:4173
+~~~
 
 ### Coming soon
 
-**Deeper autonomous agent testing** — persistent sandbox sessions, richer browser workflows, and stronger "prove it works" evidence.
+**More Shelra Bench coverage** — dedicated memory, session-resume, research,
+repeated-run statistics, and richer evidence protocols.
 
 ---
 
@@ -329,6 +374,15 @@ value of `0` permits only requests whose catalog estimate is free.
 
 The implemented provider/catalog design and known limitations are documented
 in [`docs/architecture/OPENROUTER-RUNTIME.md`](docs/architecture/OPENROUTER-RUNTIME.md).
+
+Model turns have bounded waiting by default so a provider or local runtime that
+stops emitting data cannot leave the chat apparently frozen forever: 15 minutes
+per complete turn, 5 minutes per model step, and 90 seconds between streamed
+chunks. MCP discovery is bounded to 20 seconds. Override these millisecond
+values with `SHELRA_MODEL_TIMEOUT_MS`, `SHELRA_MODEL_STEP_TIMEOUT_MS`,
+`SHELRA_MODEL_IDLE_TIMEOUT_MS`, or `SHELRA_MCP_TIMEOUT_MS` when a slower local
+model needs more time. The UI reports the current stage (context, research,
+MCP, model, or recap) while waiting.
 
 **Saved in user settings** — `~/.shelra/user-settings.json`:
 
@@ -585,6 +639,12 @@ If you're on Intel Mac or Linux, sandbox mode is not available. Use standard mod
 - Check the selected cloud/local catalogs with `shelra models --json`
 - Choose a smaller local model when memory is constrained
 - Reduce `--max-tool-rounds` for headless runs
+- If the status remains on `Waiting for <model>`, the bounded model timeout
+  will cancel a stalled request and show the provider error instead of waiting
+  indefinitely. Increase `SHELRA_MODEL_IDLE_TIMEOUT_MS` only for a demonstrably
+  slow model that is still producing progress.
+- If it remains on `Connecting configured MCP tools`, inspect or disable the
+  configured MCP server; discovery is capped by `SHELRA_MCP_TIMEOUT_MS`.
 
 **High memory usage**
 

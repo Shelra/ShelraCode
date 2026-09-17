@@ -146,3 +146,127 @@ explicitly flags it as a snippet.
   after one call: `openai/codex`, `sst/opencode`, `cline/cline`, `OpenHands/OpenHands`,
   `SWE-agent/mini-swe-agent`, `github/spec-kit`. Confirmed: `Aider-AI/aider` (Apache-2.0),
   `SWE-agent/SWE-agent` (MIT).
+
+---
+
+# Second wave (2026-09-14) — sources
+
+All fetched **14–15 September 2026** by direct `curl`/WebFetch against primary endpoints. `VERIFIED` = the
+page or API response was fetched and read this pass. Nothing was carried forward from the 8 September pass;
+every item below was re-fetched, including items that also appear in §A above.
+
+**Access note.** Unlike the first pass, discovery this time needed almost no search: the question was
+answerable from vendor documentation, package registries and the GitHub REST API, all of which responded
+normally. One WebSearch query was used, at the end, purely to check for ecosystem movement outside the seven
+named systems; its results are marked UNVERIFIED except where a primary source was then fetched.
+
+**Domain hygiene.** Acting on lane 12's warning that `doc.jarvisuni.com` and `codex-docs.com` impersonate
+official OpenAI Codex documentation: neither domain was used in the first pass or this one. Because Codex
+claims are load-bearing here, they were cross-verified against `developers.openai.com` and the
+`openai/codex` repository — see items S-11 to S-15. The `openai/codex` repo's own `docs/config.md`,
+`docs/slash_commands.md` and `docs/agents_md.md` are stubs pointing at `developers.openai.com/codex/...`,
+and `developers.openai.com/codex/guides/agents-md` returns an HTML document titled "Custom instructions with
+AGENTS.md | ChatGPT Learn", which establishes that `learn.chatgpt.com` and `developers.openai.com` serve the
+same official OpenAI corpus. The single strongest Codex finding in this wave — the 30-day memory horizon —
+is cited from `developers.openai.com`.
+
+## S-A. Claude Code (Anthropic)
+
+| # | Title | Date | URL | Status | What it evidences |
+|---|---|---|---|---|---|
+| S-1 | How Claude remembers your project | fetched 2026-09-14 | https://code.claude.com/docs/en/memory.md | VERIFIED | The four auto-memory note types incl. `project` = "ongoing work, deadlines, and decisions that Claude can't derive from the code or git history"; the derivability carve-out; discretionary writing; storage at `~/.claude/projects/<project>/memory/` keyed by git repo; 200-line / 25 KB index load; "Files are not shared across machines or cloud environments"; the `modified` ISO 8601 frontmatter field and its v2.1.214 requirement; CLAUDE.md-vs-auto-memory comparison table |
+| S-2 | Manage sessions | fetched 2026-09-14 | https://code.claude.com/docs/en/sessions.md | VERIFIED | "What a resumed session restores" and what it does not: interrupted tools not re-run, goal turn/timer/spend baselines reset, background Bash and monitor tasks not restored, `--mcp-config`/`--settings`/`--plugin-dir`/`--fallback-model`/`--add-dir` not restored, permission mode not restored on picker and `/resume` routes; the "Resume from a summary" dialog at >100K tokens and ~1h idle and "whatever the summary leaves out is no longer in Claude's context" |
+| S-3 | What lives in the `.claude` directory | fetched 2026-09-14 | https://code.claude.com/docs/en/claude-directory.md | VERIFIED | **The decisive source of this wave.** `cleanupPeriodDays` default 30 days, minimum 1; the swept-path table incl. `plans/` ("Plan files written during plan mode") and `tasks/` ("Task lists written by the task tools"), transcripts, subagent transcripts, tool-results, `file-history/`; the auto-memory exemption; `history.jsonl` kept until deleted; the "Plaintext storage" section recommending *lower* retention |
+| S-4 | Manage the context window | fetched 2026-09-14 | https://code.claude.com/docs/en/context-window.md | VERIFIED | "What survives compaction" table: project-root CLAUDE.md, auto memory and "The plan Claude wrote in plan mode" are all "Re-injected from disk"; skills capped 5K/25K tokens; up to five files re-read |
+| S-5 | Keep Claude working toward a goal | fetched 2026-09-14 | https://code.claude.com/docs/en/goal.md | VERIFIED | "Resume with an active goal": condition carries over on every resume route, but "resets the turn count, timer, and token-spend baseline. It doesn't restore a goal that was already achieved or cleared" |
+| S-6 | CHANGELOG.md (full file, 387+ version entries, downloaded and grepped) | latest entry v2.1.272 | https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md | VERIFIED | v2.1.265–v2.1.272 contain no continuity feature; v2.1.268 "Improved the MEMORY.md truncation warning…"; v2.1.75 "Added last-modified timestamps to memory files, helping Claude reason about which memories are fresh vs. stale"; v2.1.214 "Added an ISO `modified` timestamp to memory file frontmatter"; **zero hits** across the whole file for "ledger", "abandoned approach", "unfinished", "half-done", "decision log", "decision record" |
+| S-7 | npm registry metadata for `@anthropic-ai/claude-code` | modified 2026-09-15 | https://registry.npmjs.org/@anthropic-ai/claude-code | VERIFIED | Eight publishes in the window: 2.1.265 (2026-09-08), .266 (2026-09-08), .267 (2026-09-09), .268 (2026-09-10), .269 (2026-09-11), .270 (2026-09-12), .271 (2026-09-14), .272 (2026-09-14). Also 2.1.214 = 2026-07-18, 2.1.263 = 2026-09-06 |
+| S-8 | What's new — Week 37 digest | September 7–11, 2026 (v2.1.263–v2.1.269) | https://code.claude.com/docs/en/whats-new/2026-w37.md | VERIFIED | Week 37 headline is `claude plugin eval`; nothing on memory, continuity or project state |
+| S-9 | What's new — index | latest entry Week 37 | https://code.claude.com/docs/en/whats-new/index.md | VERIFIED | Confirms Week 37 is the most recent digest and its version range |
+| S-10 | Claude Code documentation index (`llms.txt`) | fetched 2026-09-14 | https://code.claude.com/docs/llms.txt | VERIFIED | Page inventory used to confirm no project-ledger page exists |
+
+## S-B. Codex (OpenAI) — cross-verified on two official hosts
+
+| # | Title | Date | URL | Status | What it evidences |
+|---|---|---|---|---|---|
+| S-11 | Codex configuration reference | fetched 2026-09-14 | https://developers.openai.com/codex/config-reference | VERIFIED | **The decisive Codex source.** `memories.max_rollout_age_days` — "Maximum age of threads considered for memory generation. Defaults to 30 and is clamped to 0 - 90"; `memories.max_unused_days` — "Maximum days since a memory was last used before it becomes ineligible for consolidation. Defaults to 30 and is clamped to 0 - 365"; `memories.min_rollout_idle_hours` default 6 (clamped 1–48); `memories.max_raw_memories_for_consolidation` default 256; `memories.generate_memories` / `use_memories` / `disable_on_external_context` / `extract_model` / `consolidation_model`; `history.persistence` = "save-all \| none"; `history.max_bytes`; `project_doc_max_bytes` |
+| S-12 | Codex CLI slash commands | fetched 2026-09-14 | https://developers.openai.com/codex/cli/slash-commands | VERIFIED | `/memories` "Configure memory use and generation"; `/resume` "Resume a saved chat from your session list"; `/new` "Start a new chat inside the same CLI session"; `/init` "Generate an AGENTS.md scaffold… Capture persistent instructions for the repository or subdirectory you're working in"; `/goal` set/edit/pause/resume/clear; `/import` "Import Claude Code or Cursor setup, projects, and chats" |
+| S-13 | Custom instructions with AGENTS.md | fetched 2026-09-14 | https://developers.openai.com/codex/guides/agents-md | VERIFIED | AGENTS.md is instructions, not state; `project_doc_max_bytes` 32 KiB default; "Codex rebuilds the instruction chain on every run… so there is no cache to clear manually". Page title "…\| ChatGPT Learn" is the evidence that this host and `learn.chatgpt.com` are the same corpus |
+| S-14 | `openai/codex` repository `docs/` listing and stub files | fetched 2026-09-14 | https://api.github.com/repos/openai/codex/contents/docs ; https://raw.githubusercontent.com/openai/codex/main/docs/{config,slash_commands,agents_md}.md | VERIFIED | The repo ships **no** memories document; the three stubs redirect to `developers.openai.com/codex/...`, establishing that host as canonical |
+| S-15 | Memories | fetched 2026-09-14 | https://learn.chatgpt.com/docs/customization/memories.md | VERIFIED | "**Local Codex memories are off by default**"; "The main memory files live under `~/.codex/memories/` and include summaries, durable entries, recent inputs, and supporting evidence from prior chats"; "Treat these files as generated state… don't rely on editing them by hand as your primary control surface"; "Keep required team guidance in `AGENTS.md` or checked-in documentation. Treat memories as a helpful recall layer…"; idle-triggered background generation |
+| S-16 | Long-running work | fetched 2026-09-14 | https://learn.chatgpt.com/docs/long-running-work.md | VERIFIED | "Keep related work in the same chat…"; "**Each chat keeps its own context, messages, results, and goal**"; `/goal` text is "both the first prompt and the completion criteria"; the Outcome/Constraints/Verification table |
+| S-17 | Projects and chats | fetched 2026-09-14 | https://learn.chatgpt.com/docs/projects.md | VERIFIED | "Codex CLI treats the directory where you start it as the project for the chat… **The CLI doesn't expose the ChatGPT Projects view**" |
+| S-18 | ChatGPT & Codex changelog (HTML, extracted to text) | entries through 2026-09-11 | https://learn.chatgpt.com/docs/changelog | VERIFIED | Codex CLI 0.154.0 (2026-09-09): GPT-6-Astra, "Experimental worktree support… then browse and resume them", "Remote resume and fork operations preserve saved permissions"; Python SDK 0.154.0 (2026-09-10): "include_turns on resume/fork… History selection changes the returned response, not model context" |
+| S-19 | npm registry metadata for `@openai/codex` | modified 2026-09-15 | https://registry.npmjs.org/@openai/codex | VERIFIED | Stable 0.154.0 published 2026-09-09; alphas 0.155.0-alpha.1 → alpha.6 through 2026-09-15 |
+| S-20 | `openai/codex` releases | latest `rust-v0.155.0-alpha.6`, 2026-09-15 | https://api.github.com/repos/openai/codex/releases | VERIFIED | Corroborates the release cadence independently of npm |
+
+## S-C. Cursor (Anysphere)
+
+| # | Title | Date | URL | Status | What it evidences |
+|---|---|---|---|---|---|
+| S-21 | **Cursor Projects** | **2026-09-10** | https://cursor.com/changelog/projects | VERIFIED | The one vendor movement of this wave, quoted in full in S5: "maintains context over months of work"; "Each Project maintains a set of files that sync across every cloud and local machine its agents use. Agents add research and artifacts, along with what they learn about the codebase and how you prefer work to be done"; "A Project runs on its own computer in the cloud"; "available in beta and rolling out to all users starting today" |
+| S-22 | Cursor changelog (HTML, extracted) | latest entry 2026-09-10 | https://cursor.com/changelog | VERIFIED | Confirms Projects is the newest entry, ahead of Self-hosted machines (2026-09-02) |
+| S-23 | Cursor memories docs — **two probes** | fetched 2026-09-14 | https://cursor.com/docs/memories.md and https://cursor.com/docs/context/memories.md | VERIFIED — **both 404** | The memories feature is no longer documented; the same quiet-deletion pattern as codebase-indexing |
+| S-24 | Cursor documentation index (`llms.txt`) | fetched 2026-09-14 | https://cursor.com/llms.txt | VERIFIED | No Projects page and no memories page; docs tree restructured since 2026-09-08 (`/docs/context/skills` → `/docs/skills.md`). The string "memor" occurs nowhere in the file |
+| S-25 | Rules | fetched 2026-09-14 | https://cursor.com/docs/rules.md | VERIFIED | The only surviving memory sentence in the corpus: "Large language models don't retain memory between completions. Rules provide persistent, reusable context at the prompt level." |
+| S-26 | Plan Mode | fetched 2026-09-14 | https://cursor.com/docs/agent/plan-mode.md | VERIFIED | "Plans are saved by default in your home directory. Click 'Save to workspace' to move it to your workspace for future reference, team sharing, and documentation" |
+| S-27 | Conversation search | fetched 2026-09-14 | https://cursor.com/help/ai-features/conversation-search.md | VERIFIED | Cursor's actual answer to "what did I leave half-done": "Cursor builds a local search index that scales to thousands of conversations" |
+| S-28 | @ mentions and context | fetched 2026-09-14 | https://cursor.com/help/customization/context.md | VERIFIED | "`@Chats` to reference context from a previous conversation"; no memory mechanism named |
+| S-29 | Cursor Projects docs — **three probes** | fetched 2026-09-15 | https://cursor.com/docs/projects.md ; https://cursor.com/help/ai-features/projects.md ; https://cursor.com/docs/agent/projects.md | VERIFIED — **all 404** | Five days after launch, Projects has no documentation page; the changelog is the only primary source |
+
+## S-D. Cline
+
+| # | Title | Date | URL | Status | What it evidences |
+|---|---|---|---|---|---|
+| S-30 | Memory Bank | fetched 2026-09-14 | https://docs.cline.bot/best-practices/memory-bank.md | VERIFIED | The six-file structure and every quoted line: `activeContext.md` "Current focus, recent changes, next steps" / "Active decisions and considerations"; `progress.md` "What works, what's left, known issues" / "Evolution of project decisions"; `systemPatterns.md` "Key technical decisions"; "Copy this into a Cline Rules file"; "my memory resets completely between sessions… I rely ENTIRELY on my Memory Bank"; and the FAQ: "Does this work with other AI tools? Yes. Memory Bank is a documentation methodology that works with any AI that can read docs." |
+| S-31 | Task management | fetched 2026-09-14 | https://docs.cline.bot/core-workflows/task-management.md | VERIFIED | "Every task you work on is saved automatically to your local machine"; "Even if you close the editor and return **days** later, Cline can pick up where you left off"; "Favorited tasks are protected from deletion"; fuzzy search over history |
+| S-32 | Cline documentation index (`llms.txt`) | fetched 2026-09-14 | https://docs.cline.bot/llms.txt | VERIFIED | Confirms Memory Bank sits under `best-practices/`, not under a product-feature section |
+| S-33 | `cline/cline` releases | `sdk/sdk/v0.0.83` 2026-09-15; `cli-v3.0.62` 2026-09-15; `desktop-v0.0.28` 2026-09-15; `desktop-v0.0.27` 2026-09-13 | https://api.github.com/repos/cline/cline/releases | VERIFIED | SDK v0.0.83: "Sessions imported from Claude Code, Codex, or opencode now summarize the foreign history on first resume rather than replaying tool calls the current agent cannot make. The summary is persisted so it runs once, the canonical transcript is left intact…" — the fourth cross-vendor import path and the first that moves conversations rather than configuration |
+
+## S-E. OpenCode, Gemini CLI, Aider
+
+| # | Title | Date | URL | Status | What it evidences |
+|---|---|---|---|---|---|
+| S-34 | OpenCode docs home (page-link inventory extracted) | fetched 2026-09-14 | https://opencode.ai/docs/ | VERIFIED | The complete docs tree: **no memory page, no sessions/persistence page.** 43 doc paths enumerated |
+| S-35 | OpenCode — Rules | fetched 2026-09-14 | https://opencode.ai/docs/rules/ | VERIFIED | AGENTS.md only; "This is similar to Cursor's rules"; project vs `~/.config/opencode/AGENTS.md` global scope; CLAUDE.md fallbacks; `/init` "focuses on the things future agent sessions are most likely to need" |
+| S-36 | OpenCode — CLI reference | fetched 2026-09-14 | https://opencode.ai/docs/cli/ | VERIFIED | `--continue`, `--session <id>`, `--fork`, `opencode session list`, `opencode session delete <sessionID>` — sessions are the only persistence unit, with no retention statement |
+| S-37 | OpenCode — TUI reference | fetched 2026-09-14 | https://opencode.ai/docs/tui/ | VERIFIED | `/sessions` (aliases `/resume`, `/continue`), `/new` (alias `/clear`), `/compact` (alias `/summarize`); no memory command |
+| S-38 | npm registry metadata for `opencode-ai` | latest 1.18.31, 2026-09-14 | https://registry.npmjs.org/opencode-ai | VERIFIED | 30 publishes between 2026-09-08 and 2026-09-14; none is a continuity feature |
+| S-39 | Gemini CLI — **Auto Memory** | fetched 2026-09-14 | https://geminicli.com/docs/cli/auto-memory/ | VERIFIED | A feature the first pass missed. "experimental feature that mines your past Gemini CLI sessions in the background and proposes durable memory updates and reusable Agent Skills. You review each candidate…"; "durable facts, preferences, workflow constraints, and procedural patterns that **recur across sessions**"; "**off by default**" (`experimental.autoMemory`); eligibility floors "idle for at least three hours and contain at least 10 user messages"; "It defaults to creating no artifacts unless the evidence is strong"; "It cannot directly edit active memory files, settings, credentials, or project GEMINI.md files"; `/memory inbox`; private vs global patch targets |
+| S-40 | Gemini CLI — Manage sessions and history | page "Last updated: Apr 29, 2026"; fetched 2026-09-14 | https://geminicli.com/docs/cli/tutorials/session-management/ | VERIFIED | `gemini -r` "restores your chat history and memory"; `/resume` browser; `x` "permanently deletes the history for that specific conversation"; `/exit --delete`; `/resume save <name>` and `/resume resume <name>` forking; `gemini --list-sessions` / `--delete-session` |
+| S-41 | Gemini CLI — Plan tasks with todos | fetched 2026-09-14 | https://geminicli.com/docs/cli/tutorials/task-planning/ | VERIFIED | `write_todos` tool, live in-session todo list, `Ctrl+T` to expand; cancellation path — "The agent will mark that task as cancelled or remove it" — with no rationale capture and no cross-session persistence claim |
+| S-42 | Gemini CLI — docs index (link inventory) | fetched 2026-09-14 | https://geminicli.com/docs/ | VERIFIED | 133 doc paths; locates `auto-memory`, `session-management`, `memory-management`, `checkpointing`, `rewind`, `task-planning`, `memport` |
+| S-43 | Gemini CLI — changelog, latest stable | v0.59.0, released 2026-09-08 | https://geminicli.com/docs/changelogs/latest/ | VERIFIED | v0.59.0 is three security fixes (MCP OAuth SSRF, fail-closed workspace trust, restricted-mode MCP filtering); no continuity work |
+| S-44 | npm registry metadata for `@google/gemini-cli` | latest 0.59.0, 2026-09-08 | https://registry.npmjs.org/@google/gemini-cli | VERIFIED | Confirms the stable date; 10 publishes in the window, the rest nightlies |
+| S-45 | Aider — options reference | fetched 2026-09-14 | https://aider.chat/docs/config/options.html | VERIFIED | `--chat-history-file` default `.aider.chat.history.md`; `--input-history-file` default `.aider.input.history`; **`--restore-chat-history` — "Restore the previous chat history messages (default: False)"**; `--max-chat-history-tokens` summarisation trigger |
+| S-46 | Aider repository metadata | `pushed_at` 2026-05-22 | https://api.github.com/repos/Aider-AI/aider | VERIFIED | Unchanged from the first pass — now 3.8 months with no push; 48,966 stars (up from 48,832 on 2026-09-08); Apache-2.0; not archived |
+
+## S-F. Third-party continuity layer
+
+| # | Title | Date | URL | Status | What it evidences |
+|---|---|---|---|---|---|
+| S-47 | `thedotmack/claude-mem` repository metadata | created 2025-08-31; last push 2026-09-13 | https://api.github.com/repos/thedotmack/claude-mem | VERIFIED | Apache-2.0; **93,953 stars**; not archived; description "Persistent Context Across Sessions for Every Agent… Works with Claude Code, OpenClaw, Codex, Gemini, Hermes, Copilot, OpenCode + More" |
+| S-48 | `claude-mem` / "Grok Mem" README | fetched 2026-09-15 | https://raw.githubusercontent.com/thedotmack/claude-mem/main/README.md | VERIFIED | Architecture: 5 lifecycle hooks (SessionStart, UserPromptSubmit, PostToolUse, Stop, SessionEnd), SQLite ("sessions, observations, summaries"), Chroma vector DB, 4 MCP tools (`search` → `timeline` → `get_observations`); **typed observation vocabulary including `decision`** — "needle observations (`decision`, `bugfix`, `security_alert`, `sensitive`) are appended as dated `- YYYY-MM-DD [awareness] …` lines" |
+| S-49 | WebSearch — persistent project memory for coding agents | run 2026-09-15 | n/a | **UNVERIFIED (secondary)** | Used only to check for ecosystem movement outside the seven systems. Surfaced Cursor Projects (then verified at source, S-21) and named Mnemos, Memorix and AgentHelm as MCP servers positioning on "architecture decisions, bug root causes, project conventions". **These three were not fetched and are not load-bearing**; they support only the sentence that the category is populated |
+
+---
+
+## Second-wave tally and corrections to the first pass
+
+- **Sources fetched and verified this pass:** 48 of 49 (S-49 is a search result, flagged UNVERIFIED).
+- **Deliberate 404 probes (evidence of absence, all confirmed):** 5 — `cursor.com/docs/memories.md`,
+  `cursor.com/docs/context/memories.md`, `cursor.com/docs/projects.md`,
+  `cursor.com/help/ai-features/projects.md`, `cursor.com/docs/agent/projects.md`.
+- **Flagged impostor domains used:** 0. `doc.jarvisuni.com` and `codex-docs.com` appear in neither pass.
+- **Corrections to the first pass, both from re-fetching:**
+  1. §3 and §7.5 stated that Claude Code auto memory "stores *preferences and corrections*". It also stores
+     a typed `project` class — "ongoing work, deadlines, and decisions that Claude can't derive from the
+     code or git history". The original report quoted the type list but drew the wrong conclusion from it.
+     The corrected finding is narrower and stronger: Claude Code *does* have project-state memory, and it is
+     explicitly scoped to exclude anything derivable from the codebase.
+  2. §3 and §7.5 stated Codex "generates memories into `~/.codex/memories/` automatically after a chat goes
+     idle". True only when enabled: "Local Codex memories are off by default."
+  3. §3 listed "Cursor memories" as evidence for procedural memory being COMMODITY. As of 2026-09-14 Cursor
+     documents no memories feature; the COMMODITY classification survives on Claude Code, Codex, Cline and
+     Gemini CLI, but the Cursor citation must be withdrawn.
+- **Carried forward unchanged and re-verified:** Aider's stall (`pushed_at` still 2026-05-22).

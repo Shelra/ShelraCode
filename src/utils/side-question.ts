@@ -23,6 +23,7 @@ export async function runSideQuestion(
   const { text, usage } = await provider.generateText({
     modelId,
     signal,
+    timeout: { totalMs: 60_000, stepMs: 60_000, chunkMs: 30_000 },
     maxOutputTokens: 2048,
     system,
     prompt: question,

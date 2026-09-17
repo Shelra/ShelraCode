@@ -1,0 +1,246 @@
+{
+  "benchmarkVersion": "0.2.0",
+  "suite": "shelra-agent-core",
+  "oracleMode": "benchmark-owned",
+  "seed": "shelra-agent-core-v0.2",
+  "config": {
+    "purpose": "Measure Shelra's coding-agent harness from deterministic work to multi-step orchestration.",
+    "subject": "agent_harness",
+    "modelRole": "controlled_variable",
+    "workspaceMode": "fresh_template_copy",
+    "oracle": "external_deterministic_oracle",
+    "leaderboardEligible": true,
+    "minimumTaskCount": 8,
+    "note": "This is a development benchmark for improving Shelra. It is not a model ranking and must not be compared across incompatible versions."
+  },
+  "scorePolicy": {
+    "id": "shelra-agent-core-provisional",
+    "version": "1",
+    "weights": {
+      "coding": 0.45,
+      "intent": 0.35,
+      "verification": 0.2
+    },
+    "requiredDimensions": ["coding", "intent", "verification"],
+    "correctnessFloor": 70,
+    "note": "Provisional development policy. Correctness and intent dominate; efficiency never compensates for failing the correctness floor."
+  },
+  "tasks": [
+    {
+      "id": "01-input-normalization",
+      "category": "coding",
+      "difficulty": "easy",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/01-input-normalization",
+      "prompt": "Implement slugify in src/slug.ts. It must trim leading and trailing whitespace, lowercase ASCII letters, replace every run of non-alphanumeric characters with one hyphen, and remove leading or trailing hyphens. Preserve digits and internal hyphens. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external slugify oracle passes all normalization and edge-case examples.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 01-input-normalization",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass without relying on an edited test file.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "02-config-pipeline",
+      "category": "intent",
+      "difficulty": "easy-medium",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/02-config-pipeline",
+      "prompt": "Implement the configuration contract in src/config.ts and keep src/app.ts consistent with it. Defaults are host 127.0.0.1, port 3000, debug false, retries 3. HOST is trimmed and blank HOST falls back to the default. PORT is accepted only when it is an integer from 1 through 65535; otherwise use 3000. DEBUG is true only for true, 1, yes, or on, case-insensitive after trimming. RETRIES is an integer from 0 through 10, otherwise 3. serverAddress must use the normalized configuration. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external configuration oracle passes defaults, normalization, invalid values, and address integration.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 02-config-pipeline",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "03-ttl-cache",
+      "category": "coding",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/03-ttl-cache",
+      "prompt": "Complete TtlCache in src/cache.ts. The class must accept an injected clock, expire entries when now is greater than or equal to the expiry timestamp, make get and has remove stale entries, treat ttl 0 as immediately expired, allow overwriting a key with a new TTL, and keep delete idempotent. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external cache oracle passes expiry boundaries, overwrites, deletes, and zero-TTL behavior.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 03-ttl-cache",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "04-retry-policy",
+      "category": "agentic",
+      "difficulty": "medium-hard",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/04-retry-policy",
+      "prompt": "Implement withRetry in src/retry.ts. maxAttempts includes the first call and defaults to 3. Retry failures with exponential delays baseDelayMs, baseDelayMs*2, and so on, using the injected sleep function. Never sleep after the final attempt. Preserve and rethrow the final error. Do not retry an AbortError or when the AbortSignal is aborted. shouldRetry may veto a retry. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external retry oracle verifies attempts, backoff, last-error preservation, vetoes, and abort behavior.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 04-retry-policy",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "05-state-migration",
+      "category": "repair",
+      "difficulty": "hard",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/05-state-migration",
+      "prompt": "Repair and complete migrateState in src/state.ts. Migrate version 1 state to version 2: trim userName into profile.name, move a valid theme into preferences.theme, use system for an absent or invalid theme, and preserve unrelated root metadata. Version 2 input must be returned as a deep-equal new value without mutation. Reject unsupported versions with an error. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external migration oracle verifies v1 conversion, v2 idempotence, preservation, immutability, and rejection.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 05-state-migration",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "06-bounded-queue",
+      "category": "agentic",
+      "difficulty": "hard",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/06-bounded-queue",
+      "prompt": "Implement runQueue in src/queue.ts. It must run items with at most the configured concurrency, preserve result order regardless of completion order, settle every item even when one worker rejects, return per-item fulfilled/value or rejected/reason results, and stop starting new work after an AbortSignal is aborted. The default concurrency is 1 and invalid concurrency must be rejected. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external queue oracle verifies the concurrency bound, ordered settlement, failure isolation, and cancellation.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 06-bounded-queue",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "07-router-integration",
+      "category": "coding",
+      "difficulty": "very-hard",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/07-router-integration",
+      "prompt": "Complete the small HTTP router in src/router.ts and its API wiring in src/api.ts. Support GET and POST route registration, path parameters such as /users/:id with URL decoding, query parameters, async handlers, JSON responses, 404 for an unknown path, and 405 with an Allow header for a known path using the wrong method. The API must expose GET /health, GET /users/:id returning the decoded id and verbose query flag, and POST /users accepting a JSON name and returning 201 with a deterministic created record. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external HTTP oracle verifies routing, decoding, query handling, JSON behavior, 404, and 405 semantics.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 07-router-integration",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "08-workflow-orchestrator",
+      "category": "intent",
+      "difficulty": "expert",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-core-v0.2/08-workflow-orchestrator",
+      "prompt": "Implement executeWorkflow in src/workflow.ts as a deterministic asynchronous workflow engine. Validate duplicate step ids, missing dependencies, and cycles before running. Run independent ready steps in parallel up to concurrency. A step's attempts value is the total number of attempts, default 1; retry a failed step until it succeeds or the limit is exhausted. A dependent step must be skipped when any dependency fails or is skipped. Preserve step-definition order in the results object, record started/succeeded/failed/skipped events, and stop starting queued steps after cancellation. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external workflow oracle verifies validation, dependency scheduling, bounded parallelism, retries, skips, event order, and cancellation.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-core-v0.2.ts 08-workflow-orchestrator",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    }
+  ]
+}

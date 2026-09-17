@@ -16,6 +16,13 @@ describe("applyMigrations", () => {
 
 class FakeDatabase implements SQLiteDatabase {
   readonly sessionColumns: Set<string>;
+  readonly benchmarkRunColumns = new Set([
+    "resolved_task_count",
+    "resolved_rate",
+    "failure_type",
+    "leaderboard_eligible",
+  ]);
+  readonly benchmarkTaskColumns = new Set(["task_definition_json", "failure_type"]);
 
   constructor(
     private version: number,
@@ -25,15 +32,27 @@ class FakeDatabase implements SQLiteDatabase {
   }
 
   exec(sql: string): void {
-    const match = sql.match(/ALTER TABLE sessions ADD COLUMN ([a-z_]+) /);
+    const match = sql.match(/ALTER TABLE (sessions|benchmark_runs|benchmark_task_results) ADD COLUMN ([a-z_]+) /);
     if (match?.[1]) {
-      this.sessionColumns.add(match[1]);
+      const columns =
+        match[1] === "sessions"
+          ? this.sessionColumns
+          : match[1] === "benchmark_runs"
+            ? this.benchmarkRunColumns
+            : this.benchmarkTaskColumns;
+      columns.add(match[2]!);
     }
   }
 
   prepare(sql: string): SQLiteStatement {
     if (sql === "PRAGMA table_info(sessions)") {
       return new FakeStatement(() => [...this.sessionColumns].map((name) => ({ name })));
+    }
+    if (sql === "PRAGMA table_info(benchmark_runs)") {
+      return new FakeStatement(() => [...this.benchmarkRunColumns].map((name) => ({ name })));
+    }
+    if (sql === "PRAGMA table_info(benchmark_task_results)") {
+      return new FakeStatement(() => [...this.benchmarkTaskColumns].map((name) => ({ name })));
     }
 
     throw new Error(`Unexpected SQL: ${sql}`);

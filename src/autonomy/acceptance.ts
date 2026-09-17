@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { BrowserObservation, CommandOutcome, DomAssertion, HttpProbe } from "../exec/types";
 import type { IntelligenceProvider } from "../intelligence/types";
 import { resolveWorkspacePath } from "../security/workspace-guard";
@@ -29,7 +30,10 @@ export const VIEWPORTS: Record<ViewportName, { width: number; height: number }> 
  * without a browser, a shell or a network.
  */
 export interface AcceptanceDeps {
-  runCommand(command: string, options: { cwd: string; timeoutMs?: number }): Promise<CommandOutcome>;
+  runCommand(
+    command: string,
+    options: { cwd: string; timeoutMs?: number; signal?: AbortSignal; env?: Record<string, string> },
+  ): Promise<CommandOutcome>;
   probeHttp(url: string): Promise<HttpProbe>;
   observePage(
     url: string,
@@ -42,6 +46,8 @@ export interface AcceptanceDeps {
 
 export interface AcceptanceContext {
   workspace: string;
+  /** Repository root used to resolve benchmark-owned external oracle commands. */
+  benchmarkRoot?: string;
   /** Base URL of the running app, when one is running. Absent means browser/http checks are blocked. */
   appUrl?: string;
   attempt: number;
@@ -106,6 +112,27 @@ function needsBrowser(criterion: AcceptanceCriterion): ViewportName | null {
     default:
       return null;
   }
+}
+
+/**
+ * Resolve host-owned oracle placeholders without putting the target workspace's absolute path
+ * into the manifest. The replacement is shell-quoted because commands are intentionally
+ * executed through the platform's normal shell.
+ */
+function resolveBenchmarkCommand(command: string, context: AcceptanceContext): string {
+  const replaceRoot = (input: string, name: "benchmarkRoot" | "workspace", root: string): string => {
+    const token = new RegExp(`\\{\\{${name}\\}\\}([^\\s"']*)`, "gu");
+    return input.replace(token, (_match, suffix: string) => shellQuote(join(root, suffix.replace(/^[/\\]+/u, ""))));
+  };
+  let resolved = command;
+  if (context.benchmarkRoot) resolved = replaceRoot(resolved, "benchmarkRoot", context.benchmarkRoot);
+  resolved = replaceRoot(resolved, "workspace", context.workspace);
+  return resolved;
+}
+
+function shellQuote(value: string): string {
+  if (process.platform === "win32") return `'${value.replace(/'/gu, "''")}'`;
+  return `'${value.replace(/'/gu, "'\\''")}'`;
 }
 
 export async function evaluateAcceptance(
@@ -221,9 +248,15 @@ export async function evaluateAcceptance(
         break;
       }
       case "command_succeeds": {
-        const outcome = await deps.runCommand(check.command, {
+        const command = resolveBenchmarkCommand(check.command, context);
+        const outcome = await deps.runCommand(command, {
           cwd: context.workspace,
           timeoutMs: check.timeoutMs ?? 180_000,
+          signal: context.signal,
+          env: {
+            SHELRA_BENCH_WORKSPACE: context.workspace,
+            ...(context.benchmarkRoot ? { SHELRA_BENCH_ROOT: context.benchmarkRoot } : {}),
+          },
         });
         const expected = check.expectExitCode ?? 0;
         const ok = outcome.state === "completed" && outcome.exitCode === expected;

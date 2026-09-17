@@ -1090,9 +1090,7 @@ function EvidenceTab({
       {contextSummary ? (
         <box flexDirection="column">
           <Fact t={t} label="Turn kind" value={contextSummary.classification.kind} />
-          <Fact t={t} label="Tool policy" value={contextSummary.classification.toolPolicy} />
           <Fact t={t} label="Reason" value={contextSummary.classification.reason} />
-          <Fact t={t} label="Host evidence" value={contextSummary.classification.hostEvidenceOnly ? "yes" : "no"} />
           <Fact
             t={t}
             label="Selected files"

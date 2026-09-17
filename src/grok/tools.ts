@@ -3,14 +3,16 @@ import { z } from "zod";
 import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks } from "../hooks/index";
 import { isLspToolEnabled, queryLsp } from "../lsp/runtime";
 import { LSP_TOOL_OPERATIONS } from "../lsp/types";
+import { decideMemoryWrite } from "../memory/gate";
 import {
   deleteMemoryEntry,
+  listMemoryRecords,
   projectMemoryScope,
   readMemoryEntry,
   readMemoryIndex,
   writeMemoryEntry,
 } from "../memory/store";
-import type { MemoryType } from "../memory/types";
+import { MEMORY_TYPES, type MemoryType } from "../memory/types";
 import type { ProviderToolContext } from "../providers/types";
 import { openWebPage, searchWeb } from "../research/web";
 import type { BashTool } from "../tools/bash";
@@ -32,7 +34,12 @@ import { deleteFile, editFile, readFile, snapshotForCheckpoint, writeFile } from
 import { executeGrep } from "../tools/grep";
 import type { ScheduleDaemonStatus, ScheduleManager, StoredSchedule } from "../tools/schedule";
 import type { AgentMode, TaskRequest, ToolResult } from "../types/index";
-import { type CustomSubagentConfig, loadPaymentSettings, loadValidSubAgents } from "../utils/settings";
+import {
+  type CustomSubagentConfig,
+  loadPaymentSettings,
+  loadValidSubAgents,
+  type ToolGroupSettings,
+} from "../utils/settings";
 import {
   type GenerateImageToolInput,
   type GenerateVideoToolInput,
@@ -75,6 +82,12 @@ interface CreateToolsOptions {
    * Omit for one-shot tool sets (e.g. a delegated sub-agent's single call) where this doesn't apply.
    */
   planState?: { published: boolean; structured: boolean };
+  /**
+   * Tool groups that are off by default. Every registered tool costs schema tokens on every
+   * request, so desktop automation, schedules, payments, and media generation appear only when
+   * enabled in settings or when a sub-agent specifically needs them.
+   */
+  toolGroups?: ToolGroupSettings;
 }
 
 export function createTools(
@@ -84,6 +97,7 @@ export function createTools(
   options: CreateToolsOptions = {},
 ) {
   const cwd = () => bash.getCwd();
+  const groups = options.toolGroups ?? {};
 
   /**
    * Snapshots a file immediately before write_file/edit_file touches it, so it can be
@@ -266,8 +280,13 @@ export function createTools(
         };
       },
     }),
+  };
 
-    search_x: tool({
+  const tools: ToolSet = { ...base };
+  let structuredPlanPublished = options.planState?.structured ?? false;
+
+  if (provider.responseSearch) {
+    tools.search_x = tool({
       description:
         "Search X (Twitter) for real-time posts, discussions, opinions, and trends. Returns relevant posts with authors and engagement data.",
       inputSchema: z.object({
@@ -276,9 +295,11 @@ export function createTools(
       execute: async ({ query }, { abortSignal }) => {
         return runResponsesSearch(query, "x_search", abortSignal);
       },
-    }),
+    });
+  }
 
-    generate_image: tool({
+  if (provider.generateImage || groups.media) {
+    tools.generate_image = tool({
       description:
         "Generate a new image or edit an existing image when the selected provider exposes image generation. Use when the user asks to create, redesign, restyle, or modify an image. Saves generated files locally and returns their paths.",
       inputSchema: z.object({
@@ -303,9 +324,11 @@ export function createTools(
           ? provider.generateImage(input, cwd(), abortSignal)
           : { success: false, output: "Image generation is unavailable for the selected provider." };
       },
-    }),
+    });
+  }
 
-    generate_video: tool({
+  if (provider.generateVideo || groups.media) {
+    tools.generate_video = tool({
       description:
         "Generate a short video or animate an existing image when the selected provider exposes video generation. Saves generated files locally and returns their paths.",
       inputSchema: z.object({
@@ -342,12 +365,8 @@ export function createTools(
           ? provider.generateVideo(input, cwd(), abortSignal)
           : { success: false, output: "Video generation is unavailable for the selected provider." };
       },
-    }),
-  };
-
-  const tools: ToolSet = { ...base };
-  let planPublished = options.planState?.published ?? mode !== "agent";
-  let structuredPlanPublished = options.planState?.structured ?? false;
+    });
+  }
 
   if (isLspToolEnabled()) {
     tools.lsp = tool({
@@ -449,185 +468,195 @@ export function createTools(
   }
 
   if (mode === "agent") {
-    tools.computer_snapshot = tool({
-      description:
-        "Capture a semantic accessibility snapshot of a desktop app using agent-desktop. Prefer this before desktop interaction. It returns stable refs like @e1 that remain valid until the next snapshot.",
-      inputSchema: z.object({
-        app: z.string().optional().describe("Optional application name to scope the snapshot"),
-        window_id: z.string().optional().describe("Optional window id from computer_list_windows"),
-        interactive_only: z
-          .boolean()
-          .optional()
-          .describe("If true or omitted, include only interactive elements with refs"),
-        include_bounds: z.boolean().optional().describe("Include element bounds in the snapshot"),
-        compact: z.boolean().optional().describe("Collapse single-child unnamed nodes to reduce tree depth"),
-        max_depth: z.number().int().min(1).max(30).optional().describe("Maximum tree depth"),
-        surface: z
-          .enum(["window", "focused", "menu", "menubar", "sheet", "popover", "alert"])
-          .optional()
-          .describe("Optional UI surface to snapshot"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerSnapshot(input, cwd(), abortSignal);
-      },
-    });
+    if (groups.desktop) {
+      tools.computer_snapshot = tool({
+        description:
+          "Capture a semantic accessibility snapshot of a desktop app using agent-desktop. Prefer this before desktop interaction. It returns stable refs like @e1 that remain valid until the next snapshot.",
+        inputSchema: z.object({
+          app: z.string().optional().describe("Optional application name to scope the snapshot"),
+          window_id: z.string().optional().describe("Optional window id from computer_list_windows"),
+          interactive_only: z
+            .boolean()
+            .optional()
+            .describe("If true or omitted, include only interactive elements with refs"),
+          include_bounds: z.boolean().optional().describe("Include element bounds in the snapshot"),
+          compact: z.boolean().optional().describe("Collapse single-child unnamed nodes to reduce tree depth"),
+          max_depth: z.number().int().min(1).max(30).optional().describe("Maximum tree depth"),
+          surface: z
+            .enum(["window", "focused", "menu", "menubar", "sheet", "popover", "alert"])
+            .optional()
+            .describe("Optional UI surface to snapshot"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerSnapshot(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_screenshot = tool({
-      description:
-        "Capture a PNG screenshot of a desktop app window using agent-desktop. Use for visual confirmation or when the accessibility snapshot is insufficient.",
-      inputSchema: z.object({
-        output_path: z
-          .string()
-          .optional()
-          .describe("Optional output path for the screenshot. Defaults to .shelra/computer/*.png"),
-        app: z.string().optional().describe("Optional application name to capture"),
-        window_id: z.string().optional().describe("Optional window id from computer_list_windows"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerScreenshot(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_screenshot = tool({
+        description:
+          "Capture a PNG screenshot of a desktop app window using agent-desktop. Use for visual confirmation or when the accessibility snapshot is insufficient.",
+        inputSchema: z.object({
+          output_path: z
+            .string()
+            .optional()
+            .describe("Optional output path for the screenshot. Defaults to .shelra/computer/*.png"),
+          app: z.string().optional().describe("Optional application name to capture"),
+          window_id: z.string().optional().describe("Optional window id from computer_list_windows"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerScreenshot(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_click = tool({
-      description:
-        "Click a desktop element via agent-desktop. Prefer `ref` values from computer_snapshot. Coordinates are a fallback only when accessibility refs are unavailable.",
-      inputSchema: z.object({
-        ref: z.string().optional().describe("Element ref from computer_snapshot, such as @e3"),
-        x: z.number().optional().describe("Fallback absolute screen X coordinate"),
-        y: z.number().optional().describe("Fallback absolute screen Y coordinate"),
-        button: z.enum(["left", "right", "middle"]).optional().describe("Mouse button to click"),
-        count: z.number().int().min(1).max(3).optional().describe("Number of clicks"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerClick(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_click = tool({
+        description:
+          "Click a desktop element via agent-desktop. Prefer `ref` values from computer_snapshot. Coordinates are a fallback only when accessibility refs are unavailable.",
+        inputSchema: z.object({
+          ref: z.string().optional().describe("Element ref from computer_snapshot, such as @e3"),
+          x: z.number().optional().describe("Fallback absolute screen X coordinate"),
+          y: z.number().optional().describe("Fallback absolute screen Y coordinate"),
+          button: z.enum(["left", "right", "middle"]).optional().describe("Mouse button to click"),
+          count: z.number().int().min(1).max(3).optional().describe("Number of clicks"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerClick(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_mouse_move = tool({
-      description: "Hover over a desktop element or coordinates via agent-desktop. Prefer refs from computer_snapshot.",
-      inputSchema: z.object({
-        ref: z.string().optional().describe("Element ref from computer_snapshot, such as @e3"),
-        x: z.number().optional().describe("Fallback absolute screen X coordinate"),
-        y: z.number().optional().describe("Fallback absolute screen Y coordinate"),
-        duration_ms: z.number().int().min(0).optional().describe("Optional hover duration in milliseconds"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerMouseMove(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_mouse_move = tool({
+        description:
+          "Hover over a desktop element or coordinates via agent-desktop. Prefer refs from computer_snapshot.",
+        inputSchema: z.object({
+          ref: z.string().optional().describe("Element ref from computer_snapshot, such as @e3"),
+          x: z.number().optional().describe("Fallback absolute screen X coordinate"),
+          y: z.number().optional().describe("Fallback absolute screen Y coordinate"),
+          duration_ms: z.number().int().min(0).optional().describe("Optional hover duration in milliseconds"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerMouseMove(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_type = tool({
-      description:
-        "Type text into a specific desktop element via agent-desktop. Pass a ref from computer_snapshot. For shortcuts like cmd+k or enter, prefer computer_press.",
-      inputSchema: z.object({
-        ref: z.string().describe("Element ref from computer_snapshot, such as @e5"),
-        text: z.string().describe("Text to type"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerType(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_type = tool({
+        description:
+          "Type text into a specific desktop element via agent-desktop. Pass a ref from computer_snapshot. For shortcuts like cmd+k or enter, prefer computer_press.",
+        inputSchema: z.object({
+          ref: z.string().describe("Element ref from computer_snapshot, such as @e5"),
+          text: z.string().describe("Text to type"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerType(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_press = tool({
-      description: "Press a key or key chord via agent-desktop, optionally targeting a specific app first.",
-      inputSchema: z.object({
-        key: z.string().describe("Key or key chord such as enter or cmd+s"),
-        app: z.string().optional().describe("Optional application name to focus before pressing"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerPress(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_press = tool({
+        description: "Press a key or key chord via agent-desktop, optionally targeting a specific app first.",
+        inputSchema: z.object({
+          key: z.string().describe("Key or key chord such as enter or cmd+s"),
+          app: z.string().optional().describe("Optional application name to focus before pressing"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerPress(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_scroll = tool({
-      description: "Scroll a desktop element via agent-desktop. Pass the element ref from computer_snapshot.",
-      inputSchema: z.object({
-        ref: z.string().describe("Element ref from computer_snapshot, such as @e8"),
-        direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction"),
-        amount: z.number().int().min(1).max(100).optional().describe("Optional scroll amount"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerScroll(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_scroll = tool({
+        description: "Scroll a desktop element via agent-desktop. Pass the element ref from computer_snapshot.",
+        inputSchema: z.object({
+          ref: z.string().describe("Element ref from computer_snapshot, such as @e8"),
+          direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction"),
+          amount: z.number().int().min(1).max(100).optional().describe("Optional scroll amount"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerScroll(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_launch = tool({
-      description: "Launch an application by name or bundle id using agent-desktop and wait for its window to appear.",
-      inputSchema: z.object({
-        app: z.string().describe("Application name or bundle id"),
-        timeout_ms: z
-          .number()
-          .int()
-          .min(100)
-          .max(120000)
-          .optional()
-          .describe("Optional launch timeout in milliseconds"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerLaunch(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_launch = tool({
+        description:
+          "Launch an application by name or bundle id using agent-desktop and wait for its window to appear.",
+        inputSchema: z.object({
+          app: z.string().describe("Application name or bundle id"),
+          timeout_ms: z
+            .number()
+            .int()
+            .min(100)
+            .max(120000)
+            .optional()
+            .describe("Optional launch timeout in milliseconds"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerLaunch(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_list_windows = tool({
-      description:
-        "List visible desktop windows using agent-desktop. Use this to discover window ids before focusing or scoping snapshots.",
-      inputSchema: z.object({
-        app: z.string().optional().describe("Optional application name to filter windows"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerListWindows(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_list_windows = tool({
+        description:
+          "List visible desktop windows using agent-desktop. Use this to discover window ids before focusing or scoping snapshots.",
+        inputSchema: z.object({
+          app: z.string().optional().describe("Optional application name to filter windows"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerListWindows(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_focus_window = tool({
-      description: "Bring a desktop window to the front using a window id, app name, or title.",
-      inputSchema: z.object({
-        window_id: z.string().optional().describe("Window id from computer_list_windows"),
-        app: z.string().optional().describe("Application name"),
-        title: z.string().optional().describe("Partial window title match"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerFocusWindow(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_focus_window = tool({
+        description: "Bring a desktop window to the front using a window id, app name, or title.",
+        inputSchema: z.object({
+          window_id: z.string().optional().describe("Window id from computer_list_windows"),
+          app: z.string().optional().describe("Application name"),
+          title: z.string().optional().describe("Partial window title match"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerFocusWindow(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_wait = tool({
-      description:
-        "Wait for time, an element ref, a window title, or text to appear using agent-desktop. Use after launches, dialogs, or UI transitions.",
-      inputSchema: z.object({
-        milliseconds: z
-          .number()
-          .int()
-          .min(0)
-          .max(120000)
-          .optional()
-          .describe("Optional pause duration in milliseconds"),
-        element: z.string().optional().describe("Wait until this element ref appears"),
-        window: z.string().optional().describe("Wait until a window title appears"),
-        text: z.string().optional().describe("Wait until text appears in the accessibility tree"),
-        timeout_ms: z.number().int().min(100).max(120000).optional().describe("Timeout for element/window/text waits"),
-        app: z.string().optional().describe("Optional app scope for the wait"),
-        menu: z.boolean().optional().describe("Wait until a menu is open"),
-        menu_closed: z.boolean().optional().describe("Wait until a menu is dismissed"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerWait(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_wait = tool({
+        description:
+          "Wait for time, an element ref, a window title, or text to appear using agent-desktop. Use after launches, dialogs, or UI transitions.",
+        inputSchema: z.object({
+          milliseconds: z
+            .number()
+            .int()
+            .min(0)
+            .max(120000)
+            .optional()
+            .describe("Optional pause duration in milliseconds"),
+          element: z.string().optional().describe("Wait until this element ref appears"),
+          window: z.string().optional().describe("Wait until a window title appears"),
+          text: z.string().optional().describe("Wait until text appears in the accessibility tree"),
+          timeout_ms: z
+            .number()
+            .int()
+            .min(100)
+            .max(120000)
+            .optional()
+            .describe("Timeout for element/window/text waits"),
+          app: z.string().optional().describe("Optional app scope for the wait"),
+          menu: z.boolean().optional().describe("Wait until a menu is open"),
+          menu_closed: z.boolean().optional().describe("Wait until a menu is dismissed"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerWait(input, cwd(), abortSignal);
+        },
+      });
 
-    tools.computer_get = tool({
-      description: "Read a property like text, value, title, bounds, role, or states from a desktop element ref.",
-      inputSchema: z.object({
-        ref: z.string().describe("Element ref from computer_snapshot, such as @e4"),
-        property: z
-          .enum(["text", "value", "title", "bounds", "role", "states"])
-          .optional()
-          .describe("Property to read"),
-      }),
-      execute: async (input, { abortSignal }) => {
-        return computerGet(input, cwd(), abortSignal);
-      },
-    });
+      tools.computer_get = tool({
+        description: "Read a property like text, value, title, bounds, role, or states from a desktop element ref.",
+        inputSchema: z.object({
+          ref: z.string().describe("Element ref from computer_snapshot, such as @e4"),
+          property: z
+            .enum(["text", "value", "title", "bounds", "role", "states"])
+            .optional()
+            .describe("Property to read"),
+        }),
+        execute: async (input, { abortSignal }) => {
+          return computerGet(input, cwd(), abortSignal);
+        },
+      });
+    }
 
     tools.write_file = tool({
       description:
@@ -637,13 +666,6 @@ export function createTools(
         content: z.string().describe("The full file content to write"),
       }),
       execute: async ({ path, content }) => {
-        if (!planPublished) {
-          return {
-            success: false,
-            output:
-              "Executable plan required before changing files. Call generate_plan with requirements, acceptance criteria, verification methods, and ordered steps, then retry the write.",
-          };
-        }
         checkpointBeforeMutation(path, "pre-write");
         return writeFile(path, content, cwd());
       },
@@ -658,13 +680,6 @@ export function createTools(
         new_string: z.string().describe("The replacement text"),
       }),
       execute: async ({ path, old_string, new_string }) => {
-        if (!planPublished) {
-          return {
-            success: false,
-            output:
-              "Executable plan required before changing files. Call generate_plan with requirements, acceptance criteria, verification methods, and ordered steps, then retry the edit.",
-          };
-        }
         checkpointBeforeMutation(path, "pre-edit");
         return editFile(path, old_string, new_string, cwd());
       },
@@ -677,28 +692,10 @@ export function createTools(
         path: z.string().describe("File path (relative to cwd or absolute)"),
       }),
       execute: async ({ path }) => {
-        if (!planPublished) {
-          return {
-            success: false,
-            output:
-              "Executable plan required before changing files. Call generate_plan with requirements, acceptance criteria, verification methods, and ordered steps, then retry the delete.",
-          };
-        }
         checkpointBeforeMutation(path, "pre-delete");
         return deleteFile(path, cwd());
       },
     });
-
-    const MEMORY_TYPES = [
-      "architecture",
-      "debugging",
-      "build",
-      "testing",
-      "conventions",
-      "known-problems",
-      "important-codepaths",
-      "decisions",
-    ] as const;
 
     tools.memory_list = tool({
       description:
@@ -744,27 +741,58 @@ export function createTools(
         slug: z.string().describe("Kebab-case identifier, e.g. 'better-auth-organization-plugin'"),
         title: z.string().describe("Human-readable title for the memory index"),
         hook: z.string().describe("One-line summary shown in the index"),
-        type: z.enum(MEMORY_TYPES).describe("Category of this memory entry"),
+        type: z.enum(MEMORY_TYPES as [MemoryType, ...MemoryType[]]).describe("Category of this memory entry"),
         description: z.string().describe("One-line description, slightly more detail than the hook"),
         body: z.string().describe("Full markdown body — the actual findings, decision, or notes"),
+        related_files: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Workspace-relative files this fact depends on; a later change to one marks the entry as possibly stale",
+          ),
+        confidence: z.number().min(0).max(1).optional().describe("How sure you are, 0-1 (default 0.7)"),
+        source: z
+          .enum(["human", "observed"])
+          .optional()
+          .describe(
+            "'human' only when the user stated it; 'observed' when a command or test showed it; omit for your own inference",
+          ),
       }),
-      execute: async ({ slug, title, hook, type, description, body }) => {
+      execute: async ({ slug, title, hook, type, description, body, related_files, confidence, source }) => {
         try {
-          const result = writeMemoryEntry(projectMemoryScope(cwd()), {
+          const scope = projectMemoryScope(cwd());
+          const candidate = {
             slug,
             title,
             hook,
             type: type as MemoryType,
             description,
             body,
-          });
+            relatedFiles: related_files,
+            confidence: confidence ?? 0.7,
+            source: source ?? ("inference" as const),
+          };
+          // Model-initiated writes pass the same gate as automatic ones: no secrets, no
+          // instruction-shaped text, no duplicate of an existing entry, no overwrite of a human statement.
+          const decision = decideMemoryWrite(candidate, listMemoryRecords(scope));
+          if (decision.action === "reject") return { success: false, output: `Not saved: ${decision.reason}.` };
+          if (decision.action === "skip") {
+            return {
+              success: true,
+              output: `Not saved: ${decision.reason}. The existing entry "${decision.slug}" already covers this.`,
+            };
+          }
+          const result = writeMemoryEntry(scope, { ...candidate, slug: decision.slug });
           if (!result.ok) {
             return {
               success: false,
               output: `Memory index is full (${result.indexLines}/${result.capLines} lines, ${result.indexBytes}/${result.capBytes} bytes) — trim or consolidate an older entry before adding a new one.`,
             };
           }
-          return { success: true, output: `Saved memory entry "${slug}".` };
+          return {
+            success: true,
+            output: `${decision.action === "update" ? "Updated" : "Saved"} memory entry "${decision.slug}"${decision.slug === slug ? "" : ` (merged into the existing near-duplicate)`}.`,
+          };
         } catch (err: unknown) {
           return { success: false, output: err instanceof Error ? err.message : String(err) };
         }
@@ -835,7 +863,7 @@ export function createTools(
       });
     }
 
-    if (options.scheduleManager) {
+    if (options.scheduleManager && groups.schedules) {
       const schedules = options.scheduleManager;
 
       tools.schedule_create = tool({
@@ -1006,152 +1034,171 @@ export function createTools(
     }
   }
 
-  tools.wallet_info = tool({
-    description:
-      "Get the local wallet address, chain, and current balances (ETH and USDC). Use this to check available funds before making a payment.",
-    inputSchema: z.object({}),
-    execute: async () => {
-      try {
-        const { WalletManager } = await import("../wallet/manager");
-        if (!WalletManager.exists()) {
-          return { success: false, output: "No wallet found. Run `shelra wallet init` to create one." };
+  if (groups.payments) {
+    tools.wallet_info = tool({
+      description:
+        "Get the local wallet address, chain, and current balances (ETH and USDC). Use this to check available funds before making a payment.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        try {
+          const { WalletManager } = await import("../wallet/manager");
+          if (!WalletManager.exists()) {
+            return { success: false, output: "No wallet found. Run `shelra wallet init` to create one." };
+          }
+          const wm = new WalletManager();
+          const balance = await wm.getBalance();
+          return {
+            success: true,
+            output: [
+              `Address: ${balance.address}`,
+              `Chain: ${balance.chain}`,
+              `ETH: ${balance.nativeBalance}`,
+              `USDC: ${balance.usdcBalance}`,
+            ].join("\n"),
+          };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { success: false, output: `Failed to get wallet info: ${msg}` };
         }
-        const wm = new WalletManager();
-        const balance = await wm.getBalance();
-        return {
-          success: true,
-          output: [
-            `Address: ${balance.address}`,
-            `Chain: ${balance.chain}`,
-            `ETH: ${balance.nativeBalance}`,
-            `USDC: ${balance.usdcBalance}`,
-          ].join("\n"),
-        };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { success: false, output: `Failed to get wallet info: ${msg}` };
-      }
-    },
-  });
+      },
+    });
 
-  tools.wallet_history = tool({
-    description:
-      "Show recent x402 payment history from the local audit log. Returns the most recent payment attempts with status, URL, amount, and transaction hash.",
-    inputSchema: z.object({
-      limit: z.number().optional().describe("Number of recent entries to return (default: 10)"),
-    }),
-    execute: async ({ limit }) => {
-      try {
-        const { PaymentHistory } = await import("../payments/history");
-        const history = new PaymentHistory();
-        const entries = history.list(limit ?? 10);
-        if (entries.length === 0) {
-          return { success: true, output: "No payment history yet." };
+    tools.wallet_history = tool({
+      description:
+        "Show recent x402 payment history from the local audit log. Returns the most recent payment attempts with status, URL, amount, and transaction hash.",
+      inputSchema: z.object({
+        limit: z.number().optional().describe("Number of recent entries to return (default: 10)"),
+      }),
+      execute: async ({ limit }) => {
+        try {
+          const { PaymentHistory } = await import("../payments/history");
+          const history = new PaymentHistory();
+          const entries = history.list(limit ?? 10);
+          if (entries.length === 0) {
+            return { success: true, output: "No payment history yet." };
+          }
+          const lines = entries.map((e) => {
+            const parts = [
+              `${e.createdAt}  ${e.status}`,
+              `  ${e.method} ${e.url}`,
+              `  ${e.amount} ${e.asset} on ${e.network}`,
+            ];
+            if (e.txHash) parts.push(`  tx: ${e.txHash}`);
+            return parts.join("\n");
+          });
+          return { success: true, output: lines.join("\n\n") };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { success: false, output: `Failed to read payment history: ${msg}` };
         }
-        const lines = entries.map((e) => {
-          const parts = [
-            `${e.createdAt}  ${e.status}`,
-            `  ${e.method} ${e.url}`,
-            `  ${e.amount} ${e.asset} on ${e.network}`,
-          ];
-          if (e.txHash) parts.push(`  tx: ${e.txHash}`);
-          return parts.join("\n");
-        });
-        return { success: true, output: lines.join("\n\n") };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { success: false, output: `Failed to read payment history: ${msg}` };
-      }
-    },
-  });
+      },
+    });
 
-  tools.fetch_payment_info = tool({
-    description:
-      "Inspect a URL for x402 payment requirements without paying. Returns payment options and a brin security scan with score, sub-scores (identity, behavior, content, graph), and any detected threats. Use this only when the user wants to inspect without paying — for actual access, call paid_request directly instead.",
-    inputSchema: z.object({
-      url: z.string().url().describe("The URL to inspect"),
-      method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().describe("HTTP method (default: GET)"),
-      headers: z.record(z.string(), z.string()).optional().describe("Optional HTTP headers"),
-      body: z.string().optional().describe("Optional request body for POST/PUT/PATCH"),
-    }),
-    execute: async ({ url, method, headers, body }) => {
-      try {
-        const { X402Service, formatInspectionOutput } = await import("../payments/service");
-        const service = new X402Service();
-        const inspection = await service.fetchPaymentInfo({ url, method, headers, body });
-        return {
-          success: true,
-          output: formatInspectionOutput(inspection),
-        };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          success: false,
-          output: `Failed to inspect payment info: ${msg}`,
-        };
-      }
-    },
-  });
+    tools.fetch_payment_info = tool({
+      description:
+        "Inspect a URL for x402 payment requirements without paying. Returns payment options and a brin security scan with score, sub-scores (identity, behavior, content, graph), and any detected threats. Use this only when the user wants to inspect without paying — for actual access, call paid_request directly instead.",
+      inputSchema: z.object({
+        url: z.string().url().describe("The URL to inspect"),
+        method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().describe("HTTP method (default: GET)"),
+        headers: z.record(z.string(), z.string()).optional().describe("Optional HTTP headers"),
+        body: z.string().optional().describe("Optional request body for POST/PUT/PATCH"),
+      }),
+      execute: async ({ url, method, headers, body }) => {
+        try {
+          const { X402Service, formatInspectionOutput } = await import("../payments/service");
+          const service = new X402Service();
+          const inspection = await service.fetchPaymentInfo({ url, method, headers, body });
+          return {
+            success: true,
+            output: formatInspectionOutput(inspection),
+          };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            success: false,
+            output: `Failed to inspect payment info: ${msg}`,
+          };
+        }
+      },
+    });
 
-  tools.paid_request = tool({
-    description:
-      "Access an x402-protected URL using the local wallet. URLs scoring below 25 on brin are automatically blocked. The user will be prompted to approve the payment before it executes.",
-    inputSchema: z.object({
-      url: z.string().url().describe("The URL to access"),
-      method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().describe("HTTP method (default: GET)"),
-      headers: z.record(z.string(), z.string()).optional().describe("Optional HTTP headers"),
-      body: z.string().optional().describe("Optional request body for POST/PUT/PATCH"),
-    }),
-    needsApproval: () => {
-      try {
-        return !loadPaymentSettings().approval.autoApprove;
-      } catch {
-        return true;
-      }
-    },
-    execute: async ({ url, method, headers, body }) => {
-      try {
-        const { X402Service } = await import("../payments/service");
-        const service = new X402Service();
-        return await service.paidRequest({ url, method, headers, body }, options.sessionId);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          success: false,
-          output: `Failed to access paid URL: ${msg}`,
-        };
-      }
-    },
-  });
+    tools.paid_request = tool({
+      description:
+        "Access an x402-protected URL using the local wallet. URLs scoring below 25 on brin are automatically blocked. The user will be prompted to approve the payment before it executes.",
+      inputSchema: z.object({
+        url: z.string().url().describe("The URL to access"),
+        method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().describe("HTTP method (default: GET)"),
+        headers: z.record(z.string(), z.string()).optional().describe("Optional HTTP headers"),
+        body: z.string().optional().describe("Optional request body for POST/PUT/PATCH"),
+      }),
+      needsApproval: () => {
+        try {
+          return !loadPaymentSettings().approval.autoApprove;
+        } catch {
+          return true;
+        }
+      },
+      execute: async ({ url, method, headers, body }) => {
+        try {
+          const { X402Service } = await import("../payments/service");
+          const service = new X402Service();
+          return await service.paidRequest({ url, method, headers, body }, options.sessionId);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            success: false,
+            output: `Failed to access paid URL: ${msg}`,
+          };
+        }
+      },
+    });
+  }
 
   if (mode !== "plan" && mode !== "agent") return tools;
 
   tools.generate_plan = tool({
     description:
       "Publish an executable implementation plan before a non-trivial coding change. Include what the user wants, concrete requirements, acceptance criteria with verification methods, ordered steps, and which criteria each step satisfies. The plan is displayed in the CLI; questions are optional and only for choices the repository and research cannot answer.",
+    // Deliberately forgiving: a criterion or step may arrive as a bare string and ids may be
+    // omitted. Mid-tier models fumble deeply nested required objects and then stop planning
+    // altogether (observed 2026-09-17); the host normalizes the shape instead of rejecting it.
     inputSchema: z.object({
       title: z.string().describe("Plan title"),
-      summary: z.string().describe("Brief summary of what the plan accomplishes"),
+      summary: z.string().optional().describe("Brief summary of what the plan accomplishes"),
       goal: z.string().describe("The user's intended observable outcome"),
-      requirements: z.array(z.string()).min(1).describe("Concrete requirements derived from the request and context"),
+      requirements: z
+        .array(z.string())
+        .optional()
+        .describe("Concrete requirements derived from the request and context"),
       acceptanceCriteria: z
         .array(
-          z.object({
-            id: z.string().describe("Stable short id such as AC1"),
-            description: z.string().describe("Observable condition that must be true"),
-            verification: z.string().describe("Specific test, command, or observation that will prove the condition"),
-          }),
+          z.union([
+            z.object({
+              id: z.string().optional().describe("Stable short id such as AC1"),
+              description: z.string().describe("Observable condition that must be true"),
+              verification: z
+                .string()
+                .optional()
+                .describe("Specific test, command, or observation that will prove the condition"),
+            }),
+            z
+              .string()
+              .describe("A criterion stated in one line; the verification is then the project's relevant check"),
+          ]),
         )
         .min(1)
         .describe("Conditions Shelra must prove before claiming completion"),
       steps: z
         .array(
-          z.object({
-            title: z.string().describe("Step title"),
-            description: z.string().describe("Detailed description of what this step involves"),
-            filePaths: z.array(z.string()).optional().describe("Files affected by this step"),
-            satisfies: z.array(z.string()).describe("Acceptance criterion ids advanced by this step"),
-          }),
+          z.union([
+            z.object({
+              title: z.string().describe("Step title"),
+              description: z.string().optional().describe("Detailed description of what this step involves"),
+              filePaths: z.array(z.string()).optional().describe("Files affected by this step"),
+              satisfies: z.array(z.string()).optional().describe("Acceptance criterion ids advanced by this step"),
+            }),
+            z.string().describe("A step stated in one line"),
+          ]),
         )
         .describe("Ordered list of implementation steps"),
       questions: z
@@ -1177,13 +1224,40 @@ export function createTools(
         .optional()
         .describe("Questions for the user to answer before proceeding"),
     }),
-    execute: async ({ title, summary, goal, requirements, acceptanceCriteria, steps, questions }) => {
-      planPublished = true;
+    execute: async ({
+      title,
+      summary: rawSummary,
+      goal,
+      requirements: rawRequirements,
+      acceptanceCriteria: rawCriteria,
+      steps: rawSteps,
+      questions,
+    }) => {
       structuredPlanPublished = true;
       if (options.planState) {
         options.planState.published = true;
         options.planState.structured = true;
       }
+      const summary = rawSummary?.trim() || goal;
+      const requirements = rawRequirements ?? [];
+      const acceptanceCriteria = rawCriteria.map((criterion, index) =>
+        typeof criterion === "string"
+          ? {
+              id: `AC${index + 1}`,
+              description: criterion,
+              verification: "Run the project's relevant check and observe it pass",
+            }
+          : {
+              id: criterion.id?.trim() || `AC${index + 1}`,
+              description: criterion.description,
+              verification: criterion.verification?.trim() || "Run the project's relevant check and observe it pass",
+            },
+      );
+      const steps = rawSteps.map((step) =>
+        typeof step === "string"
+          ? { title: step, description: step, satisfies: [] as string[] }
+          : { ...step, description: step.description ?? step.title, satisfies: step.satisfies ?? [] },
+      );
       const text = [
         `Plan: ${title}`,
         `Goal: ${goal}`,
@@ -1228,7 +1302,12 @@ export function createTools(
     }),
     execute: async ({ index, status, evidence }) => {
       if (!structuredPlanPublished) {
-        return { success: false, output: "Publish a plan before updating plan state." };
+        // A no-op, not a failure: models call this reflexively after finishing unplanned work,
+        // and an error here only makes them re-emit their summary (observed 2026-09-17).
+        return {
+          success: true,
+          output: "No plan is published in this session, so there is no step to update. Nothing changed.",
+        };
       }
       const update = { index: index - 1, status, ...(evidence?.trim() ? { evidence: evidence.trim() } : {}) };
       return {

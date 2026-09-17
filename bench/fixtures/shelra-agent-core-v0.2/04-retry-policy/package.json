@@ -1,0 +1,7 @@
+{
+  "name": "shelra-bench-retry-policy",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}

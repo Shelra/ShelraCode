@@ -14,6 +14,12 @@ import {
   objectiveEventPayload,
 } from "./autonomy/presentation";
 import { type RuntimeEvent as ObjectiveRuntimeEvent, runObjective } from "./autonomy/runtime";
+import { createAgentBenchmarkExecutor } from "./bench/agent-executor";
+import { collectBenchmarkEnvironment, collectRepositorySnapshot, resolveBenchmarkPath } from "./bench/environment";
+import { loadBenchmarkManifest } from "./bench/manifest";
+import { runBenchmark } from "./bench/runner";
+import { createShelraBenchmarkExecutor } from "./bench/shelra-executor";
+import type { BenchmarkManifest } from "./bench/types";
 import { inspectHardware } from "./hardware/profile";
 import {
   createHeadlessJsonlEmitter,
@@ -49,6 +55,12 @@ import { saveOpenRouterApiKey } from "./security/credentials";
 import { runOnboarding } from "./setup/onboarding";
 import { probeLocalModel, runStartup } from "./startup/orchestrator";
 import type { StartupProgress, StartupResult } from "./startup/types";
+import {
+  createBenchmarkRun,
+  finalizeBenchmarkRun,
+  recoverInterruptedBenchmarkRuns,
+  updateBenchmarkRunMetadata,
+} from "./storage/benchmarks";
 import { runTelegramHeadlessBridge } from "./telegram/headless-bridge";
 import { startScheduleDaemon } from "./tools/schedule";
 import type { ModelInfo } from "./types/index";
@@ -913,6 +925,229 @@ async function runAutonomousHeadless(
   }
 }
 
+/**
+ * Execute the configured benchmark suite through Shelra's autonomous runtime. The durable
+ * run is created before manifest/provider validation so a bad configuration is historical
+ * evidence (`invalid`/`failed`) instead of a missing run.
+ */
+async function runBenchCommand(options: {
+  manifest?: string;
+  suite?: string;
+  agent?: string;
+  model?: string;
+  modelPolicy?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  maxCost?: string;
+  maxRequestCost?: string;
+  directory?: string;
+  json?: boolean;
+}): Promise<void> {
+  const manifestCandidate = options.manifest || ".shelra/bench/manifest.json";
+  const agentName = ((options.agent || "shelra").trim() || "shelra").toLowerCase();
+  const requestedModel = options.model ? normalizeModelId(options.model) : undefined;
+  const rawPolicy = (options.modelPolicy || "free").trim().toLowerCase();
+  const supportedPolicies: ModelPolicy[] = ["free", "auto", "economy", "balanced", "quality", "max", "custom"];
+  const modelPolicy: ModelPolicy = supportedPolicies.includes(rawPolicy as ModelPolicy)
+    ? (rawPolicy as ModelPolicy)
+    : "free";
+  const effectiveModelPolicy = requestedModel && modelPolicy === "free" ? "custom" : modelPolicy;
+  const apiKey = options.apiKey?.trim() || getApiKey();
+  const baseURL = options.baseUrl?.trim() || getBaseURL() || OPENROUTER_BASE_URL;
+  const budget = resolveBudget(options as CliOptions);
+  const repository = collectRepositorySnapshot(process.cwd());
+  const environment = collectBenchmarkEnvironment();
+  recoverInterruptedBenchmarkRuns();
+  const commonInput = {
+    agentName,
+    agentVersion: packageJson.version,
+    model: requestedModel ?? null,
+    modelProvider: isOpenRouterBaseURL(baseURL) ? "OpenRouter" : "OpenAI-compatible",
+    repositoryCommit: repository.commit,
+    repositoryDirty: repository.dirty,
+    repositoryDiffHash: repository.diffHash,
+    shelraVersion: packageJson.version,
+    environment,
+    seed: null,
+    agentConfig: {
+      harness: agentName === "shelra-autonomy" ? "autonomy-runtime" : "agent-chat",
+      modelPolicy,
+      effectiveModelPolicy,
+      strictModel: Boolean(requestedModel),
+      requestedModel: requestedModel ?? null,
+      maxCostUsd: budget.maxSessionUsd ?? null,
+      maxRequestCostUsd: budget.maxRequestUsd ?? null,
+    },
+  } as const;
+
+  let manifest: BenchmarkManifest;
+  try {
+    manifest = loadBenchmarkManifest(process.cwd(), manifestCandidate);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const invalidRun = createBenchmarkRun({
+      workspace: process.cwd(),
+      benchmarkVersion: "unconfigured",
+      suite: options.suite?.trim() || "unconfigured",
+      ...commonInput,
+      benchmarkConfig: { manifestPath: resolveBenchmarkPath(process.cwd(), manifestCandidate) },
+      taskCount: 0,
+    });
+    const finalized = finalizeBenchmarkRun({
+      runId: invalidRun.runId,
+      status: "invalid",
+      failureReason: message,
+    });
+    printBenchJsonOrText(options.json === true, {
+      run: finalized,
+      message: `Benchmark run #${finalized.runNumber} was not executed: ${message}`,
+      type: "run_finished",
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  const resolvedManifestPath =
+    typeof manifest.config?.manifestPath === "string" ? manifest.config.manifestPath : manifestCandidate;
+
+  if (options.suite?.trim()) {
+    manifest = { ...manifest, suite: options.suite.trim() };
+  }
+
+  const summary = await runBenchmark({
+    workspace: process.cwd(),
+    manifest,
+    runInput: {
+      ...commonInput,
+      benchmarkConfig: { manifestPath: resolvedManifestPath },
+    },
+    onRunCreated: (run) => {
+      if (options.json) {
+        printBenchJson({ type: "run_created", run });
+      } else {
+        console.log(`Benchmark run #${run.runNumber} created (${run.runId})`);
+        console.log(`  Shelra agent · ${manifest.suite} · ${manifest.benchmarkVersion}`);
+      }
+    },
+    onEvent: (event) => {
+      if (options.json) {
+        printBenchJson({ type: "event", event });
+      } else if (event.type !== "run_created") {
+        console.log(`  ${event.message}`);
+      }
+    },
+    onTask: (task) => {
+      if (options.json) {
+        printBenchJson({ type: "task_finished", task });
+      } else {
+        console.log(
+          `  ${task.taskId}: ${task.status}${task.durationMs === null ? "" : ` · ${formatDuration(task.durationMs)}`}`,
+        );
+      }
+    },
+    createExecutor: async ({ run, signal, emit }) => {
+      if (agentName !== "shelra" && agentName !== "shelra-autonomy") {
+        throw new Error(
+          `Agent adapter "${agentName}" is not registered yet. This run was retained as failed evidence.`,
+        );
+      }
+      if (!apiKey) {
+        throw new Error(
+          "OpenRouter API key is required for a Shelra Bench run. Configure OPENROUTER_API_KEY or use `shelra auth openrouter <key>`.",
+        );
+      }
+      if (!isOpenRouterBaseURL(baseURL)) {
+        throw new Error(
+          "Shelra Bench currently requires the OpenRouter model runtime; the configured base URL is not OpenRouter.",
+        );
+      }
+
+      const catalog = await fetchOpenRouterCatalog({ apiKey, baseURL });
+      primeCatalog(catalog.entries);
+      const route = routeCatalogModel(catalog.entries, {
+        requestedModel: requestedModel ?? (catalog.entries.length === 0 ? "openrouter/free" : undefined),
+        policy: effectiveModelPolicy,
+        allowPaid: Boolean(requestedModel),
+        requiresTools: true,
+      });
+      updateBenchmarkRunMetadata(run.runId, {
+        model: route.modelId,
+        modelProvider: "OpenRouter",
+      });
+      emit({
+        type: "note",
+        message: `Shelra runtime ready with ${route.modelId}`,
+        payload: { agent: agentName, modelPolicy: effectiveModelPolicy },
+      });
+      if (agentName === "shelra-autonomy") {
+        const intelligence = createOpenRouterIntelligenceProvider({
+          apiKey,
+          baseURL,
+          entries: catalog.entries,
+          policy: effectiveModelPolicy,
+          modelId: route.modelId,
+          strictModel: Boolean(requestedModel),
+          maxCostUsd: budget.maxSessionUsd,
+        });
+        return createShelraBenchmarkExecutor({
+          intelligence,
+          benchmarkRoot: process.cwd(),
+          maxCostUsd: budget.maxSessionUsd,
+          maxRequestCostUsd: budget.maxRequestUsd,
+          signal,
+        });
+      }
+      // The product path: the same `Agent.processMessage()` loop interactive and `--prompt`
+      // sessions run. An explicit `--model` is strict — no server-side fallback may silently
+      // substitute another model into a measurement.
+      const provider = createOpenRouterProvider(apiKey, {
+        modelId: route.modelId,
+        entries: catalog.entries,
+        baseURL,
+        fallbackModels: requestedModel ? [] : route.candidates.map((entry) => entry.id).slice(0, 3),
+        requireParameters: true,
+      });
+      return createAgentBenchmarkExecutor({
+        provider,
+        modelId: route.modelId,
+        benchmarkRoot: process.cwd(),
+        budget,
+        signal,
+      });
+    },
+  });
+
+  printBenchJsonOrText(options.json === true, {
+    run: summary,
+    type: "run_finished",
+    message: `Benchmark run #${summary.runNumber} ${summary.status}`,
+  });
+  if (summary.status !== "completed") process.exitCode = 1;
+}
+
+function printBenchJsonOrText(json: boolean, value: { type: string; message: string; run: unknown }): void {
+  if (json) {
+    printBenchJson(value);
+    return;
+  }
+  console.log(value.message);
+  const run = value.run as { runId?: string; overall?: number } | undefined;
+  if (run?.runId) console.log(`  Stored as ${run.runId}`);
+}
+
+function printBenchJson(value: unknown): void {
+  process.stdout.write(
+    `${JSON.stringify(value, (_key, item) => (item instanceof Date ? item.toISOString() : item))}\n`,
+  );
+}
+
+function formatDuration(value: number): string {
+  const totalSeconds = Math.max(0, Math.round(value / 1_000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${String(seconds).padStart(2, "0")}s` : `${seconds}s`;
+}
+
 function changeDirectoryOrExit(directory: string | undefined) {
   if (!directory) {
     return;
@@ -1218,6 +1453,29 @@ program
       requestedModel: typeof options.model === "string" ? options.model : undefined,
       interactive: options.nonInteractive !== true,
     });
+  });
+
+program
+  .command("bench")
+  .description("Run Shelra Bench and persist an immutable historical benchmark run")
+  .option("--manifest <path>", "Benchmark manifest path", ".shelra/bench/manifest.json")
+  .option("--suite <suite>", "Override the suite label for this run")
+  .option("--agent <name>", "Agent adapter to evaluate: shelra (product chat path) or shelra-autonomy", "shelra")
+  .option("-m, --model <model>", "Model under test; keep this fixed when measuring harness changes")
+  .option("--model-policy <policy>", "Routing policy: free, auto, economy, balanced, quality, max or custom", "free")
+  .option("-k, --api-key <key>", "OpenRouter API key")
+  .option("-u, --base-url <url>", "OpenRouter API base URL")
+  .option("--max-cost <usd>", "Maximum cumulative spend for the benchmark run")
+  .option("--max-request-cost <usd>", "Maximum spend for one model request")
+  .option("-d, --directory <dir>", "Working directory", process.cwd())
+  .option("--json", "Print newline-delimited machine-readable run events")
+  .action(async (_options, command) => {
+    // Commander assigns options shared with the root command (for example --model and
+    // --max-cost) to the root even when they appear after `bench`. Merge both scopes so
+    // benchmark controls are never silently discarded.
+    const options = command.optsWithGlobals();
+    changeDirectoryOrExit(options.directory);
+    await runBenchCommand(options);
   });
 
 program

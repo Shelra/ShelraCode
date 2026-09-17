@@ -26,11 +26,42 @@ function toToolCall(part: Record<string, unknown>): ToolCall {
   };
 }
 
+const DEBUG_STREAM = Boolean(process.env.SHELRA_DEBUG_STREAM);
+
+/**
+ * Raw provider-part tracing for diagnosing model/provider behavior (`SHELRA_DEBUG_STREAM=1`).
+ * Deltas are collapsed to their type; structural parts (`finish-step`, `tool-error`, unknown
+ * types) are printed with a bounded payload so a silently-ending step is explainable.
+ */
+function traceRawPart(part: Record<string, unknown>): void {
+  const type = String(part.type);
+  if (type.endsWith("-delta")) return;
+  let detail = "";
+  if (type === "finish-step" || type === "finish") {
+    detail = ` finishReason=${String(part.finishReason)} usage=${JSON.stringify(part.usage ?? part.totalUsage ?? {})}`;
+  } else if (type === "tool-error" || type === "error") {
+    detail = ` ${String(part.toolName ?? "")} ${JSON.stringify(part.error ?? "", (_key, value) => (value instanceof Error ? value.message : value)).slice(0, 600)}`;
+  } else if (type === "tool-call") {
+    detail = ` ${String(part.toolName)}${part.invalid ? " INVALID" : ""} ${JSON.stringify(part.input ?? {}).slice(0, 200)}`;
+  } else if (
+    type !== "tool-result" &&
+    type !== "start" &&
+    type !== "start-step" &&
+    !type.endsWith("-start") &&
+    !type.endsWith("-end")
+  ) {
+    detail = ` ${JSON.stringify(part).slice(0, 400)}`;
+  }
+  process.stderr.write(`[stream] ${type}${detail}
+`);
+}
+
 /** Converts provider stream envelopes into the stable application event set. */
 export async function* normalizeProviderEvents(stream: AsyncIterable<unknown>): AsyncGenerator<ProviderEvent> {
   for await (const raw of stream) {
     const part = record(raw);
     if (!part) continue;
+    if (DEBUG_STREAM) traceRawPart(part);
     switch (part.type) {
       case "text-delta":
         yield { type: "text-delta", text: stringValue(part.text, "") };

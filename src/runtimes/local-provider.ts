@@ -1,7 +1,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { generateText, jsonSchema, type ModelMessage, Output, stepCountIs, streamText, type ToolSet } from "ai";
-import { normalizeModelMessages, repairToolInput } from "../providers/messages";
+import { coerceObjectsForStringParameters, normalizeModelMessages, repairToolInput } from "../providers/messages";
 import { normalizeProviderEvents } from "../providers/stream";
 import type {
   ProviderAdapter,
@@ -41,6 +41,39 @@ function usage(value: unknown): ProviderUsage | undefined {
   )
     return undefined;
   return { inputTokens, outputTokens, totalTokens, costUsdTicks };
+}
+
+/**
+ * `SHELRA_DEBUG_STREAM=2` additionally tees every raw provider response body to stderr, so a
+ * step that produced tokens the SDK could not map (no text, no tool call) can be attributed to
+ * the provider's actual wire output instead of guessed at.
+ */
+function tracingFetch(inner: FetchFunction | undefined): FetchFunction | undefined {
+  if (process.env.SHELRA_DEBUG_STREAM !== "2") return inner;
+  const base: FetchFunction = inner ?? ((input, init) => fetch(input, init));
+  return async (input, init) => {
+    const response = await base(input, init);
+    if (!response.body) return response;
+    const [forApp, forTrace] = response.body.tee();
+    void (async () => {
+      const reader = forTrace.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          process.stderr.write(`[raw] ${decoder.decode(value, { stream: true })}`);
+        }
+      } catch {
+        // Tracing must never affect the real response.
+      }
+    })();
+    return new Response(forApp, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  };
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -83,7 +116,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
       baseURL: model.baseURL,
       ...(apiKey ? { apiKey } : {}),
       ...(options.headers ? { headers: options.headers } : {}),
-      ...(options.fetch ? { fetch: options.fetch } : {}),
+      ...(tracingFetch(options.fetch) ? { fetch: tracingFetch(options.fetch) as FetchFunction } : {}),
       includeUsage: true,
       supportsStructuredOutputs: model.structuredOutput,
       ...(options.transformRequestBody ? { transformRequestBody: options.transformRequestBody } : {}),
@@ -113,6 +146,8 @@ export class LocalProviderAdapter implements ProviderAdapter {
   }
 
   stream(request: ProviderStreamRequest): ProviderStream {
+    let stepCostTicks = 0;
+    let stepCostSeen = false;
     const result = streamText({
       model: this.provider(request.modelId),
       system: request.system,
@@ -120,6 +155,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
       ...(request.tools ? { tools: request.tools as ToolSet } : {}),
       stopWhen: stepCountIs(request.maxSteps),
       maxRetries: this.maxRetries,
+      ...(request.timeout ? { timeout: request.timeout } : {}),
       abortSignal: request.signal,
       temperature: request.temperature,
       ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens }),
@@ -136,20 +172,44 @@ export class LocalProviderAdapter implements ProviderAdapter {
       prepareStep: ({ messages }) => ({
         messages: normalizeModelMessages(messages),
       }),
-      experimental_repairToolCall: async ({ toolCall }) => {
-        const repairedInput = repairToolInput(toolCall.toolName, toolCall.input);
+      experimental_repairToolCall: async ({ toolCall, inputSchema }) => {
+        let repairedInput = repairToolInput(toolCall.toolName, toolCall.input);
+        // Second pass, schema-aware: a JSON value where the tool wants a JSON string.
+        try {
+          const parsed = JSON.parse(repairedInput ?? toolCall.input) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            const schema = await inputSchema({ toolName: toolCall.toolName });
+            const coerced = coerceObjectsForStringParameters(parsed as Record<string, unknown>, schema);
+            if (coerced) repairedInput = JSON.stringify(coerced);
+          }
+        } catch {
+          // not JSON; the first pass already did what it could
+        }
         return repairedInput === null ? null : { ...toolCall, input: repairedInput };
       },
       experimental_onStepStart: (event: unknown) => request.onStepStart?.(stepNumber(event)),
       onStepFinish: (event: unknown) => {
         const entry = record(event);
+        const stepUsage = usage(entry?.usage);
+        if (stepUsage?.costUsdTicks !== undefined) {
+          stepCostTicks += stepUsage.costUsdTicks;
+          stepCostSeen = true;
+        }
         request.onStepFinish?.({
           stepNumber: stepNumber(event),
           finishReason: finishReason(event),
-          usage: usage(entry?.usage) ?? {},
+          usage: stepUsage ?? {},
         });
       },
-      onFinish: (event: { totalUsage?: unknown }) => request.onFinish?.(usage(event.totalUsage) ?? {}),
+      onFinish: (event: { totalUsage?: unknown }) => {
+        // OpenRouter reports exact cost per step (`usage.raw.cost`) but not on the aggregated
+        // total, so a turn's recorded spend silently fell back to a catalog estimate — or zero —
+        // while `--max-cost` trusted it. Sum the per-step figures whenever they exist.
+        const total = usage(event.totalUsage) ?? {};
+        request.onFinish?.(
+          stepCostSeen && total.costUsdTicks === undefined ? { ...total, costUsdTicks: stepCostTicks } : total,
+        );
+      },
     });
 
     return {
@@ -165,6 +225,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
       model: this.provider(request.modelId),
       system: request.system,
       prompt: request.prompt,
+      ...(request.timeout ? { timeout: request.timeout } : {}),
       abortSignal: request.signal,
       temperature: request.temperature,
       ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens }),
@@ -178,6 +239,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
       model: this.provider(request.modelId),
       system: request.system,
       prompt: request.prompt,
+      ...(request.timeout ? { timeout: request.timeout } : {}),
       output: Output.object({
         schema: jsonSchema(request.schema),
         ...(request.schemaName ? { name: request.schemaName } : {}),

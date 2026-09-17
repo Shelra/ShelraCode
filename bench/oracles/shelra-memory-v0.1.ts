@@ -1,0 +1,98 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+/**
+ * Oracle for the cross-session memory suite. Phase A ("learn") proves the agent discovered the
+ * undocumented codegen step; phase B ("recall") proves a schema change was followed by regeneration —
+ * the generated module carries a hash of schema/model.json, so a hand-edited generated file fails.
+ */
+
+const taskId = process.argv[2] ?? "";
+const workspace = process.env.SHELRA_BENCH_WORKSPACE || process.cwd();
+const moduleCacheKey = `?shelra-bench=${Date.now()}`;
+
+function fail(message: string): never {
+  throw new Error(`[${taskId || "unknown-task"}] ${message}`);
+}
+
+function assert(condition: unknown, message: string): void {
+  if (!condition) fail(message);
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: module loaded dynamically from the graded workspace
+async function loadModule(relativePath: string): Promise<Record<string, any>> {
+  const path = resolve(workspace, relativePath);
+  if (!existsSync(path)) fail(`${relativePath} is missing`);
+  // biome-ignore lint/suspicious/noExplicitAny: module loaded dynamically from the graded workspace
+  return (await import(pathToFileURL(path).href + moduleCacheKey)) as Record<string, any>;
+}
+
+function currentSchemaHash(): string {
+  return createHash("sha256")
+    .update(readFileSync(resolve(workspace, "schema", "model.json"), "utf8"))
+    .digest("hex");
+}
+
+async function checkLearn(): Promise<void> {
+  const schema = await loadModule("src/generated/schema.ts");
+  assert(
+    schema.SCHEMA_HASH === currentSchemaHash(),
+    "generated schema does not match schema/model.json (run the generator)",
+  );
+  assert(
+    JSON.stringify(schema.USER_FIELDS) === JSON.stringify(["id", "name", "createdAt"]),
+    "USER_FIELDS changed unexpectedly",
+  );
+  const { formatUser } = await loadModule("src/user.ts");
+  assert(typeof formatUser === "function", "formatUser export is missing");
+  const output = formatUser({ id: "u1", name: "Ada", createdAt: "2026-01-01" });
+  assert(output === "id=u1; name=Ada; createdAt=2026-01-01", `formatUser output was ${JSON.stringify(output)}`);
+}
+
+async function checkRecall(): Promise<void> {
+  const model = JSON.parse(readFileSync(resolve(workspace, "schema", "model.json"), "utf8")) as {
+    User?: Record<string, string>;
+  };
+  const fields = Object.keys(model.User ?? {});
+  assert(
+    fields.at(-1) === "email" && model.User?.email === "string",
+    "schema/model.json must gain a trailing string field `email`",
+  );
+  const schema = await loadModule("src/generated/schema.ts");
+  assert(
+    schema.SCHEMA_HASH === currentSchemaHash(),
+    "generated schema is stale: it does not match the edited schema/model.json (regenerate it)",
+  );
+  assert(
+    JSON.stringify(schema.USER_FIELDS) === JSON.stringify(["id", "name", "createdAt", "email"]),
+    "USER_FIELDS must include email last",
+  );
+  const { formatUser } = await loadModule("src/user.ts");
+  const output = formatUser({ id: "u1", name: "Ada", createdAt: "2026-01-01", email: "ada@example.com" });
+  assert(
+    output === "id=u1; name=Ada; createdAt=2026-01-01; email=ada@example.com",
+    `formatUser output was ${JSON.stringify(output)}`,
+  );
+}
+
+async function main(): Promise<void> {
+  switch (taskId) {
+    case "a-learn":
+      await checkLearn();
+      break;
+    case "b-recall-with-memory":
+    case "b-recall-without-memory":
+      await checkRecall();
+      break;
+    default:
+      fail(`unknown task id ${JSON.stringify(taskId)}`);
+  }
+  console.log(`[${taskId}] oracle passed`);
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});

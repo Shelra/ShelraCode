@@ -81,6 +81,25 @@ describe("OpenRouter intelligence adapter", () => {
     expect(providerFactory).toHaveBeenCalledWith("test-key", expect.objectContaining({ requireParameters: true }));
   });
 
+  it("keeps implementation output bounded for economical coding models", async () => {
+    const fake = fakeProvider();
+    providerFactory.mockReturnValueOnce(fake.provider);
+    const intelligence = new OpenRouterIntelligenceProvider({
+      apiKey: "test-key",
+      entries: [catalogEntry()],
+      policy: "free",
+    });
+
+    await intelligence.complete({
+      role: "implement",
+      system: "system",
+      prompt: "write the complete relevant files",
+      schema: { type: "object" },
+    });
+
+    expect(fake.generateStructured).toHaveBeenCalledWith(expect.objectContaining({ maxOutputTokens: 6_000 }));
+  });
+
   it("does not dispatch a paid request when Free policy has no capable free model", async () => {
     const intelligence = new OpenRouterIntelligenceProvider({
       apiKey: "test-key",
@@ -263,6 +282,35 @@ describe("OpenRouter intelligence adapter", () => {
 
     expect(result.ok).toBe(true);
     expect(providerFactory).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not switch models when strict model control is enabled", async () => {
+    const selected = fakeProvider();
+    selected.generateStructured.mockRejectedValueOnce(new Error("Selected model unavailable."));
+    providerFactory.mockReturnValueOnce(selected.provider);
+    const preferred = catalogEntry({ id: "openrouter/test/preferred" });
+    const alternative = catalogEntry({ id: "openrouter/test/alternative" });
+    const intelligence = new OpenRouterIntelligenceProvider({
+      apiKey: "test-key",
+      entries: [preferred, alternative],
+      policy: "free",
+      modelId: preferred.id,
+      strictModel: true,
+    });
+
+    const result = await intelligence.complete({
+      role: "interpret",
+      system: "system",
+      prompt: "prompt",
+      schema: { type: "object" },
+    });
+
+    expect(result).toMatchObject({ ok: false, usage: { model: preferred.id } });
+    expect(providerFactory).toHaveBeenCalledTimes(1);
+    expect(providerFactory).toHaveBeenCalledWith(
+      "test-key",
+      expect.objectContaining({ modelId: preferred.id, fallbackModels: [preferred.id] }),
+    );
   });
 
   it("hard-stops a provider that ignores abort and falls back to another model", async () => {

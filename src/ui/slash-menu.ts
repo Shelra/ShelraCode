@@ -41,6 +41,7 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   { id: "review", label: "review", description: "Review recent changes" },
   { id: "verify", label: "verify", description: "Run local verification" },
   { id: "skills", label: "skills", description: "Manage skills" },
+  { id: "memory", label: "memory", description: "Show what Shelra has learned about this project" },
   { id: "btw", label: "btw", description: "Ask a side question without interrupting" },
   { id: "update", label: "update", description: "Update ShelraCode to the latest version" },
 ];

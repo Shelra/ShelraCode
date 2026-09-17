@@ -46,6 +46,51 @@ afterEach(() => {
 });
 
 describe("acceptance workspace paths", () => {
+  it("resolves benchmark-owned oracle placeholders without hard-coding the target path", async () => {
+    const root = workspace();
+    const commands: Array<{ command: string; cwd: string; env?: Record<string, string> }> = [];
+    const report = await evaluateAcceptance(
+      [
+        {
+          id: "oracle",
+          description: "External oracle passes",
+          required: true,
+          check: {
+            kind: "command_succeeds",
+            command: "bun run {{benchmarkRoot}}/bench/oracle.ts",
+          },
+        },
+      ],
+      { workspace: root, benchmarkRoot: join(root, "benchmark root"), attempt: 1 },
+      {
+        ...deps,
+        runCommand: async (command, options) => {
+          commands.push({ command, cwd: options.cwd, env: options.env });
+          return {
+            command,
+            cwd: options.cwd,
+            state: "completed",
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            durationMs: 0,
+            timedOut: false,
+            truncated: false,
+          };
+        },
+      },
+    );
+
+    expect(report.passed).toBe(true);
+    expect(commands[0]?.command).toContain("oracle.ts");
+    expect(commands[0]?.command).not.toContain("{{benchmarkRoot}}");
+    expect(commands[0]?.cwd).toBe(root);
+    expect(commands[0]?.env).toMatchObject({
+      SHELRA_BENCH_WORKSPACE: root,
+      SHELRA_BENCH_ROOT: join(root, "benchmark root"),
+    });
+  });
+
   it("checks model-emitted absolute paths inside the workspace", async () => {
     const root = workspace();
     const file = join(root, "index.html");

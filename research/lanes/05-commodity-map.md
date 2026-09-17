@@ -626,3 +626,508 @@ the incumbents have taken everything to the left of it.
     checks a shipped change against the intent that motivated it. Lane 07 (observability) should be asked
     directly whether OpenTelemetry-era tooling plus agent hooks is enough to close it, or whether that
     remains genuinely unbuilt.
+
+---
+
+## Second wave (2026-09-14)
+
+**Question for this wave:** across Claude Code, Codex, Cursor, Cline, OpenCode, Gemini CLI and Aider, what
+specifically happens to *project-level* continuity — not user preferences — across a gap of months? This
+goes deep on the gap flagged in §8 point 2 ("nobody ships a 'what did I leave half-done in this repository'
+ledger") and open question 11.
+
+**Cutoff:** 14 September 2026. Every statement below was **re-fetched** on 14–15 September 2026; nothing
+from the 8 September pass was assumed to still hold, and two findings below show it did not. A small number
+of artefacts (Codex `0.155.0-alpha.5/6`, Cline `sdk/v0.0.83`, `desktop-v0.0.28`, `cli-v3.0.62`) carry
+publish timestamps of 2026-09-15 UTC; they are recorded with their true dates rather than suppressed.
+
+**Source-hygiene note (acting on the lane-12 warning):** this wave did not use `doc.jarvisuni.com` or
+`codex-docs.com`, and neither appeared in the original report. Because the coordinator flagged Codex
+documentation impersonation, every load-bearing Codex claim here was additionally verified against
+`developers.openai.com` and the `openai/codex` GitHub repository. The repo's own `docs/config.md`,
+`docs/slash_commands.md` and `docs/agents_md.md` are stubs that redirect to `developers.openai.com/codex/...`,
+and the page served at `developers.openai.com/codex/guides/agents-md` carries the HTML title
+"Custom instructions with AGENTS.md | ChatGPT Learn" — i.e. `learn.chatgpt.com` and `developers.openai.com`
+serve the same official OpenAI corpus. The strongest Codex finding in this wave (the 30-day memory horizon)
+is cited from `developers.openai.com`, not from `learn.chatgpt.com`.
+
+---
+
+### S1. What changed since 2026-09-08 (six days)
+
+1. **Cursor shipped the thing this lane said nobody ships.** Cursor Projects launched 2026-09-10, two days
+   after the original report, promising "context over months of work" and a per-Project file set that
+   syncs across machines. It is beta, undocumented outside the changelog, and cloud-first.
+2. **Claude Code shipped 8 releases (v2.1.265–v2.1.272, 2026-09-08 → 2026-09-14) and none of them touched
+   project continuity.** The only memory-adjacent line in the window is a truncation-warning improvement.
+3. **The original report was wrong on two counts.** Claude Code's auto memory *does* distinguish project
+   state from user preference — it has a typed `project` note class the original report did not quote. And
+   Codex local memories are **off by default**, which the original report implied were automatic.
+4. **Cursor's memories documentation is gone.** `cursor.com/docs/memories.md` and
+   `cursor.com/docs/context/memories.md` both 404, and the string "memor" appears nowhere in
+   `cursor.com/llms.txt` except one line in `rules.md` saying models *don't* have memory. The same
+   quiet-deletion pattern as codebase-indexing (§7.3).
+5. **Codex has a documented 30-day forgetting horizon**, in two places, in the official config reference.
+6. **Gemini CLI has an Auto Memory feature** the original report missed: experimental, off by default,
+   human-gated through a `/memory inbox` review queue.
+7. **The decisive finding is a retention sweep, not a feature gap.** Claude Code deletes plan files and task
+   lists after 30 days by default. The artefacts that encode "what I left half-done" are garbage-collected
+   before a months-long gap ends.
+8. **The gap is already being filled by an Apache-2.0 cross-vendor layer** with ~94k GitHub stars, which
+   changes the strategic reading of §8 point 2 from "unserved" to "served by a commodity".
+
+---
+
+### S2. Question 1 — does each system separate *user preference* memory from *project state* memory?
+
+| System | Separate surfaces? | Verdict | The doc language that settles it |
+|---|---|---|---|
+| Claude Code | **Yes — typed** | Distinguishes, but with an explicit derivability carve-out | Auto memory writes four typed notes: "`user`: your role, expertise, and working preferences"; "`feedback`: corrections you give Claude and approaches you confirm"; "**`project`: ongoing work, deadlines, and decisions that Claude can't derive from the code or git history**"; "`reference`: where to find information outside the project". Then: "Claude skips anything it can derive from the codebase, such as architecture, file paths, or debugging fixes." |
+| Codex | **No** | Conflated by construction, and user-global | "The main memory files live under `~/.codex/memories/` and include summaries, durable entries, recent inputs, and supporting evidence from prior chats." No project scoping, no type field documented. Separately: "Keep required team guidance in `AGENTS.md` or checked-in documentation. Treat memories as a helpful recall layer, not as the only source for rules that must always apply." |
+| Cursor (pre-Projects) | **N/A — feature undocumented** | Neither; rules only | `cursor.com/docs/memories.md` → 404. The only memory sentence in the docs corpus: "Large language models don't retain memory between completions. Rules provide persistent, reusable context at the prompt level." |
+| Cursor Projects | **Conflated, deliberately** | One bucket for both | "Agents add research and artifacts, along with what they learn about the codebase **and how you prefer work to be done**." One shared-context file set holds project knowledge and user preference together. |
+| Cline | **Yes — six files** | The cleanest separation of the seven, but it is a methodology, not a feature | `activeContext.md` = "Current focus, recent changes, next steps"; `progress.md` = "What works, what's left, known issues"; `systemPatterns.md` = "Key technical decisions"; `projectbrief.md` = "Source of truth for project scope". Preference lives in `.clinerules`, state lives in `memory-bank/`. |
+| OpenCode | **No memory feature at all** | Rules only | The docs index has no memory page and no session-persistence page. `AGENTS.md`: "This is similar to Cursor's rules." Project vs global scope exists, but for *instructions*: project `AGENTS.md` vs `~/.config/opencode/AGENTS.md`. |
+| Gemini CLI | **Partially** | Global vs project patch targets, but one content class | Auto Memory mines "durable facts, preferences, workflow constraints, and procedural patterns that recur across sessions" — one undifferentiated class. It does split *destinations*: "Private patches target the project memory directory; global patches target only your personal `~/.gemini/GEMINI.md` file." |
+| Aider | **No** | Chat log only | `--chat-history-file` (default `.aider.chat.history.md`) and `--input-history-file`. No memory concept. |
+
+```
+CLAIM: Only two of the seven systems type project state separately from user preference, and in both cases
+       the mechanism excludes exactly the class of fact a months-later resumption needs most.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: Claude Code is the only system with a vendor-shipped, automatically-written, typed `project`
+  memory class. Its docs define it as "ongoing work, deadlines, and decisions that Claude can't derive from
+  the code or git history" — then immediately bound it: "Claude skips anything it can derive from the
+  codebase, such as architecture, file paths, or debugging fixes. It also skips anything your CLAUDE.md
+  files already say." Writing is discretionary: "Claude doesn't save something every session. It decides
+  what's worth remembering based on whether the information would be useful in a future conversation."
+  Cline's Memory Bank types state across six files (`activeContext.md`, `progress.md`, `systemPatterns.md`,
+  `projectbrief.md`, `productContext.md`, `techContext.md`) but ships as copy-paste text: "Copy this into a
+  Cline Rules file (for example, `.clinerules/memory-bank.md`)". The other five conflate or have nothing.
+SOURCE: How Claude remembers your project — Anthropic — fetched 2026-09-14 —
+  https://code.claude.com/docs/en/memory.md ; Memory Bank — Cline — fetched 2026-09-14 —
+  https://docs.cline.bot/best-practices/memory-bank.md — both accessed 2026-09-14
+COUNTEREVIDENCE: The derivability carve-out is defensible engineering, not an oversight — architecture and
+  file paths genuinely are re-derivable, and storing them invites staleness. The real gap is narrower than
+  "project memory": it is *in-flight* state, which is neither a preference nor derivable from the code.
+OPEN QUESTION: What fraction of auto-memory files in the wild actually carry `type: project`? Nobody has
+  published a corpus study, and the files are machine-local by design ("Files are not shared across
+  machines or cloud environments"), so no vendor can measure it either.
+```
+
+---
+
+### S3. Question 2 — does anything persist an active task, a decision log, abandoned approaches, or acceptance status?
+
+Four artefact classes, seven systems. **YES** = persists across sessions as a first-class durable artefact;
+**PARTIAL** = persists but scoped to one session/chat, or requires the user to drive it; **NO** = explicit absence.
+
+| System | Active task / plan | Decision log with rationale | Abandoned approaches | Acceptance / verification status |
+|---|---|---|---|---|
+| Claude Code | PARTIAL — `plans/` on disk, re-injected after compaction, **swept at 30 days** | NO (`project` notes may *incidentally* mention decisions; no structure, no rationale field) | NO | NO |
+| Codex | PARTIAL — `/goal` condition, per-chat only | NO | NO | PARTIAL — goal text *is* the completion criteria, but only while the chat lives |
+| Cursor | PARTIAL — plan file, home dir by default, opt-in "Save to workspace" | NO | NO | NO |
+| Cursor Projects | YES claimed ("months of work") — unverifiable, no docs page | NO (not claimed) | NO (not claimed) | PARTIAL — "brings the finished work back to you to check" |
+| Cline | YES — `activeContext.md` ("next steps") | YES — `progress.md` → "Evolution of project decisions"; `systemPatterns.md` → "Key technical decisions" | PARTIAL — `activeContext.md` → "Active decisions and considerations" | YES — `progress.md` → "What works, what's left, known issues" |
+| OpenCode | NO | NO | NO | NO |
+| Gemini CLI | PARTIAL — `write_todos` in-session; `/resume save <name>` named forks | NO | PARTIAL — named conversation forks | NO |
+| Aider | NO (`.aider.chat.history.md` is a transcript, not a ledger, and is not loaded by default) | NO | NO | NO |
+
+```
+CLAIM: Exactly one of the seven systems persists a decision log with rationale and an acceptance status —
+       and it is not a shipped feature, it is a prompt template the vendor says works on competitors too.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: Cline's Memory Bank is the only design in the seven that names all four artefact classes.
+  `progress.md` is specified to hold "What works / What's left to build / Current status / Known issues /
+  Evolution of project decisions"; `activeContext.md` holds "Current work focus / Recent changes / Next
+  steps / Active decisions and considerations / Learnings and project insights"; `systemPatterns.md` holds
+  "Key technical decisions". But the docs classify it as a methodology, not a capability: "Memory Bank is a
+  documentation methodology that transforms Cline from a stateless assistant into a persistent development
+  partner", installed by "Copy this into a Cline Rules file", driven by typed English commands ("initialize
+  memory bank", "update memory bank", "follow your custom instructions"). Cline's own FAQ makes the
+  non-moat explicit: "Does this work with other AI tools? Yes. Memory Bank is a documentation methodology
+  that works with any AI that can read docs. Commands may differ but the approach works across tools."
+  No other system in the seven documents a decision-rationale artefact at all.
+SOURCE: Memory Bank — Cline — fetched 2026-09-14 — https://docs.cline.bot/best-practices/memory-bank.md —
+  accessed 2026-09-14
+COUNTEREVIDENCE: Memory Bank is user-triggered and therefore unreliable in exactly the scenario this wave
+  asks about: a developer who walks away for three months is, by construction, a developer who did not run
+  "update memory bank" before leaving. The docs concede the maintenance burden — "`activeContext.md`
+  changes most frequently; update it after each session" — which is a discipline requirement, not a
+  guarantee. A ledger that depends on the human remembering to write it is not a solution to the human
+  forgetting.
+OPEN QUESTION: Does any Memory Bank deployment survive contact with a real multi-month gap? The pattern has
+  circulated since early 2025; no longitudinal study of memory-bank drift or accuracy exists.
+```
+
+```
+CLAIM: Claude Code writes the strongest half-done-work artefacts of any first-party system — a plan file
+       and a task list, both on disk — and then deletes them on a 30-day timer by default.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: `~/.claude/` retention: "Claude Code deletes the files in the paths below once they're older than
+  `cleanupPeriodDays`, as long as it can safely determine the retention period. The default is 30 days
+  and the minimum is 1; setting `0` fails with a validation error." The swept paths include, verbatim:
+  `projects/<project>/<session>.jsonl` — "Full conversation transcript: every message, tool call, and tool
+  result"; `projects/<project>/<session>/subagents/` — subagent transcripts; `file-history/<session>/` —
+  "Pre-edit snapshots of files Claude changed, used for checkpoint restore"; `plans/` — "Plan files
+  written during plan mode"; and `tasks/` — "Task lists written by the task tools, one directory per
+  list". Auto memory is the documented exception: "the sweep doesn't delete the memory files in a
+  project's auto memory directory... Claude Code removes that directory only if it has been empty for the
+  whole retention period." One other thing survives indefinitely: `history.jsonl`, "Every prompt you've
+  typed, with timestamp and project path."
+SOURCE: What lives in the `.claude` directory — Anthropic — fetched 2026-09-14 —
+  https://code.claude.com/docs/en/claude-directory.md — accessed 2026-09-14
+COUNTEREVIDENCE: `cleanupPeriodDays` is user-configurable at any settings scope, so a team that cares can
+  set it to 365. And the sweep is a deliberate privacy control, not an oversight — the same page warns
+  "Transcripts and history are not encrypted at rest" and recommends *lowering* the value. The default
+  therefore encodes a real trade-off: continuity versus plaintext-credential exposure. That is the most
+  interesting thing in this wave — project continuity and transcript hygiene are in direct conflict, and
+  every vendor has silently resolved it in favour of hygiene.
+OPEN QUESTION: Would a ledger that stores *derived, redacted* state rather than raw transcripts dissolve
+  the conflict? Nobody has tried to separate the two retention policies.
+```
+
+---
+
+### S4. Question 3 — what is lost across a months-long gap, per each system's own docs
+
+Deliberately restricted to what the vendors state. Inferences are kept out of the table.
+
+| System | What its own docs say is lost | Documented time constant |
+|---|---|---|
+| Claude Code | Transcript, subagent transcripts, spilled tool results, checkpoint snapshots, **plan files**, **task lists**, debug logs, session env metadata, paste/image caches — all deleted by the retention sweep. On resume *within* the window: a tool still running when the process ended "doesn't finish or run again... Claude continues without its output"; `--mcp-config`, `--settings`, `--plugin-dir`, `--fallback-model` and `--add-dir` directories are not restored; an active goal's "turn count, timer, and token-spend baseline reset"; "Background Bash and monitor tasks aren't [restored]"; on the picker and `/resume` routes the stored permission mode is not restored. If the session is over 100K tokens and idle over ~1 hour, resume offers a summary, and "whatever the summary leaves out is no longer in Claude's context". | **30 days** (`cleanupPeriodDays` default); ~1 hour + 100K tokens triggers the summarise-on-resume dialog |
+| Codex | Threads older than the horizon stop being memory inputs, and unused memories stop being consolidated. Transcript persistence is a toggle: `history.persistence` = "save-all \| none". Goal state is per-chat: "Each chat keeps its own context, messages, results, and goal." | **30 days**, twice: `memories.max_rollout_age_days` "Maximum age of threads considered for memory generation. Defaults to 30 and is clamped to 0 - 90"; `memories.max_unused_days` "Maximum days since a memory was last used before it becomes ineligible for consolidation. Defaults to 30 and is clamped to 0 - 365" |
+| Cursor | Not documented. Docs describe recovery-by-search, not retention: "Cursor builds a local search index that scales to thousands of conversations", plus `@Chats` "to reference context from a previous conversation". Plans default to the home directory unless you click "Save to workspace". | **NOT FOUND** — no retention or expiry statement located in the docs corpus |
+| Cline | Not stated as loss; the claim is the opposite, and it is scoped in days: "Even if you close the editor and return **days** later, Cline can pick up where you left off." Implied deletion pressure: "Favorited tasks are protected from deletion." | **NOT FOUND** for a sweep; "days" is the only horizon the docs name |
+| OpenCode | Nothing documented. Sessions are the only unit (`--continue`, `--session <id>`, `--fork`, `opencode session list`, `opencode session delete`). No memory feature, no retention statement. | **NOT FOUND** |
+| Gemini CLI | `gemini -r` "restores your chat history and memory". Deletion is manual and explicit: `x` in the `/resume` browser "permanently deletes the history for that specific conversation"; `/exit --delete` "removes the current session's conversation history and tool output files before exiting". Auto Memory ignores sessions under 10 user messages and any session not idle at least 3 hours. | **3 hours** idle / **10** user messages (eligibility floors); no expiry documented |
+| Aider | The chat log is written into the repository (`.aider.chat.history.md`) but **not loaded**: `--restore-chat-history` — "Restore the previous chat history messages (**default: False**)". Nothing else persists. | n/a — loss is immediate and by default, at every restart |
+
+```
+CLAIM: Two of the three frontier agents have a 30-day forgetting constant written into their defaults, and
+       neither vendor frames it as a continuity decision.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: Claude Code: `cleanupPeriodDays` default 30 days, sweeping transcripts, `plans/` and `tasks/`;
+  framed on a page about disk layout and plaintext storage. Codex: `memories.max_rollout_age_days` default
+  30 (clamped 0-90) and `memories.max_unused_days` default 30 (clamped 0-365); framed as configuration
+  knobs in a reference table. Neither page discusses what happens to a project resumed after the horizon.
+  A developer returning after three months therefore finds, on both systems, that the machine-side record
+  of what was in flight has already expired — while the *prompts they typed* survive indefinitely in
+  Claude Code's `history.jsonl`, and the *preferences* survive in the memory directory the sweep skips.
+  The system preserves who you are and what you asked, and discards what it was doing.
+SOURCE: What lives in the `.claude` directory — Anthropic — fetched 2026-09-14 —
+  https://code.claude.com/docs/en/claude-directory.md ; Codex configuration reference — OpenAI —
+  fetched 2026-09-14 — https://developers.openai.com/codex/config-reference — both accessed 2026-09-14
+COUNTEREVIDENCE: Both constants are configurable, and Codex's is arguably correct for its purpose: a
+  memory derived from a three-month-old thread is a strong staleness risk, and this lane's own evidence
+  (ChainSWE, §4) says accumulated stale state is what kills agents. It is defensible that a *conversational*
+  memory should decay. The gap is that no vendor ships a second, non-decaying store for facts that should
+  not decay — and a design decision does not become wrong merely because it is six months old.
+OPEN QUESTION: Is 30 days empirically right? No vendor publishes a staleness-versus-utility curve for
+  agent memory, and Codex's own clamp ranges (0-90 for one knob, 0-365 for the other) show the vendors do
+  not agree with themselves about the order of magnitude.
+```
+
+```
+CLAIM: Claude Code has shipped a per-fact staleness signal since July 2026 — the only freshness primitive
+       found in any of the seven — but it is a timestamp on a preference note, not on a task.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: "When Claude writes a memory file that begins with YAML frontmatter, Claude Code records the
+  write time in a `modified` frontmatter field as an ISO 8601 timestamp. The timestamp shows how current
+  the fact is, both to you and to Claude when it reads the memory back... The `modified` field requires
+  Claude Code v2.1.214 or later." v2.1.214 published to npm 2026-07-18T00:13:41Z. The changelog states the
+  intent earlier and more plainly, at v2.1.75: "Added last-modified timestamps to memory files, helping
+  Claude reason about which memories are fresh vs. stale." No equivalent exists in Codex, Cursor, Cline,
+  OpenCode, Gemini CLI or Aider: searching each corpus for a per-fact freshness or confidence field
+  returned nothing.
+SOURCE: How Claude remembers your project — Anthropic — fetched 2026-09-14 —
+  https://code.claude.com/docs/en/memory.md ; CHANGELOG.md v2.1.75 and v2.1.214 — Anthropic — fetched
+  2026-09-14 — https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md ; npm publish
+  time for 2.1.214 — https://registry.npmjs.org/@anthropic-ai/claude-code — all accessed 2026-09-14
+COUNTEREVIDENCE: A write timestamp is a weak staleness proxy. It records when the note was written, not
+  whether the underlying fact still holds — the codebase can invalidate a three-day-old note and leave a
+  three-month-old one true. Nothing in the docs connects `modified` to repository state, commit history,
+  or any verification. It is metadata, not validation.
+OPEN QUESTION: Would a memory invalidated by *git evidence* (the file it references changed; the test it
+  cites now passes) outperform a timestamp? No system attempts it and no paper in this lane measures it.
+```
+
+---
+
+### S5. Question 4 — vendor movement since 2026-09-08
+
+There is exactly one, and it arrived two days after the original report.
+
+```
+CLAIM: Cursor shipped "Projects" on 2026-09-10 — the first first-party product in this lane's scope to
+       market continuity across months as its headline claim — and it is beta, cloud-first, and had no
+       documentation page five days later.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: Cursor changelog, dated "Sep 10, 2026", verbatim: "Today we're launching Projects in Cursor.
+  Projects lets you take on larger bodies of work, such as a feature, a migration, or a full app. It
+  maintains context over months of work, delegates tasks to thousands of subagents, and performs
+  recurring work without being prompted." On the mechanism: "You shouldn't have to onboard an agent every
+  time you start a task. Each Project maintains a set of files that sync across every cloud and local
+  machine its agents use. Agents add research and artifacts, along with what they learn about the codebase
+  and how you prefer work to be done. If one agent figures out how to test a service, for example, every
+  future agent can use those instructions. The shared context grows with the Project, making the
+  coordinator more effective over time." On the architecture: "A Project runs on its own computer in the
+  cloud, so closing your laptop doesn't stop it." On maturity: "Projects are available in beta and rolling
+  out to all users starting today." As of 2026-09-15, `cursor.com/docs/projects.md`,
+  `cursor.com/help/ai-features/projects.md` and `cursor.com/docs/agent/projects.md` all return 404, and
+  `cursor.com/llms.txt` lists no Projects page. The changelog entry is the only primary source that exists.
+SOURCE: Cursor Projects — Anysphere — 2026-09-10 — https://cursor.com/changelog/projects — accessed
+  2026-09-15 (also carried at https://cursor.com/changelog)
+COUNTEREVIDENCE: Read precisely, the claim is narrower than a ledger. The persisted content is described as
+  "research and artifacts... what they learn about the codebase and how you prefer work to be done" — that
+  is accumulated *knowledge*, the same category as skills and auto memory, explicitly mixed with user
+  preference. Nothing in the announcement mentions an active task list, a decision record, a rationale, an
+  abandoned approach, or a verification status. And the continuity is bought partly by moving the work to a
+  persistent cloud machine — the agent "remembers" in part because it never stopped. That is a hosting
+  answer to a state question. Whether a Project resumed after a real three-month idle gap recovers anything
+  is untested and unstated.
+OPEN QUESTION: Does a Cursor Project's shared-context file set have a schema, and is it exportable? If it
+  is opaque and cloud-resident, it is the first genuinely non-portable artefact in this lane — which would
+  contradict §8 point 7 and make it the most strategically interesting object in the market.
+```
+
+```
+CLAIM: No other vendor moved. Across the six days after the original report, Claude Code shipped eight
+       releases, Codex a stable minor plus alphas, Gemini CLI a stable release, OpenCode 30 builds and
+       Cline four — and not one entry concerns project continuity.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: Claude Code v2.1.265 (2026-09-08) through v2.1.272 (2026-09-14), eight npm publishes. Grepping
+  that whole window for memory/ledger/decision/continuity yields exactly one relevant line, in v2.1.268:
+  "Improved the MEMORY.md truncation warning to say how many lines were cut and where the cut starts."
+  The Week 37 digest (September 7-11, 2026, v2.1.263-v2.1.269) headlines `claude plugin eval`. Searching
+  the entire 387-version Claude Code changelog for "ledger", "abandoned approach", "unfinished",
+  "half-done", "decision log" and "decision record" returns zero hits. Codex CLI 0.154.0 (2026-09-09)
+  headlines GPT-6-Astra availability and "Experimental worktree support... then browse and resume them";
+  its SDK note is explicit that resume history selection is presentational — "History selection changes the
+  returned response, not model context." Gemini CLI 0.59.0 (2026-09-08) is three security fixes (MCP OAuth
+  SSRF, fail-closed workspace trust, restricted-mode MCP filtering). OpenCode reached 1.18.31 (2026-09-14).
+  Aider's repository `pushed_at` is still 2026-05-22 — unchanged from the original report, now 3.8 months
+  stalled, while its star count rose from 48,832 to 48,966.
+SOURCE: npm registry metadata for @anthropic-ai/claude-code, @openai/codex, opencode-ai and
+  @google/gemini-cli ; Claude Code CHANGELOG.md ; What's new Week 37 —
+  https://code.claude.com/docs/en/whats-new/2026-w37.md ; Codex changelog —
+  https://learn.chatgpt.com/docs/changelog ; Gemini CLI changelog —
+  https://geminicli.com/docs/changelogs/latest/ ; https://api.github.com/repos/Aider-AI/aider — all
+  accessed 2026-09-14/15
+COUNTEREVIDENCE: Six days is a short window, and absence of a changelog line is not absence of work in
+  progress; Cursor Projects itself would have been invisible to this method on 2026-09-09. The claim is
+  about shipped state, not roadmaps.
+OPEN QUESTION: none — this is a direct observation, and it should simply be re-run monthly.
+```
+
+```
+CLAIM: The one continuity primitive that did move cross-vendor in this window is the *conversational
+       summary* — Cline now summarises imported Claude Code, Codex and OpenCode histories on first resume —
+       which confirms that the portable unit of continuity in 2026 is a summary, not a ledger.
+LABEL: OBSERVED TODAY
+CONFIDENCE: high
+EVIDENCE: Cline SDK v0.0.83, published 2026-09-15T05:53:27Z, verbatim: "Sessions imported from Claude
+  Code, Codex, or opencode now summarize the foreign history on first resume rather than replaying tool
+  calls the current agent cannot make. The summary is persisted so it runs once, the canonical transcript
+  is left intact, and a failed attempt falls back to the raw history. Imported sessions also record an
+  import origin that is stamped on their telemetry, and resuming a session no longer overwrites stored
+  import or automation provenance with a default 'user' origin." This is the fourth vendor-to-vendor import
+  path this lane has documented (Codex `/import`, Cursor reading `.claude/`, Copilot reading
+  `.claude/skills`, now Cline importing three competitors' sessions) and the first that moves
+  *conversations* rather than *configuration*.
+SOURCE: cline/cline releases, tag `sdk/sdk/v0.0.83` — Cline — 2026-09-15 —
+  https://api.github.com/repos/cline/cline/releases — accessed 2026-09-15
+COUNTEREVIDENCE: This is arguably evidence *for* a ledger being valuable: the reason foreign history must
+  be summarised is that a raw transcript is not a portable representation of state ("replaying tool calls
+  the current agent cannot make"). A structured ledger would import losslessly. The feature therefore both
+  proves the summary is the current unit and demonstrates why it is the wrong one.
+OPEN QUESTION: If four vendors now read each other's session state, is a de facto interchange format
+  emerging? None of the four documents a schema; all four appear to convert into their own.
+```
+
+---
+
+### S6. The gap is no longer unserved — it is served by an Apache-2.0 commodity
+
+This is the finding that most changes the original report's strategic reading, and it argues *against* this
+lane's own §9 conclusion.
+
+```
+CLAIM: A cross-vendor, hook-driven, typed project-decision ledger already exists as open source, works on
+       at least seven agents including all the incumbents, and is one of the most-starred repositories in
+       this market — so the §8-point-2 gap is a gap in *vendor* products, not in the field.
+LABEL: OBSERVED TODAY
+CONFIDENCE: medium
+EVIDENCE: `thedotmack/claude-mem` (rebranded "Grok Mem"; package name unchanged), Apache-2.0, created
+  2025-08-31, last push 2026-09-13, 93,953 stars — against Aider's 48,966 and SWE-agent's 20,285.
+  Self-description: "Persistent Context Across Sessions for Every Agent - Captures everything your agent
+  does during sessions, compresses it with AI, and injects relevant context back into future sessions.
+  Works with Claude Code, OpenClaw, Codex, Gemini, Hermes, Copilot, OpenCode + More." Architecture from its
+  README: "5 Lifecycle Hooks - SessionStart, UserPromptSubmit, PostToolUse, Stop, SessionEnd"; "SQLite
+  Database - Stores sessions, observations, summaries"; "Chroma Vector Database - Hybrid semantic + keyword
+  search"; four MCP tools in a three-layer retrieval pattern (`search` -> `timeline` -> `get_observations`).
+  Critically, it carries a typed observation vocabulary that includes `decision` — "needle observations
+  (`decision`, `bugfix`, `security_alert`, `sensitive`) are appended as dated `- YYYY-MM-DD [awareness] ...`
+  lines" — i.e. a dated decision log, which no first-party system ships. A web search that surfaced it also
+  named Mnemos, Memorix and AgentHelm as MCP servers positioning on the same job ("architecture decisions,
+  bug root causes, project conventions"), so this is a populated category rather than one project.
+SOURCE: thedotmack/claude-mem repository metadata and README — last push 2026-09-13 —
+  https://api.github.com/repos/thedotmack/claude-mem and
+  https://raw.githubusercontent.com/thedotmack/claude-mem/main/README.md — accessed 2026-09-15 ; category
+  context from web search naming Mnemos, Memorix, AgentHelm — accessed 2026-09-15 (secondary, UNVERIFIED)
+COUNTEREVIDENCE: Three serious ones. (1) Stars measure attention, not adoption or correctness; a
+  93,953-star count on a repo created 12.5 months ago is extraordinary and could not be corroborated with
+  an independent usage metric this pass. (2) Its mechanism is transcript mining — "Captures everything your
+  agent does during sessions, compresses it with AI" — the same derived-summary approach the vendors use,
+  with a richer index; it is not an *authored* ledger with acceptance status, and an observation typed
+  `decision` by an extraction model is not the same thing as a recorded decision with rationale. (3) It is
+  built on hooks and MCP, both already classified COMMODITY here, so it inherits their portability and
+  their fragility when a vendor changes a hook contract. Only the three named competitors were found by a
+  single search; Mnemos, Memorix and AgentHelm were not verified directly.
+OPEN QUESTION: Is any of these layers actually *used* at scale, and does any measurably improve an agent's
+  behaviour after a long gap? No benchmark evaluates cross-session recovery, so the entire category is
+  unfalsified — which is what one would expect of a category whose value is asserted rather than measured.
+```
+
+---
+
+### S7. Contradictions with common belief (this wave)
+
+**1. "Agent memory means the agent remembers your project."**
+Read the docs and it means close to the opposite. Claude Code's memory explicitly "skips anything it can
+derive from the codebase, such as architecture, file paths, or debugging fixes". Codex's memories are a
+user-global store under `~/.codex/memories/` with no documented project scoping, containing "summaries,
+durable entries, recent inputs, and supporting evidence from prior chats". Gemini CLI's Auto Memory targets
+"procedural patterns that **recur across sessions**". All three are optimised for *repeated* facts. A
+half-finished migration is by definition non-recurring, non-derivable and unique — the exact shape of fact
+every one of these memory systems is designed to filter out.
+
+**2. "The state is preserved; you just have to resume the session."**
+On Claude Code the session transcript, the plan file, the task list, the subagent transcripts and the
+checkpoint snapshots are all deleted at 30 days by default. On Codex, threads older than 30 days stop
+feeding memory generation and memories unused for 30 days stop being consolidated. On Aider, the history
+file is written into your repository and then *not loaded* — `--restore-chat-history` defaults to `False`.
+The default posture of this industry is to forget, and it is documented on pages about disk hygiene and
+privacy rather than on pages about memory.
+
+**3. "Cursor has memories."** — this lane said so on 2026-09-08 and it is no longer supportable.
+`cursor.com/docs/memories.md` and `cursor.com/docs/context/memories.md` both 404; the string "memor" does
+not occur anywhere in `cursor.com/llms.txt` except one line in `rules.md`, which says models *lack* memory:
+"Large language models don't retain memory between completions. Rules provide persistent, reusable context
+at the prompt level." Cursor's documented answer to "what did I leave half-done" is now full-text search —
+"Cursor builds a local search index that scales to thousands of conversations" — plus `@Chats` to pull a
+prior conversation in by hand. This is the second time Cursor has silently retired a capability this lane
+tracked (codebase indexing was the first, §7.3), and the pattern deserves a name: **Cursor deletes the
+documentation for features it is de-emphasising rather than deprecating them loudly.** Any competitive map
+built from Cursor's docs has a short half-life, including this one.
+
+**4. "A new entrant could win on cross-session state."**
+That was this lane's own closing recommendation on 2026-09-08, and this wave weakens it. The best
+decision-log design in the market is a copy-paste prompt template whose vendor advertises that it "works
+with any AI that can read docs". The most popular implementation is Apache-2.0 with ~94k stars, built
+entirely on hooks and MCP — two capabilities this lane already classified COMMODITY. And the second-largest
+incumbent shipped a beta of it within two days of this lane declaring the space empty. The *problem* is
+real; the *moat* around it looks no better than the moats around skills or hooks.
+
+---
+
+### S8. Problems nobody is talking about (this wave)
+
+**1. Project continuity and transcript hygiene are in direct conflict, and hygiene has already won.**
+Claude Code's retention page recommends *lowering* `cleanupPeriodDays`, in a section headed "Plaintext
+storage": "Transcripts and history are not encrypted at rest... If a tool reads a `.env` file or a command
+prints a credential, that value is written to `projects/<project>/<session>.jsonl`." The same sweep that
+protects you from a leaked credential destroys your plan file and your task list. Nobody has proposed
+separating the two policies — a durable, derived, redacted state store with a long horizon, alongside a
+short-lived raw transcript. The retention knob is single-valued, and it is pointed at security.
+
+**2. Every system's continuity unit is the conversation; none is the repository.**
+Codex: "Each chat keeps its own context, messages, results, and goal", and "Codex CLI treats the directory
+where you start it as the project for the chat... The CLI doesn't expose the ChatGPT Projects view."
+OpenCode: sessions only, no memory feature anywhere in the docs index. Gemini CLI: `/resume` browses
+conversations. Cursor: search across transcripts. Cline: task history with per-task resume. The repository
+— the thing that actually persists, that the team shares, that outlives every session — is a *lookup key*
+for conversations in all seven, never a first-class carrier of state. Claude Code comes closest (its
+auto-memory directory is keyed by git repository and shared across worktrees) and still stores it in
+`~/.claude`, machine-local, with the docs stating plainly: "Files are not shared across machines or cloud
+environments." **Project state is per-developer-per-machine everywhere in this market.** A teammate
+inherits none of it, and neither does your own second laptop.
+
+**3. Freshness is timestamped but never validated.**
+Claude Code is alone in stamping facts with a `modified` ISO 8601 time so that "the timestamp shows how
+current the fact is". Nothing anywhere connects a stored fact to repository evidence. No system records
+"this note refers to `src/auth.ts@abc123`, which has since changed 14 times", or "the test this decision
+cited now passes", or "the branch this plan targeted was merged in June". Git is sitting right there
+already holding the invalidation signal, and no memory system reads it. Staleness is treated as a function
+of clock time when it is plainly a function of code change.
+
+**4. The completion predicate is stored in the most volatile place available.**
+Codex's `/goal` makes the goal text "both the first prompt and the completion criteria", and its guidance
+asks for "Verification: Add tests, measurements, or review criteria that prove the work is complete".
+Claude Code restores an active goal on resume but "resets the turn count, timer, and token-spend baseline",
+and the goal lives inside a session transcript the sweep deletes at 30 days. So the one artefact in this
+whole market that states *what done means* — the closest thing to an acceptance predicate any of these
+systems produce — has the shortest lifetime of anything they persist. Preferences outlive it. Typed
+prompts outlive it. The definition of done does not.
+
+**5. Nobody can measure any of this, including the vendors.**
+Claude Code's auto memory is machine-local by design; Codex's lives under `~/.codex` as "generated state"
+users are told not to hand-edit; Gemini CLI's inbox is local and human-gated. No telemetry crosses the
+boundary, so no vendor can answer "how often does a `project` note help a resumption three months later",
+and no benchmark in §4's list — SWE-bench Pro, Terminal-Bench 4.0, SWE Atlas, SWE-Cycle, SWE-EVO,
+ChainSWE — contains a task that resumes anything. ChainSWE comes closest and holds the scaffold fixed by
+design. **The most-cited failure mode in this lane (48% of downstream failures caused by accumulated
+state) has no evaluation that exercises a resumption at all.**
+
+---
+
+### S9. Revised classification
+
+Two rows of §3's commodity map change, and two new rows are added.
+
+| Capability | Was (2026-09-08) | Now (2026-09-14) | Why |
+|---|---|---|---|
+| Procedural / auto memory | COMMODITY | **COMMODITY (confirmed, and narrower than believed)** | Five of seven ship something (Claude Code on by default; Codex off by default; Gemini CLI experimental and off; Cline as methodology; Cursor now undocumented). All target recurring facts with derivable content excluded. Cursor's removal shows it is commoditised to the point of being retractable. |
+| Cross-session / accumulated-state management | DIFFERENTIABLE — open, "nobody" | **CONTESTED — no longer empty** | Cursor Projects (2026-09-10, beta, cloud-first); Cline Memory Bank (methodology, portable by the vendor's own statement); claude-mem/Grok Mem (Apache-2.0, ~94k stars, cross-vendor via hooks + MCP, typed `decision` observations). |
+| *(new)* Project-state retention policy | — | **UNSERVED** | Every system has exactly one retention knob, defaulted for privacy (30 days on Claude Code and Codex), sweeping plans and task lists along with raw transcripts. No system separates derived project state from raw transcript retention, and the conflict is documented on the vendor's own page. |
+| *(new)* Evidence-based staleness invalidation | — | **UNSERVED / RESEARCH-STAGE** | One system stamps write time (`modified`, Claude Code v2.1.214, 2026-07-18). None invalidates a stored fact against git history, test results, or code change. |
+
+The honest net effect on this lane's answer to "what should a new company not build": **"a memory feature"
+was already on the do-not-build list and stays there, more firmly.** "Cross-session project state" moves off
+the clean-differentiator list and onto a watch list — the *problem* is real and unsolved, but a beta from
+the second-largest incumbent and a 94k-star Apache-2.0 implementation both arrived before this lane finished
+describing it. What remains genuinely unserved is narrower and less glamorous than "memory": a retention
+policy that distinguishes derived state from raw transcripts, and an invalidation mechanism driven by
+repository evidence rather than a clock.
+
+---
+
+### S10. Open questions for a third wave
+
+12. **Does Cursor Projects' shared-context file set have an exportable schema?** If yes, it is another
+    portable commodity; if it is opaque and cloud-only, it is the first non-portable artefact this lane has
+    found and it contradicts §8 point 7. Settle it once a Projects docs page exists.
+13. **What actually survives a 90-day gap, measured rather than read?** Nobody has run the experiment: work
+    for a week on one repository in each of the seven, wait past every documented horizon, resume, and
+    score what the agent can still tell you about the in-flight work. Cheap, falsifiable, and it would be
+    the first empirical data in a field currently arguing entirely from documentation.
+14. **Is claude-mem's ~94k star count real adoption?** Corroborate with npm download counts or independent
+    telemetry. If it is, the most popular artefact in the coding-agent ecosystem is a third-party memory
+    layer, which is a market signal nobody has written up.
+15. **Would git-evidence invalidation beat timestamp staleness?** The primitive is trivial (store the blob
+    SHA a note depends on; flag the note when it changes) and nobody ships it. If it works it belongs in
+    the "stays hard" column; if it does not, that is a useful negative result for lane 11.
+16. **Why did Cursor delete its memories documentation?** Deprecation, rename, absorption into Projects, or
+    quiet failure? The answer decides whether "agent memory" is commoditising or actually *retreating*,
+    which are opposite strategic signals. Compare against the codebase-indexing precedent.
+17. **Is a session-interchange format emerging?** Codex `/import`, Cursor reading `.claude/`, Copilot
+    reading `.claude/skills`, and now Cline summarising foreign Claude Code / Codex / OpenCode histories.
+    Four vendors read each other's state and none documents a schema. If a de facto format is forming,
+    whoever writes down its spec captures the position `agentskills.io` captured for skills.

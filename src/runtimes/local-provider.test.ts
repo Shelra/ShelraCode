@@ -148,4 +148,48 @@ describe("OpenAI-compatible tool protocol", () => {
 
     expect(requests[0]?.reasoning).toBeUndefined();
   });
+
+  it("aborts a model request that never produces a response", async () => {
+    let aborted = false;
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const signal = init?.signal;
+      return await new Promise<Response>((_resolve, reject) => {
+        if (!signal) {
+          reject(new Error("The test fetch did not receive an abort signal."));
+          return;
+        }
+
+        const onAbort = () => {
+          aborted = true;
+          reject(signal.reason ?? new Error("aborted"));
+        };
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+      });
+    };
+
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: fetchImpl,
+    });
+    const response = provider.stream({
+      modelId: "test-model",
+      system: "Be helpful.",
+      messages: [{ role: "user", content: "do not answer" }],
+      maxSteps: 1,
+      timeout: { totalMs: 150, stepMs: 150, chunkMs: 100 },
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of response.events) {
+          // drain
+        }
+        await response.response;
+      })(),
+    ).rejects.toThrow();
+    expect(aborted).toBe(true);
+  });
 });

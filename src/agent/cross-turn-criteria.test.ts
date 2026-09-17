@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import type {
   ProviderAdapter,
@@ -21,9 +21,10 @@ import type {
  * because an earlier turn once published criteria.
  */
 
-const { upsertObjectiveIndex, executeEventHooksMock } = vi.hoisted(() => ({
+const { upsertObjectiveIndex, executeEventHooksMock, loadPersistedPlanStateMock } = vi.hoisted(() => ({
   upsertObjectiveIndex: vi.fn(),
   executeEventHooksMock: vi.fn<(input: HookInput) => Promise<AggregatedHookResult>>(),
+  loadPersistedPlanStateMock: vi.fn(),
 }));
 
 vi.mock("../storage/index", () => ({
@@ -37,6 +38,7 @@ vi.mock("../storage/index", () => ({
   getSessionTotalTokens: vi.fn(() => 0),
   getUsageCostSinceMicros: vi.fn(() => 0),
   listSessionUsage: vi.fn(() => []),
+  loadPersistedPlanState: loadPersistedPlanStateMock,
   loadTranscript: vi.fn(() => []),
   loadTranscriptState: vi.fn(() => ({ messages: [], seqs: [] })),
   recordCheckpoint: vi.fn(),
@@ -181,6 +183,38 @@ class FullyScriptedProvider implements ProviderAdapter {
 }
 
 describe("cross-turn acceptance-criteria tracking", () => {
+  beforeEach(() => {
+    loadPersistedPlanStateMock.mockReset();
+    loadPersistedPlanStateMock.mockReturnValue(null);
+  });
+
+  it("restores persisted criteria and progress when an agent process reopens the session", () => {
+    const ac1 = { id: "AC1", description: "Conversation survives restart", verification: "restart test" };
+    loadPersistedPlanStateMock.mockReturnValue(planResult([ac1]).plan);
+
+    const resumed = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider: new FullyScriptedProvider([]),
+      session: "latest",
+    });
+
+    expect(resumed.getVerificationStatus().criteria).toEqual([ac1]);
+    expect(resumed.getPlanState()?.steps[0]).toMatchObject({ title: "Step" });
+  });
+
+  it("does not leak a previous session's intent into a new session", () => {
+    const ac1 = { id: "AC1", description: "Only belongs to session one", verification: "inspect session" };
+    loadPersistedPlanStateMock.mockReturnValue(planResult([ac1]).plan);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider: new FullyScriptedProvider([]),
+    });
+    expect(agent.getVerificationStatus().criteria).toEqual([ac1]);
+
+    loadPersistedPlanStateMock.mockReturnValue(null);
+    agent.startNewSession();
+
+    expect(agent.getVerificationStatus().criteria).toBeNull();
+  });
+
   it("keeps an earlier turn's criteria visible to a later turn that makes no mutations", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const ac1 = { id: "AC1", description: "Clock ticks every second", verification: "curl and observe" };

@@ -30,6 +30,7 @@ function createScheduleToolSet(overrides?: {
 
   const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
     scheduleManager: scheduleManager as never,
+    toolGroups: { schedules: true },
   });
 
   return {
@@ -88,34 +89,52 @@ describe("schedule daemon tools", () => {
     });
   });
 
-  it("blocks canonical file mutations until the agent publishes its executable plan", async () => {
+  it("normalizes loosely shaped plans from weaker models instead of rejecting them", async () => {
     const tools = createTools(new BashTool("/tmp"), {} as never, "agent") as Record<
       string,
       { execute: (input: unknown, context?: unknown) => Promise<unknown> }
     >;
 
-    const result = (await tools.write_file.execute({ path: "should-not-exist.txt", content: "no" }, {})) as {
-      success: boolean;
-      output: string;
-    };
+    const result = (await tools.generate_plan.execute(
+      {
+        title: "Slugify",
+        goal: "slugify works",
+        acceptanceCriteria: ["tests pass", { description: "lowercases", verification: "bun test" }],
+        steps: ["Implement slugify", { title: "Run tests", satisfies: ["AC1"] }],
+      },
+      {},
+    )) as { success: boolean; plan: { summary: string; acceptanceCriteria: unknown[]; steps: unknown[] } };
 
-    expect(result.success).toBe(false);
-    expect(result.output).toContain("Executable plan required");
+    expect(result.success).toBe(true);
+    expect(result.plan.summary).toBe("slugify works");
+    expect(result.plan.acceptanceCriteria).toEqual([
+      { id: "AC1", description: "tests pass", verification: "Run the project's relevant check and observe it pass" },
+      { id: "AC2", description: "lowercases", verification: "bun test" },
+    ]);
+    expect(result.plan.steps).toEqual([
+      { title: "Implement slugify", description: "Implement slugify", satisfies: [], status: "pending" },
+      { title: "Run tests", description: "Run tests", satisfies: ["AC1"], status: "pending" },
+    ]);
   });
 
-  it("blocks delete_file the same way as write_file/edit_file until a plan is published", async () => {
-    const tools = createTools(new BashTool("/tmp"), {} as never, "agent") as Record<
+  it("lets canonical file mutations proceed without a published plan", async () => {
+    // The plan is guidance the prompt asks for on non-trivial work, not a gate: blocking every
+    // edit behind a nested plan schema made mid-tier models fumble the schema and give up
+    // (observed 2026-09-17). Verification, not planning, is what the host enforces.
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "grok-tools-noplan-"));
+    const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
       string,
       { execute: (input: unknown, context?: unknown) => Promise<unknown> }
     >;
 
-    const result = (await tools.delete_file.execute({ path: "should-not-be-deleted.txt" }, {})) as {
+    const result = (await tools.write_file.execute({ path: "created.txt", content: "yes" }, {})) as {
       success: boolean;
       output: string;
     };
 
-    expect(result.success).toBe(false);
-    expect(result.output).toContain("Executable plan required");
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("Created created.txt");
+    await rm(cwd, { recursive: true, force: true });
   });
 
   it("checkpoints a file immediately before delete_file removes it", async () => {
@@ -169,11 +188,6 @@ describe("schedule daemon tools", () => {
       string,
       { execute: (input: unknown, context?: unknown) => Promise<unknown> }
     >;
-    const blockedBeforePlan = (await round1.write_file.execute({ path: "a.txt", content: "one" }, {})) as {
-      success: boolean;
-    };
-    expect(blockedBeforePlan.success).toBe(false);
-
     await round1.generate_plan.execute(
       {
         title: "Write a file",
@@ -195,41 +209,10 @@ describe("schedule daemon tools", () => {
     >;
     const result = (await round2.write_file.execute({ path: "a.txt", content: "two" }, {})) as { success: boolean };
     expect(result.success).toBe(true);
-
-    await rm(cwd, { recursive: true, force: true });
-  });
-
-  it("still requires a fresh plan across independent createTools calls when no planState is shared", async () => {
-    // The fallback used for one-shot tool sets (e.g. a delegated sub-agent's single call) that
-    // don't pass planState — proves the fix above is opt-in via the reference, not a global relax.
-    const cwd = await mkdtemp(path.join(os.tmpdir(), "grok-tools-planstate-"));
-
-    const first = createTools(new BashTool(cwd), {} as never, "agent") as Record<
-      string,
-      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
-    >;
-    await first.generate_plan.execute(
-      {
-        title: "Write a file",
-        summary: "Write it.",
-        goal: "a.txt exists.",
-        requirements: ["a.txt is created"],
-        acceptanceCriteria: [{ id: "AC1", description: "File exists", verification: "read it back" }],
-        steps: [{ title: "Write it", description: "Create a.txt", filePaths: ["a.txt"], satisfies: ["AC1"] }],
-      },
-      {},
-    );
-
-    const second = createTools(new BashTool(cwd), {} as never, "agent") as Record<
-      string,
-      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
-    >;
-    const result = (await second.write_file.execute({ path: "a.txt", content: "two" }, {})) as {
+    const update = (await round2.update_plan_step.execute({ index: 1, status: "working" }, {})) as {
       success: boolean;
-      output: string;
     };
-    expect(result.success).toBe(false);
-    expect(result.output).toContain("Executable plan required");
+    expect(update.success).toBe(true);
 
     await rm(cwd, { recursive: true, force: true });
   });
@@ -373,6 +356,7 @@ describe("schedule daemon tools", () => {
     const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
       runTask,
       subagents: [],
+      toolGroups: { desktop: true },
     }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown>; description?: string }>;
 
     expect(tools).toHaveProperty("computer_screenshot");
@@ -536,7 +520,7 @@ describe("memory tools", () => {
         hook: "Memory writes work before generate_plan",
         type: "decisions",
         description: "Proves memory_write isn't behind the write_file/edit_file plan gate",
-        body: "Body text.",
+        body: "The decision and its reasoning, kept long enough to be a real memory entry.",
       },
       {},
     )) as { success: boolean };
@@ -558,7 +542,7 @@ describe("memory tools", () => {
         hook: "This turned out to be wrong",
         type: "decisions",
         description: "A decision later superseded",
-        body: "Body text.",
+        body: "The decision and its reasoning, kept long enough to be a real memory entry.",
       },
       {},
     );
@@ -608,7 +592,7 @@ describe("memory tools", () => {
         hook: "hook",
         type: "decisions",
         description: "description",
-        body: "body",
+        body: "A durable note kept long enough to count as a real memory entry.",
       },
       {},
     );

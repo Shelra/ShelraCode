@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { ProviderAdapter } from "../providers/types";
+import type { ProviderAdapter, ProviderTimeout } from "../providers/types";
 import { containsEncryptedReasoning } from "./reasoning";
 
 export interface CompactionSettings {
@@ -538,6 +538,7 @@ async function summarizeConversation(
   previousSummary?: string,
   promptOverride?: string,
   signal?: AbortSignal,
+  timeout?: ProviderTimeout,
 ): Promise<string> {
   const serialized = serializeConversation(messages);
   const promptParts = [serialized];
@@ -558,6 +559,7 @@ async function summarizeConversation(
     system: SUMMARIZATION_SYSTEM_PROMPT,
     prompt: promptParts.filter(Boolean).join("\n\n"),
     signal,
+    timeout,
     temperature: 0.2,
     maxOutputTokens: Math.max(512, Math.floor(reserveTokens * 0.8)),
   });
@@ -571,6 +573,7 @@ export async function generateCompactionSummary(
   preparation: PreparedCompaction,
   customInstructions?: string,
   signal?: AbortSignal,
+  timeout?: ProviderTimeout,
 ): Promise<string> {
   const { messagesToSummarize, turnPrefixMessages, isSplitTurn, previousSummary, settings } = preparation;
 
@@ -586,6 +589,7 @@ export async function generateCompactionSummary(
             previousSummary,
             undefined,
             signal,
+            timeout,
           )
         : Promise.resolve(previousSummary?.trim() || ""),
       summarizeConversation(
@@ -597,6 +601,7 @@ export async function generateCompactionSummary(
         undefined,
         TURN_PREFIX_SUMMARIZATION_PROMPT,
         signal,
+        timeout,
       ),
     ]);
 
@@ -615,5 +620,6 @@ export async function generateCompactionSummary(
     previousSummary,
     undefined,
     signal,
+    timeout,
   );
 }

@@ -33,13 +33,19 @@ export interface GeneratedRecap extends AuxiliaryResult {
   recap: string;
 }
 
-export async function generateTitle(provider: ProviderAdapter, userMessage: string): Promise<GeneratedTitle> {
+export async function generateTitle(
+  provider: ProviderAdapter,
+  userMessage: string,
+  signal?: AbortSignal,
+): Promise<GeneratedTitle> {
   const modelId = provider.defaultModelId ?? provider.resolveModelRuntime("default").modelId;
   try {
     const result = await provider.generateText({
       modelId,
       system: TITLE_INSTRUCTIONS,
       prompt: userMessage,
+      timeout: { totalMs: 30_000, stepMs: 30_000, chunkMs: 15_000 },
+      signal,
       temperature: 0.5,
       maxOutputTokens: 60,
     });
@@ -60,6 +66,7 @@ export async function generateRecap(
       modelId,
       system: RECAP_INSTRUCTIONS,
       prompt: transcript,
+      timeout: { totalMs: 10_000, stepMs: 10_000, chunkMs: 5_000 },
       signal,
       temperature: 0.3,
       maxOutputTokens: 120,

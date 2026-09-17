@@ -83,7 +83,52 @@ function encodePowerShellCommand(command: string): string {
   return Buffer.from(`${POWERSHELL_PRELUDE}${command}${POWERSHELL_EPILOGUE}`, "utf16le").toString("base64");
 }
 
+/**
+ * Windows PowerShell 5.1 has no `&&`/`||` pipeline-chain operators (PowerShell 7 does). Models
+ * write `cd x && bun test` constantly regardless of instructions, and in 5.1 that is a parse
+ * error before anything runs. Rewrite a top-level `&&` chain into the equivalent `$?`-guarded
+ * sequence; anything with quoting or operators this splitter does not understand is left alone.
+ */
+export function translateForWindowsPowerShell(command: string): string {
+  if (!command.includes("&&")) return command;
+  const segments: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index] as string;
+    if (quote) {
+      current += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "`") {
+      current += char + (command[index + 1] ?? "");
+      index += 1;
+      continue;
+    }
+    if (char === "&" && command[index + 1] === "&") {
+      segments.push(current);
+      current = "";
+      index += 1;
+      continue;
+    }
+    if (char === "|" && command[index + 1] === "|") return command;
+    current += char;
+  }
+  segments.push(current);
+  if (quote || segments.length < 2 || segments.some((segment) => segment.trim() === "")) return command;
+  const trimmed = segments.map((segment) => segment.trim());
+  return trimmed.reduceRight((rest, segment) => (rest ? `${segment}; if ($?) { ${rest} }` : segment), "");
+}
+
 function powerShellInvocation(file: string, command: string): ShellInvocation {
+  const isWindowsPowerShell5 = /powershell\.exe$/iu.test(file) || file === "powershell.exe";
+  const effective = isWindowsPowerShell5 ? translateForWindowsPowerShell(command) : command;
   return {
     file,
     args: [
@@ -95,7 +140,7 @@ function powerShellInvocation(file: string, command: string): ShellInvocation {
       "-OutputFormat",
       "Text",
       "-EncodedCommand",
-      encodePowerShellCommand(command),
+      encodePowerShellCommand(effective),
     ],
     kind: "powershell",
   };

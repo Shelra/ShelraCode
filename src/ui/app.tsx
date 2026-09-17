@@ -8,6 +8,7 @@ import type { KernelState } from "../agent/kernel";
 import { POPULAR_MCP_CATALOG } from "../mcp/catalog";
 import { parseEnvLines, parseHeaderLines } from "../mcp/parse-headers";
 import { toMcpServerId, validateMcpServerConfig } from "../mcp/validate";
+import { formatMemoryForChat } from "../memory/report";
 import { projectMemoryScope, readMemoryIndex } from "../memory/store";
 import {
   getEffectiveReasoningEffort,
@@ -1499,19 +1500,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       // Usage stays in runtime accounting; "Step N" never enters the chat presentation.
       onStepStart: syncKernelState,
       onStepFinish: syncKernelState,
-      onResearch: (info) => {
-        recordActivity({
-          id: `research:${runId}`,
-          kind: "research",
-          status: info.success ? "complete" : "failed",
-          label: "Repository research",
-          detail: `${info.provider} | ${info.sourceCount} source${info.sourceCount === 1 ? "" : "s"}`,
-          source: "runtime",
-          operation: "research",
-          at: info.timestamp,
-        });
-        syncKernelState();
-      },
       onToolStart: (info) => {
         recordActivity({
           id: `tool:${runId}:${info.toolCall.id}`,
@@ -2760,6 +2748,16 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
             {
               type: "assistant",
               content: formatSkillsForChat(discoverSkills(agent.getCwd()), agent.getCwd()),
+              timestamp: new Date(),
+            },
+          ]);
+          break;
+        case "memory":
+          setMessages((p) => [
+            ...p,
+            {
+              type: "assistant",
+              content: formatMemoryForChat(agent.getCwd()),
               timestamp: new Date(),
             },
           ]);

@@ -8,16 +8,43 @@
 
 import { spawn } from "node:child_process";
 import { allocateLogPath, BoundedCapture, DEFAULT_CAPTURE_CHARS, RunLog } from "./logging";
+import { measureProcessTreeMb } from "./memory";
 import {
   buildShellInvocation,
   createShellErrorFilter,
   killProcessTree,
+  killProcessTreeSync,
   type ShellPreference,
   spawnOptions,
 } from "./shell";
 import type { CommandOutcome, CommandState } from "./types";
 
 export const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
+/**
+ * Resident-memory ceiling for a command's whole process tree. Agent-written code under test
+ * can allocate without bound (a benchmark oracle reached 22 GB on 2026-09-17 and took the
+ * machine down before its wall-clock timeout mattered); the tree is killed at this size.
+ */
+export const DEFAULT_COMMAND_MEMORY_MB = 6_144;
+/** ~450 ms of CIM query per poll on Windows; 3 s keeps the watchdog cheap while a 1 GB/s runaway stays bounded. */
+export const DEFAULT_MEMORY_POLL_MS = 3_000;
+
+/** Children still running; killed on process exit so a crash never leaves orphans behind. */
+const activeChildren = new Set<number>();
+let exitSweepInstalled = false;
+function trackChild(pid: number | undefined): () => void {
+  if (!pid) return () => {};
+  activeChildren.add(pid);
+  if (!exitSweepInstalled) {
+    exitSweepInstalled = true;
+    process.once("exit", () => {
+      for (const child of activeChildren) killProcessTreeSync(child);
+    });
+  }
+  return () => {
+    activeChildren.delete(pid);
+  };
+}
 
 export interface RunCommandOptions {
   command: string;
@@ -38,6 +65,10 @@ export interface RunCommandOptions {
   maxCapturedChars?: number;
   /** Set false to skip writing a log file (in-memory capture only). */
   log?: boolean;
+  /** Process-tree resident-memory ceiling in MB; 0 disables. Defaults to 6 GB. */
+  maxMemoryMb?: number;
+  /** How often the tree is measured against the ceiling. */
+  memoryPollMs?: number;
 }
 
 function buildEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
@@ -54,6 +85,8 @@ function buildEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
 export async function runCommand(options: RunCommandOptions): Promise<CommandOutcome> {
   const cwd = options.cwd ?? process.cwd();
   const timeoutMs = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
+  const maxMemoryMb = options.maxMemoryMb ?? DEFAULT_COMMAND_MEMORY_MB;
+  const memoryPollMs = options.memoryPollMs ?? DEFAULT_MEMORY_POLL_MS;
   const captureLimit = options.maxCapturedChars ?? DEFAULT_CAPTURE_CHARS;
   const startedAt = Date.now();
 
@@ -119,11 +152,16 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
     let settled = false;
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
     let forceTimer: ReturnType<typeof setTimeout> | undefined;
-    let killedReason: "timeout" | "abort" | null = null;
+    let memoryTimer: ReturnType<typeof setInterval> | undefined;
+    let untrack: () => void = () => {};
+    let killedReason: "timeout" | "abort" | "memory" | null = null;
+    let peakMemoryMb = 0;
 
     const cleanup = (): void => {
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (forceTimer) clearTimeout(forceTimer);
+      if (memoryTimer) clearInterval(memoryTimer);
+      untrack();
       options.signal?.removeEventListener("abort", onAbort);
     };
 
@@ -177,8 +215,48 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
         settle("killed", null, false, "\nProcess tree killed by abort signal.");
         return;
       }
+      if (killedReason === "memory") {
+        settle(
+          "killed",
+          null,
+          false,
+          `\nProcess tree killed after exceeding the ${maxMemoryMb} MB memory ceiling (observed ${Math.round(peakMemoryMb)} MB).`,
+        );
+        return;
+      }
       settle("completed", code, false);
     });
+
+    untrack = trackChild(child.pid);
+    if (maxMemoryMb > 0 && child.pid) {
+      const rootPid = child.pid;
+      let measuring = false;
+      memoryTimer = setInterval(() => {
+        if (measuring || settled || killedReason) return;
+        measuring = true;
+        void measureProcessTreeMb(rootPid)
+          .then((usedMb) => {
+            peakMemoryMb = Math.max(peakMemoryMb, usedMb);
+            if (usedMb > maxMemoryMb && !killedReason) {
+              killedReason = "memory";
+              void killProcessTree(rootPid, 500);
+              forceTimer = setTimeout(
+                () =>
+                  settle(
+                    "killed",
+                    null,
+                    false,
+                    `\nProcess tree kill after exceeding the ${maxMemoryMb} MB memory ceiling timed out.`,
+                  ),
+                5_000,
+              );
+            }
+          })
+          .finally(() => {
+            measuring = false;
+          });
+      }, memoryPollMs);
+    }
 
     if (timeoutMs > 0 && Number.isFinite(timeoutMs)) {
       timeoutTimer = setTimeout(() => {

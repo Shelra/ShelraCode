@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   BashTool,
   getSandboxMutationBlockReason,
+  parseStandaloneCd,
   shouldRunOnHostInSandboxMode,
   wrapCommandForShuru,
   wrapHostBrowserCommand,
@@ -340,5 +341,39 @@ describe("BashTool sandbox state", () => {
       sandboxSettings: { allowNet: false },
     });
     expect(netOff.getToolDescription()).toContain("network is disabled");
+  });
+});
+
+describe("cd stays inside the workspace", () => {
+  it("allows moving within the workspace and refuses to leave it", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bash-root-"));
+    fs.mkdirSync(path.join(root, "src"), { recursive: true });
+    const tool = new BashTool(root);
+    expect((await tool.execute("cd src")).success).toBe(true);
+    expect(tool.getCwd()).toBe(path.join(root, "src"));
+    expect((await tool.execute("cd ..")).success).toBe(true);
+    expect(tool.getCwd()).toBe(root);
+    const escaped = await tool.execute("cd ../../../");
+    expect(escaped.success).toBe(false);
+    expect(escaped.error).toContain("outside the workspace root");
+    expect(tool.getCwd()).toBe(root);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe("parseStandaloneCd", () => {
+  it("recognizes a bare cd with plain or quoted directories", () => {
+    expect(parseStandaloneCd("cd src")).toBe("src");
+    expect(parseStandaloneCd("  cd   ../lib  ")).toBe("../lib");
+    expect(parseStandaloneCd('cd "My Project"')).toBe("My Project");
+    expect(parseStandaloneCd("cd 'a b'")).toBe("a b");
+  });
+
+  it("leaves compound commands that merely start with cd to the shell", () => {
+    expect(parseStandaloneCd("cd src && bun test")).toBeNull();
+    expect(parseStandaloneCd("cd src; ls")).toBeNull();
+    expect(parseStandaloneCd("cd src | more")).toBeNull();
+    expect(parseStandaloneCd("cdrom")).toBeNull();
+    expect(parseStandaloneCd("bun test")).toBeNull();
   });
 });

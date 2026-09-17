@@ -18,6 +18,16 @@ export interface ProviderModelRuntime {
   prefersResponses?: boolean;
 }
 
+/** Provider-neutral timeout policy passed to AI SDK compatible runtimes. */
+export interface ProviderTimeout {
+  /** Maximum time for the complete generation, including tool steps. */
+  totalMs?: number;
+  /** Maximum time allowed for one model step. */
+  stepMs?: number;
+  /** Maximum silence between streamed chunks. */
+  chunkMs?: number;
+}
+
 export interface ProviderStreamRequest {
   modelId: string;
   system: string;
@@ -33,6 +43,7 @@ export interface ProviderStreamRequest {
    * callers are expected to have already checked capability before setting this.
    */
   reasoningEffort?: ReasoningEffort;
+  timeout?: ProviderTimeout;
   signal?: AbortSignal;
   onStepStart?: (stepNumber: number) => void;
   onStepFinish?: (event: { stepNumber: number; finishReason: string; usage: ProviderUsage }) => void;
@@ -59,6 +70,7 @@ export interface ProviderTextRequest {
   prompt: string;
   maxOutputTokens?: number;
   temperature?: number;
+  timeout?: ProviderTimeout;
   signal?: AbortSignal;
 }
 
@@ -82,6 +94,7 @@ export interface ProviderStructuredRequest {
   schemaDescription?: string;
   maxOutputTokens?: number;
   temperature?: number;
+  timeout?: ProviderTimeout;
   signal?: AbortSignal;
 }
 
@@ -115,4 +128,6 @@ export interface ProviderAdapter {
   /** Optional capability; structured-output consumers must check for it. */
   generateStructured?(request: ProviderStructuredRequest): Promise<ProviderStructuredResult>;
   getToolContext(): ProviderToolContext;
+  /** Optional human-readable routing decisions made at runtime (e.g. quarantined upstream providers). */
+  routingNotes?(): string[];
 }

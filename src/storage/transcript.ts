@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai";
 import { getCompactionSummaryText } from "../agent/compaction";
-import type { ChatEntry, ToolCall, ToolResult } from "../types/index";
+import { resolvePlanResults } from "../plans/state";
+import type { ChatEntry, Plan, ToolCall, ToolResult } from "../types/index";
 import { getDatabase, withTransaction } from "./db";
 import { extractToolResultFromOutput, getOutputKind, isOutputSuccess } from "./tool-results";
 import { buildEffectiveTranscript, type LoadedTranscriptState, type PersistedCompaction } from "./transcript-view";
@@ -276,6 +277,33 @@ export function buildChatEntries(sessionId: string): ChatEntry[] {
   }
 
   return entries;
+}
+
+/**
+ * Loads plan state from the complete immutable tool-result history, rather than
+ * the compacted transcript view. This keeps structured acceptance criteria and
+ * step progress recoverable after both process restart and context compaction.
+ */
+export function loadPersistedPlanState(sessionId: string): Plan | null {
+  const rows = getDatabase()
+    .prepare(`
+    SELECT tr.output_json
+    FROM tool_results tr
+    JOIN tool_calls tc ON tc.id = tr.tool_call_row_id
+    WHERE tc.session_id = ?
+    ORDER BY tc.message_seq ASC, tr.id ASC
+  `)
+    .all(sessionId) as Array<{ output_json: string }>;
+
+  return resolvePlanResults(
+    rows.map((row) => {
+      try {
+        return JSON.parse(row.output_json) as ToolResult;
+      } catch {
+        return null;
+      }
+    }),
+  );
 }
 
 function getNextSequence(db: ReturnType<typeof getDatabase>, sessionId: string): number {
