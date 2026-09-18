@@ -4,6 +4,7 @@ import { dirname } from "path";
 import { summarizeDiagnostics, syncFileWithLsp } from "../lsp/runtime";
 import type { LspDiagnosticFile } from "../lsp/types";
 import { resolveWorkspacePath } from "../security/workspace-guard";
+import { dominantLineEnding, normalizeLineEndings, restoreLineEndings } from "./line-endings";
 
 export interface FileDiff {
   filePath: string;
@@ -116,7 +117,14 @@ export async function editFile(
       return { success: false, output: `File not found: ${filePath}` };
     }
     const before = readFileSync(full, "utf-8");
-    const count = before.split(oldString).length - 1;
+    let count = before.split(oldString).length - 1;
+    // A CRLF checkout and an LF snippet from the model are the common case on Windows: match on
+    // normalized text and write the file's own endings back.
+    const ending = dominantLineEnding(before);
+    const normalizedBefore = normalizeLineEndings(before);
+    const normalizedOld = normalizeLineEndings(oldString);
+    const useNormalized = count === 0 && normalizedBefore !== before;
+    if (useNormalized) count = normalizedBefore.split(normalizedOld).length - 1;
 
     if (count === 0) {
       return { success: false, output: `old_string not found in ${filePath}` };
@@ -128,7 +136,13 @@ export async function editFile(
       };
     }
 
-    const after = before.replace(oldString, newString);
+    // Function replacers: a literal replacement must never expand `$&`-style patterns.
+    const after = useNormalized
+      ? restoreLineEndings(
+          normalizedBefore.replace(normalizedOld, () => normalizeLineEndings(newString)),
+          ending,
+        )
+      : before.replace(oldString, () => newString);
     writeFileSync(full, after, "utf-8");
 
     const diff = computeDiff(filePath, before, after);

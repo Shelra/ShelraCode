@@ -8,6 +8,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   MEMORY_TYPES,
@@ -84,6 +85,24 @@ export function projectMemoryScope(workspace: string): MemoryScope {
 
 export function agentMemoryScope(workspace: string, agentName: string): MemoryScope {
   return { kind: "agent", workspace, agentName };
+}
+
+/**
+ * User-wide memory: preferences and standing rules that hold in every project, stored under
+ * `~/.shelra/memory` (`SHELRA_USER_MEMORY_ROOT` overrides the root, for tests and portable setups).
+ * The user should never have to teach the same preference to each repository.
+ */
+export function userMemoryScope(home = process.env.SHELRA_USER_MEMORY_ROOT || homedir()): MemoryScope {
+  return { kind: "user", workspace: home };
+}
+
+/** Records from the user-wide store, marked so retrieval and reports say where they apply. */
+export function listUserMemoryRecords(): MemoryRecord[] {
+  try {
+    return listMemoryRecords(userMemoryScope()).map((record) => ({ ...record, origin: "user" as const }));
+  } catch {
+    return [];
+  }
 }
 
 export function isMemoryType(value: unknown): value is MemoryType {

@@ -163,6 +163,7 @@ function WorkspaceFixture({ state, t: dark = defaultDark }: { state: "working" |
         reasoningEffort="high (auto)"
         verificationStatus={verificationStatus}
         memoryStatus={{ entryCount: 3, capacityRatio: 0.12 }}
+        memoryContext={null}
       />
     </box>
   );
@@ -284,6 +285,7 @@ describe("VERIFICATION section with many long criteria", () => {
         reasoningEffort="high (auto)"
         verificationStatus={verificationStatus}
         memoryStatus={{ entryCount: 0, capacityRatio: 0 }}
+        memoryContext={null}
       />,
       { width: 40, height: 40 },
     );
@@ -360,6 +362,7 @@ describe("VERIFICATION section with many long criteria", () => {
         reasoningEffort="high (auto)"
         verificationStatus={verificationStatus}
         memoryStatus={{ entryCount: 0, capacityRatio: 0 }}
+        memoryContext={null}
       />,
       { width: 40, height: 40 },
     );
@@ -554,6 +557,7 @@ describe("AGENTS sidebar section under collapse", () => {
         reasoningEffort="high (auto)"
         verificationStatus={null}
         memoryStatus={{ entryCount: 0, capacityRatio: 0 }}
+        memoryContext={null}
       />,
       { width: 40, height: 40 },
     );

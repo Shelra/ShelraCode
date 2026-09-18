@@ -23,7 +23,7 @@ import { buildMcpToolSet } from "../mcp/runtime";
 import { admitCandidates, extractUserDirectives, reflectOnTurn, type TurnCommand } from "../memory/reflection";
 import { buildMemoryContext, type MemoryContext } from "../memory/retrieval";
 import { promoteProceduresToSkills } from "../memory/skills";
-import { listMemoryRecords, projectMemoryScope, recordMemoryUse } from "../memory/store";
+import { listMemoryRecords, listUserMemoryRecords, projectMemoryScope, recordMemoryUse } from "../memory/store";
 import {
   type BudgetLimits,
   type BudgetScope,
@@ -37,6 +37,7 @@ import { getModelInfo, getSupportedReasoningEfforts, normalizeModelId } from "..
 import { BASE_URL_ENV, MAX_TOKENS_ENV } from "../product/identity";
 import { generateRecap as genRecap, generateTitle as genTitle, normalizeRecap } from "../providers/auxiliary";
 import { normalizeModelMessages } from "../providers/messages";
+import { isProviderStreamIdleError } from "../providers/stream";
 import type { ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import {
@@ -117,6 +118,7 @@ import {
 import { DelegationManager } from "./delegations";
 import { AgentKernel, type KernelPhase, type KernelState } from "./kernel";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
+import { extractRequirements, isRequirementDense } from "./requirements";
 import { describeVerificationEvidence } from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
 
@@ -415,7 +417,11 @@ Current working directory: ${cwd}`;
  */
 function memoryContextFor(cwd: string, query: string, paths: readonly string[] = []): MemoryContext {
   try {
-    return buildMemoryContext(listMemoryRecords(projectMemoryScope(cwd)), { text: query, paths }, cwd);
+    return buildMemoryContext(
+      [...listMemoryRecords(projectMemoryScope(cwd)), ...listUserMemoryRecords()],
+      { text: query, paths },
+      cwd,
+    );
   } catch {
     return { text: "", expanded: [], listed: [] };
   }
@@ -2133,6 +2139,14 @@ export class Agent {
     let overflowRecoveryLevel = 0;
     let verificationRetries = 0;
     let emptyResponseRetries = 0;
+    // Requirement audit, one round per turn: when the request enumerates several behaviors, a
+    // green run is evidence only for the behaviors the executed tests exercise. Measured on the
+    // core suite 2026-09-17 (qwen3-coder-30b, run #11): all three failures were tasks whose prompt
+    // listed five to eight behaviors; the model's own checks passed while the benchmark's hidden
+    // tests failed on behaviors nothing had exercised.
+    const requirementChecklist = isRequirementDense(userMessage) ? extractRequirements(userMessage) : [];
+    let requirementAudit: { mutations: number; evidence: number } | null = null;
+    let turnMutationEvents = 0;
 
     try {
       while (true) {
@@ -2140,6 +2154,7 @@ export class Agent {
         let reasoningPreview = "";
         let encryptedReasoningHidden = false;
         let streamOk = false;
+        let idleAbort = false;
         let closeMcp: (() => Promise<void>) | undefined;
         let stepNumber = -1;
         let lastStepProducedOutput = false;
@@ -2304,8 +2319,10 @@ export class Agent {
               case "tool-result": {
                 const tc = part.toolCall;
                 const tr = toToolResult(part.output);
-                if (tr.success && tr.diff?.filePath) this.kernel?.recordMutation(tr.diff.filePath);
-                else this.kernel?.recordObservation(`${tc.function.name}: ${tr.output}`);
+                if (tr.success && tr.diff?.filePath) {
+                  this.kernel?.recordMutation(tr.diff.filePath);
+                  turnMutationEvents += 1;
+                } else this.kernel?.recordObservation(`${tc.function.name}: ${tr.output}`);
                 if (tr.success && tr.plan?.acceptanceCriteria?.length) {
                   this.activeAcceptanceCriteria = tr.plan.acceptanceCriteria;
                   this.activePlanSteps = tr.plan.steps;
@@ -2404,6 +2421,12 @@ export class Agent {
               }
 
               case "error": {
+                // A silent upstream was cut by the idle watchdog: retry the step below instead
+                // of presenting a transient failure as the end of the turn.
+                if (isProviderStreamIdleError(part.error) && emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES) {
+                  idleAbort = true;
+                  break;
+                }
                 // A provider may surface a context failure as a stream event
                 // before `stream.response` rejects. Route it through the same
                 // recovery ladder without exposing a transient raw error to
@@ -2440,6 +2463,7 @@ export class Agent {
                 yield { type: "content", content: "\n\n[Cancelled]" };
                 break;
             }
+            if (idleAbort) break;
           }
 
           if (signal.aborted) {
@@ -2461,8 +2485,21 @@ export class Agent {
             );
           }
           try {
-            const response = (await stream.response) as { messages: ModelMessage[] };
-            if (!signal.aborted) {
+            const response = idleAbort ? null : ((await stream.response) as { messages: ModelMessage[] });
+            if (idleAbort) {
+              // The stream went silent and was cut. Tool work already done is on disk but not in
+              // the transcript; asking again lets the model rediscover it from the workspace.
+              emptyResponseRetries += 1;
+              this.kernel?.recordObservation(
+                `Model stream stalled with no output; retrying the step (${emptyResponseRetries}/${MAX_EMPTY_RESPONSE_RETRIES}).`,
+              );
+              this.persistKernelIndex();
+              if (emptyResponseRetries > 1) {
+                this.messages.push({ role: "user", content: EMPTY_RESPONSE_CONTINUATION });
+                this.messageSeqs.push(null);
+              }
+              emptyStepRetry = true;
+            } else if (response && !signal.aborted) {
               const roundMessages = sanitizeModelMessages(response.messages);
               // An assistant step that produced neither text nor a tool call is not a result —
               // it is a provider or model failure (seen live 2026-09-17: an upstream provider
@@ -2561,7 +2598,13 @@ export class Agent {
 
           const mutations = this.kernel?.snapshot().mutations ?? [];
           const mutatedThisTurn = mutations.length > 0;
-          if (mutatedThisTurn && this.turnVerificationEvidence.length === 0) {
+          // A fix made in answer to the requirement audit is as unverified as the first write
+          // until something runs again.
+          const unverifiedSinceAudit =
+            requirementAudit !== null &&
+            turnMutationEvents > requirementAudit.mutations &&
+            this.turnVerificationEvidence.length === requirementAudit.evidence;
+          if (mutatedThisTurn && (this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)) {
             const criteria = this.activeAcceptanceCriteria ?? [];
             const criteriaList = criteria
               .map((c) => `- ${c.id}: ${c.description} (verify: ${c.verification})`)
@@ -2569,15 +2612,20 @@ export class Agent {
 
             if (verificationRetries < MAX_VERIFICATION_RETRIES) {
               verificationRetries += 1;
+              const blockedLine = unverifiedSinceAudit
+                ? "Completion blocked: you changed files after your last verification run and nothing has run since."
+                : criteria.length > 0
+                  ? "Completion blocked: none of your stated acceptance criteria have been verified yet."
+                  : `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`;
               const nudge =
                 criteria.length > 0
                   ? [
-                      "Completion blocked: none of your stated acceptance criteria have been verified yet.",
+                      blockedLine,
                       "You wrote files and re-reading them is not verification — actually perform the verification method for each criterion below (make a real request, run the real command, observe the real output), then report what you actually observed for each one:",
                       criteriaList,
                     ].join("\n")
                   : [
-                      `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`,
+                      blockedLine,
                       "Run the project's real checks for what you changed (its tests, build, type-check, or a real request against the running app), fix anything that fails, then report exactly which commands you ran and what they printed.",
                       `Changed: ${mutations.join(", ")}`,
                     ].join("\n");
@@ -2602,6 +2650,22 @@ export class Agent {
             };
             yield { type: "done" };
             return;
+          }
+
+          if (mutatedThisTurn && requirementChecklist.length > 0 && requirementAudit === null) {
+            requirementAudit = { mutations: turnMutationEvents, evidence: this.turnVerificationEvidence.length };
+            const audit = [
+              "Before you finish, audit the request requirement by requirement. It states:",
+              ...requirementChecklist.map((requirement, index) => `${index + 1}. ${requirement}`),
+              "For each numbered item, list every distinct behavior it names. For each behavior, name the code that implements it and the test or command that exercised exactly that behavior, with the output you observed. A behavior nothing exercised is unverified: exercise it now with a real run (a scratch script you delete afterwards, or a new test file when the request allows adding tests; never edit existing tests), fix what fails, run again, and only then report. Do not report done while any stated behavior is unverified.",
+            ].join("\n");
+            this.messages.push({ role: "user", content: audit });
+            this.messageSeqs.push(null);
+            this.kernel?.recordObservation(
+              `Requirement audit requested for ${requirementChecklist.length} stated requirement(s).`,
+            );
+            this.persistKernelIndex("Auditing the stated requirements");
+            continue;
           }
 
           const stopInput: StopHookInput = {

@@ -1528,6 +1528,26 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         });
         syncKernelState();
       },
+      // What the memory engine did with this turn, in the live tree: the user sees learning
+      // happen (or not) instead of trusting that it does.
+      onMemory: (info) => {
+        recordActivity({
+          id: `memory:${runId}:${info.timestamp}`,
+          kind: "memory",
+          status: info.error ? "failed" : "complete",
+          label:
+            info.written.length > 0
+              ? `Memory updated · ${info.written.length} entr${info.written.length === 1 ? "y" : "ies"}`
+              : info.qualified
+                ? "Memory reviewed · nothing new"
+                : "Memory unchanged",
+          detail: info.error ?? (info.written.length > 0 ? info.written.join(", ") : info.reason),
+          source: "runtime",
+          operation: "memory",
+          at: info.timestamp,
+        });
+        syncKernelState();
+      },
       onError: (info) => {
         recordActivity({
           id: `error:${runId}:${info.timestamp}`,
@@ -4115,6 +4135,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
               )}
               verificationStatus={agent.getVerificationStatus()}
               memoryStatus={memoryStatus}
+              memoryContext={agent.getLastMemoryContext()}
             />
           ) : null}
         </box>

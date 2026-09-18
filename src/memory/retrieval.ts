@@ -177,7 +177,7 @@ export function buildMemoryContext(
 
   const lines: string[] = [
     "PROJECT MEMORY:",
-    "Saved findings from earlier work in this project. Entries below are ranked for this request; trust human and observed sources over inferences, and re-verify anything marked stale. Read others with memory_read before re-investigating from scratch.",
+    "Saved findings from earlier work in this project. Entries below are ranked for this request; trust human and observed sources over inferences, and re-verify anything marked stale. Entries marked user-wide are the user's own preferences and hold in every project. Read others with memory_read before re-investigating from scratch.",
   ];
   for (const item of expanded) {
     const meta = item.record.entry.frontmatter.metadata;
@@ -185,7 +185,7 @@ export function buildMemoryContext(
     const stale = item.stale ? ` — MAY BE STALE: ${item.staleReason}` : "";
     lines.push(
       "",
-      `### ${item.record.index.title} (${item.record.slug}; ${meta.type}; ${provenance}${stale})`,
+      `### ${item.record.index.title} (${item.record.slug}; ${meta.type}; ${provenance}${item.record.origin === "user" ? "; user-wide" : ""}${stale})`,
       item.record.entry.body.trim(),
     );
   }
@@ -193,7 +193,7 @@ export function buildMemoryContext(
     lines.push("", "Other saved entries:");
     for (const item of listed) {
       lines.push(
-        `- ${item.record.index.title} (${item.record.index.file}) — ${item.record.index.hook}${item.stale ? " [may be stale]" : ""}`,
+        `- ${item.record.index.title} (${item.record.index.file}) — ${item.record.index.hook}${item.record.origin === "user" ? " [user-wide]" : ""}${item.stale ? " [may be stale]" : ""}`,
       );
     }
   }

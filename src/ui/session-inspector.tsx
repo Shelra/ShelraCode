@@ -1,6 +1,7 @@
 import type React from "react";
 import type { AgentContextSummary } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
+import type { MemoryContext } from "../memory/retrieval";
 import type {
   DelegationRun,
   Plan,
@@ -329,6 +330,8 @@ interface WorkspaceSidebarProps {
   reasoningEffort: string;
   verificationStatus: VerificationStatus | null;
   memoryStatus: MemoryStatus;
+  /** What retrieval injected into the latest turn, so recall is visible rather than assumed. */
+  memoryContext: MemoryContext | null;
 }
 
 export function WorkspaceSidebar({
@@ -354,8 +357,10 @@ export function WorkspaceSidebar({
   reasoningEffort,
   verificationStatus,
   memoryStatus,
+  memoryContext,
 }: WorkspaceSidebarProps) {
   const status = completionStatus(kernel, isProcessing);
+  const gateObservation = lastGateObservation(kernel);
   const innerWidth = Math.max(16, width - 4);
   const completedForegroundAgents = activities.filter(
     (event) => event.kind === "agent" && event.status === "complete",
@@ -530,6 +535,7 @@ export function WorkspaceSidebar({
           {kernel?.verificationDetails ? (
             <text fg={t.textMuted}>{normalizeText(kernel.verificationDetails)}</text>
           ) : null}
+          {gateObservation ? <text fg={t.accent}>{normalizeText(gateObservation)}</text> : null}
           {verificationStatus?.criteria?.length ? (
             <box paddingTop={1} flexDirection="column">
               {verificationStatus.criteria.map((criterion) => {
@@ -556,6 +562,11 @@ export function WorkspaceSidebar({
               <SidebarFact t={t} label="Entries" value={String(memoryStatus.entryCount)} />
               <ContextBar t={t} ratio={memoryStatus.capacityRatio} width={Math.min(18, innerWidth)} />
               <SidebarFact t={t} label="Capacity" value={`${Math.round(memoryStatus.capacityRatio * 100)}%`} />
+              {memoryContext && memoryContext.expanded.length > 0 ? (
+                <text fg={t.textDim}>{normalizeText(`Recalled: ${memoryContext.expanded.join(", ")}`)}</text>
+              ) : (
+                <text fg={t.textMuted}>{"Nothing recalled for the latest turn."}</text>
+              )}
             </>
           ) : (
             <text fg={t.textMuted}>{"No project memory saved yet."}</text>
@@ -1254,6 +1265,16 @@ function criterionMarkSymbol(mark: CriterionMark): string {
 }
 
 /** Honest summary line beneath the criteria list — never claims more linkage than actually happened. */
+/** The most recent host gate message (verification block or requirement audit), if any. */
+function lastGateObservation(kernel: KernelState | null): string | null {
+  if (!kernel) return null;
+  for (let index = kernel.observations.length - 1; index >= 0; index -= 1) {
+    const observation = kernel.observations[index];
+    if (observation.startsWith("Completion gate") || observation.startsWith("Requirement audit")) return observation;
+  }
+  return null;
+}
+
 function verificationEvidenceSummaryLine(status: VerificationStatus): string {
   const total = status.criteria?.length ?? 0;
   if (status.evidenceCount === 0) return "No verification action observed this turn";

@@ -93,7 +93,9 @@ export interface MemoryEntry {
 /** Project memory is shared; agent memory is scoped to one named agent and never appears in the project index. */
 export type MemoryScope =
   | { kind: "project"; workspace: string }
-  | { kind: "agent"; workspace: string; agentName: string };
+  | { kind: "agent"; workspace: string; agentName: string }
+  /** User-wide preferences and standing rules; `workspace` is the user's home directory. */
+  | { kind: "user"; workspace: string };
 
 export interface MemoryIndexEntry {
   /** Human-readable title, used as the markdown link text. */
@@ -164,4 +166,6 @@ export interface MemoryRecord {
   slug: string;
   index: MemoryIndexEntry;
   entry: MemoryEntry;
+  /** Set when the record comes from the user-wide store rather than this project. */
+  origin?: "user";
 }

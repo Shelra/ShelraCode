@@ -97,3 +97,105 @@ export async function* normalizeProviderEvents(stream: AsyncIterable<unknown>): 
     }
   }
 }
+
+/** Raised into the stream when the provider sends nothing for longer than the idle budget. */
+export class ProviderStreamIdleError extends Error {
+  readonly idleMs: number;
+  constructor(idleMs: number) {
+    super(`The model stream sent nothing for ${Math.round(idleMs / 1000)}s; the request was aborted.`);
+    this.name = "ProviderStreamIdleError";
+    this.idleMs = idleMs;
+  }
+}
+
+export function isProviderStreamIdleError(error: unknown): error is ProviderStreamIdleError {
+  return (
+    error instanceof ProviderStreamIdleError || (error as { name?: string } | null)?.name === "ProviderStreamIdleError"
+  );
+}
+
+const DEFAULT_STREAM_IDLE_MS = 180_000;
+
+/** Idle budget between stream parts: SHELRA_STREAM_IDLE_MS, 0 to disable, default 3 minutes. */
+export function streamIdleTimeoutMs(): number {
+  const raw = process.env.SHELRA_STREAM_IDLE_MS;
+  if (raw === undefined || raw.trim() === "") return DEFAULT_STREAM_IDLE_MS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_STREAM_IDLE_MS;
+}
+
+/**
+ * Cuts a provider stream that stops producing parts. Seen live 2026-09-17: an upstream
+ * provider accepted a request, executed nothing, and kept the connection open; without a
+ * watchdog the turn sat idle until the benchmark's 20-minute task timeout. On idle, the
+ * controller is aborted (which releases the HTTP request) and one error part is emitted so the
+ * caller can retry the step instead of waiting on a response that will never come.
+ */
+export async function* withIdleWatchdog(
+  source: AsyncIterable<unknown>,
+  idleMs: number,
+  controller: AbortController,
+): AsyncIterable<unknown> {
+  if (idleMs <= 0) {
+    yield* source;
+    return;
+  }
+  const iterator = source[Symbol.asyncIterator]();
+  try {
+    while (true) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<{ idle: true }>((resolveIdle) => {
+        timer = setTimeout(() => resolveIdle({ idle: true }), idleMs);
+      });
+      const next = iterator.next().then((result) => ({ idle: false as const, result }));
+      // If the timer wins, this pending read settles later (or never); it must not surface as
+      // an unhandled rejection when the abort tears the stream down.
+      next.catch(() => undefined);
+      const outcome = await Promise.race([next, idle]);
+      if (timer) clearTimeout(timer);
+      if (outcome.idle) {
+        const error = new ProviderStreamIdleError(idleMs);
+        controller.abort(error);
+        yield { type: "error", error };
+        return;
+      }
+      if (outcome.result.done) return;
+      yield outcome.result.value;
+    }
+  } finally {
+    // Do not await: a source suspended inside a hung read would never settle its return().
+    const closing = iterator.return?.();
+    if (closing) closing.catch(() => undefined);
+  }
+}
+
+/** Minimal view of an AI SDK step for loop detection; only the fields this check reads. */
+export interface LoopStepView {
+  toolCalls?: ReadonlyArray<{ toolName: string; input: unknown }>;
+  toolResults?: ReadonlyArray<{ output?: unknown; result?: unknown }>;
+}
+
+const LOOP_WINDOW = 6;
+
+/**
+ * True when the last steps only repeat tool calls the turn already made, with identical results.
+ * Seen live 2026-09-17 (qwen3-coder-30b, task 01 of the core suite): after finishing, the model
+ * emitted "Task complete" summaries each ending in one more `bun test`, `ls` or `read_file`,
+ * 96 steps and 250K tokens until the step cap. A step that calls something new, or gets a new
+ * result, is progress and never trips this; six consecutive steps of pure repetition do.
+ */
+export function isRepeatingToolLoop(steps: ReadonlyArray<LoopStepView>): boolean {
+  if (steps.length < LOOP_WINDOW + 1) return false;
+  const signature = (step: LoopStepView): string[] =>
+    (step.toolCalls ?? []).map((call, index) => {
+      const result = step.toolResults?.[index];
+      const output = result === undefined ? undefined : (result.output ?? result.result);
+      return JSON.stringify([call.toolName, call.input, output]);
+    });
+  const window = steps.slice(-LOOP_WINDOW);
+  const earlier = new Set(steps.slice(0, -LOOP_WINDOW).flatMap(signature));
+  return window.every((step) => {
+    const calls = signature(step);
+    return calls.length > 0 && calls.every((call) => earlier.has(call));
+  });
+}

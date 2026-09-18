@@ -13,8 +13,19 @@ function assert(condition: unknown, message: string): void {
   if (!condition) fail(message);
 }
 
+/** JSON with object keys sorted at every level: deep equality must not depend on insertion order. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(
+          Object.entries(item as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        )
+      : item,
+  );
+}
+
 function equal<T>(actual: T, expected: T, message: string): void {
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (canonical(actual) !== canonical(expected)) {
     fail(`${message}. expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
   }
 }
@@ -235,15 +246,23 @@ async function checkRouterIntegration(): Promise<void> {
   equal(user.status, 200, "user status");
   equal(await user.json(), { id: "Ada Lovelace", verbose: true }, "user body");
 
-  const created = await api.handle(
-    new Request("http://bench.test/users", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Lin" }),
-    }),
-  );
+  const createLin = () =>
+    api.handle(
+      new Request("http://bench.test/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "Lin" }),
+      }),
+    );
+  const created = await createLin();
   equal(created.status, 201, "create status");
-  equal(await created.json(), { id: "new", name: "Lin" }, "create body");
+  // The prompt asks for "a deterministic created record", not a particular id: the record must
+  // carry the posted name and an id, and the same request must produce the same record.
+  const createdBody = (await created.json()) as { id?: unknown; name?: unknown };
+  equal(createdBody.name, "Lin", "create body name");
+  assert(createdBody.id !== undefined && createdBody.id !== null, "create body must include an id");
+  const createdAgain = await (await createLin()).json();
+  equal(createdAgain, createdBody, "create body must be deterministic for the same request");
 
   const missing = await api.handle(new Request("http://bench.test/missing"));
   equal(missing.status, 404, "missing status");

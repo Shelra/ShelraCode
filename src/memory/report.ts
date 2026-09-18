@@ -1,5 +1,11 @@
 import { detectStaleness } from "./retrieval";
-import { listMemoryRecords, projectMemoryScope, readMemoryHistory, readReflectionAudit } from "./store";
+import {
+  listMemoryRecords,
+  listUserMemoryRecords,
+  projectMemoryScope,
+  readMemoryHistory,
+  readReflectionAudit,
+} from "./store";
 
 /**
  * Plain-text view of a project's memory for the `/memory` command: what Shelra has learned, how
@@ -41,6 +47,16 @@ export function formatMemoryForChat(workspace: string, now = Date.now()): string
       }
       lines.push("");
     }
+  }
+  const userRecords = listUserMemoryRecords();
+  if (userRecords.length > 0) {
+    lines.push(
+      `User-wide memory (${userRecords.length} entr${userRecords.length === 1 ? "y" : "ies"}) — holds in every project:`,
+    );
+    for (const record of userRecords) {
+      lines.push(`- ${record.index.title} (${record.slug}) — ${record.index.hook}`);
+    }
+    lines.push("");
   }
   const history = readMemoryHistory(scope, 8);
   if (history.length > 0) {

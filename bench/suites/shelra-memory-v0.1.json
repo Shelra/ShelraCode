@@ -4,13 +4,13 @@
   "oracleMode": "benchmark-owned",
   "seed": "shelra-memory-v0.1",
   "config": {
-    "purpose": "Prove that persistent project memory improves a later session: phase A discovers an undocumented codegen step; phase B must apply it after a schema change, once with the memory phase A produced and once with it wiped.",
+    "purpose": "Prove that persistent project memory improves a later session: phase A/C discovers an undocumented codegen step; phase B/D must apply it after a source change, once with the memory the learn phase produced and once with it wiped. Two independent traps (schema codegen, i18n catalog).",
     "subject": "agent_memory",
     "modelRole": "controlled_variable",
     "workspaceMode": "phase_b_copies_phase_a_workspace",
     "oracle": "external_deterministic_oracle",
     "leaderboardEligible": false,
-    "minimumTaskCount": 3,
+    "minimumTaskCount": 6,
     "note": "Compare b-recall-with-memory against b-recall-without-memory on oracle pass, steps, and tokens. One run is one sample; repeat runs before drawing conclusions."
   },
   "scorePolicy": {
@@ -45,7 +45,11 @@
         {
           "id": "AC-TESTS",
           "description": "The fixture's visible Bun tests pass.",
-          "check": { "kind": "command_succeeds", "command": "bun test", "timeoutMs": 60000 }
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
         }
       ]
     },
@@ -69,7 +73,11 @@
         {
           "id": "AC-TESTS",
           "description": "The fixture's visible Bun tests pass.",
-          "check": { "kind": "command_succeeds", "command": "bun test", "timeoutMs": 60000 }
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
         }
       ]
     },
@@ -93,7 +101,94 @@
         {
           "id": "AC-TESTS",
           "description": "The fixture's visible Bun tests pass.",
-          "check": { "kind": "command_succeeds", "command": "bun test", "timeoutMs": 60000 }
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "c-learn",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-memory-v0.1/i18n-catalog",
+      "prompt": "Implement t in src/i18n.ts: look up the key in the generated message catalog (MESSAGES), replace every {param} placeholder with the matching value from params, and return the key itself when it is not in the catalog. Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external oracle verifies the message catalog was generated (hash matches locales/en.json) and t interpolates, reads the catalog, and falls back to the key.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-memory-v0.1.ts c-learn",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "d-recall-with-memory",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceFrom": "c-learn",
+      "memoryPolicy": "keep",
+      "prompt": "Add a message checkout.total with the text 'Total: {amount}' to locales/en.json and make renderTotal in src/checkout.ts return t('checkout.total', { amount }). Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The external oracle verifies locales/en.json gained checkout.total, the generated catalog was regenerated (hash matches), and renderTotal renders from it.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-memory-v0.1.ts d-recall-with-memory",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "d-recall-without-memory",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceFrom": "c-learn",
+      "memoryPolicy": "wipe",
+      "prompt": "Add a message checkout.total with the text 'Total: {amount}' to locales/en.json and make renderTotal in src/checkout.ts return t('checkout.total', { amount }). Do not modify tests. Run bun test before completing.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "Control arm: same task as d-recall-with-memory with phase C's memory and skills wiped.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-memory-v0.1.ts d-recall-without-memory",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The fixture's visible Bun tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
         }
       ]
     }

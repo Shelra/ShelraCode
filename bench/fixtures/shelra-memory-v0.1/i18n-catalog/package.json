@@ -1,0 +1,8 @@
+{
+  "name": "shelra-bench-i18n-catalog",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "build:messages": "bun run scripts/build-messages.ts"
+  }
+}

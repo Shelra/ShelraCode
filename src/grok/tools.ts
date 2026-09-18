@@ -10,6 +10,7 @@ import {
   projectMemoryScope,
   readMemoryEntry,
   readMemoryIndex,
+  userMemoryScope,
   writeMemoryEntry,
 } from "../memory/store";
 import { MEMORY_TYPES, type MemoryType } from "../memory/types";
@@ -48,6 +49,7 @@ import {
   VIDEO_ASPECT_RATIOS,
   VIDEO_RESOLUTIONS,
 } from "./media";
+import { looseCriteriaList, looseStepList, looseStringList } from "./plan-input";
 
 interface CreateToolsOptions {
   runTask?: (request: TaskRequest, abortSignal?: AbortSignal) => Promise<ToolResult>;
@@ -703,13 +705,16 @@ export function createTools(
       inputSchema: z.object({}),
       execute: async () => {
         const result = readMemoryIndex(projectMemoryScope(cwd()));
-        if (result.entries.length === 0) {
+        const userEntries = readMemoryIndex(userMemoryScope()).entries;
+        if (result.entries.length === 0 && userEntries.length === 0) {
           return { success: true, output: "No project memory saved yet." };
         }
-        return {
-          success: true,
-          output: result.entries.map((entry) => `- ${entry.title} (${entry.file}) — ${entry.hook}`).join("\n"),
-        };
+        const lines = result.entries.map((entry) => `- ${entry.title} (${entry.file}) — ${entry.hook}`);
+        if (userEntries.length > 0) {
+          lines.push("", "User-wide (holds in every project; read with memory_read scope=user):");
+          for (const entry of userEntries) lines.push(`- ${entry.title} (${entry.file}) — ${entry.hook}`);
+        }
+        return { success: true, output: lines.join("\n") };
       },
     });
 
@@ -718,9 +723,21 @@ export function createTools(
         "Read one saved project memory entry in full, by its slug from memory_list's file name (without .md).",
       inputSchema: z.object({
         slug: z.string().describe("Memory entry slug, e.g. 'better-auth-organization-plugin'"),
+        scope: z
+          .enum(["project", "user"])
+          .optional()
+          .describe("Where to look: this project (default, then user-wide as a fallback) or the user-wide store"),
       }),
-      execute: async ({ slug }) => {
-        const result = readMemoryEntry(projectMemoryScope(cwd()), slug);
+      execute: async ({ slug, scope }) => {
+        const scopes =
+          scope === "user"
+            ? [userMemoryScope()]
+            : scope === "project"
+              ? [projectMemoryScope(cwd())]
+              : [projectMemoryScope(cwd()), userMemoryScope()];
+        const result = scopes.map((candidate) => readMemoryEntry(candidate, slug)).find((found) => found.entry) ?? {
+          entry: null,
+        };
         if (!result.entry) {
           return {
             success: false,
@@ -757,10 +774,27 @@ export function createTools(
           .describe(
             "'human' only when the user stated it; 'observed' when a command or test showed it; omit for your own inference",
           ),
+        scope: z
+          .enum(["project", "user"])
+          .optional()
+          .describe(
+            "'user' for a preference or standing rule the user wants in every project (language, tone, style, tooling habits); 'project' (default) for everything tied to this codebase",
+          ),
       }),
-      execute: async ({ slug, title, hook, type, description, body, related_files, confidence, source }) => {
+      execute: async ({
+        slug,
+        title,
+        hook,
+        type,
+        description,
+        body,
+        related_files,
+        confidence,
+        source,
+        scope: scopeName,
+      }) => {
         try {
-          const scope = projectMemoryScope(cwd());
+          const scope = scopeName === "user" ? userMemoryScope() : projectMemoryScope(cwd());
           const candidate = {
             slug,
             title,
@@ -804,10 +838,11 @@ export function createTools(
         "Delete a saved project memory entry — use this once you've confirmed a saved memory is wrong, stale, or superseded by a newer decision. A stale entry left in place gets reused as if it were still true and adds noise to every future memory_list; don't just leave it. To correct an entry rather than remove it, call memory_write again with the same slug instead.",
       inputSchema: z.object({
         slug: z.string().describe("Memory entry slug to remove, from memory_list's file name (without .md)"),
+        scope: z.enum(["project", "user"]).optional().describe("Which store holds the entry (default: this project)"),
       }),
-      execute: async ({ slug }) => {
+      execute: async ({ slug, scope }) => {
         try {
-          const result = deleteMemoryEntry(projectMemoryScope(cwd()), slug);
+          const result = deleteMemoryEntry(scope === "user" ? userMemoryScope() : projectMemoryScope(cwd()), slug);
           if (!result.ok) {
             return {
               success: false,
@@ -1168,6 +1203,7 @@ export function createTools(
       goal: z.string().describe("The user's intended observable outcome"),
       requirements: z
         .array(z.string())
+        .or(z.string().describe("Requirements as lines; the host splits them"))
         .optional()
         .describe("Concrete requirements derived from the request and context"),
       acceptanceCriteria: z
@@ -1187,6 +1223,7 @@ export function createTools(
           ]),
         )
         .min(1)
+        .or(z.string().describe("Criteria as lines or <item id='AC1'> markup; the host splits them"))
         .describe("Conditions Shelra must prove before claiming completion"),
       steps: z
         .array(
@@ -1200,6 +1237,7 @@ export function createTools(
             z.string().describe("A step stated in one line"),
           ]),
         )
+        .or(z.string().describe("Steps as lines; the host splits them"))
         .describe("Ordered list of implementation steps"),
       questions: z
         .array(
@@ -1239,8 +1277,8 @@ export function createTools(
         options.planState.structured = true;
       }
       const summary = rawSummary?.trim() || goal;
-      const requirements = rawRequirements ?? [];
-      const acceptanceCriteria = rawCriteria.map((criterion, index) =>
+      const requirements = looseStringList(rawRequirements);
+      const acceptanceCriteria = looseCriteriaList(rawCriteria).map((criterion, index) =>
         typeof criterion === "string"
           ? {
               id: `AC${index + 1}`,
@@ -1253,7 +1291,7 @@ export function createTools(
               verification: criterion.verification?.trim() || "Run the project's relevant check and observe it pass",
             },
       );
-      const steps = rawSteps.map((step) =>
+      const steps = looseStepList(rawSteps).map((step) =>
         typeof step === "string"
           ? { title: step, description: step, satisfies: [] as string[] }
           : { ...step, description: step.description ?? step.title, satisfies: step.satisfies ?? [] },

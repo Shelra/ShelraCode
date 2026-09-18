@@ -2,7 +2,13 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { generateText, jsonSchema, type ModelMessage, Output, stepCountIs, streamText, type ToolSet } from "ai";
 import { coerceObjectsForStringParameters, normalizeModelMessages, repairToolInput } from "../providers/messages";
-import { normalizeProviderEvents } from "../providers/stream";
+import {
+  isRepeatingToolLoop,
+  type LoopStepView,
+  normalizeProviderEvents,
+  streamIdleTimeoutMs,
+  withIdleWatchdog,
+} from "../providers/stream";
 import type {
   ProviderAdapter,
   ProviderModelRuntime,
@@ -148,15 +154,24 @@ export class LocalProviderAdapter implements ProviderAdapter {
   stream(request: ProviderStreamRequest): ProviderStream {
     let stepCostTicks = 0;
     let stepCostSeen = false;
+    // The caller's signal still cancels; the watchdog additionally cuts a silent upstream after
+    // the idle budget instead of holding the turn open until an outer timeout.
+    const watchdog = new AbortController();
+    if (request.signal?.aborted) watchdog.abort(request.signal.reason);
+    else request.signal?.addEventListener("abort", () => watchdog.abort(request.signal?.reason), { once: true });
     const result = streamText({
       model: this.provider(request.modelId),
       system: request.system,
       messages: normalizeModelMessages(request.messages as ModelMessage[]),
       ...(request.tools ? { tools: request.tools as ToolSet } : {}),
-      stopWhen: stepCountIs(request.maxSteps),
+      stopWhen: [
+        stepCountIs(request.maxSteps),
+        // A model that keeps re-running what it already ran is finished, not working.
+        ({ steps }) => isRepeatingToolLoop(steps as ReadonlyArray<LoopStepView>),
+      ],
       maxRetries: this.maxRetries,
       ...(request.timeout ? { timeout: request.timeout } : {}),
-      abortSignal: request.signal,
+      abortSignal: watchdog.signal,
       temperature: request.temperature,
       ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens }),
       // OpenRouter's unified reasoning control is a nested `{ reasoning: { effort } }` body field,
@@ -213,7 +228,9 @@ export class LocalProviderAdapter implements ProviderAdapter {
     });
 
     return {
-      events: normalizeProviderEvents(result.fullStream as AsyncIterable<unknown>),
+      events: normalizeProviderEvents(
+        withIdleWatchdog(result.fullStream as AsyncIterable<unknown>, streamIdleTimeoutMs(), watchdog),
+      ),
       response: Promise.resolve(result.response).then((response) => ({
         messages: response.messages as readonly unknown[],
       })),

@@ -1752,3 +1752,148 @@ recording them.
 - Memory is per workspace; cross-project user preferences are not stored globally yet.
 - Reflection quality is bounded by the turn's model; the gate limits the damage of a poor
   extraction but cannot improve one. The audit trail (`reflections.jsonl`) makes each decision reviewable.
+
+## 25. Model versus harness on the hard tasks, and the loops that hid behind them (2026-09-17)
+
+After §23 the core suite stood at 5/8 with `qwen/qwen3-coder-30b-a3b-instruct`; tasks 05, 07 and 08
+failed with the model's own tests green and the benchmark oracle red. The open question was how
+much of that was the model and how much the harness. This section records the experiment, what
+the transcripts and oracle details actually showed, and the five mechanisms that came out of it.
+
+### 25.1 A stronger open model on the same harness
+
+`deepseek/deepseek-v4-flash` (run #22, same suite, same harness as run #11) scored the same 5/8,
+failing the same three tasks, in 15 minutes instead of 27. Reading the oracle details instead of the
+scores changed the picture:
+
+| Task | Run #11 (qwen 30B) | Run #22 (deepseek) | Verdict |
+|---|---|---|---|
+| 05 | `userName` left untrimmed and in place | output deep-equal to the expectation, keys in another order | run #22 was an **oracle defect**: `equal` compared `JSON.stringify` output, so insertion order failed a "deep-equal" requirement |
+| 07 | 404 where the prompt says 405 | `{id: 1}` then `{id: 2}` where the oracle hard-coded `id: "new"` | the prompt says "a deterministic created record"; the oracle demanded a value it never stated |
+| 08 | queued steps still started after cancellation | missing-dependency validation did not reject | real misses in both |
+
+Two oracle fixes followed (`bench/oracles/shelra-agent-core-v0.2.ts`): `equal` now compares a
+canonical, key-sorted serialization, and the create check accepts any record carrying the posted
+name and an id, provided the same request yields the same record twice. Re-grading the preserved
+run workspaces with the fixed oracle: run #11 stays 5/8 (its three misses were real); run #22 becomes
+6/8 (05 passes; 07 fails the determinism check because its ids were a counter). The model/harness
+split, then: on this harness a much larger model gains one task, and every remaining failure is a
+behavior the prompt states in prose and no visible test exercises.
+
+### 25.2 Requirement audit in the completion gate
+
+`src/agent/requirements.ts` extracts obligation-shaped sentences from the request deterministically
+and counts the behaviors they enumerate (comma- and semicolon-separated clauses). When a turn
+changed files, verification evidence exists, and the request names at least three behaviors, the
+gate sends one audit round listing the requirements verbatim and asking, per behavior, for the code
+that implements it and the test or command that exercised exactly that behavior; anything
+unexercised must be run now (a scratch script, or a new test file when the request allows it,
+never an edit to existing tests). A fix made in answer to the audit without a re-run is blocked
+like the first unverified write. One round per turn; the audit never fires on requests that name a
+single behavior. Behavioral tests: `src/agent/completion-gate.test.ts` (three new cases),
+`src/agent/requirements.test.ts`.
+
+A first attempt also added a per-behavior sentence to the system prompt's verification step. Run
+#23, task 01: the model produced the correct implementation in step 16, then spent 80 more steps
+alternating "Task complete" summaries with `bun test`, `ls` and `read_file` until the step cap —
+96 steps, 250K tokens, 17 minutes, for a task run #11 finished in 6 steps. The prompt sentence was
+reverted; the audit alone carries the mechanism.
+
+### 25.3 Two loop breakers the run exposed
+
+- **Repeating-tool-loop stop condition** (`isRepeatingToolLoop`, `src/providers/stream.ts`, wired
+  as a second `stopWhen` in `src/runtimes/local-provider.ts`): six consecutive steps whose tool
+  calls all repeat earlier calls with identical results end the stream. A step that calls anything
+  new, or sees a new result, is progress and never trips it.
+- **Stream idle watchdog** (`withIdleWatchdog`, same module): a provider stream that sends nothing
+  for `SHELRA_STREAM_IDLE_MS` (default 180 s, 0 disables) is aborted and the step retried through
+  the existing empty-step path, instead of holding the turn open until the benchmark's 20-minute
+  task timeout. Run #23 sat 15 minutes on a silent upstream before this existed.
+
+### 25.4 `generate_plan` accepts what the model actually sends
+
+The same run showed the 30B model publishing acceptance criteria as
+`<item id="AC1">…</item>` markup inside a JSON string, twice, then abandoning the plan. The schema
+now accepts a string for `requirements`, `acceptanceCriteria` and `steps` and the host splits it
+(`src/grok/plan-input.ts`: `<item>` markup with ids, otherwise lines with bullets and numbering
+stripped).
+
+### 25.5 A public task set without Docker
+
+`scripts/build-polyglot-suite.ts` generates a suite from the aider polyglot Exercism set (pinned
+upstream commit, JavaScript and Python, fixtures and the shared jest toolchain in gitignored paths);
+`bench/oracles/polyglot.ts` restores pristine test files before grading. The protocol difference
+from aider's published "pass rate 2" is stated in `bench/README.md`. Neither SWE-bench nor
+Terminal-Bench can run on this host (no Docker); this is the first public task set the product path
+is measured on.
+
+### 25.6 What the TUI now shows
+
+The live activity tree gets a `memory` line per turn (updated, reviewed, or unchanged, with the
+written slugs or the reason), the sidebar's MEMORY section lists what retrieval recalled for the
+latest turn, and the VERIFICATION section shows the most recent gate message (verification block
+or requirement audit). The user sees learning and gating happen instead of trusting that they do.
+
+### 25.7 A second memory trap
+
+`bench/fixtures/shelra-memory-v0.1/i18n-catalog` repeats the cross-session experiment in another
+domain with the same silent shape: phase C implements `t()` over a generated message catalog
+(`bun run build:messages`, discoverable only from `package.json`); phase D adds a message to
+`locales/en.json`, which silently requires regenerating the catalog. Without regeneration the
+visible tests stay green and `t("checkout.total")` returns the key; the oracle checks the embedded
+catalog hash. Validated without a model: stub fails, reference passes, stale catalog passes `bun test`
+and fails the oracle, regeneration passes. Tasks `c-learn`, `d-recall-with-memory`,
+`d-recall-without-memory` in the same manifest, so one run now yields two paired samples.
+
+### 25.8 Kernel decision
+
+`src/autonomy` (3.7K lines: kernel, prompts, context, presentation, acceptance, journal, runtime,
+types) is imported by the bench executors, `src/index.ts` and `src/storage/objectives.ts`. Every
+mechanism proven in §23-§25 lives in `Agent.processMessage`; the autonomy kernel has none of them
+and is no longer measured. Decision: `--autonomous` becomes an objective loop over
+`Agent.processMessage`, reusing `acceptance.ts`, `journal.ts` and the `CheckSpec` types (already the
+bench's oracle infrastructure) and retiring `kernel.ts`, `prompts.ts`, `context.ts` and
+`presentation.ts` once the kernel-parity scenario (`docs/future-research/13_LONG_HORIZON_BENCHMARK_DESIGN.md`
+§3) shows no regression. The `--agent shelra-autonomy` bench adapter is deprecated with it. This is
+the next structural change; it was not started while the comparison runs in this section were
+executing, because the queued runs load the working tree at launch.
+
+### 25.9 `edit_file` and line endings
+
+Run #23's transcript also showed three consecutive `edit_file` rejections ("old_string not found")
+on a four-line file: the checkout is CRLF, the model's snippet was LF. The model recovered with
+`Get-Content -Raw` and a full rewrite, five steps later. `editFile` now matches on line-ending
+normalized text when the exact match fails and writes the file's own ending back
+(`src/tools/line-endings.ts`, `src/tools/file-crlf.test.ts`); a literal replacement also no longer
+expands `$&`-style patterns. Runs launched after this fix: the qwen3-coder (480B) comparison, the
+polyglot sample and the memory-suite repeats; run B2 below ran without it.
+
+### 25.10 Results so far, and the blocker
+
+| Run | Model | Harness | Result |
+|---|---|---|---|
+| #11 | qwen3-coder-30b | §23 | 5/8 (re-graded with the fixed oracle: 5/8) |
+| #22 | deepseek-v4-flash | §23 | 5/8 as recorded; **6/8** re-graded with the fixed oracle |
+| #23 | qwen3-coder-30b | audit + prompt sentence | discarded: task 01 looped 96 steps (§25.2) |
+| #24 (B2) | qwen3-coder-30b | audit, loop breaker, watchdog, plan fix | task 01 **passed** with the audit doing exactly what it was built for (six behaviors, each exercised by a scratch script and deleted; 38 steps, 7.7 min, 547K tokens, against 6 steps in run #11); tasks 02-08 never ran |
+
+Tasks 02-08 of run #24, the qwen3-coder (480B) comparison, the 16-task polyglot sample and the two
+memory-suite repeats all failed within seconds with HTTP 402 from OpenRouter
+(`in_flight_budget_exhausted`): the account's credits were exhausted (30.00 bought, 30.11 used at
+the time of writing). Nothing in the harness could have continued; the queued commands are
+recorded in `bench/README.md` and the memory notes and run unchanged once credits exist.
+
+What the partial evidence supports: the audit works mechanically and is expensive on this model
+(one scratch script per behavior). Whether it converts 05/07/08 is still unmeasured. The audit's
+cost is the next thing to tune once a full run exists: asking for one scratch script covering all
+behaviors instead of one per behavior would cut the audit round from ~18 steps to ~3.
+
+### 25.11 User-wide memory
+
+`~/.shelra/memory` (`SHELRA_USER_MEMORY_ROOT` overrides it) is a second memory scope for
+preferences and standing rules that hold in every project. `memory_write`, `memory_read` and
+`memory_delete` take `scope: "user"`; `memory_list` shows both; retrieval merges user-wide records
+into every turn's memory context, labelled `user-wide`; `/memory` lists them under their own
+heading. Automatic capture stays project-scoped: deciding on its own that a rule is universal is
+exactly the kind of inference the write gate exists to keep out of permanent memory.
+`src/memory/user-scope.test.ts` covers store, retrieval and report.

@@ -85,7 +85,8 @@ schedules, payments, and media generation are opt-in groups in
 `payments`, `media`); the `computer` sub-agent always receives the desktop
 group. `SHELRA_DEBUG_STREAM=1` traces provider stream parts to stderr and
 `SHELRA_DEBUG_STREAM=2` also tees raw response bodies, for diagnosing a model or
-an upstream provider that returns content-less steps.
+an upstream provider that returns content-less steps. `SHELRA_STREAM_IDLE_MS` (default 180000, 0 disables) is the
+idle budget after which a silent model stream is aborted and the step retried.
 
 ## Repository layout notes
 

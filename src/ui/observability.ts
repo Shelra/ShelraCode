@@ -3,7 +3,7 @@ import { MEMORY_INDEX_MAX_BYTES, MEMORY_INDEX_MAX_LINES } from "../memory/store"
 import type { MemoryIndexEntry, MemoryReadIndexResult } from "../memory/types";
 import type { ChatEntry, Plan, ReasoningEffort, UsageEvent } from "../types/index";
 
-export type UiActivityKind = "research" | "step" | "tool" | "agent" | "verification" | "error";
+export type UiActivityKind = "research" | "step" | "tool" | "agent" | "verification" | "memory" | "error";
 export type UiActivityStatus = "active" | "complete" | "failed";
 
 export interface UiActivityEvent {
@@ -268,6 +268,7 @@ export function visibleRuntimeActivity(events: UiActivityEvent[]): UiActivityEve
       (event.status === "active" ||
         event.kind === "research" ||
         event.kind === "verification" ||
+        event.kind === "memory" ||
         event.kind === "error"),
   );
 }
@@ -292,6 +293,7 @@ export function groupLiveActivity(events: UiActivityEvent[]): LiveActivityLine[]
   let filesDeleted = 0;
   let commandsRun = 0;
   const agentLines: string[] = [];
+  const memoryLines: string[] = [];
 
   for (const event of events) {
     switch (event.operation) {
@@ -321,6 +323,9 @@ export function groupLiveActivity(events: UiActivityEvent[]): LiveActivityLine[]
       case "delegate":
         if (event.label) agentLines.push(event.label);
         break;
+      case "memory":
+        if (event.label) memoryLines.push(event.label);
+        break;
       default:
         break;
     }
@@ -344,6 +349,7 @@ export function groupLiveActivity(events: UiActivityEvent[]): LiveActivityLine[]
   if (commandsRun > 0)
     lines.push({ key: "commands", text: `Ran ${commandsRun} command${commandsRun === 1 ? "" : "s"}` });
   for (const [index, line] of agentLines.entries()) lines.push({ key: `agent:${index}`, text: line });
+  for (const [index, line] of memoryLines.entries()) lines.push({ key: `memory:${index}`, text: line });
   return lines;
 }
 

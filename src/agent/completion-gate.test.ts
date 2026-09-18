@@ -134,6 +134,16 @@ function toolResultEvent(
   };
 }
 
+/** A request that enumerates several behaviors — the shape the requirement audit exists for. */
+const DENSE_REQUEST =
+  "Implement slugify in src/slug.ts. It must trim leading and trailing whitespace, lowercase ASCII letters, replace every run of non-alphanumeric characters with one hyphen, and remove leading or trailing hyphens. Preserve digits and internal hyphens. Do not modify tests. Run bun test before completing.";
+
+function lastUserText(request: ProviderStreamRequest | undefined): string {
+  const messages = (request?.messages ?? []) as Array<{ role: string; content: unknown }>;
+  const last = [...messages].reverse().find((message) => message.role === "user");
+  return typeof last?.content === "string" ? last.content : JSON.stringify(last?.content ?? "");
+}
+
 /**
  * Round 1: publish a plan, write a file, never verify. Later rounds (nudges): scripted per-test
  * — either one script repeated for every nudge, or a distinct script per round (an array of
@@ -143,6 +153,7 @@ class ScenarioProvider implements ProviderAdapter {
   readonly id = "gate-test";
   readonly defaultModelId = "gate-test-model";
   round = 0;
+  readonly requests: ProviderStreamRequest[] = [];
 
   constructor(private readonly secondRoundEvents: ProviderEvent[] | ProviderEvent[][]) {}
 
@@ -164,7 +175,8 @@ class ScenarioProvider implements ProviderAdapter {
     };
   }
 
-  stream(_request: ProviderStreamRequest): ProviderStream {
+  stream(request: ProviderStreamRequest): ProviderStream {
+    this.requests.push(request);
     this.round += 1;
     const events: ProviderEvent[] =
       this.round === 1
@@ -455,5 +467,87 @@ describe("completion/verification gate", () => {
 
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
     expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+  it("requests one requirement audit after verification on a requirement-dense request", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([
+      // Nudge 1: the model finally runs the tests — real verification evidence.
+      [
+        toolCallEvent("call-test", "bash", { command: "bun test" }),
+        toolResultEvent("call-test", "bash", { success: true, output: "3 pass" }, { command: "bun test" }),
+        { type: "text-delta", text: "Tests pass." },
+      ],
+      // Audit round: the model accounts for every stated behavior without further changes.
+      [{ type: "text-delta", text: "Audit: every behavior is exercised by src/slug.test.ts." }],
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage(DENSE_REQUEST)) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    // Initial round + verification nudge + exactly one audit round.
+    expect(provider.round).toBe(3);
+    const auditPrompt = lastUserText(provider.requests[2]);
+    expect(auditPrompt).toContain("audit the request requirement by requirement");
+    expect(auditPrompt).toContain("1. Implement slugify in src/slug.ts.");
+    expect(auditPrompt).toContain("Preserve digits and internal hyphens.");
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+    expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("blocks a fix made in answer to the audit until something runs again", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([
+      [
+        toolCallEvent("call-test", "bash", { command: "bun test" }),
+        toolResultEvent("call-test", "bash", { success: true, output: "3 pass" }, { command: "bun test" }),
+        { type: "text-delta", text: "Tests pass." },
+      ],
+      // Audit round: the model finds a gap and edits the file, but never re-runs anything.
+      [
+        toolCallEvent("call-edit", "edit_file", { path: "src/slug.ts", old_text: "a", new_text: "b" }),
+        toolResultEvent("call-edit", "edit_file", {
+          success: true,
+          output: "Edited src/slug.ts",
+          diff: { filePath: "src/slug.ts", additions: 1, removals: 1, patch: "", isNew: false },
+        }),
+        { type: "text-delta", text: "Fixed the trailing-hyphen case. Done." },
+      ],
+      // Re-verification nudge: the model runs the tests again.
+      [
+        toolCallEvent("call-test-2", "bash", { command: "bun test" }),
+        toolResultEvent("call-test-2", "bash", { success: true, output: "4 pass" }, { command: "bun test" }),
+        { type: "text-delta", text: "Tests pass after the fix." },
+      ],
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage(DENSE_REQUEST)) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(4);
+    expect(lastUserText(provider.requests[3])).toContain("after your last verification run");
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+    expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("does not audit a request that names a single behavior", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([
+      toolCallEvent("call-test", "bash", { command: "bun test" }),
+      toolResultEvent("call-test", "bash", { success: true, output: "1 pass" }, { command: "bun test" }),
+      { type: "text-delta", text: "Tests pass." },
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    for await (const _chunk of agent.processMessage("The clock must tick every second.")) {
+      // drain
+    }
+
+    expect(provider.round).toBe(2);
   });
 });

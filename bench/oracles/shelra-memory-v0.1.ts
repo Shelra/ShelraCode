@@ -77,6 +77,48 @@ async function checkRecall(): Promise<void> {
   );
 }
 
+function currentCatalogHash(): string {
+  return createHash("sha256")
+    .update(readFileSync(resolve(workspace, "locales", "en.json"), "utf8"))
+    .digest("hex");
+}
+
+/** Second trap, same shape (a derived module that goes stale silently), different domain. */
+async function checkLearnI18n(): Promise<void> {
+  const generated = await loadModule("src/generated/messages.ts");
+  assert(
+    generated.CATALOG_HASH === currentCatalogHash(),
+    "generated messages do not match locales/en.json (run the generator)",
+  );
+  const { t } = await loadModule("src/i18n.ts");
+  assert(typeof t === "function", "t export is missing");
+  assert(
+    t("greeting", { name: "Ada" }) === "Hello, Ada!",
+    `t(greeting) was ${JSON.stringify(t("greeting", { name: "Ada" }))}`,
+  );
+  assert(t("checkout.title") === "Checkout", "t(checkout.title) must read the catalog");
+  assert(t("not.a.key") === "not.a.key", "t must return the key when the message is missing");
+}
+
+async function checkRecallI18n(): Promise<void> {
+  const catalog = JSON.parse(readFileSync(resolve(workspace, "locales", "en.json"), "utf8")) as Record<string, string>;
+  assert(catalog["checkout.total"] === "Total: {amount}", "locales/en.json must gain checkout.total = Total: {amount}");
+  const generated = await loadModule("src/generated/messages.ts");
+  assert(
+    generated.CATALOG_HASH === currentCatalogHash(),
+    "generated messages are stale: they do not match the edited locales/en.json (regenerate them)",
+  );
+  assert(generated.MESSAGES?.["checkout.total"] === "Total: {amount}", "MESSAGES must include checkout.total");
+  const { t } = await loadModule("src/i18n.ts");
+  assert(
+    t("checkout.total", { amount: "5" }) === "Total: 5",
+    "t(checkout.total) must render from the regenerated catalog",
+  );
+  const { renderTotal } = await loadModule("src/checkout.ts");
+  assert(typeof renderTotal === "function", "renderTotal export is missing");
+  assert(renderTotal("5") === "Total: 5", `renderTotal output was ${JSON.stringify(renderTotal("5"))}`);
+}
+
 async function main(): Promise<void> {
   switch (taskId) {
     case "a-learn":
@@ -85,6 +127,13 @@ async function main(): Promise<void> {
     case "b-recall-with-memory":
     case "b-recall-without-memory":
       await checkRecall();
+      break;
+    case "c-learn":
+      await checkLearnI18n();
+      break;
+    case "d-recall-with-memory":
+    case "d-recall-without-memory":
+      await checkRecallI18n();
       break;
     default:
       fail(`unknown task id ${JSON.stringify(taskId)}`);

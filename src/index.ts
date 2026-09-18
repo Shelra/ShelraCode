@@ -1106,6 +1106,9 @@ async function runBenchCommand(options: {
         baseURL,
         fallbackModels: requestedModel ? [] : route.candidates.map((entry) => entry.id).slice(0, 3),
         requireParameters: true,
+        // Free variants are rate-limited upstream (429 "temporarily rate-limited, retry shortly");
+        // the SDK's exponential backoff needs more attempts than the paid default to ride it out.
+        ...(route.modelId.endsWith(":free") ? { maxRetries: 6 } : {}),
       });
       return createAgentBenchmarkExecutor({
         provider,

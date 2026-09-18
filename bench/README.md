@@ -123,6 +123,50 @@ but not retrieved in B). One run is one sample; repeat before concluding.
 bun run src/index.ts bench --manifest bench/suites/shelra-memory-v0.1.json --model <fixed-model>
 ~~~
 
+## Public task set: aider polyglot
+
+`scripts/build-polyglot-suite.ts` builds a suite from the public aider polyglot task set (Exercism
+practice exercises curated by Aider-AI), pinned to one upstream commit. Fixtures, the shared
+JavaScript test toolchain, and the generated manifest live in gitignored paths and are rebuilt on
+demand:
+
+    bun run scripts/build-polyglot-suite.ts --languages javascript,python --sample 16
+    bun run src/index.ts bench --manifest bench/suites/polyglot-js-py-sample16-v0.1.json --max-cost 4 --json
+
+Each task's prompt is the exercise's own instructions plus aider's directive naming the solution
+files. The oracle (`bench/oracles/polyglot.ts`) restores every test file from the pristine fixture
+before running the tests, so edited or deleted tests never count. JavaScript tests arrive upstream
+with most cases skipped (`xtest`); the generator enables all of them, as aider's harness does.
+
+Protocol difference, stated so nobody compares the wrong numbers: aider reports "pass rate 2"
+(two attempts, test output fed back between them). Shelra's agent runs the tests itself inside one
+session and may fix and re-run as often as its budget allows. A Shelra number on this set is a
+single-session pass rate on the same tasks, not a leaderboard entry. Requirements on the host:
+`node`/`npm` for JavaScript, `python` with `pytest` for Python. No Docker.
+
+### Second trap: i18n catalog
+
+`bench/fixtures/shelra-memory-v0.1/i18n-catalog` repeats the experiment in another domain: phase C
+implements `t()` over a generated message catalog (`bun run build:messages`, discoverable only from
+`package.json`); phase D adds a message to `locales/en.json`, which silently requires regenerating
+the catalog. Without regeneration the visible tests stay green and `t("checkout.total")` returns
+the key; the oracle checks the embedded catalog hash. Tasks `c-learn`, `d-recall-with-memory`,
+`d-recall-without-memory` in the same manifest.
+
+## Queued comparison runs (2026-09-17)
+
+Blocked on OpenRouter credits when written; run one at a time (two bench processes lock the
+SQLite database):
+
+    bun run src/index.ts bench --manifest bench/suites/shelra-agent-core-v0.2.json --model qwen/qwen3-coder-30b-a3b-instruct --max-cost 2 --json
+    bun run src/index.ts bench --manifest bench/suites/shelra-agent-core-v0.2.json --model qwen/qwen3-coder --max-cost 2 --json
+    bun run scripts/build-polyglot-suite.ts --sample 16
+    bun run src/index.ts bench --manifest bench/suites/polyglot-js-py-sample16-v0.1.json --model qwen/qwen3-coder-30b-a3b-instruct --max-cost 4 --json
+    bun run src/index.ts bench --manifest bench/suites/shelra-memory-v0.1.json --model qwen/qwen3-coder-30b-a3b-instruct --max-cost 3 --json
+
+Compare the first against run #11 (5/8) for the requirement audit's effect, the second against the
+first for the model's effect, and the memory suite's `*-with-memory` rows against `*-without-memory`.
+
 ## Running a real benchmark
 
 From the repository root, for a reproducible harness comparison, fix the model:
