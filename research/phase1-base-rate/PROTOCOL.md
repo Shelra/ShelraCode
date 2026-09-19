@@ -116,4 +116,37 @@ and `REPORT.md`, all in this directory, published whatever the result.
 
 ## Amendments
 
-None yet.
+1. 2026-09-18, before any pull request was read. The first draw found no eligible pull request in
+   `Sylius/Sylius`: it merges with two-parent commits titled after the pull request and ending in
+   `(#number)`, which the sampler only recognized on one-parent commits. The "Sampling" section
+   already counts merge commits, so the parser was fixed to accept both forms and all three
+   repositories were drawn again with the same seed. The first draw's rows were discarded unread.
+2. 2026-09-18, before labeling. The owner's audit is blind: the review page shows the rules and the
+   added lines, and reveals the first-pass label only after the owner answers, so agreement is
+   measured rather than induced.
+3. 2026-09-18, before labeling. A secondary analysis separates live rules from abandoned ones. For
+   every commitment whose screen pattern matches the violation itself (the list is fixed in
+   `compliance.py`), the share of in-scope files that already match it is
+   measured at each repository's last commit before 2025-09-01 (`compliance.py`). A commitment
+   matched in 25% or more of its in-scope files at that point is reported as "not followed by the
+   codebase". The primary rate is unchanged; the report adds the rate with those commitments
+   excluded, because violating a rule the code base had already abandoned is a stale decision,
+   not a lost one, and the two call for different products.
+4. 2026-09-18, before labeling. The sampled diffs add about 75,000 lines. The reading view shows
+   every changed file's path and size, and each file's changed lines up to 400; lockfiles, generated
+   API reports, changesets and snapshots are listed but not shown. Lines beyond a file's cap are
+   covered only by the screen patterns. The report states how many pull requests had capped files.
+5. 2026-09-19, after 50 backstage labels. The compliance measure for backstage B2 (ADR004) was
+   incomplete: its screen pattern saw only single-line re-exports in non-index files, while the
+   labels found violations in multi-line re-exports and in index files re-exporting from a
+   grandchild or a sibling directory. `compliance_b2.py` measures both forms at the same
+   snapshot. Because this correction came after labels were seen, the report gives the original
+   and the corrected measure side by side and states which one the secondary analysis uses.
+6. 2026-09-19, after first-pass labeling, before the audit. How the audit set is drawn and shown,
+   fixed in `audit_cases.py` before the owner answers anything: all first-pass `violation` and
+   `unsure` labels plus 20 `no` labels drawn with the seed `shelra-phase1-audit-2026-09-19` from
+   the `no` labels sorted by repository and number; the combined set is shuffled with the same
+   seed. Every case shows the same things whatever its label: the rules in scope, quoted from
+   `commitments.md`, and the added and removed lines of every in-scope file that could carry code,
+   each capped at 400 changed lines as in the first-pass reading. The first pass found 8 violations
+   and no `unsure` label, so the audit has 28 cases.

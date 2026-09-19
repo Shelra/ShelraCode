@@ -1,0 +1,145 @@
+{
+  "backstage_backstage": {
+    "snapshot": "89247ccf444975479e2fe6acd51b5c2c1a29883d",
+    "commitments": {
+      "B1": {
+        "in_scope_files": 5690,
+        "matching_files": 156,
+        "share": 0.0274,
+        "followed": true
+      },
+      "B2": {
+        "in_scope_files": 4798,
+        "matching_files": 62,
+        "share": 0.0129,
+        "followed": true,
+        "full_measure": {
+          "in_scope_files": 5797,
+          "non_index_files_with_reexports": 57,
+          "index_files_reexporting_beyond_children": 49,
+          "share": 0.0183,
+          "followed": true,
+          "note": "amendment 5: multi-line aware, counts both ways ADR004 is broken"
+        }
+      },
+      "B3": {
+        "in_scope_files": 5952,
+        "matching_files": 11,
+        "share": 0.0018,
+        "followed": true
+      },
+      "B4": {
+        "in_scope_files": 1429,
+        "matching_files": 2,
+        "share": 0.0014,
+        "followed": true
+      },
+      "B5": {
+        "in_scope_files": 8182,
+        "matching_files": 0,
+        "share": 0.0,
+        "followed": true
+      },
+      "B7": {
+        "in_scope_files": 2559,
+        "matching_files": 1,
+        "share": 0.0004,
+        "followed": true
+      },
+      "B8": {
+        "in_scope_files": 3785,
+        "matching_files": 11,
+        "share": 0.0029,
+        "followed": true
+      },
+      "B9": {
+        "in_scope_files": 1896,
+        "matching_files": 14,
+        "share": 0.0074,
+        "followed": true
+      }
+    }
+  },
+  "mozilla_fxa": {
+    "snapshot": "f56714156b53f78083de83f23db774117b261f7c",
+    "commitments": {
+      "F1": {
+        "in_scope_files": 3501,
+        "matching_files": 10,
+        "share": 0.0029,
+        "followed": true
+      },
+      "F2": {
+        "in_scope_files": 957,
+        "matching_files": 17,
+        "share": 0.0178,
+        "followed": true
+      },
+      "F3": {
+        "in_scope_files": 147,
+        "matching_files": 22,
+        "share": 0.1497,
+        "followed": true
+      },
+      "F4": {
+        "in_scope_files": 74,
+        "matching_files": 4,
+        "share": 0.0541,
+        "followed": true
+      },
+      "F5": {
+        "in_scope_files": 4093,
+        "matching_files": 4,
+        "share": 0.001,
+        "followed": true
+      },
+      "F6": {
+        "in_scope_files": 3816,
+        "matching_files": 65,
+        "share": 0.017,
+        "followed": true
+      },
+      "F13": {
+        "in_scope_files": 1232,
+        "matching_files": 0,
+        "share": 0.0,
+        "followed": true
+      }
+    }
+  },
+  "Sylius_Sylius": {
+    "snapshot": "7b200462ce7118b652e6cde68d76792c25ef9424",
+    "commitments": {
+      "S1": {
+        "in_scope_files": 57,
+        "matching_files": 0,
+        "share": 0.0,
+        "followed": true
+      },
+      "S2": {
+        "in_scope_files": 90,
+        "matching_files": 28,
+        "share": 0.3111,
+        "followed": false
+      },
+      "S3": {
+        "in_scope_files": 7866,
+        "matching_files": 0,
+        "share": 0.0,
+        "followed": true
+      },
+      "S10": {
+        "in_scope_files": 0,
+        "matching_files": 0,
+        "share": 0.0,
+        "followed": true
+      },
+      "S11": {
+        "in_scope_files": 183,
+        "matching_files": 8,
+        "share": 0.0437,
+        "followed": true
+      }
+    }
+  }
+}
