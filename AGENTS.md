@@ -95,6 +95,27 @@ idle budget after which a silent model stream is aborted and the step retried.
 - Source is `src/`; compiled output is `dist/` (gitignored except when built
   locally).
 
+## Resilience (hard rule)
+
+A missing or failing resource never ends Shelra's flow. Only the user's cancellation (Esc) and a
+provider key the provider rejects end a turn at once. Everything else is recovered:
+
+- A model round that fails (silence, an SDK timeout, a cut stream, a rate limit, a provider error,
+  no credits, a spend limit, a missing endpoint) keeps its completed steps, is retried after a
+  pause, and moves to the provider's next fallback model after two failures in a row, or at once
+  when retrying cannot help (`fallbackModelIds`, `SHELRA_FALLBACK_MODELS`). On OpenRouter the
+  fallback is its own router for the spending policy, never a hand-picked model: `openrouter/free`
+  under the free policy or a hand-chosen model, `openrouter/auto` (paid, within the policy's cost
+  tier) then `openrouter/free` under a paid policy. A fallback is not always free: the switch
+  notice states its cost, and spend limits still apply. A strict (benchmark) model is never
+  replaced. A turn in which no model answers for many attempts pauses with its progress saved and
+  says how to resume.
+- A tool that throws (a missing binary, an unreachable service, an MCP server that fails) returns
+  a failed result the model routes around (`hardenToolSet` in `src/toolset/tools.ts`).
+- New code must follow the same rule: degrade and report, never throw out of the turn loop.
+
+Tests: `src/agent/resilience.test.ts`. Background: `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §26.
+
 ## Persistent memory (hard rule)
 
 Shelra must not behave like a stateless agent. `src/memory/` implements project memory under

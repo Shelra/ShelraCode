@@ -60,7 +60,7 @@ import {
 } from "../storage/index";
 import { BashTool } from "../tools/bash";
 import { type ScheduleDaemonStatus, ScheduleManager, type StoredSchedule } from "../tools/schedule";
-import { createTools } from "../toolset/tools";
+import { createTools, hardenToolSet } from "../toolset/tools";
 import type {
   AgentMode,
   ChatEntry,
@@ -173,6 +173,30 @@ const MAX_EMPTY_RESPONSE_RETRIES = 2;
 const LEAKED_TOOL_MARKUP_RE = /<(?:function|tool_call|parameter)(?:=|>)/u;
 const EMPTY_RESPONSE_CONTINUATION =
   "Your previous reply was empty. Continue the task: call the next tool you need, and when the work is verified, summarize what you did and observed.";
+/**
+ * A failing model connection (silence, a cut stream, a timeout, a rate limit, a provider error, a
+ * missing endpoint, no credits) interrupts a turn and never ends it on its own: completed steps
+ * are kept, the step is retried after a pause, and a model that keeps failing is replaced by the
+ * provider's next fallback. Only the user's cancellation and a rejected credential end a turn at
+ * once. Seen live 2026-09-19: two turns on free models ended as "The operation was aborted." 99 s
+ * in, with every step lost, because the AI SDK's 90 s chunk timeout aborted the generation and
+ * the loop treated any non-context error as the end of the turn.
+ */
+const FAILURES_BEFORE_MODEL_SWITCH = 2;
+/** Consecutive failures without any completed step, across models, before a turn pauses. */
+const MAX_INTERRUPTIONS_WITHOUT_PROGRESS = 8;
+/** Bound on interruptions in one turn even while steps keep completing. */
+const MAX_INTERRUPTIONS_PER_TURN = 20;
+const INTERRUPTION_BACKOFF_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+
+interface InterruptionState {
+  withoutProgress: number;
+  onModel: number;
+  total: number;
+  triedModels: Set<string>;
+}
+
+type InterruptionOutcome = { action: "retry" } | { action: "switch"; modelId: string } | { action: "pause" };
 
 export interface AgentOptions {
   persistSession?: boolean;
@@ -189,6 +213,8 @@ export interface AgentOptions {
   budget?: BudgetLimits;
   /** Injectable model timeout policy; environment values are used by default. */
   modelTimeout?: ProviderTimeout;
+  /** Pauses before retrying an interrupted model round; tests pass zeros. */
+  interruptionBackoffMs?: readonly number[];
   /** Injectable MCP discovery timeout; environment values are used by default. */
   mcpTimeoutMs?: number;
 }
@@ -749,6 +775,7 @@ export class Agent {
   private lastMemoryContext: MemoryContext | null = null;
   private readonly budget: BudgetLimits;
   private readonly modelTimeout: ProviderTimeout;
+  private readonly interruptionBackoffMs: readonly number[];
   private readonly mcpTimeoutMs: number;
   private localCostMicros = 0;
   private taskCostMicros = 0;
@@ -786,6 +813,7 @@ export class Agent {
     this.reasoningEffortOverride = loadUserSettings().reasoningEffort ?? null;
     this.budget = options.budget ?? {};
     this.modelTimeout = options.modelTimeout ?? readModelTimeoutFromEnvironment();
+    this.interruptionBackoffMs = options.interruptionBackoffMs ?? INTERRUPTION_BACKOFF_MS;
     this.mcpTimeoutMs =
       options.mcpTimeoutMs ?? readPositiveMilliseconds("SHELRA_MCP_TIMEOUT_MS", DEFAULT_MCP_TIMEOUT_MS);
 
@@ -1307,6 +1335,82 @@ export class Agent {
     }
   }
 
+  /**
+   * One failed model round, recovered. Completed steps (and streamed text, when no step
+   * completed) are saved first, so nothing already done is lost; then the turn retries the same
+   * model after a pause, or moves to the provider's next fallback when this model failed twice
+   * in a row or cannot serve the request at all (no credits, no endpoint, a spend limit).
+   * "pause" comes back only after many attempts in which no model made any progress.
+   */
+  private async *recoverFromInterruption(args: {
+    reason: string;
+    error: unknown;
+    state: InterruptionState;
+    provider: ProviderAdapter;
+    modelId: string;
+    userModelMessage: ModelMessage;
+    completedSteps: ModelMessage[];
+    partialText: string;
+    signal: AbortSignal;
+  }): AsyncGenerator<StreamChunk, InterruptionOutcome, unknown> {
+    const { reason, state } = args;
+    const saved =
+      args.completedSteps.length > 0
+        ? args.completedSteps
+        : args.partialText.trim()
+          ? [{ role: "assistant" as const, content: args.partialText }]
+          : [];
+    if (saved.length > 0) {
+      this.appendCompletedTurn(args.userModelMessage, saved);
+      state.withoutProgress = 0;
+      state.onModel = 0;
+      this.messages.push({ role: "user", content: interruptionContinuation(reason) });
+      this.messageSeqs.push(null);
+    }
+    state.withoutProgress += 1;
+    state.onModel += 1;
+    state.total += 1;
+    this.kernel?.recordObservation(`Model connection interrupted (${reason}); attempt ${state.total}.`);
+    this.persistKernelIndex();
+
+    if (state.withoutProgress > MAX_INTERRUPTIONS_WITHOUT_PROGRESS || state.total > MAX_INTERRUPTIONS_PER_TURN) {
+      return { action: "pause" };
+    }
+    if (isModelUnavailableError(args.error) || state.onModel >= FAILURES_BEFORE_MODEL_SWITCH) {
+      const fallback = nextFallbackModel(args.provider, args.modelId, state);
+      if (fallback) {
+        state.onModel = 0;
+        yield {
+          type: "content",
+          content: `\n\n[${args.modelId} is not answering (${reason}); continuing with ${fallback} (${describeModelCost(args.provider, fallback)}).]\n\n`,
+        };
+        return { action: "switch", modelId: fallback };
+      }
+    }
+    const backoff = this.interruptionBackoffMs;
+    const delay = backoff[Math.min(state.onModel - 1, backoff.length - 1)] ?? 0;
+    yield {
+      type: "content",
+      content: `\n\n[Model connection interrupted (${reason}); retrying${delay >= 1_000 ? ` in ${Math.round(delay / 1_000)}s` : ""}.]\n\n`,
+    };
+    await sleepUnlessAborted(delay, args.signal);
+    return { action: "retry" };
+  }
+
+  /** The end of a turn in which no model answered: progress is already saved and resumable. */
+  private async *pauseAfterInterruptions(
+    reason: string,
+    observer?: ProcessMessageObserver,
+  ): AsyncGenerator<StreamChunk, void, unknown> {
+    const message = `No model answered after repeated attempts (last: ${reason}). Everything completed so far is saved; send "continue" to resume, or choose another model with /models.`;
+    this.kernel?.recordObservation(message);
+    this.kernel?.transition("blocked");
+    this.persistKernelIndex(message);
+    notifyObserver(observer?.onError, { message, timestamp: Date.now() });
+    yield { type: "content", content: `\n\n[Paused — ${message}]` };
+    yield { type: "done" };
+  }
+
   private discardAbortedTurn(userMessage: ModelMessage): void {
     const idx = this.messages.lastIndexOf(userMessage);
     if (idx >= 0) {
@@ -1584,7 +1688,7 @@ export class Agent {
           timeoutMs: this.mcpTimeoutMs,
         });
         closeMcp = mcpBundle.close;
-        childTools = { ...childBaseTools, ...mcpBundle.tools };
+        childTools = { ...childBaseTools, ...hardenToolSet(mcpBundle.tools) };
         if (mcpBundle.errors.length > 0) {
           lastActivity = `MCP unavailable: ${mcpBundle.errors.join(" | ")}`;
           onActivity?.(lastActivity);
@@ -2062,7 +2166,8 @@ export class Agent {
     reportStatus("notifications", "Reading background activity");
     await this.consumeBackgroundNotifications();
     const provider = this.requireProvider();
-    const runtime = provider.resolveModelRuntime(this.modelId);
+    // Reassigned when a failing model is replaced by a fallback for the rest of this turn.
+    let runtime = provider.resolveModelRuntime(this.modelId);
     // Create the host-owned lifecycle before context compilation and research so
     // observers can answer what is happening during the earliest real phase.
     this.kernel = new AgentKernel(userMessage);
@@ -2133,11 +2238,22 @@ export class Agent {
         .join("\n\n"),
       this.modelId,
     );
-    const modelInfo = runtime.modelInfo;
+    let modelInfo = runtime.modelInfo;
     this.planContext = null;
     let overflowRecoveryLevel = 0;
     let verificationRetries = 0;
     let emptyResponseRetries = 0;
+    const interruptions: InterruptionState = {
+      withoutProgress: 0,
+      onModel: 0,
+      total: 0,
+      triedModels: new Set([runtime.modelId]),
+    };
+    const switchModel = (modelId: string) => {
+      runtime = provider.resolveModelRuntime(modelId);
+      modelInfo = runtime.modelInfo;
+      emptyResponseRetries = 0;
+    };
     // Requirement audit, one round per turn: when the request enumerates several behaviors, a
     // green run is evidence only for the behaviors the executed tests exercise. Measured on the
     // core suite 2026-09-17 (qwen3-coder-30b, run #11): all three failures were tasks whose prompt
@@ -2153,7 +2269,10 @@ export class Agent {
         let reasoningPreview = "";
         let encryptedReasoningHidden = false;
         let streamOk = false;
-        let idleAbort = false;
+        // Set when the model connection failed during this round; recovered below, never fatal.
+        let interruption: { reason: string; error: unknown } | null = null;
+        // The generation's completed steps so far, kept if a later step of it fails.
+        let completedStepMessages: ModelMessage[] = [];
         let closeMcp: (() => Promise<void>) | undefined;
         let stepNumber = -1;
         let lastStepProducedOutput = false;
@@ -2208,7 +2327,7 @@ export class Agent {
               timeoutMs: this.mcpTimeoutMs,
             });
             closeMcp = mcpBundle.close;
-            tools = { ...baseTools, ...mcpBundle.tools };
+            tools = { ...baseTools, ...hardenToolSet(mcpBundle.tools) };
             if (mcpBundle.errors.length > 0) {
               yield { type: "content", content: `MCP unavailable: ${mcpBundle.errors.join(" | ")}\n\n` };
             }
@@ -2256,6 +2375,9 @@ export class Agent {
               const currentStep = Math.max(stepNumber, event.stepNumber);
               stepNumber = currentStep;
               lastStepFinishReason = getBatchFinishReason(event.finishReason);
+              if (event.responseMessages) {
+                completedStepMessages = sanitizeModelMessages(event.responseMessages as ModelMessage[]);
+              }
               notifyObserver(observer?.onStepFinish, {
                 stepNumber: currentStep,
                 timestamp: Date.now(),
@@ -2267,6 +2389,9 @@ export class Agent {
               this.recordUsage(usage, "message", runtime.modelId);
             },
           });
+          // An interrupted or cancelled round never awaits its response; its rejection must not
+          // surface as an unhandled rejection. Awaiting it below still sees the rejection.
+          stream.response.catch(() => undefined);
           this.kernel?.transition("act");
 
           for await (const part of stream.events) {
@@ -2420,12 +2545,6 @@ export class Agent {
               }
 
               case "error": {
-                // A silent upstream was cut by the idle watchdog: retry the step below instead
-                // of presenting a transient failure as the end of the turn.
-                if (isProviderStreamIdleError(part.error) && emptyResponseRetries < MAX_EMPTY_RESPONSE_RETRIES) {
-                  idleAbort = true;
-                  break;
-                }
                 // A provider may surface a context failure as a stream event
                 // before `stream.response` rejects. Route it through the same
                 // recovery ladder without exposing a transient raw error to
@@ -2433,36 +2552,23 @@ export class Agent {
                 if (modelInfo && isContextLimitError(part.error)) {
                   throw part.error instanceof Error ? part.error : new Error(humanizeApiError(part.error));
                 }
-                {
-                  const friendly = humanizeApiError(part.error);
-                  this.kernel?.recordObservation(`provider: ${friendly}`);
-                  // A mid-stream error event (e.g. "Upstream idle timeout exceeded") does not
-                  // necessarily throw into the surrounding catch(err) block below — found live
-                  // (2026-09-12): this case fell through without ever marking the kernel
-                  // blocked, so a later unconditional persistKernelIndex() call (e.g. at the
-                  // Stop-hook check) persisted whatever phase preceded the error, with no
-                  // record that a failure happened at all.
-                  this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
-                  this.persistKernelIndex(friendly);
-                  const authError = isAuthenticationError(part.error);
-                  notifyObserver(observer?.onError, {
-                    message: friendly,
-                    timestamp: Date.now(),
-                  });
-                  yield {
-                    type: "error",
-                    content: friendly,
-                    isAuthError: authError,
-                  };
+                // A rejected credential cannot be retried around; it ends the turn in the catch below.
+                if (isRejectedCredentialError(part.error)) {
+                  throw part.error instanceof Error ? part.error : new Error(humanizeApiError(part.error));
                 }
+                // Anything else (a silent upstream cut by the idle watchdog, "Upstream idle timeout
+                // exceeded", a rate limit, a provider error) is the connection failing, not the task.
+                interruption = { reason: describeInterruption(part.error), error: part.error };
                 break;
               }
 
               case "abort":
-                yield { type: "content", content: "\n\n[Cancelled]" };
+                if (signal.aborted) yield { type: "content", content: "\n\n[Cancelled]" };
+                // Not the user: an SDK chunk, step or total timeout aborted the generation.
+                else interruption ??= { reason: "no response within the time limit", error: null };
                 break;
             }
-            if (idleAbort) break;
+            if (interruption) break;
           }
 
           if (signal.aborted) {
@@ -2484,21 +2590,8 @@ export class Agent {
             );
           }
           try {
-            const response = idleAbort ? null : ((await stream.response) as { messages: ModelMessage[] });
-            if (idleAbort) {
-              // The stream went silent and was cut. Tool work already done is on disk but not in
-              // the transcript; asking again lets the model rediscover it from the workspace.
-              emptyResponseRetries += 1;
-              this.kernel?.recordObservation(
-                `Model stream stalled with no output; retrying the step (${emptyResponseRetries}/${MAX_EMPTY_RESPONSE_RETRIES}).`,
-              );
-              this.persistKernelIndex();
-              if (emptyResponseRetries > 1) {
-                this.messages.push({ role: "user", content: EMPTY_RESPONSE_CONTINUATION });
-                this.messageSeqs.push(null);
-              }
-              emptyStepRetry = true;
-            } else if (response && !signal.aborted) {
+            const response = interruption ? null : ((await stream.response) as { messages: ModelMessage[] });
+            if (response && !signal.aborted) {
               const roundMessages = sanitizeModelMessages(response.messages);
               // An assistant step that produced neither text nor a tool call is not a result —
               // it is a provider or model failure (seen live 2026-09-17: an upstream provider
@@ -2549,8 +2642,11 @@ export class Agent {
 
             // A stream can yield text and still fail while resolving its final response
             // (network reset, provider timeout, or malformed final metadata). Do not let that
-            // failure fall through to the completion gate as if the turn finished normally.
-            throw responseError;
+            // failure fall through to the completion gate as if the turn finished normally; it
+            // is an interruption, recovered below, unless the user cancelled or the credential
+            // was rejected.
+            if (signal.aborted || isRejectedCredentialError(responseError)) throw responseError;
+            interruption = { reason: describeInterruption(responseError), error: responseError };
           }
 
           if (signal.aborted) {
@@ -2558,6 +2654,23 @@ export class Agent {
             this.persistKernelIndex();
             this.discardAbortedTurn(userModelMessage);
             yield { type: "done" };
+            return;
+          }
+
+          if (interruption) {
+            const outcome = yield* this.recoverFromInterruption({
+              ...interruption,
+              state: interruptions,
+              provider,
+              modelId: runtime.modelId,
+              userModelMessage,
+              completedSteps: completedStepMessages,
+              partialText: assistantText,
+              signal,
+            });
+            if (outcome.action === "switch") switchModel(outcome.modelId);
+            if (outcome.action !== "pause") continue;
+            yield* this.pauseAfterInterruptions(interruption.reason, observer);
             return;
           }
 
@@ -2584,6 +2697,20 @@ export class Agent {
           // turn once published criteria.
           if (!lastStepProducedOutput && !assistantText.trim()) {
             const reason = `The model returned an empty response ${emptyResponseRetries + 1} times in a row.`;
+            // A model that keeps answering with nothing is as unavailable as one that is down.
+            const fallback = nextFallbackModel(provider, runtime.modelId, interruptions);
+            if (fallback) {
+              this.kernel?.recordObservation(`${reason} Continuing with ${fallback}.`);
+              this.persistKernelIndex();
+              yield {
+                type: "content",
+                content: `\n\n[${runtime.modelId} kept returning empty replies; continuing with ${fallback} (${describeModelCost(provider, fallback)}).]\n\n`,
+              };
+              this.messages.push({ role: "user", content: EMPTY_RESPONSE_CONTINUATION });
+              this.messageSeqs.push(null);
+              switchModel(fallback);
+              continue;
+            }
             this.kernel?.recordObservation(reason);
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
@@ -2728,6 +2855,28 @@ export class Agent {
           ) {
             overflowRecoveryLevel += 1;
             continue;
+          }
+
+          // Whatever failed before the round completed (compaction, a spend limit on the current
+          // model, a provider that threw, a stream that broke) is recovered like any other
+          // interruption: completed steps are kept and the turn retries or moves to a fallback.
+          if (!streamOk && !isRejectedCredentialError(err)) {
+            const reason = describeInterruption(err);
+            const outcome = yield* this.recoverFromInterruption({
+              reason,
+              error: err,
+              state: interruptions,
+              provider,
+              modelId: runtime.modelId,
+              userModelMessage,
+              completedSteps: completedStepMessages,
+              partialText: assistantText,
+              signal,
+            });
+            if (outcome.action === "switch") switchModel(outcome.modelId);
+            if (outcome.action !== "pause") continue;
+            yield* this.pauseAfterInterruptions(reason, observer);
+            return;
           }
 
           const authError = isAuthenticationError(err);
@@ -3170,6 +3319,87 @@ const STATUS_MESSAGES: Record<number, string> = {
   503: "The API service is temporarily overloaded. Please try again later.",
   529: "The API service is overloaded. Please try again later.",
 };
+
+function interruptionContinuation(reason: string): string {
+  return `The connection to the model was interrupted (${reason}). Your completed steps are above and their effects are on disk. Continue the task from where it stopped; do not redo finished work.`;
+}
+
+/** A short, user-facing cause for a failed model round. */
+function describeInterruption(error: unknown): string {
+  if (isProviderStreamIdleError(error)) return `no output for ${Math.round(error.idleMs / 1_000)}s`;
+  const name = (error as { name?: unknown } | null)?.name;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (
+    name === "AbortError" ||
+    name === "TimeoutError" ||
+    /operation was aborted|timed out|\btimeout\b/i.test(message)
+  ) {
+    return "no response within the time limit";
+  }
+  return humanizeApiError(error).slice(0, 300);
+}
+
+/** A key the provider rejects fails the same way for every model and every retry. */
+function isRejectedCredentialError(error: unknown): boolean {
+  if (APICallError.isInstance(error) && error.statusCode === 401) return true;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /\b401\b|unauthori[sz]ed|invalid.*(api[_ ]?key|token|credential)|authentication failed|no auth credentials/i.test(
+    message,
+  );
+}
+
+/** Failures that retrying the same model cannot fix: no credits, no endpoint, a spend limit, a daily quota. */
+function isModelUnavailableError(error: unknown): boolean {
+  if (APICallError.isInstance(error) && [402, 403, 404].includes(error.statusCode ?? 0)) return true;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /blocked by budget|insufficient (credits|balance|funds)|more credits|no endpoints found|model .*not (found|available)|not a valid model|does not support tool|free-models-per-day|quota/i.test(
+    message,
+  );
+}
+
+/** The provider's next fallback this turn has not tried yet, marked as tried. */
+function nextFallbackModel(provider: ProviderAdapter, modelId: string, state: InterruptionState): string | null {
+  let candidates: string[] = [];
+  try {
+    candidates = provider.fallbackModelIds?.(modelId) ?? [];
+  } catch {
+    candidates = [];
+  }
+  const next = candidates.find((id) => !state.triedModels.has(id));
+  if (!next) return null;
+  state.triedModels.add(next);
+  return next;
+}
+
+/**
+ * What a fallback costs, stated when the turn switches to it: a fallback is not always free (a
+ * paid policy falls back to OpenRouter's auto router; `SHELRA_FALLBACK_MODELS` may name paid models).
+ */
+function describeModelCost(provider: ProviderAdapter, modelId: string): string {
+  let info: ModelInfo | undefined;
+  try {
+    info = provider.resolveModelRuntime(modelId).modelInfo;
+  } catch {
+    info = undefined;
+  }
+  if (!info || info.pricingKnown === false) return "paid: billed at the rate of the model it uses";
+  if (info.inputPrice === 0 && info.outputPrice === 0) return "free";
+  const perMillion = (price: number) => `$${(price * 1_000_000).toFixed(2)}`;
+  return `paid: ${perMillion(info.inputPrice)} in / ${perMillion(info.outputPrice)} out per 1M tokens`;
+}
+
+function sleepUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  if (ms <= 0 || signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
 
 function humanizeApiError(error: unknown): string {
   if (APICallError.isInstance(error)) {

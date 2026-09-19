@@ -403,6 +403,8 @@ export class OpenRouterIntelligenceProvider implements IntelligenceProvider {
       maxRetries: this.maxRetries,
       fallbackModels: route.candidates.map((candidate) => candidate.id).slice(0, 3),
       requireParameters: true,
+      policy: this.policy,
+      strictModel: this.strictModel,
     });
   }
 

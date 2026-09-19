@@ -1278,7 +1278,47 @@ export function createTools(
     },
   });
 
-  return tools;
+  return hardenToolSet(tools);
+}
+
+type ToolExecute = (input: unknown, options: { abortSignal?: AbortSignal }) => unknown;
+
+/**
+ * No tool may end a turn by throwing. A missing binary, an unreachable service or a bug in one
+ * tool becomes a failed result the model reads and routes around; only the user's own
+ * cancellation propagates. Applied to the built-in tools here and to MCP tools by the agent.
+ */
+export function hardenToolSet(tools: ToolSet): ToolSet {
+  const hardened: ToolSet = {};
+  for (const [name, definition] of Object.entries(tools)) {
+    const execute = (definition as { execute?: ToolExecute }).execute;
+    if (typeof execute !== "function") {
+      hardened[name] = definition;
+      continue;
+    }
+    hardened[name] = {
+      ...definition,
+      execute: async (input: unknown, options: { abortSignal?: AbortSignal }) => {
+        try {
+          return await execute(input, options);
+        } catch (error) {
+          if (options?.abortSignal?.aborted) throw error;
+          return { success: false, output: describeToolFailure(name, error) };
+        }
+      },
+    } as ToolSet[string];
+  }
+  return hardened;
+}
+
+export function describeToolFailure(name: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: unknown } | null)?.code;
+  const missing =
+    code === "ENOENT" || /\bENOENT\b|not found|not installed|not recognized|cannot find|no such file/i.test(message);
+  return missing
+    ? `${name} could not run because something it needs is missing: ${message}. Continue without it: use another tool or approach (for example bash, read_file or grep), and do not repeat this call unchanged.`
+    : `${name} failed: ${message}. Continue the task: fix the call or use another tool or approach.`;
 }
 
 function formatScheduleList(schedules: StoredSchedule[], daemonStatus: ScheduleDaemonStatus): string {

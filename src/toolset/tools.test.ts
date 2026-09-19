@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { BashTool } from "../tools/bash";
-import { createTools } from "./tools";
+import { createTools, hardenToolSet } from "./tools";
 
 function createScheduleToolSet(overrides?: {
   getDaemonStatus?: () => Promise<{ running: boolean; pid: number | null }>;
@@ -599,5 +599,36 @@ describe("memory tools", () => {
     const result = (await tools.memory_delete.execute({ slug: "to-remove" }, {})) as { success: boolean };
     expect(result.success).toBe(true);
     await rm(cwd, { recursive: true, force: true });
+  });
+});
+
+describe("hardenToolSet", () => {
+  it("turns a tool that throws into a failed result with a way forward", async () => {
+    const missing = Object.assign(new Error("spawn rg ENOENT"), { code: "ENOENT" });
+    const tools = hardenToolSet({
+      grep: { description: "search", inputSchema: {} as never, execute: async () => Promise.reject(missing) },
+    } as never);
+    const result = (await tools.grep.execute?.({}, { toolCallId: "t", messages: [] })) as {
+      success: boolean;
+      output: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("something it needs is missing");
+    expect(result.output).toContain("use another tool or approach");
+  });
+
+  it("still lets the user's cancellation through", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const tools = hardenToolSet({
+      slow: {
+        description: "slow",
+        inputSchema: {} as never,
+        execute: async () => Promise.reject(new Error("aborted")),
+      },
+    } as never);
+    await expect(
+      tools.slow.execute?.({}, { toolCallId: "t", messages: [], abortSignal: controller.signal }),
+    ).rejects.toThrow("aborted");
   });
 });

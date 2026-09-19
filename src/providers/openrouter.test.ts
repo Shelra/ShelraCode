@@ -140,3 +140,55 @@ describe("upstream provider quarantine", () => {
     });
   });
 });
+
+describe("OpenRouter fallback models", () => {
+  const options = { entries: [entry], quarantineStorePath: null } as const;
+
+  it("falls back to OpenRouter's free router under the free policy, never to a hand-picked model", () => {
+    const provider = createOpenRouterProvider("secret-not-printed", options);
+    expect(provider.fallbackModelIds?.(entry.id)).toEqual(["openrouter/free"]);
+    expect(provider.fallbackModelIds?.("openrouter/free")).toEqual([]);
+  });
+
+  it("keeps a hand-chosen model (custom policy) off paid routing", () => {
+    const provider = createOpenRouterProvider("secret-not-printed", { ...options, policy: "custom" });
+    expect(provider.fallbackModelIds?.("openrouter/anthropic/paid")).toEqual(["openrouter/free"]);
+  });
+
+  it("falls back to the paid auto router, then the free router, under a paid policy", () => {
+    const provider = createOpenRouterProvider("secret-not-printed", { ...options, policy: "balanced" });
+    expect(provider.fallbackModelIds?.("openrouter/anthropic/paid")).toEqual(["openrouter/auto", "openrouter/free"]);
+  });
+
+  it("never replaces a strict (measured) model", () => {
+    const provider = createOpenRouterProvider("secret-not-printed", { ...options, strictModel: true });
+    expect(provider.fallbackModelIds?.(entry.id)).toEqual([]);
+  });
+
+  it("uses SHELRA_FALLBACK_MODELS when set, paid models included", () => {
+    const previous = process.env.SHELRA_FALLBACK_MODELS;
+    process.env.SHELRA_FALLBACK_MODELS = "openrouter/anthropic/paid, openrouter/google/gemma-3:free";
+    try {
+      const provider = createOpenRouterProvider("secret-not-printed", options);
+      expect(provider.fallbackModelIds?.(entry.id)).toEqual(["openrouter/anthropic/paid"]);
+    } finally {
+      if (previous === undefined) delete process.env.SHELRA_FALLBACK_MODELS;
+      else process.env.SHELRA_FALLBACK_MODELS = previous;
+    }
+  });
+
+  it("bounds the auto router by the policy's cost tier", () => {
+    expect(buildOpenRouterRequestBody({ model: "openrouter/auto" }, { policy: "economy" })).toMatchObject({
+      plugins: [{ id: "auto-router", cost_tier: "low" }],
+    });
+    expect(buildOpenRouterRequestBody({ model: "openrouter/auto" }, { policy: "auto" })).not.toHaveProperty("plugins");
+    expect(buildOpenRouterRequestBody({ model: "google/gemma-3:free" }, { policy: "economy" })).not.toHaveProperty(
+      "plugins",
+    );
+  });
+
+  it("never reports the auto router as free when the catalog lacks it", () => {
+    const provider = createOpenRouterProvider("secret-not-printed", { entries: [], quarantineStorePath: null });
+    expect(provider.resolveModelRuntime("openrouter/auto").modelInfo?.pricingKnown).toBe(false);
+  });
+});

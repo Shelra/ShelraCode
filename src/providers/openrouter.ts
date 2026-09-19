@@ -1,6 +1,6 @@
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { OPENROUTER_BASE_URL } from "../models/openrouter";
-import { catalogModelId, resolveCatalogModel } from "../models/routing";
+import { catalogModelId, type ModelPolicy, resolveCatalogModel } from "../models/routing";
 import { type CatalogEntry, catalogEntryToModelInfo } from "../models/types";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { loadQuarantinedProviders, recordQuarantinedProvider } from "./provider-quarantine";
@@ -35,6 +35,13 @@ export interface OpenRouterProviderOptions {
   requireParameters?: boolean;
   /** Upstream providers to exclude from routing (OpenRouter `provider.ignore`). */
   ignoreProviders?: readonly string[];
+  /**
+   * The spending policy the session runs under. It decides which of OpenRouter's routers a turn
+   * falls back to when its model stops answering, and the auto router's cost tier.
+   */
+  policy?: ModelPolicy;
+  /** A measured model must never be replaced: no client-side fallback (benchmarks). */
+  strictModel?: boolean;
   /** Injectable transport, for tests. */
   fetch?: FetchFunction;
   /** Durable quarantine store path; `null` disables persistence (tests). */
@@ -74,6 +81,7 @@ export function buildOpenRouterRequestBody(
     | "zeroDataRetention"
     | "requireParameters"
     | "ignoreProviders"
+    | "policy"
   >,
 ): Record<string, unknown> {
   const models = options.fallbackModels
@@ -88,11 +96,37 @@ export function buildOpenRouterRequestBody(
     ...(options.requireParameters === undefined ? {} : { require_parameters: options.requireParameters }),
     ...(options.ignoreProviders && options.ignoreProviders.length > 0 ? { ignore: [...options.ignoreProviders] } : {}),
   };
+  // The auto router picks a paid model for the task; the policy's cost tier bounds which one.
+  const costTier = options.policy ? AUTO_ROUTER_COST_TIER[options.policy] : undefined;
+  const plugins =
+    body.model === "openrouter/auto" && costTier
+      ? [...(Array.isArray(body.plugins) ? body.plugins : []), { id: "auto-router", cost_tier: costTier }]
+      : undefined;
   return {
     ...body,
     ...(models && models.length > 0 ? { models } : {}),
     ...(Object.keys(provider).length > 0 ? { provider } : {}),
+    ...(plugins ? { plugins } : {}),
   };
+}
+
+/** OpenRouter auto-router `cost_tier` per paid policy; `auto` lets the router choose freely. */
+const AUTO_ROUTER_COST_TIER: Partial<Record<ModelPolicy, string>> = {
+  economy: "low",
+  balanced: "medium",
+  quality: "high",
+  max: "max",
+};
+
+/**
+ * OpenRouter's own routers a turn falls back to when its model stops answering, instead of
+ * hand-picked models. The spending policy is the consent: under the free policy, or with a model
+ * the user chose by hand (`custom`), only the free router, which picks among free models; under a
+ * paid policy the auto router, which picks a model for the task and bills that model's rate within
+ * the policy's cost tier, then the free router as the last resort.
+ */
+export function fallbackRoutersForPolicy(policy: ModelPolicy): string[] {
+  return policy === "free" || policy === "custom" ? ["openrouter/free"] : ["openrouter/auto", "openrouter/free"];
 }
 
 function fallbackModelInfo(modelId: string) {
@@ -102,7 +136,9 @@ function fallbackModelInfo(modelId: string) {
     contextWindow: 8_192,
     inputPrice: 0,
     outputPrice: 0,
-    pricingKnown: true,
+    // The auto routers bill whichever model they pick; without a catalog entry the price is unknown,
+    // never zero, so a spend limit cannot mistake them for free.
+    pricingKnown: !(modelId === "openrouter/auto" || modelId === "openrouter/auto-beta"),
     reasoning: false,
     description: "OpenRouter model metadata is not available yet.",
     supportsMaxOutputTokens: true,
@@ -123,11 +159,15 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   private readonly quarantined = new Set<string>();
   private readonly quarantineStorePath: string | null | undefined;
   private lastUpstreamProvider: string | null = null;
+  private readonly policy: ModelPolicy;
+  private readonly strictModel: boolean;
 
   constructor(apiKey: string, options: OpenRouterProviderOptions = {}) {
     this.defaultModelId = canonicalModelId(options.modelId ?? "openrouter/free");
     this.entries = options.entries ?? [];
     this.quarantineStorePath = options.quarantineStorePath;
+    this.policy = options.policy ?? "free";
+    this.strictModel = options.strictModel === true;
     if (this.quarantineStorePath !== null) {
       for (const entry of loadQuarantinedProviders(this.defaultModelId, {
         ...(this.quarantineStorePath ? { path: this.quarantineStorePath } : {}),
@@ -215,6 +255,23 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
 
   routingNotes(): string[] {
     return [...this.quarantined].map((provider) => `quarantined upstream provider ${provider} (content-less step)`);
+  }
+
+  /**
+   * Where a turn continues when `modelId` stops answering: OpenRouter's router for the session's
+   * policy (see `fallbackRoutersForPolicy`), or the ids in `SHELRA_FALLBACK_MODELS`, which the user
+   * may point at paid models. Nothing for a strict (measured) model.
+   */
+  fallbackModelIds(modelId: string): string[] {
+    if (this.strictModel) return [];
+    const current = canonicalModelId(modelId);
+    const configured = (process.env.SHELRA_FALLBACK_MODELS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map(canonicalModelId);
+    const chosen = configured.length > 0 ? configured : fallbackRoutersForPolicy(this.policy);
+    return chosen.filter((id) => id !== current);
   }
 
   resolveModelRuntime(modelId: string): ProviderModelRuntime {

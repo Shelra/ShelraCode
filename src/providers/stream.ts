@@ -75,6 +75,19 @@ export async function* normalizeProviderEvents(stream: AsyncIterable<unknown>): 
       case "tool-result":
         yield { type: "tool-result", toolCall: toToolCall(part), output: part.output };
         break;
+      case "tool-error": {
+        // A tool that threw (or an MCP server that failed) reaches the model as an error result
+        // and the generation goes on; the app sees the same thing as a failed result instead of
+        // a call that never finishes.
+        const error = part.error instanceof Error ? part.error.message : String(part.error ?? "unknown error");
+        const message = `${stringValue(part.toolName, "tool")} failed: ${error}`;
+        yield {
+          type: "tool-result",
+          toolCall: toToolCall(part),
+          output: { success: false, output: message, error: message },
+        };
+        break;
+      }
       case "tool-approval-request": {
         const call = record(part.toolCall) ?? part;
         yield {

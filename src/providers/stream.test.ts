@@ -160,3 +160,26 @@ describe("repeating tool loop", () => {
     expect(isRepeatingToolLoop(steps)).toBe(false);
   });
 });
+
+describe("tool errors", () => {
+  it("turns a tool that threw into a failed result instead of a call that never finishes", async () => {
+    async function* raw() {
+      yield {
+        type: "tool-error",
+        toolCallId: "call-9",
+        toolName: "grep",
+        input: {},
+        error: new Error("spawn rg ENOENT"),
+      };
+    }
+    const events: unknown[] = [];
+    for await (const event of normalizeProviderEvents(raw())) events.push(event);
+    expect(events).toEqual([
+      {
+        type: "tool-result",
+        toolCall: { id: "call-9", type: "function", function: { name: "grep", arguments: "{}" } },
+        output: { success: false, output: "grep failed: spawn rg ENOENT", error: "grep failed: spawn rg ENOENT" },
+      },
+    ]);
+  });
+});

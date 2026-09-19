@@ -210,10 +210,12 @@ export class LocalProviderAdapter implements ProviderAdapter {
           stepCostTicks += stepUsage.costUsdTicks;
           stepCostSeen = true;
         }
+        const responseMessages = record(entry?.response)?.messages;
         request.onStepFinish?.({
           stepNumber: stepNumber(event),
           finishReason: finishReason(event),
           usage: stepUsage ?? {},
+          ...(Array.isArray(responseMessages) ? { responseMessages } : {}),
         });
       },
       onFinish: (event: { totalUsage?: unknown }) => {

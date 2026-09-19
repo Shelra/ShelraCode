@@ -243,8 +243,11 @@ describe("provider failure persistence", () => {
     // set a blockedReason (only evaluateCompletion/cancel do), and nothing persisted it.
     executeEventHooksMock.mockResolvedValue(emptyResult);
 
+    // Since 2026-09-19 a rate limit is retried (hard rule: a failing resource never ends a turn
+    // at once); a provider that keeps failing pauses the turn, and that pause must persist too.
     const agent = new Agent(undefined, undefined, "failing-test-model", undefined, {
       provider: new FailingProvider(),
+      interruptionBackoffMs: [0],
     });
 
     const chunks: Array<{ type: string; content?: string; isAuthError?: boolean }> = [];
@@ -252,7 +255,7 @@ describe("provider failure persistence", () => {
       chunks.push(chunk as { type: string; content?: string; isAuthError?: boolean });
     }
 
-    expect(chunks.some((c) => c.type === "error")).toBe(true);
+    expect(chunks.some((c) => c.content?.includes("[Paused"))).toBe(true);
     expect(chunks.at(-1)).toEqual({ type: "done" });
 
     const blockedCall = upsertObjectiveIndex.mock.calls.find(([record]) => record.phase === "blocked");

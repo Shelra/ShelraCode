@@ -1910,3 +1910,53 @@ into every turn's memory context, labelled `user-wide`; `/memory` lists them und
 heading. Automatic capture stays project-scoped: deciding on its own that a rule is universal is
 exactly the kind of inference the write gate exists to keep out of permanent memory.
 `src/memory/user-scope.test.ts` covers store, retrieval and report.
+
+## 26. A failing resource never ends the flow (2026-09-19)
+
+The project owner set a hard rule: Shelra must never fail or cancel its flow because some resource
+is missing. Two turns that day showed the flow doing exactly that. A Mini CRM build on
+`nvidia/nemotron-3-ultra-550b-a55b:free` and a request on `openrouter/free` both ended 99 seconds
+in as "The operation was aborted.", with nothing saved: the session held no message of either turn.
+
+**Cause.** The AI SDK's own chunk timeout (`chunkMs`, 90 s) aborts the generation with a bare
+`AbortError` when a free model is silent for 90 s (queueing, or thinking without streaming). It
+fires before Shelra's 180 s idle watchdog, which retried; the loop then treated every error other
+than a context overflow as the end of the turn, and dropped the round's completed tool steps
+because they only exist in the failed generation's response. The SDK reported the abort as an
+`abort` stream part, which the loop printed as `[Cancelled]` although nobody cancelled.
+
+**Change.**
+
+- Any failed round that the user did not cancel is an interruption. The SDK's per-step response
+  messages (`onStepFinish` → `responseMessages`) are kept as the round goes, and saved to the
+  transcript when it fails, followed by a note telling the model to continue from where it
+  stopped. Streamed text is saved when no step completed.
+- The round is retried after 2, 5, 10, 20, 30 s. After two failures in a row on one model, or at
+  once for failures retrying cannot fix (402, 403, 404, a spend limit, a daily free quota, a model
+  without tool support), the turn moves to the provider's next fallback. On OpenRouter the fallback
+  is its own router for the session's spending policy, not a hand-picked model: under the free
+  policy, or with a model the user chose by hand, `openrouter/free`, which picks among free models;
+  under a paid policy `openrouter/auto`, which picks a model for the task and bills that model's
+  rate, bounded by the auto-router `cost_tier` for the policy (economy low, balanced medium,
+  quality high, max max), then `openrouter/free`. The policy is the spending consent, so a free
+  session never moves to a paid model. A fallback is not always free: the switch notice states its
+  cost (free, a per-1M-token price, or billed at the model the router uses), `ensureBudget` still
+  applies (the auto router's price is unknown, so a spend limit skips it), and
+  `SHELRA_FALLBACK_MODELS` may name paid models on purpose. A benchmark's explicit `--model` is
+  strict and never replaced. This complements OpenRouter's server-side `models` fallback, which
+  covers rate limits, downtime, moderation and context length but not a stream that goes silent.
+  A model that keeps returning empty replies is replaced the same way.
+- A turn pauses, with progress saved and a resume hint, only after eight consecutive attempts in
+  which no model completed a step (or 20 interruptions in all). A rejected key (401) still ends the
+  turn at once: no retry or model fixes it.
+- Tools: every built-in and MCP tool is wrapped so an exception becomes a failed result with a way
+  forward, and `tool-error` stream parts, which the app used to ignore (leaving the call
+  spinning), become failed tool results.
+
+**Evidence.** `src/agent/resilience.test.ts` (six cases: SDK timeout, completed steps kept, switch
+after two failures, immediate switch on 402, 401 ends, bounded pause); tests for the tool wrapper,
+`tool-error` parts and fallback selection. Live, same model as the failure, with
+`SHELRA_MODEL_IDLE_TIMEOUT_MS=3000` to force the abort: two interruptions, the two `read_file`
+steps kept, a switch to `openrouter/free`, the correct answer, objective `complete`, exit 0.
+Sub-agents already return a failed task to the parent as a tool result, so the parent's flow goes
+on; they do not retry by themselves.

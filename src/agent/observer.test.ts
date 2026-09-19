@@ -231,10 +231,13 @@ describe("Agent process observer", () => {
     expect(agent.getKernelState()).toMatchObject({ phase: "blocked" });
   });
 
-  it("surfaces a final provider timeout instead of treating the turn as complete", async () => {
+  it("retries a provider timeout and, if it never answers, pauses visibly instead of completing", async () => {
+    // A timeout interrupts the turn; it does not end it (hard rule, 2026-09-19). A model that
+    // never answers is retried until the bound, then the turn pauses, visibly and not complete.
     const agent = new Agent(undefined, undefined, "timeout-test-model", undefined, {
       provider: new TimeoutProvider(),
       persistSession: false,
+      interruptionBackoffMs: [0],
     });
     const chunks: Array<{ type: string; content?: string }> = [];
 
@@ -242,6 +245,10 @@ describe("Agent process observer", () => {
       chunks.push(chunk as { type: string; content?: string });
     }
 
-    expect(chunks.find((chunk) => chunk.type === "error")?.content).toContain("stopped responding");
+    const text = chunks.map((chunk) => chunk.content ?? "").join("");
+    expect(text).toContain("no response within the time limit");
+    expect(text).toContain("[Paused");
+    expect(agent.getKernelState()).toMatchObject({ phase: "blocked" });
+    expect(chunks.at(-1)).toEqual({ type: "done" });
   });
 });

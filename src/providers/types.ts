@@ -46,7 +46,17 @@ export interface ProviderStreamRequest {
   timeout?: ProviderTimeout;
   signal?: AbortSignal;
   onStepStart?: (stepNumber: number) => void;
-  onStepFinish?: (event: { stepNumber: number; finishReason: string; usage: ProviderUsage }) => void;
+  onStepFinish?: (event: {
+    stepNumber: number;
+    finishReason: string;
+    usage: ProviderUsage;
+    /**
+     * Every response message of this generation up to and including the finished step (the
+     * assistant tool calls and their tool results). Lets the caller keep completed work when a
+     * later step of the same generation fails.
+     */
+    responseMessages?: readonly unknown[];
+  }) => void;
   onFinish?: (usage: ProviderUsage) => void;
 }
 
@@ -128,4 +138,10 @@ export interface ProviderAdapter {
   getToolContext(): ProviderToolContext;
   /** Optional human-readable routing decisions made at runtime (e.g. quarantined upstream providers). */
   routingNotes?(): string[];
+  /**
+   * Models to continue with, in order, when `modelId` stops answering (silence, rate limit,
+   * missing endpoint, no credits). Optional: an adapter with no alternative returns nothing and
+   * the caller retries the same model.
+   */
+  fallbackModelIds?(modelId: string): string[];
 }
