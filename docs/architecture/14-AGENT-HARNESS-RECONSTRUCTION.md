@@ -1930,7 +1930,8 @@ because they only exist in the failed generation's response. The SDK reported th
 - Any failed round that the user did not cancel is an interruption. The SDK's per-step response
   messages (`onStepFinish` → `responseMessages`) are kept as the round goes, and saved to the
   transcript when it fails, followed by a note telling the model to continue from where it
-  stopped. Streamed text is saved when no step completed.
+  stopped. Only a completed step counts as progress: text streamed before a stall is neither saved
+  nor counted, so a model that writes a preamble and goes silent is still replaced.
 - The round is retried after 2, 5, 10, 20, 30 s. After two failures in a row on one model, or at
   once for failures retrying cannot fix (402, 403, 404, a spend limit, a daily free quota, a model
   without tool support), the turn moves to the provider's next fallback. On OpenRouter the fallback
@@ -1946,9 +1947,12 @@ because they only exist in the failed generation's response. The SDK reported th
   strict and never replaced. This complements OpenRouter's server-side `models` fallback, which
   covers rate limits, downtime, moderation and context length but not a stream that goes silent.
   A model that keeps returning empty replies is replaced the same way.
-- A turn pauses, with progress saved and a resume hint, only after eight consecutive attempts in
-  which no model completed a step (or 20 interruptions in all). A rejected key (401) still ends the
-  turn at once: no retry or model fixes it.
+- A turn pauses, with progress saved and a resume hint, after eight consecutive attempts in which
+  no model completed a step (or 20 interruptions in all), or at once when the failure is one retrying
+  cannot fix (no credits, an exhausted quota, a spend limit) and no fallback is left. A rejected key
+  still ends the turn at once: no retry or model fixes it. It is recognized by HTTP 401 or by
+  wording only authentication failures use; an earlier, looser pattern took request errors such as
+  "Invalid 'max_tokens'" for a rejected key and ended turns a retry would have finished.
 - Tools: every built-in and MCP tool is wrapped so an exception becomes a failed result with a way
   forward, and `tool-error` stream parts, which the app used to ignore (leaving the call
   spinning), become failed tool results.

@@ -316,4 +316,49 @@ describe("a failing model connection never ends the turn", () => {
     expect(text).toContain('send "continue" to resume');
     expect(chunks.at(-1)).toEqual({ type: "done" });
   });
+
+  it("retries a request error that merely mentions tokens instead of taking it for a rejected key", async () => {
+    const provider = new ScriptedProvider([
+      { events: [], fail: apiError(400, "Invalid 'max_tokens': integer below minimum value") },
+      answer("Answered on the retry."),
+    ]);
+    const { chunks, text } = await run(provider);
+
+    expect(provider.requests).toHaveLength(2);
+    expect(text).toContain("Answered on the retry.");
+    expect(chunks.some((chunk) => chunk.type === "error")).toBe(false);
+  });
+
+  it("replaces a model that streams a preamble and then stalls, without saving the fragments", async () => {
+    const stallAfterPreamble: Round = {
+      events: [
+        { type: "text-delta", text: "Let me write the file now." },
+        { type: "error", error: new ProviderStreamIdleError(180_000) },
+      ],
+    };
+    const provider = new ScriptedProvider(
+      [stallAfterPreamble, stallAfterPreamble, answer("Written by the fallback.")],
+      ["fallback-model"],
+    );
+    const { text } = await run(provider);
+
+    expect(provider.requests.map((request) => request.modelId)).toEqual([
+      "primary-model",
+      "primary-model",
+      "fallback-model",
+    ]);
+    expect(text).toContain("Written by the fallback.");
+    const sent = JSON.stringify(provider.requests[2]?.messages ?? []);
+    expect(sent).not.toContain("Let me write the file now.");
+  });
+
+  it("stops at once when retrying cannot help and no fallback is left", async () => {
+    const provider = new ScriptedProvider([{ events: [], fail: apiError(402, "This request requires more credits") }]);
+    const { chunks, text } = await run(provider);
+
+    expect(provider.requests).toHaveLength(1);
+    expect(text).toContain("[Paused");
+    expect(text).toContain("cannot serve this request");
+    expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
 });

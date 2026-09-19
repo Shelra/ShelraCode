@@ -196,7 +196,10 @@ interface InterruptionState {
   triedModels: Set<string>;
 }
 
-type InterruptionOutcome = { action: "retry" } | { action: "switch"; modelId: string } | { action: "pause" };
+type InterruptionOutcome =
+  | { action: "retry" }
+  | { action: "switch"; modelId: string }
+  | { action: "pause"; message: string };
 
 export interface AgentOptions {
   persistSession?: boolean;
@@ -1336,11 +1339,11 @@ export class Agent {
   }
 
   /**
-   * One failed model round, recovered. Completed steps (and streamed text, when no step
-   * completed) are saved first, so nothing already done is lost; then the turn retries the same
-   * model after a pause, or moves to the provider's next fallback when this model failed twice
-   * in a row or cannot serve the request at all (no credits, no endpoint, a spend limit).
-   * "pause" comes back only after many attempts in which no model made any progress.
+   * One failed model round, recovered. Completed steps are saved first, so nothing already done
+   * is lost; then the turn retries the same model after a pause, or moves to the provider's next
+   * fallback when this model failed twice in a row or cannot serve the request at all (no
+   * credits, no endpoint, a spend limit). "pause" comes back after many attempts in which no
+   * model made progress, or at once when retrying cannot help and no fallback is left.
    */
   private async *recoverFromInterruption(args: {
     reason: string;
@@ -1350,18 +1353,14 @@ export class Agent {
     modelId: string;
     userModelMessage: ModelMessage;
     completedSteps: ModelMessage[];
-    partialText: string;
     signal: AbortSignal;
   }): AsyncGenerator<StreamChunk, InterruptionOutcome, unknown> {
     const { reason, state } = args;
-    const saved =
-      args.completedSteps.length > 0
-        ? args.completedSteps
-        : args.partialText.trim()
-          ? [{ role: "assistant" as const, content: args.partialText }]
-          : [];
-    if (saved.length > 0) {
-      this.appendCompletedTurn(args.userModelMessage, saved);
+    // Only a completed step is progress. Text streamed before a stall (a preamble such as "Let me
+    // write the file now.") is not: counting it kept a stalling model from ever being replaced and
+    // filled the transcript with fragments; the retried round regenerates it.
+    if (args.completedSteps.length > 0) {
+      this.appendCompletedTurn(args.userModelMessage, args.completedSteps);
       state.withoutProgress = 0;
       state.onModel = 0;
       this.messages.push({ role: "user", content: interruptionContinuation(reason) });
@@ -1374,9 +1373,10 @@ export class Agent {
     this.persistKernelIndex();
 
     if (state.withoutProgress > MAX_INTERRUPTIONS_WITHOUT_PROGRESS || state.total > MAX_INTERRUPTIONS_PER_TURN) {
-      return { action: "pause" };
+      return { action: "pause", message: `No model answered after repeated attempts (last: ${reason}).` };
     }
-    if (isModelUnavailableError(args.error) || state.onModel >= FAILURES_BEFORE_MODEL_SWITCH) {
+    const unavailable = isModelUnavailableError(args.error);
+    if (unavailable || state.onModel >= FAILURES_BEFORE_MODEL_SWITCH) {
       const fallback = nextFallbackModel(args.provider, args.modelId, state);
       if (fallback) {
         state.onModel = 0;
@@ -1385,6 +1385,14 @@ export class Agent {
           content: `\n\n[${args.modelId} is not answering (${reason}); continuing with ${fallback} (${describeModelCost(args.provider, fallback)}).]\n\n`,
         };
         return { action: "switch", modelId: fallback };
+      }
+      // No credits, an exhausted quota or a spend limit is not fixed by asking again, and nothing
+      // is left to switch to: stop spending attempts and say why.
+      if (unavailable) {
+        return {
+          action: "pause",
+          message: `${args.modelId} cannot serve this request (${reason}) and no fallback model is left.`,
+        };
       }
     }
     const backoff = this.interruptionBackoffMs;
@@ -1397,12 +1405,12 @@ export class Agent {
     return { action: "retry" };
   }
 
-  /** The end of a turn in which no model answered: progress is already saved and resumable. */
+  /** The end of a turn no model could serve: progress is already saved and resumable. */
   private async *pauseAfterInterruptions(
-    reason: string,
+    cause: string,
     observer?: ProcessMessageObserver,
   ): AsyncGenerator<StreamChunk, void, unknown> {
-    const message = `No model answered after repeated attempts (last: ${reason}). Everything completed so far is saved; send "continue" to resume, or choose another model with /models.`;
+    const message = `${cause} Everything completed so far is saved; send "continue" to resume, or choose another model with /models.`;
     this.kernel?.recordObservation(message);
     this.kernel?.transition("blocked");
     this.persistKernelIndex(message);
@@ -2665,12 +2673,11 @@ export class Agent {
               modelId: runtime.modelId,
               userModelMessage,
               completedSteps: completedStepMessages,
-              partialText: assistantText,
               signal,
             });
             if (outcome.action === "switch") switchModel(outcome.modelId);
             if (outcome.action !== "pause") continue;
-            yield* this.pauseAfterInterruptions(interruption.reason, observer);
+            yield* this.pauseAfterInterruptions(outcome.message, observer);
             return;
           }
 
@@ -2870,12 +2877,11 @@ export class Agent {
               modelId: runtime.modelId,
               userModelMessage,
               completedSteps: completedStepMessages,
-              partialText: assistantText,
               signal,
             });
             if (outcome.action === "switch") switchModel(outcome.modelId);
             if (outcome.action !== "pause") continue;
-            yield* this.pauseAfterInterruptions(reason, observer);
+            yield* this.pauseAfterInterruptions(outcome.message, observer);
             return;
           }
 
@@ -3339,11 +3345,16 @@ function describeInterruption(error: unknown): string {
   return humanizeApiError(error).slice(0, 300);
 }
 
-/** A key the provider rejects fails the same way for every model and every retry. */
+/**
+ * A key the provider rejects fails the same way for every model and every retry. Matched on the
+ * HTTP status, or on wording that only authentication failures use: a looser pattern (any
+ * "invalid ... token") also caught request errors such as "Invalid 'max_tokens'" and ended turns
+ * that a retry or another model would have finished.
+ */
 function isRejectedCredentialError(error: unknown): boolean {
-  if (APICallError.isInstance(error) && error.statusCode === 401) return true;
+  if (APICallError.isInstance(error)) return error.statusCode === 401;
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return /\b401\b|unauthori[sz]ed|invalid.*(api[_ ]?key|token|credential)|authentication failed|no auth credentials/i.test(
+  return /\bunauthori[sz]ed\b|invalid (api[_ -]?key|credentials?|authentication)|incorrect api key|api key (is )?(invalid|revoked|missing)|no auth credentials|authentication failed/i.test(
     message,
   );
 }
