@@ -124,3 +124,7 @@ telegram-pair-code.txt
 # Generated from the pinned aider polyglot task set (scripts/build-polyglot-suite.ts)
 bench/fixtures/polyglot/
 bench/suites/polyglot-*.json
+
+# Python bytecode from the research scripts
+__pycache__/
+*.pyc
