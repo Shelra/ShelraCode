@@ -3,14 +3,8 @@ import { testRender } from "@opentui/react/test-utils";
 import { describe, expect, it } from "vitest";
 import type { KernelState } from "../agent/kernel";
 import type { DelegationRun, Plan, SubagentStatus } from "../types/index";
-import { AuroraEdge } from "./aurora";
-import {
-  ActiveAgentsStrip,
-  SessionInspector,
-  SessionStatusStrip,
-  type VerificationStatus,
-  WorkspaceSidebar,
-} from "./session-inspector";
+import type { CheckSummary } from "./observability";
+import { ActiveAgentsStrip, MissionPanel, SessionInspector, type VerificationStatus } from "./session-inspector";
 import { dark as defaultDark, light, type Theme } from "./theme";
 
 const dark = defaultDark;
@@ -70,64 +64,41 @@ function fixture(state: "working" | "failed") {
     evidenceSummary: failed ? [] : ["bash: curl http://localhost:8080"],
     linkedCriteriaIds: [],
   };
-  return { kernel, plan, delegations, verificationStatus };
+  const changes = [
+    { path: "src/ui/app.tsx", additions: 40, removals: 12, kind: "modified" as const },
+    { path: "src/ui/mission.ts", additions: 96, removals: 0, kind: "added" as const },
+  ];
+  const checks: CheckSummary[] = failed
+    ? [{ command: "bun test", label: "tests", tone: "danger", meta: "2 fail · 1.4s" }]
+    : [{ command: "bun test", label: "tests", tone: "success", meta: "5 pass · 1.4s" }];
+  return { kernel, plan, delegations, verificationStatus, changes, checks };
 }
 
-function WorkspaceFixture({ state, t: dark = defaultDark }: { state: "working" | "failed"; t?: Theme }) {
-  const t = dark;
-  const { kernel, plan, delegations, verificationStatus } = fixture(state);
+type View = "plan" | "changes" | "checks" | "context";
+
+function MissionFixture({ state, view, t = defaultDark }: { state: "working" | "failed"; view: View; t?: Theme }) {
+  const { kernel, plan, delegations, verificationStatus, changes, checks } = fixture(state);
   const currentActivity = state === "failed" ? "Repairing agent restoration" : "Running restart verification";
+  const contextStats = {
+    contextWindow: 128_000,
+    usedTokens: 86_000,
+    remainingTokens: 42_000,
+    ratioUsed: 86_000 / 128_000,
+    ratioRemaining: 42_000 / 128_000,
+  };
   return (
-    <box width="100%" height="100%" flexDirection="row" backgroundColor={t.background}>
-      <box width={122} flexDirection="column">
-        <box flexGrow={1} paddingLeft={3} paddingTop={1} flexDirection="column">
-          <text fg={t.brand}>USER</text>
-          <text fg={t.text}>{"Improve session persistence..."}</text>
-          <text fg={t.primary}>{"SHELRA"}</text>
-          <text fg={t.text}>{"I traced where active task state is lost."}</text>
-          <text fg={dark.text}>{"✓ Explored repository · 12 operations"}</text>
-          <text fg={dark.textMuted}>{"└─ Found task hydration is missing on resume."}</text>
-          {state === "failed" ? <text fg={dark.danger}>{"× Verification failed"}</text> : null}
-        </box>
-        <SessionStatusStrip
-          t={t}
-          width={122}
-          isProcessing
-          kernel={kernel}
-          currentActivity={currentActivity}
-          elapsedMs={8_000}
-          changedFileCount={3}
-          planStepCount={5}
-          activeAgent={null}
-        />
-        <box
-          height={3}
-          paddingLeft={2}
-          paddingRight={2}
-          alignItems="center"
-          flexDirection="column"
-          border={["bottom"]}
-          borderColor={t.border}
-        >
-          <AuroraEdge t={t} width={118} active={state === "working"} focused={false} reducedMotion />
-          <box flexDirection="row" width="100%" alignItems="center">
-            <text fg={t.textMuted}>{"Ask Shelra..."}</text>
-            <box flexGrow={1} />
-            <text fg={dark.danger}>{"■ Stop"}</text>
-          </box>
-        </box>
-        <ActiveAgentsStrip
-          t={dark}
-          activeSubagent={null}
-          startedAt={null}
-          lastActivityAt={null}
-          delegations={delegations}
-          now={NOW}
-        />
-      </box>
-      <WorkspaceSidebar
+    <box
+      width="100%"
+      height="100%"
+      flexDirection="column"
+      backgroundColor={t.background}
+      paddingLeft={2}
+      paddingRight={2}
+    >
+      <MissionPanel
+        view={view}
         t={t}
-        width={38}
+        width={112}
         isProcessing
         kernel={kernel}
         currentActivity={currentActivity}
@@ -139,13 +110,7 @@ function WorkspaceFixture({ state, t: dark = defaultDark }: { state: "working" |
         delegations={delegations}
         activeToolCalls={[]}
         contextSummary={null}
-        contextStats={{
-          contextWindow: 128_000,
-          usedTokens: 86_000,
-          remainingTokens: 42_000,
-          ratioUsed: 86_000 / 128_000,
-          ratioRemaining: 42_000 / 128_000,
-        }}
+        contextStats={contextStats}
         usage={{
           inputTokens: 54_200,
           outputTokens: 8_400,
@@ -164,65 +129,131 @@ function WorkspaceFixture({ state, t: dark = defaultDark }: { state: "working" |
         verificationStatus={verificationStatus}
         memoryStatus={{ entryCount: 3, capacityRatio: 0.12 }}
         memoryContext={null}
+        changes={changes}
+        checks={checks}
       />
     </box>
   );
 }
 
-describe("workspace visual hierarchy", () => {
-  it.each(["working", "failed"] as const)("renders the %s lifecycle without internal model steps", async (state) => {
-    const screen = await testRender(<WorkspaceFixture state={state} />, { width: 160, height: 65 });
-    await screen.renderOnce();
-    const frame = screen.captureCharFrame();
-    if (process.env.SHELRA_CAPTURE_WORKSPACE === "1") console.log(`\n${state.toUpperCase()}\n${frame}`);
+async function renderView(state: "working" | "failed", view: View, t?: Theme) {
+  const screen = await testRender(<MissionFixture state={state} view={view} t={t} />, { width: 120, height: 40 });
+  await screen.renderOnce();
+  const frame = screen.captureCharFrame();
+  const colors = screen.captureSpans();
+  if (process.env.SHELRA_CAPTURE_WORKSPACE === "1") console.log(`\n${state.toUpperCase()} ${view}\n${frame}`);
+  return { screen, frame, colors };
+}
 
+describe("mission views", () => {
+  it.each(["working", "failed"] as const)("plan view draws the whole plan and the agents (%s)", async (state) => {
+    const { screen, frame } = await renderView(state, "plan");
     expect(frame).toContain("PLAN");
-    expect(frame).toContain("CURRENT");
-    expect(frame).toContain("CONTEXT");
+    expect(frame).toContain("Implement activity workspace");
+    expect(frame).toContain("Verify rendered lifecycle");
     expect(frame).toContain("AGENTS");
-    expect(frame).toContain("TOKENS");
-    expect(frame).toContain("■ Stop");
-    // The SESSION section shows the model and the reasoning effort actually in effect (§11) —
-    // never just "Model" with no indication of whether/how hard it's reasoning.
-    expect(frame).toContain("openrouter/free");
-    expect(frame).toContain("high (auto)");
+    // The active step explains itself; internal model steps never appear.
+    expect(frame).toContain("Inspect it");
     expect(frame).not.toContain("Model turn started");
     expect(frame).not.toContain("Step 1");
+    // A right-hand sidebar no longer exists: the panel owns the full width.
+    expect(frame).not.toContain("CURRENT");
+    screen.renderer.destroy();
+  });
 
-    // MEMORY shows the real entry count and capacity used (§16) — never a fabricated placeholder.
-    expect(frame).toContain("MEMORY");
-    expect(frame).toContain("Entries");
-    expect(frame).toContain("3");
-    expect(frame).toContain("Capacity");
-    expect(frame).toContain("12%");
+  it("changes view lists every file with its diffstat", async () => {
+    const { screen, frame } = await renderView("working", "changes");
+    expect(frame).toContain("CHANGES");
+    expect(frame).toContain("src/ui/app.tsx");
+    expect(frame).toContain("+40");
+    expect(frame).toContain("-12");
+    expect(frame).toContain("src/ui/mission.ts");
+    screen.renderer.destroy();
+  });
 
+  it.each(["working", "failed"] as const)("checks view shows results and honest criteria (%s)", async (state) => {
+    const { screen, frame } = await renderView(state, "checks");
+    expect(frame).toContain("CHECKS");
+    expect(frame).toContain("bun test");
     // Real published criteria are listed — never invented — with an honest, aggregate-only
     // mark (§9 of the reconstruction brief: no fabricated per-criterion precision).
     expect(frame).toContain("AC1: Activity is visible");
     if (state === "failed") {
       expect(frame).toContain("× AC1");
+      expect(frame).toContain("2 fail");
       expect(frame).toContain("No verification action observed");
     } else {
       expect(frame).toContain("○ AC1");
+      expect(frame).toContain("5 pass");
       expect(frame).toContain("1 verification action observed");
     }
     screen.renderer.destroy();
   });
 
-  it("keeps the working workspace legible in the intentional light palette", async () => {
-    const screen = await testRender(<WorkspaceFixture state="working" t={light} />, { width: 160, height: 65 });
-    await screen.renderOnce();
-    const frame = screen.captureCharFrame();
-    const colors = screen.captureSpans();
-    if (process.env.SHELRA_CAPTURE_WORKSPACE === "1") console.log(`\nLIGHT WORKING\n${frame}`);
+  it("context view shows the window, the memory and the model actually in effect", async () => {
+    const { screen, frame } = await renderView("working", "context");
+    expect(frame).toContain("CONTEXT");
+    expect(frame).toContain("86K of 128K tokens");
+    // Memory shows the real saved count — never a fabricated placeholder.
+    expect(frame).toContain("LOADED");
+    expect(frame).toContain("3 saved");
+    expect(frame).toContain("SESSION");
+    // The model and the reasoning effort in effect (§11) — never just "Model".
+    expect(frame).toContain("openrouter/free");
+    expect(frame).toContain("effort high (auto)");
+    // Empty telemetry is not rendered.
+    expect(frame).not.toContain("TOKENS");
+    screen.renderer.destroy();
+  });
 
-    expect(frame).toContain("Ask Shelra...");
-    expect(frame).toContain("Running restart verification");
-    expect(frame).toContain("VERIFICATION");
+  it("keeps every view legible in the light palette", async () => {
+    const { screen, frame, colors } = await renderView("working", "plan", light);
+    expect(frame).toContain("PLAN");
     expect(frameUsesForeground(colors, light.brand)).toBe(true);
-    expect(frameUsesForeground(colors, light.aurora.green)).toBe(true);
-    expect(frameUsesForeground(colors, light.aurora.cyan)).toBe(true);
-    expect(frameUsesForeground(colors, light.aurora.violet)).toBe(true);
+    screen.renderer.destroy();
+  });
+
+  it("says so when a view has nothing to show", async () => {
+    const screen = await testRender(
+      <MissionPanel
+        view="plan"
+        t={dark}
+        width={80}
+        isProcessing={false}
+        kernel={null}
+        currentActivity="Idle"
+        plan={null}
+        changedFiles={[]}
+        activities={[]}
+        activeSubagent={null}
+        lastActivityAt={null}
+        delegations={[]}
+        activeToolCalls={[]}
+        contextSummary={null}
+        contextStats={null}
+        usage={{
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          costMicros: 0,
+          eventCount: 0,
+          models: [],
+          sources: [],
+          lastUpdatedAt: NOW,
+        }}
+        sessionStartedAt={NOW}
+        now={NOW}
+        model="openrouter/free"
+        modeLabel="Agent"
+        reasoningEffort="high (auto)"
+        verificationStatus={null}
+        memoryStatus={{ entryCount: 0, capacityRatio: 0 }}
+        memoryContext={null}
+      />,
+      { width: 84, height: 20 },
+    );
+    await screen.renderOnce();
+    expect(screen.captureCharFrame()).toContain("No plan yet");
     screen.renderer.destroy();
   });
 });
@@ -253,7 +284,8 @@ describe("VERIFICATION section with many long criteria", () => {
     };
 
     const screen = await testRender(
-      <WorkspaceSidebar
+      <MissionPanel
+        view="checks"
         t={dark}
         width={38}
         isProcessing={false}
@@ -296,9 +328,10 @@ describe("VERIFICATION section with many long criteria", () => {
     // mid-word with "..." the way a fixed single-line truncate() used to (the exact garbling
     // the user reported: "User can register with...", "Password reset with si...").
     expect(frame).toContain("User can register with");
-    expect(frame).toContain("their email address");
+    expect(frame).toContain("verify their email");
+    expect(frame).toContain("address");
     expect(frame).toContain("invalidates");
-    expect(frame).toContain("old sessions");
+    expect(frame).toContain("sessions");
     expect(frame).not.toMatch(/register with\.\.\./);
     expect(frame).not.toMatch(/with si\.\.\./);
     screen.renderer.destroy();
@@ -330,7 +363,8 @@ describe("VERIFICATION section with many long criteria", () => {
     };
 
     const screen = await testRender(
-      <WorkspaceSidebar
+      <MissionPanel
+        view="checks"
         t={dark}
         width={38}
         isProcessing={false}
@@ -374,14 +408,14 @@ describe("VERIFICATION section with many long criteria", () => {
     // Wraps across lines in the narrow sidebar (like the criteria descriptions above) — assert on
     // substrings that survive the wrap rather than the full sentence.
     expect(frame).toContain("1 of 2 criteria");
-    expect(frame).toContain("explicitly linked, the rest");
+    expect(frame).toContain("linked, the rest");
     expect(frame).toContain("aggregate only");
     screen.renderer.destroy();
   });
 });
 
 /**
- * Three-tier sub-agent disclosure (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §19, §14
+ * Three-tier sub-agent disclosure (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §19, §14
  * Phase 4). All three tiers are asserted in ONE rendered frame so the visual distinction between
  * them is proven, not just each tier in isolation.
  */
@@ -525,7 +559,8 @@ describe("AGENTS sidebar section under collapse", () => {
       detail: "bash: npx playwright test",
     };
     const screen = await testRender(
-      <WorkspaceSidebar
+      <MissionPanel
+        view="plan"
         t={dark}
         width={38}
         isProcessing
@@ -567,7 +602,7 @@ describe("AGENTS sidebar section under collapse", () => {
     expect(frame).toContain("AGENTS");
     // The count comes from real status, never from the disclosure tier — collapsing must not make
     // a running agent disappear from the totals.
-    expect(frame).toContain("Active");
+    expect(frame).toContain("1 active");
     expect(frame).toContain("Verify");
     expect(frame).toContain("idle 1m 1s · /tasks");
     expect(frame).not.toContain("npx playwright test");

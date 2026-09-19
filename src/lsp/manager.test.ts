@@ -133,7 +133,7 @@ describe("createWorkspaceLspManager", () => {
 });
 
 async function createTempWorkspace(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "grok-lsp-manager-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "shelra-lsp-manager-"));
   tempDirs.push(root);
   await mkdir(path.join(root, ".git"), { recursive: true });
   return root;

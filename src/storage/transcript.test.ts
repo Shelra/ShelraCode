@@ -14,7 +14,7 @@ describe("transcript media tool results", () => {
           url: "https://example.com/generated.png",
           sourcePath: "/tmp/source.png",
           prompt: "Create a new hero image",
-          modelId: "grok-imagine-image",
+          modelId: "image-model",
         },
       ],
     };

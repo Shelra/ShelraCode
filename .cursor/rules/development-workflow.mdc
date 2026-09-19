@@ -33,7 +33,7 @@ The managed local path is explicit through `--local`; copy `.env.example` to
 | Variable | Purpose |
 |----|----|
 | `OPENROUTER_API_KEY` | Primary cloud provider key; activates dynamic Free catalog and routing. |
-| `SHELRA_API_KEY` / `SHELRA_BASE_URL` | Optional generic OpenAI-compatible provider (`--remote`). Legacy `GROK_*` still read. |
+| `SHELRA_API_KEY` / `SHELRA_BASE_URL` | Optional generic OpenAI-compatible provider (`--remote`). |
 | `SHELRA_MODEL` | Force a model id for every turn |
 | `SHELRA_RUNTIME_BACKEND` | `cpu` or `cuda` for the managed llama.cpp engine (auto-detected) |
 | `TELEGRAM_BOT_TOKEN` | Enable the Telegram bridge |

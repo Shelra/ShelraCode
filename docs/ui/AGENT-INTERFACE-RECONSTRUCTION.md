@@ -178,15 +178,16 @@ review is deliberately not rendered as done. Coding completion requires host pro
 
 ### Design system
 
-The existing monochrome theme remains the source of truth. The first slice adds
-semantic status tokens only:
+The existing theme (`src/ui/theme.ts`) remains the source of truth. Shelra draws no
+gradients, glows or fades; every colour is flat. The dark palette is background `#080808`, surfaces `#111111` / `#1A1A1A`, text `#F0F0F0` / `#888888`, a single accent `#00FF88` (pressed `#00CF6E`), amber `#FFB84D` for warnings and Plan mode, red `#FF5C6C`, blue `#5CB8FF`, and hairline borders `#222222`.
+The first slice adds semantic status tokens only:
 
-- black background, dark panel, element surface, and existing border hierarchy;
+- near-black background, dark panel, element surface, and existing border hierarchy;
 - high-contrast primary text and muted metadata;
 - blue active, amber attention/verification-needed, green passed, red failed;
 - status words and ASCII markers always accompany color;
 - existing OpenTUI box and scrollbox spacing; no nested card dashboard;
-- no new fonts, gradients, decorative graphs, or motion.
+- no new fonts, gradients, glows, fades, decorative graphs, or motion.
 
 ## Gates 7-8: surface specification and implementation plan
 
@@ -267,7 +268,7 @@ Not yet demonstrated:
 - screenshot-based visual QA. There is no browser surface, and no visual terminal
   capture tool is available in this environment. These are limitations, not claims.
 
-The existing `.grok/verify-artifacts` screenshots were also inspected. They are
+The existing `.shelra/verify-artifacts` screenshots were also inspected. They are
 digital-clock task outputs, not screenshots of the Shelra terminal UI, so they are
 not counted as Shelra visual QA.
 

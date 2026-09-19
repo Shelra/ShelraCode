@@ -1,7 +1,7 @@
 import type { VerifyArtifact } from "../types/index";
 import type { VerifyProjectProfile } from "./recipes";
 
-export const VERIFY_ARTIFACT_DIR = ".grok/verify-artifacts";
+export const VERIFY_ARTIFACT_DIR = ".shelra/verify-artifacts";
 export const VERIFY_SCREENSHOT_PATH = `${VERIFY_ARTIFACT_DIR}/verify-screenshot.png`;
 export const VERIFY_VIDEO_PATH = `${VERIFY_ARTIFACT_DIR}/verify-smoke.webm`;
 export const VERIFY_LOG_PATH = `${VERIFY_ARTIFACT_DIR}/app.log`;
@@ -21,7 +21,7 @@ export function getVerifyArtifacts(): VerifyArtifact[] {
 export function buildReadinessGuidance(profile: VerifyProjectProfile): string[] {
   if (profile.recipe.smokeKind !== "http" || !profile.recipe.startCommand || !profile.recipe.startPort) {
     return [
-      "- If you start any process, capture stdout/stderr into a log file under .grok/verify-artifacts whenever practical.",
+      "- If you start any process, capture stdout/stderr into a log file under .shelra/verify-artifacts whenever practical.",
     ];
   }
 
@@ -41,7 +41,7 @@ export function buildBrowserGuidance(profile: VerifyProjectProfile): string[] {
       "- CRITICAL SEQUENCING: The dev server MUST stay running for the entire browser test. Do NOT stop the server until after recording is stopped and the browser is closed.",
       "",
       // biome-ignore lint/suspicious/noTemplateCurlyInString: shell variable reference in prompt text
-      "- IMPORTANT: All artifact paths MUST be absolute. Use `$(pwd)/${VERIFY_ARTIFACT_DIR}` to construct them. Example: `$(pwd)/.grok/verify-artifacts/verify-smoke.webm`.",
+      "- IMPORTANT: All artifact paths MUST be absolute. Use `$(pwd)/${VERIFY_ARTIFACT_DIR}` to construct them. Example: `$(pwd)/.shelra/verify-artifacts/verify-smoke.webm`.",
       "",
       "- Browser smoke test procedure (run each step as a SEPARATE bash tool call):",
       `  1. mkdir -p ${VERIFY_ARTIFACT_DIR}`,

@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "grok-dev@*"
+      - "shelra@*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag to publish (for example grok-dev@1.1.4)"
+        description: "Release tag to publish (for example shelra@1.1.4)"
         required: true
 
 permissions:
@@ -20,14 +20,14 @@ jobs:
       matrix:
         include:
           - runner: ubuntu-latest
-            build_output: grok
-            asset_name: grok-linux-x64
+            build_output: shelra
+            asset_name: shelra-linux-x64
           - runner: macos-latest
-            build_output: grok
-            asset_name: grok-darwin-arm64
+            build_output: shelra
+            asset_name: shelra-darwin-arm64
           - runner: windows-latest
-            build_output: grok.exe
-            asset_name: grok-windows-x64.exe
+            build_output: shelra.exe
+            asset_name: shelra-windows-x64.exe
 
     runs-on: ${{ matrix.runner }}
 
@@ -115,7 +115,7 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(env.RELEASE_TAG, '-rc') || contains(env.RELEASE_TAG, '-alpha') || contains(env.RELEASE_TAG, '-beta') || contains(env.RELEASE_TAG, '-pre') }}
           files: |
-            release-assets/**/grok-linux-x64
-            release-assets/**/grok-darwin-arm64
-            release-assets/**/grok-windows-x64.exe
+            release-assets/**/shelra-linux-x64
+            release-assets/**/shelra-darwin-arm64
+            release-assets/**/shelra-windows-x64.exe
             release-assets/checksums.txt

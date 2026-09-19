@@ -178,7 +178,7 @@ src/index.ts:797 → runHeadless(...)  :485-543
 --remote + -p:
   runHeadless(:498) → new Agent(apiKey, baseURL, …)
      src/agent/agent.ts:618  if (apiKey && baseURL) this.setApiKey(apiKey, baseURL)
-     ⚠ getBaseURL() returns "" unless SHELRA_BASE_URL/GROK_BASE_URL is set
+     ⚠ getBaseURL() returns "" unless SHELRA_BASE_URL is set
        (src/utils/settings.ts:345-347) ⇒ "" is falsy ⇒ NO provider created
   configureLocalProvider(agent, model, activate=false, requireReady=true)  :506
      └─ activate is false ⇒ skips the requireReady branch entirely (:448)

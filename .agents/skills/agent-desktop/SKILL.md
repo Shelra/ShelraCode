@@ -18,7 +18,7 @@ This project uses `agent-desktop` on the host. Prefer the built-in `Computer` su
 ## Requirements
 
 - `agent-desktop` must be installed and its native binary available.
-- On macOS, the terminal app running `grok` needs Accessibility permission.
+- On macOS, the terminal app running `shelra` needs Accessibility permission.
 - Refs from `computer_snapshot` are only valid until the next snapshot.
 
 ## Preferred flow

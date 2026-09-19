@@ -232,7 +232,7 @@ fixture.
 ## 9. The load-bearing `catalog.ts` consumers
 
 **Evidence (`03 §1.1`) — six production consumers, not four:**
-`agent.ts:36`, `grok/client.ts:5`, `index.ts:17`, `storage/usage.ts:1`,
+`agent.ts:36`, `toolset/client.ts:5`, `index.ts:17`, `storage/usage.ts:1`,
 `ui/app.tsx:11-15`, `utils/settings.ts:11`.
 
 **Risks per consumer once `getModelInfo` starts returning real data:**
@@ -241,7 +241,7 @@ fixture.
 | --- | --- | --- |
 | `agent.ts:566` `applyModelConstraints` | Currently dead (`getModelInfo` → `undefined` → `undefined !== false` → `true`). Once real, a model with `supportsClientTools: false` **starts injecting a "MODEL CONSTRAINTS: do not call bash/read_file/…" block** into the system prompt (audit `07` §1). | **Real behaviour change.** Ensure `capabilities.tools` is never wrongly `false`. Local candidates declare `tools: true` (`managed-llama.ts:85`); cloud reads `supported_parameters`. |
 | `agent.ts:655-657` `getModelInfo()` | Falls back to the catalog when no provider is set | Now returns data before a provider exists — the context gauge appears earlier. Benign, arguably a fix. |
-| `grok/client.ts:60-62` | `modelInfo` and reasoning effort become non-undefined | Verify no branch assumes `undefined`. |
+| `toolset/client.ts:60-62` | `modelInfo` and reasoning effort become non-undefined | Verify no branch assumes `undefined`. |
 | `storage/usage.ts:95` | Cost accounting gets real prices | **Free models are `0`** — make sure `0` renders as "free", not as "unknown". |
 | `ui/app.tsx:806` | Context gauge appears where it did not | Benign. |
 | `utils/settings.ts:369-372` | `DEFAULT_MODEL` | **Do not change it from `""`** (`04 §10.1`). |
@@ -288,7 +288,7 @@ correct is an open question (§12, Q6).
 | Reasoning is default-enabled on some free models | `02 §1.3` (`reasoning.default_enabled: true`) | Inflates latency and output tokens; consider disabling explicitly |
 | `resolveConfig` persists `--api-key` and `--model` as a side effect | `index.ts:765-766` | Surprising for a per-provider key; see Q5 |
 | `sst/opencode` now redirects to `anomalyco/opencode` | `01` header | Any future reference should use the new path |
-| Another session is editing `src/runtimes/*` and `src/models/*` | task brief | All line numbers are as of HEAD `fb97af8`, read 2026-09-06 19:37; re-verify before implementing |
+| Another session is editing `src/runtimes/*` and `src/models/*` | task brief | All line numbers are as of the working tree read 2026-09-06 19:37; re-verify before implementing |
 
 ---
 

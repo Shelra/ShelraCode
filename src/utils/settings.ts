@@ -13,10 +13,7 @@ import {
   API_KEY_ENV,
   BASE_URL_ENV,
   CONFIG_DIR_NAME,
-  getLegacyUserDir,
   getProductUserDir,
-  LEGACY_CONFIG_DIR_NAME,
-  MIGRATION_MARKER_NAME,
   MODEL_ENV,
   OPENROUTER_API_KEY_ENV,
   OPENROUTER_BASE_URL,
@@ -82,7 +79,7 @@ export interface SandboxSettings {
 export interface TelegramAudioInputSettings {
   /** Enable Telegram voice/audio transcription before sending text to the agent. Default: true. */
   enabled?: boolean;
-  /** Language code (e.g. `en`, `fr`) forwarded to the Grok STT endpoint. Default: en. */
+  /** Language code (e.g. `en`, `fr`) forwarded to the speech-to-text endpoint. Default: en. */
   language?: string;
 }
 
@@ -153,13 +150,7 @@ export function parseSubAgentsRawList(raw: unknown): CustomSubagentConfig[] {
     const model = typeof entry.model === "string" ? normalizeModelId(entry.model) : "";
     const instruction = typeof entry.instruction === "string" ? entry.instruction : "";
 
-    if (
-      !name ||
-      isReservedSubagentName(name) ||
-      !model ||
-      /^(?:xai|x-ai)\//i.test(model) ||
-      /^grok(?:-|$)/i.test(model)
-    ) {
+    if (!name || isReservedSubagentName(name) || !model || /^(?:xai|x-ai)\//i.test(model)) {
       continue;
     }
 
@@ -189,8 +180,6 @@ export interface ToolGroupSettings {
   schedules?: boolean;
   /** x402 wallet and paid requests; implied by `payments.enabled`. */
   payments?: boolean;
-  /** Image and video generation tools even when the provider does not advertise them. */
-  media?: boolean;
 }
 
 export interface UserSettings {
@@ -227,9 +216,7 @@ export interface ProjectSettings {
 }
 
 const USER_DIR = getProductUserDir();
-const LEGACY_USER_DIR = getLegacyUserDir();
 const USER_SETTINGS_PATH = path.join(USER_DIR, "user-settings.json");
-const LEGACY_USER_SETTINGS_PATH = path.join(LEGACY_USER_DIR, "user-settings.json");
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -252,7 +239,7 @@ function writeJson(filePath: string, data: unknown): void {
 }
 
 export function loadUserSettings(): UserSettings {
-  return readJson<UserSettings>(USER_SETTINGS_PATH) || readJson<UserSettings>(LEGACY_USER_SETTINGS_PATH) || {};
+  return readJson<UserSettings>(USER_SETTINGS_PATH) || {};
 }
 
 export function normalizeAppearancePreference(value: unknown): "system" | "dark" | "light" {
@@ -273,8 +260,6 @@ export function loadMotionPreference(): "full" | "reduced" {
 
 export function saveUserSettings(partial: Partial<UserSettings>): void {
   const current = loadUserSettings();
-  const hadCanonicalSettings = fs.existsSync(USER_SETTINGS_PATH);
-  const loadedLegacySettings = !hadCanonicalSettings && fs.existsSync(LEGACY_USER_SETTINGS_PATH);
   const next: UserSettings = {
     ...current,
     ...partial,
@@ -349,19 +334,11 @@ export function saveUserSettings(partial: Partial<UserSettings>): void {
   };
 
   writeJson(USER_SETTINGS_PATH, next);
-  if (loadedLegacySettings) {
-    writeJson(path.join(USER_DIR, MIGRATION_MARKER_NAME), {
-      source: LEGACY_USER_SETTINGS_PATH,
-      migratedAt: new Date().toISOString(),
-      writes: "canonical-only",
-    });
-  }
 }
 
 export function loadProjectSettings(): ProjectSettings {
   const projectPath = path.join(process.cwd(), CONFIG_DIR_NAME, "settings.json");
-  const legacyPath = path.join(process.cwd(), LEGACY_CONFIG_DIR_NAME, "settings.json");
-  return readJson<ProjectSettings>(projectPath) || readJson<ProjectSettings>(legacyPath) || {};
+  return readJson<ProjectSettings>(projectPath) || {};
 }
 
 export function saveProjectSettings(partial: Partial<ProjectSettings>): void {
@@ -388,7 +365,6 @@ export function getApiKey(): string | undefined {
     process.env[OPENROUTER_API_KEY_ENV] ||
     process.env.KEY_OPENROUTER ||
     process.env[API_KEY_ENV] ||
-    process.env.GROK_API_KEY ||
     getStoredOpenRouterApiKey() ||
     loadUserSettings().apiKey
   );
@@ -397,7 +373,6 @@ export function getApiKey(): string | undefined {
 export function getBaseURL(): string {
   return (
     process.env[BASE_URL_ENV] ||
-    process.env.GROK_BASE_URL ||
     (getApiKey() && (process.env[OPENROUTER_API_KEY_ENV] || process.env.KEY_OPENROUTER || getStoredOpenRouterApiKey())
       ? OPENROUTER_BASE_URL
       : "")
@@ -752,7 +727,6 @@ export function loadToolGroupSettings(): ToolGroupSettings {
     desktop: tools.desktop === true,
     schedules: tools.schedules === true,
     payments: tools.payments === true || loadPaymentSettings().enabled === true,
-    media: tools.media === true,
   };
 }
 

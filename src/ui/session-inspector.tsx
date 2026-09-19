@@ -11,9 +11,13 @@ import type {
   ToolCall,
 } from "../types/index";
 import { formatSubagentName } from "../utils/subagent-display";
+import { type LoadedContext, loadedContextRows } from "./loaded-context";
+import type { MissionTab } from "./mission";
 import {
   AGENT_IDLE_COLLAPSE_MS,
   type AgentDisclosureState,
+  type ChangeSummary,
+  type CheckSummary,
   completionLabel,
   completionStatus,
   type MemoryStatus,
@@ -22,9 +26,11 @@ import {
   type SessionUsageSummary,
   type UiActivityEvent,
   type UiCompletionStatus,
+  workStatus,
 } from "./observability";
 import { PlanView } from "./plan";
-import type { Theme } from "./theme";
+import { scrollbarStyle, type Theme } from "./theme";
+import { GLYPH, statusGlyph, toneColor } from "./transcript";
 
 export type InspectorTab = "overview" | "plan" | "activity" | "evidence" | "agents";
 
@@ -57,7 +63,8 @@ export function SessionStatusStrip({
   elapsedMs,
 }: SessionStatusStripProps) {
   const status = completionStatus(kernel, isProcessing);
-  if (!isProcessing && status !== "blocked" && status !== "verification-needed") return null;
+  // While a turn runs, the live line in the transcript is the single source of "what now".
+  if (isProcessing || (status !== "blocked" && status !== "verification-needed")) return null;
 
   const marker = isProcessing ? "●" : status === "blocked" ? "×" : "!";
   const statusColor = isProcessing ? t.accent : completionColor(status, t);
@@ -87,7 +94,7 @@ interface ActiveAgentsStripProps {
   /**
    * When the host last observed the foreground sub-agent report a new action — the timestamp of its
    * most recent `onSubagentStatus` emission, one per child tool call. Drives the tier-2 collapse
-   * (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §19). `null` keeps the row expanded, because
+   * (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §19). `null` keeps the row expanded, because
    * nothing about idleness can honestly be claimed without a real timestamp.
    */
   lastActivityAt: number | null;
@@ -226,7 +233,7 @@ function AgentStripRow({
 }
 
 /**
- * Tier 2 (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §19): a sub-agent that is still running
+ * Tier 2 (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §19): a sub-agent that is still running
  * but has reported nothing new for `AGENT_IDLE_COLLAPSE_MS`. Keeps the honest running marker and
  * the live elapsed timer — the work really is still in flight — and drops only the stale detail
  * line, pointing at `/tasks`, which still holds the full record. Status is never carried by color
@@ -306,7 +313,9 @@ export interface VerificationStatus {
   linkedCriteriaIds: string[];
 }
 
-interface WorkspaceSidebarProps {
+interface MissionPanelProps {
+  /** Which mission view to draw; the log is the transcript, drawn by the app. */
+  view: Exclude<MissionTab, "log">;
   t: Theme;
   width: number;
   isProcessing: boolean;
@@ -332,21 +341,28 @@ interface WorkspaceSidebarProps {
   memoryStatus: MemoryStatus;
   /** What retrieval injected into the latest turn, so recall is visible rather than assumed. */
   memoryContext: MemoryContext | null;
+  /** What the session has loaded besides the conversation; read only when the context view opens. */
+  loaded?: LoadedContext | null;
+  /** Files this session changed, with diffstat. */
+  changes?: ChangeSummary[];
+  /** Latest result of each check (tests, types, lint, build) that ran. */
+  checks?: CheckSummary[];
+  /** The last request failed at the provider. */
+  requestFailed?: boolean;
 }
 
-export function WorkspaceSidebar({
+export function MissionPanel({
+  view,
   t,
   width,
   isProcessing,
   kernel,
-  currentActivity,
   plan,
   changedFiles,
   activities,
   activeSubagent,
   lastActivityAt,
   delegations,
-  activeToolCalls,
   contextSummary,
   contextStats,
   usage,
@@ -358,241 +374,371 @@ export function WorkspaceSidebar({
   verificationStatus,
   memoryStatus,
   memoryContext,
-}: WorkspaceSidebarProps) {
-  const status = completionStatus(kernel, isProcessing);
-  const gateObservation = lastGateObservation(kernel);
-  const innerWidth = Math.max(16, width - 4);
-  const completedForegroundAgents = activities.filter(
-    (event) => event.kind === "agent" && event.status === "complete",
-  ).length;
+  loaded = null,
+  changes = [],
+  checks = [],
+  requestFailed = false,
+}: MissionPanelProps) {
+  const inner = Math.max(16, width);
+  const status = workStatus({ kernel, isProcessing, changedCount: changedFiles.length, checks, requestFailed });
+  // A criterion is only "verified" when something actually changed or ran; a plan-only turn proves nothing.
+  const markKernel =
+    kernel?.verificationPassed && changes.length === 0 && checks.length === 0
+      ? { ...kernel, verificationPassed: false }
+      : kernel;
   const runningDelegations = delegations.filter((delegation) => delegation.status === "running");
-  const completedDelegations = delegations.filter((delegation) => delegation.status !== "running");
-  // Disclosure tiers only change how much of a running agent is RESTATED here; the counts below
-  // stay derived from real status, so a collapsed agent still counts as active.
+  const finishedAgents =
+    activities.filter((event) => event.kind === "agent" && event.status === "complete").length +
+    delegations.filter((delegation) => delegation.status !== "running").length;
   const foregroundDisclosure = activeSubagent
     ? resolveAgentDisclosure({ status: "running", lastObservedActivityAt: lastActivityAt, now })
     : null;
-  const runningDelegationRows = runningDelegations
-    .slice(0, 3)
-    .map((delegation) => ({ delegation, disclosure: delegationDisclosure(delegation, now) }));
-  const activeAgentCount = (activeSubagent ? 1 : 0) + runningDelegations.length;
-  const failedEvents = activities.filter((event) => event.status === "failed").length;
-  const toolEvents = activities.filter((event) => event.kind === "tool").length;
   const completedPlanSteps = plan?.steps.filter((step) => step.status === "complete").length ?? 0;
-  const currentPlanStep =
-    plan?.steps.find((step) => step.status === "working") ??
-    plan?.steps.find((step) => step.status === "failed") ??
-    null;
+  const criteria = verificationStatus?.criteria ?? [];
+  const recalled = memoryContext?.expanded ?? [];
+  const contextFiles = (contextSummary?.files ?? []).map((file) => file.replace(/\\/g, "/").split("/").pop() ?? file);
+  const activeAgentCount = (activeSubagent ? 1 : 0) + runningDelegations.length;
+  const hasAgents = activeAgentCount > 0 || finishedAgents > 0;
+  const percentUsed = contextStats ? Math.round(contextStats.ratioUsed * 100) : null;
+  const loadedRows = loadedContextRows(loaded, { saved: memoryStatus.entryCount, recalled: recalled.length });
 
   return (
-    <box
-      width={width}
-      flexShrink={0}
-      border={["left"]}
-      borderColor={t.border}
-      backgroundColor={t.background}
-      paddingLeft={1}
-      paddingRight={1}
-      flexDirection="column"
-    >
-      <scrollbox flexGrow={1} minHeight={0}>
-        <SidebarSection t={t} title="PLAN">
-          {plan ? (
-            <>
-              <text fg={t.textMuted}>{`${completedPlanSteps} / ${plan.steps.length} completed`}</text>
-              {plan.steps.slice(0, 6).map((step) => (
-                <text
-                  key={`${step.title}:${step.description}:${step.satisfies?.join(",") ?? ""}`}
-                  fg={planStepColor(step.status, t)}
-                >
-                  {`${planStepMark(step.status)} ${truncate(step.title, innerWidth - 2)}`}
-                </text>
+    <box flexGrow={1} minHeight={0} flexDirection="column">
+      <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0} contentOptions={{ paddingRight: 1 }}>
+        {view === "plan" ? (
+          <>
+            <box paddingTop={1} flexDirection="column">
+              <text wrapMode="none">
+                <span style={{ fg: toneColor(t, status.tone) }}>{`${statusGlyph(status.tone)} `}</span>
+                <b>
+                  <span style={{ fg: t.text }}>{status.label}</span>
+                </b>
+              </text>
+              {status.hint ? <text fg={t.textMuted}>{`  ${normalizeText(status.hint)}`}</text> : null}
+            </box>
+            {plan ? (
+              <RailSection t={t} title="PLAN" meta={`${completedPlanSteps}/${plan.steps.length}`}>
+                <PlanRail t={t} plan={plan} width={inner} max={14} />
+              </RailSection>
+            ) : (
+              <EmptyState
+                t={t}
+                title="No plan yet"
+                detail="Shelra writes a plan for multi-step work. It appears here and updates as each step finishes."
+              />
+            )}
+            {hasAgents ? (
+              <RailSection
+                t={t}
+                title="AGENTS"
+                meta={
+                  activeAgentCount > 0
+                    ? `${activeAgentCount} active`
+                    : finishedAgents > 0
+                      ? `${finishedAgents} done`
+                      : undefined
+                }
+              >
+                {activeSubagent && foregroundDisclosure ? (
+                  <RailRow
+                    t={t}
+                    glyph={GLYPH.active}
+                    glyphColor={t.subagentAccent}
+                    text={`${formatSubagentName(activeSubagent.agent)}: ${
+                      foregroundDisclosure.tier === "collapsed"
+                        ? idlePointerLine(foregroundDisclosure.idleMs, "reported")
+                        : activeSubagent.detail
+                    }`}
+                    textColor={t.textSecondary}
+                    width={inner}
+                  />
+                ) : null}
+                {runningDelegations.slice(0, 3).map((delegation) => (
+                  <RailRow
+                    key={delegation.id}
+                    t={t}
+                    glyph={GLYPH.active}
+                    glyphColor={t.subagentAccent}
+                    text={`${formatSubagentName(delegation.agent)}: ${delegation.description}`}
+                    textColor={t.textSecondary}
+                    width={inner}
+                  />
+                ))}
+              </RailSection>
+            ) : null}
+          </>
+        ) : null}
+
+        {view === "changes" ? (
+          changes.length > 0 ? (
+            <RailSection t={t} title="CHANGES" meta={`${changes.length} file${changes.length === 1 ? "" : "s"}`}>
+              {changes.slice(0, 40).map((change) => (
+                <ChangeRail key={change.path} t={t} change={change} width={inner} />
               ))}
-              {plan.steps.length > 6 ? <text fg={t.textDim}>{`+ ${plan.steps.length - 6} more steps`}</text> : null}
-            </>
+              {changes.length > 40 ? <text fg={t.textDim}>{`  + ${changes.length - 40} more`}</text> : null}
+            </RailSection>
           ) : (
-            <text fg={t.textMuted}>{"No structured plan published."}</text>
-          )}
-        </SidebarSection>
+            <EmptyState t={t} title="No files changed" detail="Edits and new files appear here with their diffstat." />
+          )
+        ) : null}
 
-        <SidebarSection t={t} title="CURRENT">
-          {currentPlanStep ? (
-            <text fg={planStepColor(currentPlanStep.status, t)}>{truncate(currentPlanStep.title, innerWidth)}</text>
-          ) : kernel?.objective ? (
-            <text fg={t.text}>{truncate(kernel.objective, innerWidth)}</text>
-          ) : null}
-          <text fg={completionColor(status, t)}>{phaseLabel(kernel, isProcessing)}</text>
-          {currentActivity !== phaseLabel(kernel, isProcessing) ? (
-            <text fg={t.textMuted}>{truncate(currentActivity, innerWidth)}</text>
-          ) : null}
-          {kernel?.blockedReason ? (
-            <box paddingTop={1} flexDirection="column">
-              <text fg={t.danger}>{"× Completion blocked"}</text>
-              <text fg={t.textMuted}>{truncate(kernel.blockedReason, innerWidth)}</text>
-            </box>
-          ) : null}
-        </SidebarSection>
-
-        <SidebarSection t={t} title="CONTEXT">
-          {contextStats ? (
-            <>
-              <SidebarFact
-                t={t}
-                label="Estimate"
-                value={`${formatTokenCount(contextStats.usedTokens)} / ${formatTokenCount(contextStats.contextWindow)}`}
-              />
-              <ContextBar t={t} ratio={contextStats.ratioUsed} width={Math.min(18, innerWidth)} />
-              <SidebarFact t={t} label="Used" value={`${Math.round(contextStats.ratioUsed * 100)}%`} />
-              <SidebarFact
-                t={t}
-                label="Health"
-                value={contextHealth(contextStats.ratioUsed)}
-                tone={contextHealthColor(contextStats.ratioUsed, t)}
-              />
-            </>
-          ) : (
-            <text fg={t.textMuted}>{"Context estimate unavailable."}</text>
-          )}
-          {contextSummary ? (
-            <>
-              <SidebarFact t={t} label="Kind" value={contextSummary.classification.kind} />
-              <SidebarFact
-                t={t}
-                label="Files"
-                value={`${contextSummary.files.length}${contextSummary.truncated ? " (truncated)" : ""}`}
-              />
-            </>
-          ) : (
-            <text fg={t.textDim}>{"Breakdown appears after context compilation."}</text>
-          )}
-        </SidebarSection>
-
-        <SidebarSection t={t} title="AGENTS">
-          <SidebarFact
-            t={t}
-            label="Active"
-            value={String(activeAgentCount)}
-            tone={activeAgentCount > 0 ? t.subagentAccent : undefined}
-          />
-          <SidebarFact
-            t={t}
-            label="Completed"
-            value={String(completedForegroundAgents + completedDelegations.length)}
-          />
-          {activeSubagent && foregroundDisclosure ? (
-            <>
-              <text fg={foregroundDisclosure.tier === "collapsed" ? t.textMuted : t.subagentAccent}>
-                {formatSubagentName(activeSubagent.agent)}
-              </text>
-              <text fg={t.textMuted}>
-                {foregroundDisclosure.tier === "collapsed"
-                  ? idlePointerLine(foregroundDisclosure.idleMs, "reported")
-                  : truncate(activeSubagent.detail, innerWidth)}
-              </text>
-            </>
-          ) : runningDelegations.length === 0 ? (
-            <text fg={t.textDim}>{"No delegated agent is active."}</text>
-          ) : null}
-          {runningDelegationRows.map(({ delegation, disclosure }) => (
-            <box key={delegation.id} paddingTop={1} flexDirection="column">
-              <text fg={disclosure.tier === "collapsed" ? t.textMuted : t.subagentAccent}>
-                {`● ${formatSubagentName(delegation.agent)}`}
-              </text>
-              <text fg={t.textMuted}>
-                {disclosure.tier === "collapsed"
-                  ? idlePointerLine(disclosure.idleMs, "start-only")
-                  : truncate(delegation.description, innerWidth)}
-              </text>
-            </box>
-          ))}
-        </SidebarSection>
-
-        <SidebarSection t={t} title="TOKENS">
-          {usage.eventCount > 0 ? (
-            <>
-              <SidebarFact t={t} label="Input" value={formatTokenCount(usage.inputTokens)} />
-              <SidebarFact t={t} label="Output" value={formatTokenCount(usage.outputTokens)} />
-              <SidebarFact t={t} label="Total" value={formatTokenCount(usage.totalTokens)} />
-              <SidebarFact
-                t={t}
-                label={usage.costMicros > 0 ? "Est. cost" : "Cost"}
-                value={formatCostMicros(usage.costMicros)}
-              />
-            </>
-          ) : (
-            <text fg={t.textMuted}>{"No token usage recorded yet."}</text>
-          )}
-        </SidebarSection>
-
-        <SidebarSection t={t} title="VERIFICATION">
-          <SidebarFact t={t} label="Gate" value={completionLabel(status)} tone={completionColor(status, t)} />
-          <SidebarFact
-            t={t}
-            label="Host verify"
-            value={verificationLabel(kernel)}
-            tone={verificationColor(kernel, t)}
-          />
-          {kernel?.verificationDetails ? (
-            <text fg={t.textMuted}>{normalizeText(kernel.verificationDetails)}</text>
-          ) : null}
-          {gateObservation ? <text fg={t.accent}>{normalizeText(gateObservation)}</text> : null}
-          {verificationStatus?.criteria?.length ? (
-            <box paddingTop={1} flexDirection="column">
-              {verificationStatus.criteria.map((criterion) => {
+        {view === "checks" ? (
+          checks.length > 0 || criteria.length > 0 ? (
+            <RailSection t={t} title="CHECKS">
+              {checks.map((check) => (
+                <RailRow
+                  key={check.command}
+                  t={t}
+                  glyph={check.tone === "danger" ? GLYPH.failed : GLYPH.done}
+                  glyphColor={toneColor(t, check.tone)}
+                  text={check.command}
+                  textColor={check.tone === "danger" ? t.danger : t.textSecondary}
+                  meta={check.meta.split(" · ").slice(0, 2).join(" · ")}
+                  metaColor={check.tone === "danger" ? t.danger : t.textDim}
+                  width={inner}
+                />
+              ))}
+              {criteria.length > 0 && checks.length > 0 ? <box height={1} /> : null}
+              {criteria.map((criterion) => {
                 const mark = criterionMark(
-                  kernel,
-                  verificationStatus.evidenceCount,
+                  markKernel,
+                  verificationStatus?.evidenceCount ?? 0,
                   criterion.id,
-                  verificationStatus.linkedCriteriaIds,
+                  verificationStatus?.linkedCriteriaIds ?? [],
                 );
                 return (
-                  <text key={criterion.id} fg={criterionTone(mark, t)}>
-                    {`${criterionMarkSymbol(mark)} ${normalizeText(`${criterion.id}: ${criterion.description}`)}`}
+                  <text key={criterion.id}>
+                    <span style={{ fg: criterionTone(mark, t) }}>{`${criterionMarkSymbol(mark)} `}</span>
+                    <span style={{ fg: mark === "pending" ? t.textMuted : t.textSecondary }}>
+                      {normalizeText(`${criterion.id}: ${criterion.description}`)}
+                    </span>
                   </text>
                 );
               })}
-              <text fg={t.textDim}>{verificationEvidenceSummaryLine(verificationStatus)}</text>
-            </box>
-          ) : null}
-        </SidebarSection>
-
-        <SidebarSection t={t} title="MEMORY">
-          {memoryStatus.entryCount > 0 ? (
-            <>
-              <SidebarFact t={t} label="Entries" value={String(memoryStatus.entryCount)} />
-              <ContextBar t={t} ratio={memoryStatus.capacityRatio} width={Math.min(18, innerWidth)} />
-              <SidebarFact t={t} label="Capacity" value={`${Math.round(memoryStatus.capacityRatio * 100)}%`} />
-              {memoryContext && memoryContext.expanded.length > 0 ? (
-                <text fg={t.textDim}>{normalizeText(`Recalled: ${memoryContext.expanded.join(", ")}`)}</text>
-              ) : (
-                <text fg={t.textMuted}>{"Nothing recalled for the latest turn."}</text>
-              )}
-            </>
+              {verificationStatus && criteria.length > 0 ? (
+                <text fg={t.textDim}>{verificationEvidenceSummaryLine(verificationStatus)}</text>
+              ) : null}
+            </RailSection>
           ) : (
-            <text fg={t.textMuted}>{"No project memory saved yet."}</text>
-          )}
-        </SidebarSection>
+            <EmptyState
+              t={t}
+              title="Nothing has run yet"
+              detail="Tests, type checks, lint and builds appear here with their result."
+            />
+          )
+        ) : null}
 
-        <SidebarSection t={t} title="SESSION">
-          <SidebarFact t={t} label="Duration" value={formatElapsed(Math.max(0, now - sessionStartedAt))} />
-          <SidebarFact t={t} label="Files" value={String(changedFiles.length)} />
-          <SidebarFact t={t} label="Tools" value={String(toolEvents)} />
-          <SidebarFact
-            t={t}
-            label="Failures"
-            value={String(failedEvents)}
-            tone={failedEvents > 0 ? t.danger : undefined}
-          />
-          <SidebarFact t={t} label="Mode" value={modeLabel} />
-          <SidebarFact t={t} label="Model" value={truncate(model, innerWidth)} />
-          <SidebarFact t={t} label="Effort" value={reasoningEffort} />
-          {activeToolCalls.length > 0 ? (
-            <SidebarFact t={t} label="Live tools" value={String(activeToolCalls.length)} tone={t.accent} />
-          ) : null}
-        </SidebarSection>
+        {view === "context" ? (
+          <>
+            <RailSection t={t} title="CONTEXT" meta={percentUsed !== null ? `${percentUsed}%` : undefined}>
+              {contextStats ? (
+                <>
+                  <ContextBar t={t} ratio={contextStats.ratioUsed} width={Math.min(inner, 40)} />
+                  <text fg={t.textMuted} wrapMode="none">
+                    {`${formatTokenCount(contextStats.usedTokens)} of ${formatTokenCount(contextStats.contextWindow)} tokens`}
+                  </text>
+                </>
+              ) : (
+                <text fg={t.textDim}>{"Estimated after the first request"}</text>
+              )}
+              {contextFiles.length > 0 ? (
+                <text fg={t.textMuted} wrapMode="none">
+                  {truncate(
+                    `${contextFiles.slice(0, 6).join(", ")}${contextFiles.length > 6 ? ` +${contextFiles.length - 6}` : ""}`,
+                    inner,
+                  )}
+                </text>
+              ) : null}
+            </RailSection>
+            {loadedRows.length > 0 ? (
+              <RailSection t={t} title="LOADED">
+                {loadedRows.map((row) => (
+                  <text key={row.label} wrapMode="none">
+                    <span style={{ fg: t.textDim }}>{row.label.padEnd(8)}</span>
+                    <span style={{ fg: t.textSecondary }}>{truncate(row.text, Math.max(8, inner - 8))}</span>
+                  </text>
+                ))}
+              </RailSection>
+            ) : null}
+            <RailSection t={t} title="SESSION">
+              <text fg={t.textMuted} wrapMode="none">
+                {truncate(`${model} · ${modeLabel}`, inner)}
+              </text>
+              {reasoningEffort !== "not supported" ? (
+                <text fg={t.textMuted} wrapMode="none">
+                  {truncate(`effort ${reasoningEffort}`, inner)}
+                </text>
+              ) : null}
+              <text fg={t.textMuted} wrapMode="none">
+                {truncate(
+                  `${formatElapsed(Math.max(0, now - sessionStartedAt))}${
+                    usage.eventCount > 0 ? ` · ${formatTokenCount(usage.totalTokens)} tokens` : ""
+                  }${usage.costMicros > 0 ? ` · ${formatCostMicros(usage.costMicros)}` : ""}`,
+                  inner,
+                )}
+              </text>
+            </RailSection>
+          </>
+        ) : null}
       </scrollbox>
     </box>
   );
+}
+
+function RailSection({
+  t,
+  title,
+  meta,
+  children,
+}: {
+  t: Theme;
+  title: string;
+  meta?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <box paddingTop={1} flexDirection="column">
+      <box flexDirection="row" flexShrink={0}>
+        <text wrapMode="none">
+          <span style={{ fg: t.textDim }}>{"[ "}</span>
+          <span style={{ fg: t.brand }}>
+            <b>{title}</b>
+          </span>
+          <span style={{ fg: t.textDim }}>{" ]"}</span>
+        </text>
+        <box flexGrow={1} />
+        {meta ? (
+          <text fg={t.textDim} wrapMode="none">
+            {meta}
+          </text>
+        ) : null}
+      </box>
+      <box flexDirection="column">{children}</box>
+    </box>
+  );
+}
+
+function RailRow({
+  t,
+  glyph,
+  glyphColor,
+  text,
+  textColor,
+  meta,
+  metaColor,
+  width,
+  bold,
+}: {
+  t: Theme;
+  glyph: string;
+  glyphColor: string;
+  text: string;
+  textColor: string;
+  meta?: string;
+  metaColor?: string;
+  width: number;
+  bold?: boolean;
+}) {
+  const room = Math.max(6, width - 2 - (meta ? meta.length + 1 : 0));
+  const shown = truncate(text, room);
+  return (
+    <box flexDirection="row" flexShrink={0}>
+      <text wrapMode="none">
+        <span style={{ fg: glyphColor }}>{`${glyph} `}</span>
+        {bold ? (
+          <b>
+            <span style={{ fg: textColor }}>{shown}</span>
+          </b>
+        ) : (
+          <span style={{ fg: textColor }}>{shown}</span>
+        )}
+      </text>
+      <box flexGrow={1} />
+      {meta ? (
+        <text wrapMode="none" fg={metaColor ?? t.textDim}>
+          {meta}
+        </text>
+      ) : null}
+    </box>
+  );
+}
+
+/** Steps around the active one: a long plan never pushes the current step out of view. */
+function PlanRail({ t, plan, width, max = 6 }: { t: Theme; plan: Plan; width: number; max?: number }) {
+  const steps = plan.steps;
+  const activeIndex = Math.max(
+    0,
+    steps.findIndex((step) => step.status === "working" || step.status === "failed") >= 0
+      ? steps.findIndex((step) => step.status === "working" || step.status === "failed")
+      : steps.findIndex((step) => (step.status ?? "pending") === "pending"),
+  );
+  const start = steps.length <= max ? 0 : Math.min(Math.max(0, activeIndex - 1), steps.length - max);
+  const visible = steps.slice(start, start + max);
+  const before = start;
+  const after = steps.length - (start + visible.length);
+
+  return (
+    <>
+      {before > 0 ? <text fg={t.textDim}>{`  ${before} earlier`}</text> : null}
+      {visible.map((step, offset) => {
+        const status = step.status ?? "pending";
+        const active = status === "working";
+        const description = active && max > 6 ? normalizeText(step.description ?? "") : "";
+        return (
+          <box
+            // biome-ignore lint/suspicious/noArrayIndexKey: plan steps are ordered and titles may repeat
+            key={`${start + offset}:${step.title}`}
+            flexDirection="column"
+            flexShrink={0}
+          >
+            <RailRow
+              t={t}
+              glyph={planStepMark(status)}
+              glyphColor={status === "complete" ? t.success : planStepColor(status, t)}
+              text={step.title}
+              textColor={
+                active ? t.text : status === "failed" ? t.danger : status === "complete" ? t.textMuted : t.textDim
+              }
+              width={width}
+              bold={active}
+            />
+            {description ? (
+              <text fg={t.textMuted} wrapMode="none">{`  ${truncate(description, Math.max(8, width - 2))}`}</text>
+            ) : null}
+          </box>
+        );
+      })}
+      {after > 0 ? <text fg={t.textDim}>{`  ${after} more`}</text> : null}
+    </>
+  );
+}
+
+function ChangeRail({ t, change, width }: { t: Theme; change: ChangeSummary; width: number }) {
+  const marker = change.kind === "added" ? "A" : change.kind === "deleted" ? "D" : "M";
+  const stat =
+    `${change.additions > 0 ? `+${change.additions}` : ""}${change.removals > 0 ? ` -${change.removals}` : ""}`.trim();
+  const room = Math.max(6, width - 2 - stat.length - 1);
+  return (
+    <box flexDirection="row" flexShrink={0}>
+      <text wrapMode="none">
+        <span style={{ fg: change.kind === "deleted" ? t.danger : t.textDim }}>{`${marker} `}</span>
+        <span style={{ fg: t.textSecondary }}>{shortenTail(change.path, room)}</span>
+      </text>
+      <box flexGrow={1} />
+      <text wrapMode="none">
+        {change.additions > 0 ? <span style={{ fg: t.diffAddedFg }}>{`+${change.additions}`}</span> : null}
+        {change.removals > 0 ? (
+          <span style={{ fg: t.diffRemovedFg }}>{`${change.additions > 0 ? " " : ""}-${change.removals}`}</span>
+        ) : null}
+      </text>
+    </box>
+  );
+}
+
+/** Keeps the end of a path: the file name is what identifies it. */
+function shortenTail(path: string, max: number): string {
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.length <= max ? normalized : `…${normalized.slice(-(max - 1))}`;
 }
 
 interface SessionInspectorProps {
@@ -678,6 +824,7 @@ export function SessionInspector({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -725,7 +872,7 @@ export function SessionInspector({
             );
           })}
         </box>
-        <scrollbox flexGrow={1} minHeight={0} paddingLeft={2} paddingRight={2}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0} paddingLeft={2} paddingRight={2}>
           {tab === "overview" ? (
             <OverviewTab
               t={t}
@@ -927,7 +1074,7 @@ function ActivityTab({
 }
 
 /**
- * The `/tasks` surface — tier 2's pointer target (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md
+ * The `/tasks` surface — tier 2's pointer target (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md
  * §19). Every value here reads from the same real sources the strip and sidebar use: the live
  * `onSubagentStatus` stream for the foreground sub-agent, and `DelegationManager.list()` (the same
  * on-disk job records the `delegation_list` tool returns) for background runs. Collapsing a row in
@@ -1147,26 +1294,6 @@ function Fact({ t, label, value, tone }: { t: Theme; label: string; value: strin
   );
 }
 
-function SidebarSection({ t, title, children }: { t: Theme; title: string; children: React.ReactNode }) {
-  return (
-    <box paddingTop={1} flexDirection="column">
-      <text fg={t.primary}>
-        <b>{title}</b>
-      </text>
-      <box flexDirection="column">{children}</box>
-    </box>
-  );
-}
-
-function SidebarFact({ t, label, value, tone }: { t: Theme; label: string; value: string; tone?: string }) {
-  return (
-    <box flexDirection="row">
-      <text fg={t.textDim}>{`${label}: `}</text>
-      <text fg={tone ?? t.textMuted}>{value}</text>
-    </box>
-  );
-}
-
 function ActivityRow({ t, event }: { t: Theme; event: UiActivityEvent }) {
   const tone = event.status === "failed" ? t.danger : event.status === "active" ? t.accent : t.text;
   return (
@@ -1266,7 +1393,7 @@ function criterionMarkSymbol(mark: CriterionMark): string {
 
 /** Honest summary line beneath the criteria list — never claims more linkage than actually happened. */
 /** The most recent host gate message (verification block or requirement audit), if any. */
-function lastGateObservation(kernel: KernelState | null): string | null {
+function _lastGateObservation(kernel: KernelState | null): string | null {
   if (!kernel) return null;
   for (let index = kernel.observations.length - 1; index >= 0; index -= 1) {
     const observation = kernel.observations[index];
@@ -1300,7 +1427,7 @@ function criterionTone(mark: CriterionMark, t: Theme): string {
   }
 }
 
-function statusMark(status: UiCompletionStatus): string {
+function _statusMark(status: UiCompletionStatus): string {
   switch (status) {
     case "passed":
       return "OK";
@@ -1400,16 +1527,16 @@ function formatCostMicros(costMicros: number): string {
   return `$${dollars.toFixed(dollars < 0.01 ? 4 : 2)}`;
 }
 
-function contextHealth(ratioUsed: number): string {
+function _contextHealth(ratioUsed: number): string {
   if (ratioUsed >= 0.85) return "Near compaction";
   if (ratioUsed >= 0.6) return "Growing";
   return "Healthy";
 }
 
 function contextHealthColor(ratioUsed: number, t: Theme): string {
-  if (ratioUsed >= 0.85) return t.warning;
-  if (ratioUsed >= 0.6) return t.accent;
-  return t.success;
+  if (ratioUsed >= 0.85) return t.danger;
+  if (ratioUsed >= 0.6) return t.warning;
+  return t.textSecondary;
 }
 
 function shortId(value: string): string {

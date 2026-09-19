@@ -16,7 +16,7 @@ describe("runtime model catalog", () => {
     expect(MODELS).toEqual([]);
     expect(DEFAULT_MODEL).toBe("");
     expect(getModelIds()).toEqual([]);
-    expect(getModelInfo("grok-4.3")).toBeUndefined();
+    expect(getModelInfo("test-model-a")).toBeUndefined();
   });
 
   it("exposes normalized metadata after discovery and preserves aliases", () => {

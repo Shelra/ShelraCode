@@ -8,7 +8,7 @@ slice; 3–5 make it usable; 6–9 are polish and integration.
 
 * No change to `src/providers/types.ts` (`ProviderAdapter` is frozen).
 * `src/providers/architecture.test.ts` keeps passing — never import a provider
-  SDK into `agent.ts`, `grok/tools.ts` or `agent/compaction.ts`.
+  SDK into `agent.ts`, `toolset/tools.ts` or `agent/compaction.ts`.
 * `normalizeModelId` stays `trim()`.
 * `DEFAULT_MODEL` stays `""` (rationale: `04 §10.1`).
 * No network call on any path that did not previously make one, unless the user

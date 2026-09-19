@@ -319,7 +319,7 @@ export async function startScheduleDaemon(cwd = process.cwd()): Promise<Schedule
     cwd,
     detached: true,
     stdio: "ignore",
-    env: { ...process.env, FORCE_COLOR: "0", GROK_DAEMON_CHILD: "1" },
+    env: { ...process.env, FORCE_COLOR: "0" },
   });
   child.unref();
 

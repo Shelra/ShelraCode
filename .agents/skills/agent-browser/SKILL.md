@@ -47,12 +47,12 @@ agent-browser --session verify fill @e2 "text"
 agent-browser --session verify press Enter
 
 # Record the smoke test as video
-agent-browser record start .grok/verify-artifacts/verify-smoke.webm
+agent-browser record start .shelra/verify-artifacts/verify-smoke.webm
 
 # Capture screenshot proof (use --screenshot-dir, not a positional path)
-mkdir -p .grok/verify-artifacts
-agent-browser --screenshot-dir .grok/verify-artifacts screenshot
-agent-browser --screenshot-dir .grok/verify-artifacts screenshot --full
+mkdir -p .shelra/verify-artifacts
+agent-browser --screenshot-dir .shelra/verify-artifacts screenshot
+agent-browser --screenshot-dir .shelra/verify-artifacts screenshot --full
 
 # Stop recording and clean up
 agent-browser record stop
@@ -62,7 +62,7 @@ agent-browser close
 ## Guidance
 
 - Keep browser checks narrow in phase 1: page load, one or two critical controls, and optional screenshot evidence.
-- Save screenshots to stable workspace-relative paths under `.grok/verify-artifacts/` so verify can report them back to the user.
+- Save screenshots to stable workspace-relative paths under `.shelra/verify-artifacts/` so verify can report them back to the user.
 - Prefer `wait --load networkidle` after `open`.
 - If the page is dynamic, use `snapshot -i` again after each meaningful DOM change.
 - If the target URL is ambiguous because multiple forwarded ports exist, stop and report the ambiguity instead of guessing.

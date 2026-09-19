@@ -19,7 +19,7 @@ function contrast(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-describe("Shelra Aurora themes", () => {
+describe("Shelra themes", () => {
   it("resolves explicit and system appearance without an inversion fallback", () => {
     expect(resolveTheme("dark", "light")).toBe(dark);
     expect(resolveTheme("light", "dark")).toBe(light);

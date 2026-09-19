@@ -17,9 +17,8 @@ before it.
    `intelligence`, `exec`, `runtimes`, `providers`, `router`, `security`, `context`, `models` — are
    unversioned, with `git stash` empty and no branch holding them. One `git clean -fd` destroys the
    differentiating half of the project. Last commit was 2026-05-15; zero commits in 90 days.
-2. **Fix the repository's identity.** `git remote origin` still points at `superagent-ai/grok-cli`; the
-   README carries an npm badge and a `bun add -g shelra` instruction for a package that returns 404;
-   `package.json` still lists `"author": "Vibe Kit"`.
+2. **Fix the repository's identity.** The README carries an npm badge and a `bun add -g shelra`
+   instruction for a package that returns 404.
 3. **Close the wallet path or delete it.** `src/wallet/manager.ts` writes a private key as plaintext JSON;
    there is no encryption anywhere in the tree (`grep` for `createCipher|scrypt|keytar|safeStorage`
    returns nothing); and `resolveWorkspacePath` is imported by exactly one module, so the bash tool, MCP

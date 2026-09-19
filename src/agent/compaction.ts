@@ -232,7 +232,7 @@ export function createCompactionSummaryMessage(summary: string): ModelMessage {
 
 /**
  * Appends the CURRENT acceptance criteria verbatim after the LLM-generated prose summary. The
- * summarization model paraphrases everything else (§14 Phase 2 item 3, docs/migration/
+ * summarization model paraphrases everything else (§14 Phase 2 item 3, docs/architecture/
  * 14-AGENT-HARNESS-RECONSTRUCTION.md) — fine for prose, but the exact criterion ids, wording, and
  * verification methods must survive a compaction boundary unchanged, since a resumed turn and the
  * completion gate (§9) both need to state/check the SAME criteria the model published, not a

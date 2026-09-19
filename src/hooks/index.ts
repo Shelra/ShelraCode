@@ -28,6 +28,35 @@ import type {
 } from "./types.js";
 import { getMatchQuery } from "./types.js";
 
+export interface HookIssue {
+  event: string;
+  /** `blocking` stopped the action; `non_blocking_error` failed without stopping it. */
+  outcome: "blocking" | "non_blocking_error";
+  message: string;
+}
+
+let hookIssueListener: ((issue: HookIssue) => void) | null = null;
+
+/** The interface subscribes here. A hook that succeeds is silent; only failures and blocks are reported. */
+export function setHookIssueListener(listener: ((issue: HookIssue) => void) | null): void {
+  hookIssueListener = listener;
+}
+
+/** Reports every failed or blocking hook of one run to the listener, with the first useful line of why. */
+export function reportHookIssues(event: string, result: AggregatedHookResult): void {
+  if (!hookIssueListener) return;
+  for (const hook of result.results) {
+    if (hook.outcome !== "blocking" && hook.outcome !== "non_blocking_error") continue;
+    const reason =
+      (hook.stderr ?? "").split(/\r?\n/).find((line) => line.trim()) ?? hook.output?.reason ?? hook.output?.stopReason;
+    try {
+      hookIssueListener({ event, outcome: hook.outcome, message: (reason ?? hook.command).trim() });
+    } catch {
+      // A broken listener must never break the agent.
+    }
+  }
+}
+
 function emptyResult(): AggregatedHookResult {
   return {
     blocked: false,
@@ -52,7 +81,9 @@ export async function executeEventHooks(
     const matchValue = getMatchQuery(input);
     const hooks = getMatchingHooks(config, input.hook_event_name, matchValue);
     if (hooks.length === 0) return emptyResult();
-    return await executeHooks(hooks, input, cwd, signal);
+    const result = await executeHooks(hooks, input, cwd, signal);
+    reportHookIssues(input.hook_event_name, result);
+    return result;
   } catch {
     return emptyResult();
   }

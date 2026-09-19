@@ -16,7 +16,7 @@ import type {
 } from "../providers/types";
 
 /**
- * End-to-end proof for §14 Phase 2 item 4 (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md):
+ * End-to-end proof for §14 Phase 2 item 4 (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md):
  * the project memory index is injected into every turn's system prompt automatically — mirroring
  * how AGENTS.md/custom instructions already are — rather than depending on the model remembering
  * to call the `memory_list` tool itself.

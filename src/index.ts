@@ -34,7 +34,7 @@ import { normalizeModelId, primeCatalog } from "./models/catalog";
 import { installLocalModel } from "./models/manager";
 import { fetchOpenRouterCatalog, isOpenRouterBaseURL } from "./models/openrouter";
 import type { ModelRecommendation } from "./models/recommendation";
-import { isGuaranteedFree, type ModelPolicy, resolveCatalogModel, routeCatalogModel } from "./models/routing";
+import { type ModelPolicy, routeCatalogModel, startupModelRequest } from "./models/routing";
 import type { CatalogEntry } from "./models/types";
 import { catalogEntryToModelInfo } from "./models/types";
 import {
@@ -160,19 +160,13 @@ async function configureRemoteProvider(
     }
   };
 
-  const savedModelIsFree = requestedModel
-    ? requestedModel.toLowerCase() === "openrouter/free" ||
-      (() => {
-        const entry = resolveCatalogModel(catalog.entries, requestedModel);
-        return entry ? isGuaranteedFree(entry) : false;
-      })()
-    : true;
-  const effectiveRequestedModel =
-    catalog.entries.length === 0
-      ? "openrouter/free"
-      : policy === "free" && !explicitModelSelection && !savedModelIsFree
-        ? "openrouter/free"
-        : (requestedModel ?? (policy === "free" ? "openrouter/free" : undefined));
+  // An explicit model or a still-free saved preference wins. Otherwise the free policy picks the most
+  // capable free model, with the free router as the last fallback (see startupModelRequest).
+  const effectiveRequestedModel = startupModelRequest(catalog.entries, {
+    requestedModel,
+    policy,
+    explicitModelSelection,
+  });
   const route = routeCatalogModel(catalog.entries, {
     // The free router is a real OpenRouter model endpoint and remains usable
     // when catalog discovery is temporarily unavailable. A stale paid saved
@@ -831,7 +825,7 @@ function renderObjectiveError(format: HeadlessOutputFormat, code: string, messag
  * engine from `Agent.processMessage()`. The `Agent` constructed below is only used to resolve
  * a provider/model; the actual work happens in `runObjective()`. See the architecture note at
  * the top of `src/autonomy/kernel.ts` for what this path does and does not share with
- * interactive chat (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase 0).
+ * interactive chat (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase 0).
  */
 async function runAutonomousHeadless(
   prompt: string,

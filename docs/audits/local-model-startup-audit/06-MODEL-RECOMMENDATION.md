@@ -49,7 +49,7 @@ is always `> 0`, the ternary always takes the `gpuMemory * 0.72` arm, and
 execute**. RAM, CPU, cores, storage, arch and platform are **not inputs to the
 bootstrap recommendation at all**.
 
-This directly contradicts `docs/migration/11-STARTUP-ONBOARDING.md:16-19`
+This directly contradicts `docs/architecture/11-STARTUP-ONBOARDING.md:16-19`
 ("scores the reviewed Hugging Face GGUF seed catalog using GPU/VRAM first,
 **then RAM/CPU/storage and context headroom**"). **Docs vs code: code wins;
 the doc claim is false.**

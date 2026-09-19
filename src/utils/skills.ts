@@ -42,7 +42,7 @@ const INJECTION_SHAPED_PATTERNS: RegExp[] = [
 
 /**
  * Lightweight structural/heuristic review — not an LLM-graded trust score (Claude Code's own
- * `skill-reviewer` agent does that; out of scope for this pass, see docs/migration/
+ * `skill-reviewer` agent does that; out of scope for this pass, see docs/architecture/
  * 14-AGENT-HARNESS-RECONSTRUCTION.md §19). Catches the cheap, high-confidence cases: a
  * prompt-injection-shaped instruction embedded in the skill, or a description too vague/broad to
  * have been written for a real, specific workflow. False negatives are expected and acceptable —
@@ -219,7 +219,7 @@ The following <available_skills> list specialized workflows. Use them when they 
 If a skill's description fits the task or could improve consistency, read that skill's instructions first using read_file with the path from <location>, then follow the SKILL.md body.
 Paths inside a skill (scripts/, references/, assets/) are relative to the skill directory (the folder containing SKILL.md); prefer absolute paths in tool calls.`;
 
-/** OpenCode-style XML catalog plus activation instructions for read_file. Returns null if no skills. */
+/** XML catalog (the Agent Skills `<available_skills>` format) plus activation instructions for read_file. Returns null if no skills. */
 export function formatSkillsForPrompt(skills: DiscoveredSkill[]): string | null {
   if (skills.length === 0) return null;
   const parts = skills.map((s) => {

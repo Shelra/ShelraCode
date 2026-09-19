@@ -10,7 +10,7 @@ import type {
   BenchmarkRunSummary,
   BenchmarkTaskResult,
 } from "../bench/types";
-import type { Theme } from "./theme";
+import { scrollbarStyle, type Theme } from "./theme";
 
 export type BenchView = "leaderboard" | "history" | "trend" | "compare" | "tasks" | "live";
 export type BenchTrendMetric = BenchmarkDimension | "cost" | "duration";
@@ -109,6 +109,7 @@ export function BenchModal({
         height={panelHeight}
         backgroundColor={t.backgroundPanel}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -149,7 +150,7 @@ export function BenchModal({
             {loading ? "loading…" : "j/k move · enter inspect · r refresh"}
           </text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0} paddingTop={1}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0} paddingTop={1}>
           {error ? (
             <box paddingLeft={2} paddingRight={2} paddingBottom={1}>
               <text fg={t.danger}>{`Bench data unavailable: ${error}`}</text>

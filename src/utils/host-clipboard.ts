@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 
 /**
- * Put plain text on the OS clipboard (OpenCode-style fallback when OSC 52 is not enough).
+ * Put plain text on the OS clipboard (fallback when OSC 52 is not enough).
  */
 export function copyTextToHostClipboard(text: string): void {
   const platform = os.platform();

@@ -7,7 +7,7 @@ vi.mock("./checkpoint", () => ({
   ensureVerifyCheckpoint: vi.fn(async () => ({
     created: true,
     checkpointName: "verify-nextjs-test",
-    guestWorkdir: "/grok/verify/worktree",
+    guestWorkdir: "/shelra/verify/worktree",
   })),
 }));
 
@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe("prepareVerifySandbox", () => {
   it("adds checkpoint-backed sandbox settings for verify execution", async () => {
-    const dir = makeTempDir("grok-verify-runtime-prep-");
+    const dir = makeTempDir("shelra-verify-runtime-prep-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev", build: "next build" } }, null, 2),
@@ -40,7 +40,7 @@ describe("prepareVerifySandbox", () => {
     expect(prepared.profile.appKind).toBe("nextjs");
     expect(prepared.sandboxSettings.allowNet).toBe(true);
     expect(prepared.sandboxSettings.from).toBe("verify-nextjs-test");
-    expect(prepared.sandboxSettings.guestWorkdir).toBe("/grok/verify/worktree");
+    expect(prepared.sandboxSettings.guestWorkdir).toBe("/shelra/verify/worktree");
     expect(prepared.sandboxSettings.syncHostWorkspace).toBe(true);
     expect(prepared.checkpoint?.created).toBe(true);
   });

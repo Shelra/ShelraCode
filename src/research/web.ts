@@ -234,7 +234,7 @@ async function googleApiSearch(query: string, apiKey: string, engineId: string, 
  * Tavily: https://api.tavily.com/search. Verified against Tavily's own current API reference
  * (2026-09-13) — real free tier (1,000 credits/mo, no card) rather than an HTML scrape, so this
  * is the preferred provider whenever a key is configured. See
- * docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §9 for the provider comparison this order
+ * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9 for the provider comparison this order
  * is based on.
  */
 async function tavilySearch(query: string, apiKey: string, options: WebSearchOptions): Promise<WebSearchSource[]> {
@@ -409,7 +409,7 @@ async function htmlSearch(
 }
 
 /**
- * Provider chain (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §9): Tavily first when
+ * Provider chain (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9): Tavily first when
  * configured (a real free-tier API, no card, no HTML scraping), then the existing Google/
  * DuckDuckGo path unchanged for zero-config and legacy-key users, then Exa/SearXNG/Brave as
  * further optional fallbacks in that order — Brave last because it now requires a card even

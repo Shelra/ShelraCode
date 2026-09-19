@@ -42,21 +42,21 @@ describe("loadCustomInstructions", () => {
   });
 
   it("returns null when no instruction files exist", async () => {
-    const home = makeTempDir("grok-home-");
-    const cwd = makeTempDir("grok-cwd-");
+    const home = makeTempDir("shelra-home-");
+    const cwd = makeTempDir("shelra-cwd-");
     const loadCustomInstructions = await importLoadCustomInstructions(home);
 
     expect(loadCustomInstructions(cwd)).toBeNull();
   });
 
   it("loads global plus repo-chain AGENTS files in order", async () => {
-    const home = makeTempDir("grok-home-");
-    const repoRoot = makeTempDir("grok-repo-");
+    const home = makeTempDir("shelra-home-");
+    const repoRoot = makeTempDir("shelra-repo-");
     const cwd = path.join(repoRoot, "pkg", "feature");
     fs.mkdirSync(path.join(repoRoot, ".git"));
     fs.mkdirSync(cwd, { recursive: true });
 
-    writeFile(path.join(home, ".grok", "AGENTS.md"), "global instructions");
+    writeFile(path.join(home, ".shelra", "AGENTS.md"), "global instructions");
     writeFile(path.join(repoRoot, "AGENTS.md"), "root instructions");
     writeFile(path.join(repoRoot, "pkg", "AGENTS.md"), "pkg instructions");
     writeFile(path.join(repoRoot, "pkg", "feature", "AGENTS.md"), "feature instructions");
@@ -68,8 +68,8 @@ describe("loadCustomInstructions", () => {
   });
 
   it("prefers AGENTS.override.md over AGENTS.md in the same directory", async () => {
-    const home = makeTempDir("grok-home-");
-    const repoRoot = makeTempDir("grok-repo-");
+    const home = makeTempDir("shelra-home-");
+    const repoRoot = makeTempDir("shelra-repo-");
     const cwd = path.join(repoRoot, "nested");
     fs.mkdirSync(path.join(repoRoot, ".git"));
     fs.mkdirSync(cwd, { recursive: true });

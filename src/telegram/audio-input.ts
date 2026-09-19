@@ -61,7 +61,7 @@ export async function transcribeTelegramAudioMessage(opts: {
     throw new Error("Telegram audio input is disabled in settings.");
   }
 
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "grok-telegram-audio-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "shelra-telegram-audio-"));
   try {
     const file = await opts.api.getFile(opts.source.fileId);
     if (!file.file_path) {

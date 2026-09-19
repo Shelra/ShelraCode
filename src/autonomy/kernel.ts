@@ -53,7 +53,7 @@ import {
  * terminal here. They are the input to the next cycle. The runtime only stops for the
  * reasons enumerated in `StopReason`.
  *
- * DELIBERATELY SEPARATE FROM `src/agent/agent.ts` + `src/agent/kernel.ts` (docs/migration/
+ * DELIBERATELY SEPARATE FROM `src/agent/agent.ts` + `src/agent/kernel.ts` (docs/architecture/
  * 14-AGENT-HARNESS-RECONSTRUCTION.md §2.1, §14 Phase 0). This is not neglected duplication —
  * it is a different product for a different mode: an unattended, single-command, one-shot
  * objective runner (`shelra --autonomous`), versus `agent.ts`'s interactive, tool-calling,
@@ -112,7 +112,7 @@ export interface KernelDeps {
   /**
    * Called every time the objective's durable state changes (phase, stop reason, tasks).
    * This is the kernel's only hook into cross-run/cross-session indexing (see
-   * `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6) — the kernel stays free of any
+   * `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6) — the kernel stays free of any
    * storage import; the composition root in `runtime.ts` decides what "change" means to persist.
    */
   onObjectiveChange?(objective: Objective): void;

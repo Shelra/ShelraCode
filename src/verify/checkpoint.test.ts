@@ -69,7 +69,7 @@ afterEach(() => {
 
 describe("verify checkpoints", () => {
   it("skips checkpoint creation when no install commands are needed", async () => {
-    const dir = makeTempDir("grok-verify-ckpt-go-");
+    const dir = makeTempDir("shelra-verify-ckpt-go-");
     fs.writeFileSync(path.join(dir, "go.mod"), "module example.com/demo\n");
     const profile = inferVerifyProjectProfile(dir);
 
@@ -79,7 +79,7 @@ describe("verify checkpoints", () => {
   });
 
   it("creates a deterministic checkpoint for install-based recipes", async () => {
-    const dir = makeTempDir("grok-verify-ckpt-node-");
+    const dir = makeTempDir("shelra-verify-ckpt-node-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev" } }, null, 2),
@@ -101,7 +101,7 @@ describe("verify checkpoints", () => {
 
     expect(result.created).toBe(true);
     expect(result.checkpointName).toMatch(/^verify-nextjs-/);
-    expect(result.guestWorkdir).toBe("/grok/verify/worktree");
+    expect(result.guestWorkdir).toBe("/shelra/verify/worktree");
     expect(execFileMock).toHaveBeenCalledTimes(1);
     expect(spawnMock).toHaveBeenCalledTimes(1);
     const spawnArgs = spawnMock.mock.calls[0];
@@ -112,7 +112,7 @@ describe("verify checkpoints", () => {
   });
 
   it("reuses an existing checkpoint when present", async () => {
-    const dir = makeTempDir("grok-verify-ckpt-existing-");
+    const dir = makeTempDir("shelra-verify-ckpt-existing-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev" } }, null, 2),
@@ -138,7 +138,7 @@ describe("verify checkpoints", () => {
   });
 
   it("deletes a failed checkpoint when bootstrap/install fails", async () => {
-    const dir = makeTempDir("grok-verify-ckpt-fail-");
+    const dir = makeTempDir("shelra-verify-ckpt-fail-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "15.0.0" } }, null, 2));
     fs.writeFileSync(path.join(dir, "bun.lock"), "");
     const profile = inferVerifyProjectProfile(dir);

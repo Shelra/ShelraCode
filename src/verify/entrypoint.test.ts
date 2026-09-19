@@ -37,7 +37,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("detects a nextjs app and infers a default port", () => {
-    const dir = makeTempDir("grok-verify-next-");
+    const dir = makeTempDir("shelra-verify-next-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify(
@@ -65,7 +65,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("detects bun as package manager and bootstraps bun plus node tooling for web apps", () => {
-    const dir = makeTempDir("grok-verify-bun-");
+    const dir = makeTempDir("shelra-verify-bun-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev" } }, null, 2),
@@ -89,7 +89,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("enables ephemeral installs in the verify runtime config", () => {
-    const dir = makeTempDir("grok-verify-runtime-");
+    const dir = makeTempDir("shelra-verify-runtime-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }, null, 2));
 
     const runtime = createVerifyRuntimeConfig(dir);
@@ -99,7 +99,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("forces full network in verify mode and ignores inherited allowlists", () => {
-    const dir = makeTempDir("grok-verify-network-");
+    const dir = makeTempDir("shelra-verify-network-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { dev: "next dev" } }, null, 2));
 
     const runtime = createVerifyRuntimeConfig(dir, {
@@ -114,7 +114,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("preserves explicit sandbox ports over inferred defaults", () => {
-    const dir = makeTempDir("grok-verify-override-");
+    const dir = makeTempDir("shelra-verify-override-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "15.0.0" } }, null, 2));
 
     const profile = inferVerifyProjectProfile(dir, { ports: ["4444:4444"], from: "web-env" });
@@ -123,7 +123,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("uses an override recipe as the primary source of truth", () => {
-    const dir = makeTempDir("grok-verify-override-recipe-");
+    const dir = makeTempDir("shelra-verify-override-recipe-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ dependencies: { next: "15.0.0" } }, null, 2));
     const overrideRecipe: VerifyRecipe = {
       ecosystem: "custom",
@@ -149,7 +149,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("builds a generic python recipe", () => {
-    const dir = makeTempDir("grok-verify-python-");
+    const dir = makeTempDir("shelra-verify-python-");
     fs.writeFileSync(path.join(dir, "pyproject.toml"), "[project]\nname = 'demo'\n");
     fs.mkdirSync(path.join(dir, "tests"));
 
@@ -161,7 +161,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("builds a go recipe from go.mod", () => {
-    const dir = makeTempDir("grok-verify-go-");
+    const dir = makeTempDir("shelra-verify-go-");
     fs.writeFileSync(path.join(dir, "go.mod"), "module example.com/demo\n");
     fs.writeFileSync(path.join(dir, "main.go"), "package main\nfunc main() {}\n");
 
@@ -173,7 +173,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("builds a task prompt with detected project context and browser guidance", () => {
-    const dir = makeTempDir("grok-verify-prompt-");
+    const dir = makeTempDir("shelra-verify-prompt-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify(
@@ -212,13 +212,13 @@ describe("verify entrypoint helpers", () => {
     expect(prompt).toContain("MANDATORY workflow");
     expect(prompt).toContain("Phase 4");
     expect(prompt).toContain("QA tester");
-    expect(prompt).toContain(".grok/verify-artifacts");
+    expect(prompt).toContain(".shelra/verify-artifacts");
     expect(prompt).toContain("Keep the report compact");
     expect(prompt).toContain("Evidence is mandatory even on failure");
   });
 
   it("builds a detector prompt that requests JSON output", () => {
-    const dir = makeTempDir("grok-verify-detect-");
+    const dir = makeTempDir("shelra-verify-detect-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { dev: "next dev" } }, null, 2));
     const prompt = buildVerifyDetectPrompt(dir);
     expect(prompt).toContain("Return ONLY valid JSON");
@@ -228,7 +228,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("explains ambiguous browser setup when multiple ports exist", () => {
-    const dir = makeTempDir("grok-verify-ambiguous-");
+    const dir = makeTempDir("shelra-verify-ambiguous-");
     fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { dev: "node server.js" } }, null, 2));
     const prompt = buildVerifyTaskPrompt(dir, { ports: ["3000:3000", "8080:8080"] });
     expect(prompt).toContain("Multiple forwarded ports are configured");
@@ -236,7 +236,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("buildVerifyPrompt drives both sub-agents with a draft recipe", () => {
-    const dir = makeTempDir("grok-verify-prompt-dynamic-");
+    const dir = makeTempDir("shelra-verify-prompt-dynamic-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev", build: "next build" } }, null, 2),
@@ -248,7 +248,7 @@ describe("verify entrypoint helpers", () => {
     expect(prompt).toContain("Step 1");
     expect(prompt).toContain("Step 2");
     expect(prompt).toContain("task");
-    expect(prompt).toContain(".grok/environment.json");
+    expect(prompt).toContain(".shelra/environment.json");
     expect(prompt).toContain('"ecosystem"');
     expect(prompt).toContain('"bootstrapCommands"');
     expect(prompt).toContain("apt-get");
@@ -256,7 +256,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("uses an override recipe when creating the runtime config", () => {
-    const dir = makeTempDir("grok-verify-runtime-override-");
+    const dir = makeTempDir("shelra-verify-runtime-override-");
     const overrideRecipe: VerifyRecipe = {
       ecosystem: "custom",
       appKind: "node",
@@ -278,7 +278,7 @@ describe("verify entrypoint helpers", () => {
   });
 
   it("adds notes for unknown projects instead of pretending it knows the recipe", () => {
-    const dir = makeTempDir("grok-verify-unknown-");
+    const dir = makeTempDir("shelra-verify-unknown-");
     const profile = inferVerifyProjectProfile(dir);
     const recipe: VerifyRecipe = profile.recipe;
     expect(recipe.appKind).toBe("unknown");

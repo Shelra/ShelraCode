@@ -60,11 +60,7 @@ function getOrCreateManager(cwd: string): WorkspaceLspManager {
 function resolveManagerKey(cwd: string): string {
   let current = path.resolve(cwd);
   while (true) {
-    if (
-      existsSync(path.join(current, ".shelra")) ||
-      existsSync(path.join(current, ".grok")) ||
-      existsSync(path.join(current, ".git"))
-    ) {
+    if (existsSync(path.join(current, ".shelra")) || existsSync(path.join(current, ".git"))) {
       return current;
     }
     const parent = path.dirname(current);

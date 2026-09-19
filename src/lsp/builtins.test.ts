@@ -97,7 +97,7 @@ describe("createRuntimeLspDefinitions", () => {
 });
 
 async function createTempWorkspace(): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "grok-lsp-builtins-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "shelra-lsp-builtins-"));
   tempDirs.push(root);
   await mkdir(path.join(root, ".git"), { recursive: true });
   return root;

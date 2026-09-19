@@ -137,7 +137,8 @@ user how to collect a real run; production code has no benchmark fixtures.
   counters, usage, timing, evidence references, and structured operational
   events. It never displays private chain-of-thought.
 - Dark/light roles, glyphs, focus, and reduced-motion behavior reuse
-  `src/ui/theme.ts`; aurora is reserved for active/current accents.
+  `src/ui/theme.ts`. Shelra draws no gradients, glows or fades; every colour is
+  flat, and the single accent (`#00FF88` in dark) marks active/current state.
 
 ## CLI and manifest
 

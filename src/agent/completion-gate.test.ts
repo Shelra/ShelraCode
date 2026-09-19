@@ -13,7 +13,7 @@ import type {
 
 /**
  * Behavioral proof for the completion/verification gate
- * (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §9), added after reproducing the failure
+ * (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9), added after reproducing the failure
  * live on 2026-09-13: a headless coding turn published a plan with acceptance criteria, wrote
  * files, re-read its own source, and reported "Done." having never made a single
  * verification-shaped tool call. `describeVerificationEvidence` in agent.ts deliberately does
@@ -225,7 +225,7 @@ describe("completion/verification gate", () => {
     }
 
     // Round 1 (initial) + 3 nudge rounds (MAX_VERIFICATION_RETRIES) = 4 total streamed rounds.
-    // Raised from 1 nudge to 3 (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §12): each
+    // Raised from 1 nudge to 3 (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §12): each
     // nudge re-enters the same turn's tool loop, so more nudges means more real room to reach a
     // verifiable state on a large scaffold, not just asking the same unmet question again.
     expect(provider.round).toBe(4);
@@ -308,7 +308,7 @@ describe("completion/verification gate", () => {
     }
 
     // Would have been wrongly blocked after round 2 under the old 1-nudge limit — this is the
-    // exact shape of the live CITADEL failure (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §12).
+    // exact shape of the live CITADEL failure (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §12).
     expect(provider.round).toBe(4);
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
     expect(chunks.at(-1)).toEqual({ type: "done" });

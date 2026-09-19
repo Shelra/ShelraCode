@@ -1,7 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useEffect, useRef } from "react";
 import type { StoredSchedule } from "../tools/schedule";
-import type { Theme } from "./theme";
+import { scrollbarStyle, type Theme } from "./theme";
 
 export type ScheduleBrowseRow = { kind: "schedule"; schedule: StoredSchedule };
 
@@ -69,6 +69,7 @@ export function ScheduleBrowserModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -85,7 +86,7 @@ export function ScheduleBrowserModal({
             {searchQuery || <span style={{ fg: t.textMuted }}>{"Search by name, cron, instruction..."}</span>}
           </text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
           {rows.map((row, idx) => {
             const selected = idx === selectedIndex;
             const schedule = row.schedule;

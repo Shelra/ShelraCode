@@ -7,7 +7,7 @@ import { sendFileToTelegram, type TelegramFileContext } from "./send-file";
 const tempDirs: string[] = [];
 
 function createTempFile(name: string, sizeBytes = 16): string {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "grok-tg-sendfile-"));
+  const dir = mkdtempSync(path.join(os.tmpdir(), "shelra-tg-sendfile-"));
   tempDirs.push(dir);
   const filePath = path.join(dir, name);
   writeFileSync(filePath, Buffer.alloc(sizeBytes, 1));

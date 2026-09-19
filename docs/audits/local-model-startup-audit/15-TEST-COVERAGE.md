@@ -24,7 +24,7 @@ run 5 (runtime-prep.test.ts): 1 file  /   1 test    passed
 TOTAL                        66 files / 273 tests   EXIT 0
 ```
 
-**Note:** `docs/migration/10-IMPLEMENTATION-STATUS.md` records "66 test files /
+**Note:** `docs/architecture/10-IMPLEMENTATION-STATUS.md` records "66 test files /
 268 tests". The file count matches; the test count has drifted by +5. Minor
 doc/code drift.
 

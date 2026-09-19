@@ -276,7 +276,7 @@ describe("managed llama runtime lifecycle", () => {
       PATH: "/usr/bin",
       SystemRoot: "C:\\Windows",
       GGML_CUDA_ENABLE_UNIFIED_MEMORY: "1",
-      GROK_API_KEY: "secret",
+      XAI_API_KEY: "secret",
       OPENAI_API_KEY: "secret",
       HF_TOKEN: "secret",
       WALLET_PRIVATE_KEY: "secret",
@@ -286,7 +286,7 @@ describe("managed llama runtime lifecycle", () => {
     expect(environment.PATH).toBe("/usr/bin");
     expect(environment.SystemRoot).toBe("C:\\Windows");
     expect(environment.GGML_CUDA_ENABLE_UNIFIED_MEMORY).toBe("1");
-    expect(environment).not.toHaveProperty("GROK_API_KEY");
+    expect(environment).not.toHaveProperty("XAI_API_KEY");
     expect(environment).not.toHaveProperty("OPENAI_API_KEY");
     expect(environment).not.toHaveProperty("HF_TOKEN");
     expect(environment).not.toHaveProperty("WALLET_PRIVATE_KEY");

@@ -116,7 +116,7 @@ describe("deleteFile", () => {
 });
 
 async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "grok-file-tools-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "shelra-file-tools-"));
   tempDirs.push(dir);
   return dir;
 }

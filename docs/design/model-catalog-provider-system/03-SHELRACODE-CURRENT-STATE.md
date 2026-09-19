@@ -1,11 +1,9 @@
 # 03 — Audit: ShelraCode's current model / provider / catalog code
 
-**Repository:** `D:\PROYECTS\grok-cli` (product `ShelraCode`, package `shelra`).
+**Repository:** `D:\PROYECTS\shelra` (product `ShelraCode`, package `shelra`).
 **Observed at:** 2026-09-06 ~19:37 local.
-**Git HEAD:** `fb97af83f06dca873281d60168430f06c8de6324` — *"bump version"*,
-committed 2026-05-15 12:09:46 +0200.
-**Working tree:** dirty. 44 tracked files modified, `src/grok/models.ts` and
-`src/grok/models.test.ts` deleted, and the following directories **untracked**
+**Working tree:** dirty. 44 tracked files modified, `src/toolset/models.ts` and
+`src/toolset/models.test.ts` deleted, and the following directories **untracked**
 (i.e. new, never committed): `docs/`, `scripts/`, `src/cli/`, `src/context/`,
 `src/hardware/`, `src/models/`, `src/product/`, `src/providers/`, `src/router/`,
 `src/runtimes/`, `src/security/`, `src/setup/`, `src/startup/`, plus
@@ -39,7 +37,7 @@ provider models are bundled."*
 
 **FACT — the test asserts the emptiness** (`src/models/catalog.test.ts:4-17`):
 `expect(MODELS).toEqual([])`, `expect(DEFAULT_MODEL).toBe("")`,
-`expect(getModelIds()).toEqual([])`, `expect(getModelInfo("grok-4.3")).toBeUndefined()`.
+`expect(getModelIds()).toEqual([])`, `expect(getModelInfo("test-model-a")).toBeUndefined()`.
 It also pins the normalisation contract: a padded
 `hf:Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF:Q4_K_M` must round-trip unchanged
 apart from trimming (`:12-16`). **Any real catalog must keep that property** —
@@ -52,7 +50,7 @@ model ids are opaque and must not be aliased or lower-cased.
 | Consumer | Line | Imports | What breaks today |
 | --- | --- | --- | --- |
 | `src/agent/agent.ts` | `:36` | `getModelInfo`, `normalizeModelId` | `applyModelConstraints` at `:566` reads `getModelInfo(modelId)` → always `undefined`; `agent.getModelInfo()` at `:655-657` falls back to `undefined` when no provider is set |
-| `src/grok/client.ts` | `:5` | `getEffectiveReasoningEffort`, `getModelInfo`, `normalizeModelId` | `:60-62` computes a `modelInfo` that is always `undefined` and a reasoning effort that is always `undefined` |
+| `src/toolset/client.ts` | `:5` | `getEffectiveReasoningEffort`, `getModelInfo`, `normalizeModelId` | `:60-62` computes a `modelInfo` that is always `undefined` and a reasoning effort that is always `undefined` |
 | `src/index.ts` | `:17` | `normalizeModelId` | fine (trim only) — `:702`, `:748`, `:766` |
 | `src/storage/usage.ts` | `:1` | `getModelInfo` | `:95` — token→cost accounting has no prices, so **cost is always unknown** |
 | `src/ui/app.tsx` | `:11-15` | `getEffectiveReasoningEffort`, `getModelInfo`, `getSupportedReasoningEfforts`, `normalizeModelId` | `:806` context gauge disappears when there is no provider; `ModelPickerModal`'s reasoning-effort column (`:5399`, `:5434-5437`) is permanently empty |
@@ -280,7 +278,7 @@ mnemonics …); loopback-only port allocation (`:58-72`); `--jinja` always passe
 `ProviderAdapter`.
 
 **FACT — `src/providers/architecture.test.ts` is a text-grep boundary test**
-(19 lines). It asserts that `src/agent/agent.ts`, `src/grok/tools.ts` and
+(19 lines). It asserts that `src/agent/agent.ts`, `src/toolset/tools.ts` and
 `src/agent/compaction.ts` do **not** contain the string `"XaiProvider"`, and
 that `agent.ts` does not contain `"@ai-sdk/xai"`. **Nothing in the catalog
 design touches those files' provider imports**, so this test is not at risk —
@@ -323,11 +321,10 @@ installed* are invisible; cloud models do not exist.
 
 **FACT — `src/product/identity.ts`** (28 lines): `PRODUCT_NAME = "ShelraCode"`,
 `CLI_NAME = "shelra"`, `CONFIG_DIR_NAME = ".shelra"`,
-`LEGACY_CONFIG_DIR_NAME = ".grok"`, `MIGRATION_MARKER_NAME = "migration.json"`,
 `API_KEY_ENV = "SHELRA_API_KEY"`, `BASE_URL_ENV = "SHELRA_BASE_URL"`,
 `MODEL_ENV = "SHELRA_MODEL"`, `MAX_TOKENS_ENV = "SHELRA_MAX_TOKENS"`,
 `BACKGROUND_CHILD_ENV`, `HOOK_EVENT_ENV`; `getProductUserDir()` → `~/.shelra`
-(`:21-23`), `getLegacyUserDir()` → `~/.grok` (`:26-28`).
+(`:21-23`).
 
 **FACT — `UserSettings`** (`src/utils/settings.ts:176-193`):
 
@@ -341,20 +338,18 @@ installed* are invisible; cloud models do not exist.
 `apiKey` is a single flat string — implicitly "the one remote provider".
 
 **FACT — `ProjectSettings`** (`:195-200`): `{model?, sandboxMode?, sandbox?, lsp?}`,
-read from `<cwd>/.shelra/settings.json` with a `<cwd>/.grok/…` fallback
+read from `<cwd>/.shelra/settings.json`
 (`:316-320`).
 
-**FACT — paths & migration.** `USER_SETTINGS_PATH = ~/.shelra/user-settings.json`
-(`:204`); `loadUserSettings` reads the canonical path, then the legacy
-`~/.grok/user-settings.json` (`:227-229`); `saveUserSettings` **always writes
-canonical only** and drops a `migration.json` marker when it had read legacy
-(`:306-313`). Directory mode `0o700` (`:209`), file mode `0o600` (`:224`).
+**FACT — paths.** `USER_SETTINGS_PATH = ~/.shelra/user-settings.json`
+(`:204`); `loadUserSettings` reads that path only and `saveUserSettings` writes
+it only; there is no legacy-path fallback and no migration marker. Directory mode `0o700` (`:209`), file mode `0o600` (`:224`).
 
 **FACT — credential accessors:**
 
 ```ts
-getApiKey()  = process.env.SHELRA_API_KEY || process.env.GROK_API_KEY || loadUserSettings().apiKey   // :341-343
-getBaseURL() = process.env.SHELRA_BASE_URL || process.env.GROK_BASE_URL || ""                        // :345-347
+getApiKey()  = process.env.SHELRA_API_KEY || loadUserSettings().apiKey   // :341-343
+getBaseURL() = process.env.SHELRA_BASE_URL || ""                        // :345-347
 ```
 
 **FACT — model precedence** (`getCurrentModel(mode)`, `:349-365`):

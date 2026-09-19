@@ -81,13 +81,13 @@ describe("schedule helpers", () => {
     expect(mod.cronMatchesDate("0 9 * * 5-7", monday)).toBe(false);
   });
 
-  it("creates, lists, and removes recurring schedules under ~/.grok/schedules", async () => {
-    const home = makeTempDir("grok-schedule-home-");
-    const cwd = makeTempDir("grok-schedule-cwd-");
+  it("creates, lists, and removes recurring schedules under ~/.shelra/schedules", async () => {
+    const home = makeTempDir("shelra-schedule-home-");
+    const cwd = makeTempDir("shelra-schedule-cwd-");
     const mod = await importScheduleModule({ home });
     const manager = new mod.ScheduleManager(
       () => cwd,
-      () => "grok-test-model",
+      () => "test-model",
     );
     const name = `Daily Security Scan ${path.basename(home)}`;
     const id = mod.toScheduleId(name);
@@ -101,7 +101,7 @@ describe("schedule helpers", () => {
     expect(result.startedPid).toBeNull();
     expect(result.schedule).toMatchObject({
       id,
-      model: "grok-test-model",
+      model: "test-model",
       directory: cwd,
       cron: "0 9 * * 1-5",
       enabled: true,
@@ -126,7 +126,7 @@ describe("schedule helpers", () => {
       mod.buildHeadlessCliArgs({
         directory: "/repo",
         instruction: "Summarize the repository status.",
-        model: "grok-test-model",
+        model: "test-model",
         maxToolRounds: 123,
       }),
     ).toEqual([
@@ -135,7 +135,7 @@ describe("schedule helpers", () => {
       "--prompt",
       "Summarize the repository status.",
       "--model",
-      "grok-test-model",
+      "test-model",
       "--max-tool-rounds",
       "123",
     ]);

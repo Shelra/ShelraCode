@@ -1,4 +1,4 @@
-import type { ModelInfo, ReasoningEffort, ToolCall, ToolResult } from "../types/index";
+import type { ModelInfo, ReasoningEffort, ToolCall } from "../types/index";
 
 /**
  * Provider-neutral usage data. Adapters may omit fields that their protocol
@@ -111,8 +111,6 @@ export interface ProviderToolContext {
     toolName: "web_search" | "x_search",
     signal?: AbortSignal,
   ) => Promise<{ success: boolean; output: string }>;
-  generateImage?: (input: unknown, cwd: string, signal?: AbortSignal) => Promise<ToolResult>;
-  generateVideo?: (input: unknown, cwd: string, signal?: AbortSignal) => Promise<ToolResult>;
 }
 
 /** Provider contract consumed by the application Agent façade. */

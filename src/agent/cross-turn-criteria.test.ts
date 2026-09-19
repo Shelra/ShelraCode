@@ -12,7 +12,7 @@ import type {
 } from "../providers/types";
 
 /**
- * Proof for §14 Phase 2 item 1 (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md): the
+ * Proof for §14 Phase 2 item 1 (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md): the
  * completion gate's acceptance criteria are session-scoped (`Agent.activeAcceptanceCriteria`),
  * not turn-scoped — a plan published in an earlier turn stays visible to the gate (and to
  * `getVerificationStatus()` for the UI) in later turns, instead of silently vanishing the moment

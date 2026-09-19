@@ -85,6 +85,40 @@ function eligible(entries: readonly CatalogEntry[], request: ModelRouteRequest):
   });
 }
 
+const FREE_ROUTER_ID = "openrouter/free";
+
+/** OpenRouter's free router: a real endpoint that picks a model per request, so it is a fallback, not a candidate. */
+export function isFreeRouter(entry: CatalogEntry): boolean {
+  const providerModelId = entry.state.kind === "cloud" ? entry.state.providerModelId.trim().toLowerCase() : "";
+  return entry.id.trim().toLowerCase() === FREE_ROUTER_ID || providerModelId === FREE_ROUTER_ID;
+}
+
+/** Total parameters in billions, read from the model id ("nemotron-3-ultra-550b-a55b" -> 550). Active-parameter suffixes are ignored. */
+export function parseModelSizeB(id: string): number | undefined {
+  const name = (id.trim().toLowerCase().split("/").pop() ?? "").replace(/:[a-z]+$/, "");
+  const match = name.match(/(?:^|[^a-z0-9.])(\d+(?:\.\d+)?)b(?![a-z0-9])/);
+  return match?.[1] === undefined ? undefined : Number(match[1]);
+}
+
+const TIER_UP = /(?:^|[-_.])(ultra|max|pro|large|xl|opus|sonnet|plus|prime)(?:[-_.]|$)/;
+const TIER_DOWN = /(?:^|[-_.])(flash|lite|mini|nano|lightning|small|tiny|xs|edge|instant|micro)(?:[-_.]|$)/;
+
+/**
+ * A transparent, deterministic proxy for "how capable is this model" when all candidates cost the
+ * same (free). It is a heuristic over what the catalog exposes, not a benchmark: reasoning support,
+ * parameter-size class from the id, a size-tier keyword, and context as a small tiebreak.
+ */
+export function capabilityScore(entry: CatalogEntry): number {
+  const name = entry.id.trim().toLowerCase().split("/").pop() ?? "";
+  let score = entry.capabilities.reasoning ? 30 : 0;
+  const size = parseModelSizeB(entry.id);
+  score += size === undefined ? 40 : Math.min(80, Math.max(0, Math.log2(Math.max(size, 1)) * 8));
+  if (TIER_UP.test(name)) score += 12;
+  if (TIER_DOWN.test(name)) score -= 15;
+  score += Math.min(4, entry.contextWindow / 262_144) * 2;
+  return score;
+}
+
 function costScore(entry: CatalogEntry): number {
   return entry.cost.pricingKnown === false ? Number.POSITIVE_INFINITY : entry.cost.prompt + entry.cost.completion;
 }
@@ -94,6 +128,8 @@ function rank(entries: CatalogEntry[], policy: ModelPolicy): CatalogEntry[] {
     const aFree = isGuaranteedFree(a);
     const bFree = isGuaranteedFree(b);
     if (aFree !== bFree) return aFree ? -1 : 1;
+    // Every free model costs the same, so cost cannot rank them: prefer the most capable one.
+    if (policy === "free") return capabilityScore(b) - capabilityScore(a) || b.contextWindow - a.contextWindow;
     if (policy === "max" || policy === "quality") {
       return b.contextWindow - a.contextWindow || costScore(b) - costScore(a);
     }
@@ -149,10 +185,12 @@ export function routeCatalogModel(
     };
   }
 
-  const candidates = rank(
-    eligible(entries, request).filter((entry) => policy !== "free" || isGuaranteedFree(entry)),
-    policy,
-  );
+  const pool = eligible(entries, request).filter((entry) => policy !== "free" || isGuaranteedFree(entry));
+  const router = policy === "free" ? pool.find(isFreeRouter) : undefined;
+  const ranked = rank(router ? pool.filter((entry) => entry !== router) : pool, policy);
+  // OpenRouter's server-side fallback list holds three ids: best, second best, then the free router,
+  // so a busy or rate-limited top model degrades to "some free model" instead of failing the turn.
+  const candidates = router ? [...ranked.slice(0, 2), router, ...ranked.slice(2)] : ranked;
   if (candidates.length === 0) {
     const capabilityText = [
       request.requiresTools ? "tool calling" : undefined,
@@ -176,7 +214,35 @@ export function routeCatalogModel(
       selected.cost.free ? "free under the active policy" : "paid model permitted by the active policy",
       request.requiresTools ? "supports tools" : undefined,
       request.minimumContext ? `fits ${request.minimumContext} token minimum context` : undefined,
-      "ranked by cost first, then context",
+      policy === "free"
+        ? "ranked by capability: reasoning, model size class, then context"
+        : "ranked by cost first, then context",
+      router && selected !== router ? "the free router is the last fallback" : undefined,
     ].filter((reason): reason is string => Boolean(reason)),
   };
+}
+
+/**
+ * The model to request at startup. An explicit choice or a still-free saved preference wins. With
+ * neither, the free policy leaves the choice to capability ranking (`undefined`) rather than the
+ * router, because the router may answer with a very small model. Any situation where ranking would
+ * have nothing to rank falls back to the router, which needs no catalog.
+ */
+export function startupModelRequest(
+  entries: readonly CatalogEntry[],
+  input: { requestedModel?: string; policy: ModelPolicy; explicitModelSelection: boolean },
+): string | undefined {
+  const { requestedModel, policy, explicitModelSelection } = input;
+  if (entries.length === 0) return FREE_ROUTER_ID;
+  if (policy !== "free") return requestedModel;
+  if (explicitModelSelection) return requestedModel;
+  if (requestedModel) {
+    if (requestedModel.trim().toLowerCase() === FREE_ROUTER_ID) return requestedModel;
+    const saved = resolveCatalogModel(entries, requestedModel);
+    if (saved && isGuaranteedFree(saved)) return requestedModel;
+  }
+  const hasRankedFree = eligible(entries, { requiresTools: true }).some(
+    (entry) => isGuaranteedFree(entry) && !isFreeRouter(entry),
+  );
+  return hasRankedFree ? undefined : FREE_ROUTER_ID;
 }

@@ -13,7 +13,7 @@ import type {
 } from "../providers/types";
 
 /**
- * Proof that `/effort` and the "high in agent mode" default (docs/migration/
+ * Proof that `/effort` and the "high in agent mode" default (docs/architecture/
  * 14-AGENT-HARNESS-RECONSTRUCTION.md §11) actually reach the request the model sees — not just
  * the `resolveReasoningEffort` method in isolation. Before this, `reasoningEffort` was declared
  * on `ProviderModelRuntime`/`ProviderToolContext` but nothing ever read it for OpenRouter: the

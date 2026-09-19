@@ -33,7 +33,7 @@ describe("computer tools", () => {
   });
 
   it("captures screenshots through agent-desktop", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "grok-computer-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-computer-"));
     tempDirs.push(cwd);
     const outputPath = path.join(cwd, "artifacts", "screen.png");
     const runner: AgentDesktopRunner = vi.fn(async () => ({
@@ -126,11 +126,11 @@ describe("computer tools", () => {
       stderr: "",
     }));
 
-    const result = await computerType({ ref: "@e5", text: "hello from grok" }, "/tmp", undefined, runner);
+    const result = await computerType({ ref: "@e5", text: "hello from shelra" }, "/tmp", undefined, runner);
 
     expect(result.success).toBe(true);
     expect(result.output).toContain("Typed into @e5.");
-    expect(runner).toHaveBeenCalledWith(["type", "@e5", "hello from grok"], "/tmp", undefined);
+    expect(runner).toHaveBeenCalledWith(["type", "@e5", "hello from shelra"], "/tmp", undefined);
   });
 
   it("launches apps through agent-desktop", async () => {
@@ -172,7 +172,7 @@ describe("computer tools", () => {
       PATH: "/usr/bin:/bin",
       HOME: "/Users/tester",
       TERM: "xterm-256color",
-      GROK_API_KEY: "secret",
+      SHELRA_API_KEY: "secret",
       TELEGRAM_BOT_TOKEN: "also-secret",
       CUSTOM_SECRET: "nope",
     });

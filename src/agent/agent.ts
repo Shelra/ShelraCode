@@ -2,7 +2,6 @@ import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
 import type { ContextPacket } from "../context/types";
-import { createTools } from "../grok/tools";
 import { executeEventHooks } from "../hooks/index";
 import type {
   NotificationHookInput,
@@ -61,6 +60,7 @@ import {
 } from "../storage/index";
 import { BashTool } from "../tools/bash";
 import { type ScheduleDaemonStatus, ScheduleManager, type StoredSchedule } from "../tools/schedule";
+import { createTools } from "../toolset/tools";
 import type {
   AgentMode,
   ChatEntry,
@@ -156,7 +156,7 @@ const OVERFLOW_RECOVERY_KEPT_TURNS = 2;
  * up. Raised from 1 to 3 after a live large-scaffold turn (a full multi-tenant SaaS spec) got
  * blocked on its very first turn, before dependencies were even installed — nothing was
  * verifiable yet, so the single nudge was structurally unmeetable, not a caught lie. See
- * docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §12.
+ * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §12.
  */
 const MAX_VERIFICATION_RETRIES = 3;
 /**
@@ -271,13 +271,12 @@ const SHELL_GUIDANCE =
 
 const ENVIRONMENT = `ENVIRONMENT:
 ${SHELL_GUIDANCE}
-You are running inside a terminal (CLI). Your text output is rendered in a plain terminal — not a browser, not a rich text editor.
-- Use plain text only. No markdown tables, no HTML, no images, no colored text.
-- Use simple markers like dashes (-) or asterisks (*) for lists.
-- Use indentation and blank lines for structure.
-- Keep lines under 100 characters when possible.
-- Use backticks for inline code and triple backticks for code blocks — these are rendered.
-- Never use unicode box-drawing, fancy borders, or ASCII art in your responses.`;
+You are running inside a terminal (CLI) that renders Markdown: headings, bold, italic, bullet and numbered lists (nested), block quotes, links, small tables and fenced code blocks are all drawn with formatting. Write answers that scan well:
+- Lead with the result in one or two sentences. Use ## headings only when the answer has several distinct parts; otherwise use none.
+- Put file paths, identifiers, commands and flags in backticks. Put code in fenced blocks with a language tag (ts, bash, json).
+- Use bullets for parallel facts, numbered lists for ordered steps, and bold for the few terms that matter; never bold whole sentences.
+- Tables are fine when small (at most four columns, short cells).
+- No HTML, images, emoji, ASCII art or box-drawing characters. Skip filler: do not restate the question or announce what you are about to say.`;
 
 const MODE_PROMPTS: Record<AgentMode, string> = {
   agent: `You are ShelraCode, a coding agent working inside the user's repository through tools. You finish tasks end to end: understand the request, gather the context you need, change the code, verify the result, and report what you actually observed.
@@ -401,7 +400,7 @@ Current working directory: ${cwd}`;
 }
 
 /**
- * Deterministic, always-on memory consultation (§14 Phase 2 item 4, docs/migration/
+ * Deterministic, always-on memory consultation (§14 Phase 2 item 4, docs/architecture/
  * 14-AGENT-HARNESS-RECONSTRUCTION.md) — mirrors how AGENTS.md/custom instructions above are
  * already merged into every turn's system prompt automatically, rather than relying on the model
  * remembering to call `memory_list` itself (§13 added that tool, but it was opt-in per turn).
@@ -473,7 +472,7 @@ function buildSubagentPrompt(
           : isVerifyDetect
             ? "You are the Verify Detect sub-agent. You inspect a repository to produce a structured verification recipe. You are read-only."
             : isVerifyManifest
-              ? "You are the Verify Manifest sub-agent. You inspect a repository and create or update .grok/environment.json, the current verification manifest path. The future canonical .shelra path may be used when that verifier is migrated."
+              ? "You are the Verify Manifest sub-agent. You inspect a repository and create or update .shelra/environment.json, the current verification manifest path. The future canonical .shelra path may be used when that verifier is migrated."
               : isUiVerify
                 ? "You are the UI Verifier sub-agent. You audit the rendered workspace against its visual specification through three independent inspect-and-report passes."
                 : isVerify
@@ -507,9 +506,9 @@ function buildSubagentPrompt(
           ]
         : isVerifyManifest
           ? [
-              "Focus on creating or updating .grok/environment.json as the current verification contract for this repository; preserve compatibility until the verifier path is migrated.",
-              "Read package.json and key config files to understand the project, then write .grok/environment.json.",
-              "Prefer editing only .grok/environment.json unless the delegated task explicitly requires something else.",
+              "Focus on creating or updating .shelra/environment.json as the current verification contract for this repository; preserve compatibility until the verifier path is migrated.",
+              "Read package.json and key config files to understand the project, then write .shelra/environment.json.",
+              "Prefer editing only .shelra/environment.json unless the delegated task explicitly requires something else.",
               "",
               "SANDBOX ENVIRONMENT (Shuru):",
               "- OS: Debian GNU/Linux 13 (trixie)",
@@ -702,7 +701,7 @@ export class Agent {
    * The most recently published plan's acceptance criteria — SESSION-scoped, not turn-scoped: it
    * survives across turns (a `generate_plan` in turn 1 still governs turn 5's mutations) and is
    * only ever replaced, never merged, by a later `generate_plan` call. Deliberately NOT reset in
-   * `processMessage`'s per-turn setup (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase
+   * `processMessage`'s per-turn setup (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase
    * 2 item 1) — a plan from an earlier turn in the same session must still be checkable by a later
    * turn that keeps mutating files without ever re-publishing it. `turnVerificationEvidence` stays
    * turn-scoped on purpose: each turn that mutates must still supply its OWN evidence, not borrow
@@ -729,7 +728,7 @@ export class Agent {
    * turn-level co-occurrence, not a precise causal link between one specific bash call and one
    * specific criterion — genuinely more precise than the old fully-flat aggregate (the id came
    * from the model's own structural `satisfies` declaration, not inferred from text), but not
-   * fabricating exact causality either. See docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §18.
+   * fabricating exact causality either. See docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §18.
    */
   private turnLinkedCriteriaIds: Set<string> = new Set();
   /**
@@ -738,7 +737,7 @@ export class Agent {
    * so without a stable object reference each round got its own `planPublished = false` closure,
    * forcing a redundant `generate_plan` call whenever a nudge asked the model to keep working on
    * already-planned work. Reset only at the true start of a turn (`processMessage`), not per
-   * round. See docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §15.
+   * round. See docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §15.
    */
   private planState: { published: boolean; structured: boolean } = { published: true, structured: false };
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
@@ -780,7 +779,7 @@ export class Agent {
       () => this.modelId,
     );
     this.maxToolRounds = maxToolRounds || MAX_TOOL_ROUNDS;
-    const envMax = Number(process.env[MAX_TOKENS_ENV] || process.env.GROK_MAX_TOKENS);
+    const envMax = Number(process.env[MAX_TOKENS_ENV]);
     this.maxTokensExplicit = Number.isFinite(envMax) && envMax > 0;
     this.maxTokens = this.maxTokensExplicit ? envMax : 16_384;
     this.recapsEnabled = loadRecapsEnabled();
@@ -892,7 +891,7 @@ export class Agent {
    * via `/models`' arrow keys) when the model supports it; otherwise `"high"` by default in agent
    * mode (coding/agentic work benefits from the model's best reasoning); otherwise the provider's
    * own silent default (`undefined`, no param sent). Never claims a level the model doesn't
-   * actually support. See docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase 2 item 2 —
+   * actually support. See docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase 2 item 2 —
    * before this, `reasoningEffortByModel` was written by the UI but read by nothing.
    */
   resolveReasoningEffort(modelId: string = this.modelId): ReasoningEffort | undefined {
@@ -926,7 +925,7 @@ export class Agent {
   }
 
   setApiKey(apiKey: string, baseURL = this.baseURL ?? undefined): void {
-    const endpoint = baseURL || process.env[BASE_URL_ENV] || process.env.GROK_BASE_URL;
+    const endpoint = baseURL || process.env[BASE_URL_ENV];
     if (!endpoint) {
       throw new Error("Remote provider base URL required. Set SHELRA_BASE_URL or pass --base-url.");
     }
@@ -957,7 +956,7 @@ export class Agent {
   }
 
   /**
-   * Real state behind the completion gate (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §9,
+   * Real state behind the completion gate (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9,
    * §18). Does NOT claim a causal per-criterion pass/fail (which bash call proved which
    * criterion) — that precision doesn't exist. It DOES honestly distinguish a criterion the model
    * explicitly linked to a completed step (`linkedCriteriaIds`, via `update_plan_step`'s own
@@ -1028,7 +1027,7 @@ export class Agent {
   /**
    * Indexes the chat-turn kernel's state into the same `objectives` table the autonomy
    * runtime writes into (see `src/autonomy/runtime.ts`'s `indexObjective` and
-   * `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6). This is what makes
+   * `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6). This is what makes
    * `getKernelState()` — previously computed and read by nothing — answerable from outside
    * the running process: "what is this session doing right now" becomes a query against
    * `objectives WHERE session_id = ?`, not a guess reconstructed from chat history.
@@ -1055,7 +1054,7 @@ export class Agent {
     }
   }
 
-  /** Bound `onCheckpoint` for `createTools` — keeps the storage import out of `grok/tools.ts`. */
+  /** Bound `onCheckpoint` for `createTools` — keeps the storage import out of `toolset/tools.ts`. */
   private onToolCheckpoint = (input: {
     filePath: string;
     previousContent: string | null;
@@ -1594,7 +1593,7 @@ export class Agent {
 
       const childPrompt =
         isVerify && verifyPreparedRecipe
-          ? `${request.prompt}\n\nPrepared verify recipe JSON (use this as the primary execution recipe and keep .grok/environment.json aligned with it if present):\n${JSON.stringify(verifyPreparedRecipe, null, 2)}`
+          ? `${request.prompt}\n\nPrepared verify recipe JSON (use this as the primary execution recipe and keep .shelra/environment.json aligned with it if present):\n${JSON.stringify(verifyPreparedRecipe, null, 2)}`
           : request.prompt;
 
       const childMessages =
@@ -2570,7 +2569,7 @@ export class Agent {
             await this.refreshSessionRecap(signal);
           }
 
-          // Completion/verification gate (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §9):
+          // Completion/verification gate (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9):
           // a coding turn that mutated a file under acceptance criteria (write_file/edit_file/
           // delete_file already require generate_plan first) but never made any verification-
           // shaped tool call is not evidence of a working result — it is the model's own
@@ -3154,7 +3153,7 @@ function isAuthenticationError(error: unknown): boolean {
  * `Get-ChildItem`/`ls`-style inspection does not. A successful delegation to `verify`/`ui-verify`/
  * `computer` also counts: those sub-agents are prompted to do the real thing themselves (build,
  * test, start the app, real browser smoke test, or a desktop/UI observation) — see
- * docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §13. Without this, a parent turn that
+ * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §13. Without this, a parent turn that
  * correctly delegated real verification work still got blocked, because the gate only ever
  * looked at the parent's own direct tool calls.
  */

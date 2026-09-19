@@ -99,12 +99,9 @@ temp/
 
 # Coding agents
 .claude/
-.grok/*
-.grok/
 .shelra/
 
-# Local ShelraCode reference checkout used for migration forensics; it is not
-# part of the target product tree.
+# Local ShelraCode reference checkout; it is not part of the product tree.
 /ShelraCode/
 
 # Local claude-code reference checkout used for migration forensics; it is a

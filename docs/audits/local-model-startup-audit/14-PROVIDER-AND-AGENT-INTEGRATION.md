@@ -33,7 +33,7 @@ crosses the seam. Events are normalised to a 7-member closed union.
 | `createLocalProvider(model)` | `:127-129` | **ACTIVE** — `ManagedLlamaRuntime.provider` `:239` |
 | `createOpenAICompatibleProvider(apiKey, baseURL, modelId)` | `:133-152` | **ACTIVE** — `explicitEndpointRuntime.provider` (`discovery.ts:69`) **and** `Agent.setApiKey` (`agent.ts:728`) |
 | `FakeProvider` | `src/providers/fake.ts:13-56` | **TEST-ONLY** — imported by `orchestrator.test.ts`, `architecture.test.ts` |
-| `GrokProviderAdapter` / `createProvider` | `src/grok/client.ts:120,234` | **DEAD** — no runtime importer |
+| xAI-only adapter / `createProvider` | `src/toolset/client.ts:120,234` | **DEAD** — no runtime importer (since removed) |
 
 **FACT — one class serves every provider.** `createOpenAICompatibleProvider`
 constructs a synthetic `LocalModelCandidate` with `source: "remote"`,
@@ -64,7 +64,7 @@ There is a **test enforcing the boundary**:
 ```
 src/providers/architecture.test.ts
   :5  "keeps xAI provider types out of the Agent and tool registry"
-  :14 "keeps the SDK import inside the Grok adapter"
+  :14 "keeps the xAI SDK import out of the Agent"
 ```
 
 Audited leaks, all **FACT**:
@@ -76,7 +76,7 @@ Audited leaks, all **FACT**:
 | `ManagedLlamaRuntime` imports `createLocalProvider` from a sibling and constructs providers itself | `src/runtimes/managed-llama.ts:13,238-240` | Low — intended by the contract |
 | The UI imports byte formatters from the model module | `src/ui/startup.tsx:5` ← `src/models/huggingface.ts:239-248` | Low |
 | The UI hard-codes the runtime id `"shelra-llama"` | `src/index.ts:222` | Low-Medium |
-| `src/grok/client.ts` imports `createOpenAICompatibleProvider` from `src/runtimes/` | `src/grok/client.ts:17` | Odd direction (legacy → runtimes), but the file is dead |
+| `src/toolset/client.ts` imports `createOpenAICompatibleProvider` from `src/runtimes/` | `src/toolset/client.ts:17` | Odd direction (legacy → runtimes), but the file is dead |
 | `src/models/catalog.ts` stubs are imported by `agent.ts`, `app.tsx`, `settings.ts`, `client.ts` | see `07` §1 | **Medium** — a placeholder module is load-bearing in four subsystems |
 
 **FACT — the runtime adapter itself never reaches the UI.** `renderApp`

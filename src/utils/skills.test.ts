@@ -36,7 +36,7 @@ afterEach(() => {
 
 describe("discoverSkills", () => {
   it("discovers project skills from parent directories up to the git root", () => {
-    const repoRoot = makeTempDir("grok-skills-root-");
+    const repoRoot = makeTempDir("shelra-skills-root-");
     fs.mkdirSync(path.join(repoRoot, ".git"));
     const nested = path.join(repoRoot, "tmp", "app");
     fs.mkdirSync(nested, { recursive: true });
@@ -49,7 +49,7 @@ describe("discoverSkills", () => {
   });
 
   it("lets nearer project skills override parent project skills", () => {
-    const repoRoot = makeTempDir("grok-skills-override-");
+    const repoRoot = makeTempDir("shelra-skills-override-");
     fs.mkdirSync(path.join(repoRoot, ".git"));
     const nested = path.join(repoRoot, "tmp", "app");
     fs.mkdirSync(nested, { recursive: true });
@@ -62,7 +62,7 @@ describe("discoverSkills", () => {
   });
 
   it("trusts project-scope skills unconditionally, even with injection-shaped content", () => {
-    const repoRoot = makeTempDir("grok-skills-project-trust-");
+    const repoRoot = makeTempDir("shelra-skills-project-trust-");
     fs.mkdirSync(path.join(repoRoot, ".git"));
     writeSkill(
       repoRoot,

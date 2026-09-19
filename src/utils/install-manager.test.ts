@@ -28,10 +28,10 @@ function createTempDir(prefix: string): string {
 
 describe("getReleaseTargetForPlatform", () => {
   it("maps supported platforms to release asset names", () => {
-    expect(getReleaseTargetForPlatform("darwin", "arm64")?.assetName).toBe("grok-darwin-arm64");
-    expect(getReleaseTargetForPlatform("darwin", "x64")?.assetName).toBe("grok-darwin-arm64");
-    expect(getReleaseTargetForPlatform("linux", "x64")?.assetName).toBe("grok-linux-x64");
-    expect(getReleaseTargetForPlatform("win32", "x64")?.assetName).toBe("grok-windows-x64.exe");
+    expect(getReleaseTargetForPlatform("darwin", "arm64")?.assetName).toBe("shelra-darwin-arm64");
+    expect(getReleaseTargetForPlatform("darwin", "x64")?.assetName).toBe("shelra-darwin-arm64");
+    expect(getReleaseTargetForPlatform("linux", "x64")?.assetName).toBe("shelra-linux-x64");
+    expect(getReleaseTargetForPlatform("win32", "x64")?.assetName).toBe("shelra-windows-x64.exe");
     expect(getReleaseTargetForPlatform("linux", "arm64")).toBeNull();
   });
 });
@@ -40,12 +40,14 @@ describe("parseChecksumsFile", () => {
   it("parses standard and BSD-style checksum entries", () => {
     const checksums = parseChecksumsFile(
       [
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  grok-darwin-arm64",
-        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb *grok-windows-x64.exe",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  shelra-darwin-arm64",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb *shelra-windows-x64.exe",
       ].join("\n"),
     );
-    expect(checksums.get("grok-darwin-arm64")).toBe("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-    expect(checksums.get("grok-windows-x64.exe")).toBe(
+    expect(checksums.get("shelra-darwin-arm64")).toBe(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
+    expect(checksums.get("shelra-windows-x64.exe")).toBe(
       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     );
   });
@@ -53,16 +55,16 @@ describe("parseChecksumsFile", () => {
 
 describe("script install metadata", () => {
   it("round-trips metadata through write and load", () => {
-    const homeDir = createTempDir("grok-meta-");
+    const homeDir = createTempDir("shelra-meta-");
     const installDir = getScriptInstallDir(homeDir);
     const metadata = {
       schemaVersion: 1,
       installMethod: "script" as const,
       version: "1.2.3",
-      repo: "superagent-ai/grok-cli",
-      binaryPath: path.join(installDir, "grok"),
+      repo: "yosoyjavieruiz/ShelraCode",
+      binaryPath: path.join(installDir, "shelra"),
       installDir,
-      assetName: "grok-darwin-arm64",
+      assetName: "shelra-darwin-arm64",
       target: "darwin-arm64" as const,
       installedAt: "2026-04-03T00:00:00.000Z",
       shellConfigPath: path.join(homeDir, ".zshrc"),
@@ -75,13 +77,13 @@ describe("script install metadata", () => {
   });
 
   it("returns null when no metadata file exists", () => {
-    expect(loadScriptInstallMetadata(createTempDir("grok-empty-"))).toBeNull();
+    expect(loadScriptInstallMetadata(createTempDir("shelra-empty-"))).toBeNull();
   });
 });
 
 describe("getScriptInstallContext", () => {
   it("returns context when metadata exists", () => {
-    const homeDir = createTempDir("grok-ctx-");
+    const homeDir = createTempDir("shelra-ctx-");
     const installDir = getScriptInstallDir(homeDir);
     const currentTarget = getReleaseTargetForPlatform();
     expect(currentTarget).not.toBeNull();
@@ -91,7 +93,7 @@ describe("getScriptInstallContext", () => {
         schemaVersion: 1,
         installMethod: "script" as const,
         version: "1.2.3",
-        repo: "superagent-ai/grok-cli",
+        repo: "yosoyjavieruiz/ShelraCode",
         binaryPath: path.join(installDir, currentTarget!.binaryName),
         installDir,
         assetName: currentTarget!.assetName,
@@ -107,7 +109,7 @@ describe("getScriptInstallContext", () => {
   });
 
   it("returns null when no metadata exists", () => {
-    expect(getScriptInstallContext(createTempDir("grok-no-ctx-"))).toBeNull();
+    expect(getScriptInstallContext(createTempDir("shelra-no-ctx-"))).toBeNull();
   });
 
   it("recognizes the active.json manifest written by the Bun build", () => {
@@ -136,8 +138,8 @@ describe("getScriptInstallContext", () => {
 });
 
 describe("buildScriptUninstallPlan", () => {
-  it("removes the full ~/.grok directory by default", () => {
-    const homeDir = createTempDir("grok-uninstall-");
+  it("removes the full ~/.shelra directory by default", () => {
+    const homeDir = createTempDir("shelra-uninstall-");
     const installDir = getScriptInstallDir(homeDir);
     const currentTarget = getReleaseTargetForPlatform()!;
     fs.mkdirSync(installDir, { recursive: true });
@@ -147,7 +149,7 @@ describe("buildScriptUninstallPlan", () => {
         schemaVersion: 1,
         installMethod: "script" as const,
         version: "1.2.3",
-        repo: "superagent-ai/grok-cli",
+        repo: "yosoyjavieruiz/ShelraCode",
         binaryPath: path.join(installDir, currentTarget.binaryName),
         installDir,
         assetName: currentTarget.assetName,
@@ -158,11 +160,11 @@ describe("buildScriptUninstallPlan", () => {
     );
 
     const plan = buildScriptUninstallPlan({}, homeDir);
-    expect(plan?.removePaths).toContain(path.join(homeDir, ".grok"));
+    expect(plan?.removePaths).toContain(path.join(homeDir, ".shelra"));
   });
 
   it("keeps config and data when requested", () => {
-    const homeDir = createTempDir("grok-keep-");
+    const homeDir = createTempDir("shelra-keep-");
     const installDir = getScriptInstallDir(homeDir);
     const currentTarget = getReleaseTargetForPlatform()!;
     fs.mkdirSync(installDir, { recursive: true });
@@ -172,7 +174,7 @@ describe("buildScriptUninstallPlan", () => {
         schemaVersion: 1,
         installMethod: "script" as const,
         version: "1.2.3",
-        repo: "superagent-ai/grok-cli",
+        repo: "yosoyjavieruiz/ShelraCode",
         binaryPath: path.join(installDir, currentTarget.binaryName),
         installDir,
         assetName: currentTarget.assetName,
@@ -183,7 +185,7 @@ describe("buildScriptUninstallPlan", () => {
     );
 
     const plan = buildScriptUninstallPlan({ keepConfig: true, keepData: true }, homeDir);
-    expect(plan?.removePaths).not.toContain(path.join(homeDir, ".grok"));
+    expect(plan?.removePaths).not.toContain(path.join(homeDir, ".shelra"));
     expect(plan?.removePaths).toContain(path.join(installDir, currentTarget.binaryName));
   });
 

@@ -10,7 +10,7 @@ Every risk below is tied to specific code evidence. No generic risks.
 ### R-01 — Agent cannot create files in new directories
 **Evidence:** `src/security/workspace-guard.ts:22-24`; `src/tools/file.ts:23-25,70`.
 `realpathSync.native(dirname(candidate))` throws `ENOENT` before `mkdirSync`
-runs. Reproduced: `newdir/file.ts` → `ENOENT: … realpath 'D:\PROYECTS\grok-cli\newdir'`.
+runs. Reproduced: `newdir/file.ts` → `ENOENT: … realpath 'D:\PROYECTS\shelra\newdir'`.
 **L:** High (any scaffolding task) · **I:** High
 **Blast radius:** the agent's core capability. Silent to the user as a generic
 tool error.
@@ -317,11 +317,11 @@ land silently)
 `Agent` constructor depends on pre-UI)
 
 ### R-39 — Repository instructions are actively misleading
-**Evidence:** `AGENTS.md` describes "Grok CLI", `GROK_API_KEY`, a broken ESLint
-config, and two files that do not exist (`src/utils/model-config.ts`,
+**Evidence:** `AGENTS.md` describes a broken ESLint
+config and two files that do not exist (`src/utils/model-config.ts`,
 `settings-manager.ts`).
 **L:** Certain · **I:** Med (any agent or contributor following it will be wrong
-about lint, env vars, and the module layout)
+about lint and the module layout)
 
 ---
 
@@ -329,13 +329,13 @@ about lint, env vars, and the module layout)
 
 ### R-40 — The full parent environment is passed to `llama-server`
 **Evidence:** `src/runtimes/managed-llama.ts:153-155` forwards every defined
-`process.env` entry, including `SHELRA_API_KEY`/`GROK_API_KEY` if set.
+`process.env` entry, including `SHELRA_API_KEY` if set.
 **L:** Certain · **I:** Low-Med (a local third-party binary receives credentials
 it has no use for)
 
 ### R-41 — The update check contacts GitHub on every chat mount
 **Evidence:** `src/ui/app.tsx:1863-1873` → `checkForUpdate`
-(`src/utils/update-checker.ts:16-29`) → `https://api.github.com/repos/superagent-ai/grok-cli/releases/latest`
+(`src/utils/update-checker.ts:16-29`) → `https://api.github.com/repos/yosoyjavieruiz/ShelraCode/releases/latest`
 (`src/utils/install-manager.ts:14`).
 **L:** Certain · **I:** Low (no user data sent; but it is an unannounced network
 call in a "local-first, private by default" product whose startup screen reads

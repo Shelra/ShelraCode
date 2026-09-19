@@ -62,38 +62,14 @@ metadata persistence** and it is unversioned and unvalidated beyond three
 Holds workspaces, sessions, transcripts, usage. **No model, runtime, hardware or
 capability data.**
 
-**FACT — legacy migration is read-only for the DB** (`src/storage/db.ts:26-33`
-copies `~/.grok/grok.db` → `~/.shelra/shelra.db` once if the target is absent)
-and for settings (`settings.ts:228` falls back to the legacy path).
+**FACT — no legacy-path migration remains.** The DB (`src/storage/db.ts`) and
+settings (`settings.ts`) are read from `~/.shelra` only; the earlier one-way
+legacy-path copy and fallback have been removed.
 
-### FACT — the legacy write mirror (unconditional, never read)
+### The legacy delegation write mirror has been removed
 
-```ts
-// src/agent/delegations.ts:234-243
-async function ensureDelegationsDir(cwd) {
-  const dir = path.join(getHomeDir(), CONFIG_DIR_NAME, "delegations", projectId);
-  await fs.mkdir(dir, { recursive: true });
-  const legacyDir = path.join(getHomeDir(), LEGACY_CONFIG_DIR_NAME, "delegations", projectId);
-  await fs.mkdir(legacyDir, { recursive: true });      // ← unconditional
-  return dir;
-}
-// :263-277
-async function writeRecord(filePath, record) {
-  await fs.writeFile(filePath, serialized, "utf8");
-  ...
-  if (filePath.startsWith(canonicalPrefix)) {
-    const legacyPath = path.join(legacyRoot, filePath.slice(canonicalPrefix.length));
-    await fs.mkdir(path.dirname(legacyPath), { recursive: true });
-    await fs.writeFile(legacyPath, serialized, "utf8");   // ← mirror
-  }
-}
-```
-
-The comments (`:238-239`, `:267-268`) say the mirror "is deliberately never read
-by the application". **Confirmed by grep** — nothing reads
-`~/.grok/delegations`. So every delegation **recreates the legacy tree on a
-clean machine** and doubles disk writes. **Field evidence:** `~/.grok/delegations`
-on this machine contains 9 project directories, timestamped after the migration.
+Delegation records are written only under `~/.shelra/delegations`; the earlier
+unconditional mirror into a second config tree no longer exists.
 
 ## 2. What is NOT persisted
 
@@ -169,7 +145,7 @@ targeted repair (delete corrupt artifact, re-download, reinstall engine) and no
 
 | Store | Versioned? | Migration | Validation |
 | --- | --- | --- | --- |
-| `user-settings.json` | **No** | legacy path fallback read only (`settings.ts:228`) + a "canonical vs legacy" write dance (`:233-234`) | Per-field normalizers exist for sandbox/reasoning (`:240-243`) but **none for `defaultModel`** beyond `trim()` |
+| `user-settings.json` | **No** | — (the legacy-path fallback and the "canonical vs legacy" write dance have been removed) | Per-field normalizers exist for sandbox/reasoning (`:240-243`) but **none for `defaultModel`** beyond `trim()` |
 | Project `settings.json` | **No** | — | — |
 | Sidecar JSON | **No** | — | 3 `typeof` checks (`huggingface.ts:211-215`) |
 | SQLite | **Yes** — `PRAGMA user_version` | `applyMigrations` `migrations.ts:5-20` | — |
@@ -214,6 +190,6 @@ GGUF, no test fixture has two *installed* models on one managed runtime, and the
 | Corrupt-sidecar detection | **NOT FOUND** — silent degradation, observed live |
 | Runtime-version change handling | **BROKEN** — old binary wins, new one is downloaded and ignored |
 | Orphan recovery | **NOT FOUND** |
-| Legacy `.grok` write mirror | **LEGACY, unconditional, never read** (`src/agent/delegations.ts:238-241,267-276`) |
+| Legacy delegation write mirror | **REMOVED** — delegation records are written only under `~/.shelra/delegations` |
 </content>
 </invoke>

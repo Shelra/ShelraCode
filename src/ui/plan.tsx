@@ -93,21 +93,7 @@ export function PlanView({ plan, t }: PlanViewProps) {
   );
 }
 
-/* ── Plan Questions Panel (OpenCode-style tabbed inline) ──── */
-
-const SPLIT = {
-  topLeft: "",
-  bottomLeft: "",
-  vertical: "┃",
-  topRight: "",
-  bottomRight: "",
-  horizontal: " ",
-  bottomT: "",
-  topT: "",
-  cross: "",
-  leftT: "",
-  rightT: "",
-};
+/* ── Plan Questions Panel (tabbed, inline) ───────────────────── */
 
 export interface PlanQuestionsState {
   tab: number;
@@ -141,16 +127,28 @@ export function PlanQuestionsPanel({ t, questions, state }: PlanQuestionsPanelPr
   return (
     <box
       flexDirection="column"
-      border={["left"]}
-      customBorderChars={SPLIT}
+      border={["top", "left", "right", "bottom"]}
+      borderStyle="rounded"
       borderColor={t.planBorder}
       marginTop={1}
       paddingLeft={2}
       paddingRight={2}
-      paddingTop={1}
       paddingBottom={1}
-      backgroundColor={t.backgroundPanel}
     >
+      <box flexShrink={0} marginBottom={1}>
+        <text wrapMode="none">
+          <span style={{ fg: t.textDim }}>{"[ "}</span>
+          <span style={{ fg: t.brand }}>
+            <b>{isSingle ? "QUESTION" : "QUESTIONS"}</b>
+          </span>
+          <span style={{ fg: t.textDim }}>{" ]"}</span>
+          {isSingle ? null : (
+            <span style={{ fg: t.textMuted }}>
+              {isConfirmTab ? "  review" : `  ${state.tab + 1}/${questions.length}`}
+            </span>
+          )}
+        </text>
+      </box>
       {/* Tabs */}
       {!isSingle && (
         <box flexDirection="row" gap={2} marginBottom={1} flexShrink={0}>

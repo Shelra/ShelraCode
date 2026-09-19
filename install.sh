@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP="grok"
-REPO="superagent-ai/grok-cli"
+APP="shelra"
+REPO="yosoyjavieruiz/ShelraCode"
 RELEASES_API="https://api.github.com/repos/${REPO}/releases"
-USER_DIR="${HOME}/.grok"
+USER_DIR="${HOME}/.shelra"
 INSTALL_DIR="${USER_DIR}/bin"
 METADATA_PATH="${USER_DIR}/install.json"
-PATH_MARKER="# grok"
+PATH_MARKER="# shelra"
 
 requested_version=""
 binary_path=""
@@ -17,12 +17,12 @@ written_path_command=""
 
 usage() {
   cat <<'EOF'
-Install Grok from GitHub Releases.
+Install ShelraCode from GitHub Releases.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/superagent-ai/grok-cli/main/install.sh | bash
-  curl -fsSL https://raw.githubusercontent.com/superagent-ai/grok-cli/main/install.sh | bash -s -- --version 1.1.4
-  bash install.sh --binary /path/to/grok
+  curl -fsSL https://raw.githubusercontent.com/yosoyjavieruiz/ShelraCode/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/yosoyjavieruiz/ShelraCode/main/install.sh | bash -s -- --version 1.1.4
+  bash install.sh --binary /path/to/shelra
 
 Options:
   -v, --version <version>  Install a specific version
@@ -101,11 +101,11 @@ resolve_target() {
 
   TARGET="${OS}-${ARCH}"
   if [[ "$TARGET" == windows-* ]]; then
-    ASSET_NAME="grok-${TARGET}.exe"
-    BINARY_NAME="grok.exe"
+    ASSET_NAME="shelra-${TARGET}.exe"
+    BINARY_NAME="shelra.exe"
   else
-    ASSET_NAME="grok-${TARGET}"
-    BINARY_NAME="grok"
+    ASSET_NAME="shelra-${TARGET}"
+    BINARY_NAME="shelra"
   fi
 }
 
@@ -245,7 +245,7 @@ EOF
 resolve_release_version() {
   if [[ -n "$requested_version" ]]; then
     RESOLVED_VERSION="${requested_version}"
-    RELEASE_BASE_URL="https://github.com/${REPO}/releases/download/grok-dev@${RESOLVED_VERSION}"
+    RELEASE_BASE_URL="https://github.com/${REPO}/releases/download/shelra@${RESOLVED_VERSION}"
     return
   fi
 
@@ -253,9 +253,9 @@ resolve_release_version() {
   tag=$(curl -fsSL "${RELEASES_API}/latest" \
     | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
     | head -n 1)
-  RESOLVED_VERSION="${tag#grok-dev@}"
+  RESOLVED_VERSION="${tag#shelra@}"
   if [[ -z "$RESOLVED_VERSION" ]]; then
-    echo "Failed to resolve the latest Grok release version." >&2
+    echo "Failed to resolve the latest ShelraCode release version." >&2
     exit 1
   fi
   RELEASE_BASE_URL="https://github.com/${REPO}/releases/latest/download"
@@ -264,7 +264,7 @@ resolve_release_version() {
 
 install_downloaded_release() {
   local tmp_dir binary_file checksum_file
-  tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/grok-install.XXXXXX")
+  tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/shelra-install.XXXXXX")
   trap "rm -rf \"$tmp_dir\"" EXIT
 
   binary_file="${tmp_dir}/${ASSET_NAME}"
@@ -307,11 +307,11 @@ resolve_installed_version
 write_metadata "$INSTALLED_VERSION"
 
 echo ""
-echo "Grok ${INSTALLED_VERSION} installed to ${INSTALL_DIR}/${BINARY_NAME}"
+echo "ShelraCode ${INSTALLED_VERSION} installed to ${INSTALL_DIR}/${BINARY_NAME}"
 echo ""
 echo "Run:"
-echo "  grok --help"
+echo "  shelra --help"
 echo ""
 echo "To uninstall later:"
-echo "  grok uninstall"
+echo "  shelra uninstall"
 echo ""

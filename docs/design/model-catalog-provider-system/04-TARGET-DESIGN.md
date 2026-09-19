@@ -719,7 +719,7 @@ one that would pick a model before discovery has run.
 
 `src/models/catalog.test.ts` asserts the stubs (`MODELS === []`,
 `DEFAULT_MODEL === ""`, `getModelIds() === []`,
-`getModelInfo("grok-4.3") === undefined`). Rewrite it to assert:
+`getModelInfo("test-model-a") === undefined`). Rewrite it to assert:
 
 * `normalizeModelId` still round-trips `hf:…:Q4_K_M` (**keep verbatim**);
 * `getModelInfo` returns `undefined` before priming;

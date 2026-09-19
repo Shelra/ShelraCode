@@ -33,7 +33,7 @@ import {
  * Deliberately not a database: memory is markdown on disk under `<workspace>/.shelra/memory/`
  * (project scope) or `<workspace>/.shelra/memory/agents/<agentName>/` (agent scope), mirroring
  * the confirmed Claude Code MEMORY.md + topic-file design. The index must stay a cheap, always-safe
- * read used to judge relevance; topic files load only on demand. See docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md.
+ * read used to judge relevance; topic files load only on demand. See docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md.
  *
  * Every write also appends one line to `history.jsonl`, so the store has an event-sourced timeline
  * (created/updated/confirmed/deleted) without a second storage system (research/lanes/11 §3.3).
@@ -437,7 +437,7 @@ export function confirmMemoryEntry(scope: MemoryScope, slug: string, detail?: st
 
 /**
  * Removes one memory entry — the "forget" operation a memory system needs alongside store and
- * retrieve (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §16): a wrong or superseded entry
+ * retrieve (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §16): a wrong or superseded entry
  * left in place quietly adds noise to every future retrieval. Removes the index line and the
  * topic file. Self-healing: either one existing is enough to count as "found," so a partially
  * corrupted state (e.g. the topic file deleted by hand but the index line left behind) still

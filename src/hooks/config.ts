@@ -4,7 +4,7 @@ import type { HookCommand, HookEvent, HookMatcher, HooksConfig } from "./types.j
 /**
  * Load hooks config from user settings (~/.shelra/user-settings.json) only.
  *
- * Project-level .grok/settings.json hooks are intentionally excluded because
+ * Project-level .shelra/settings.json hooks are intentionally excluded because
  * that file is repo-committed — a malicious repository could execute arbitrary
  * unsandboxed commands on a developer's machine via hook definitions.
  * Hooks run on the host (outside any sandbox) so they must be user-configured.

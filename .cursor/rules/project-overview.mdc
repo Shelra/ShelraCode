@@ -10,8 +10,7 @@ alwaysApply: true
 the terminal. It defaults to OpenRouter Free when configured; a small reviewed
 GGUF model through an app-managed `llama.cpp` server remains available through
 the explicit `--local` mode.
-It began as the Grok CLI and is mid-migration to this architecture — see
-`docs/migration/`.
+Architecture notes live in `docs/architecture/`.
 
 ## Tech Stack
 
@@ -23,8 +22,7 @@ It began as the Grok CLI and is mid-migration to this architecture — see
 - **Lint/format**: Biome (`biome.json`)
 - **Tests**: Vitest
 - **Model layer**: Vercel AI SDK (`ai`, `@ai-sdk/openai-compatible`) behind a
-  provider-neutral seam (`src/providers/`); `@ai-sdk/xai` remains only as an
-  isolated migration-compat surface
+  provider-neutral seam (`src/providers/`)
 - **Storage**: local SQLite via `bun:sqlite` (`src/storage/`)
 - **Tools**: bash, file read/write/edit, grep, LSP, MCP, schedules, computer-use
 
@@ -35,14 +33,14 @@ src/
 ├── index.ts          # CLI entry (Commander) + OpenTUI bootstrap + startup state machine
 ├── startup/          # explicit local-mode startup orchestrator + state machine
 ├── agent/            # agent loop, kernel, compaction, delegations
-├── providers/        # provider-neutral seam (types, stream normalizer, fake, xai-compat)
+├── providers/        # provider-neutral seam (types, stream normalizer, fake)
 ├── runtimes/         # managed llama.cpp lifecycle, discovery, local OpenAI-compatible adapter
 ├── models/           # Hugging Face GGUF download/catalog + recommendation
 ├── router/           # cloud model routing + local privacy/capability routing
 ├── context/          # bounded repository-context compiler
 ├── hardware/         # host hardware profile + model-fit scoring
 ├── security/         # workspace path guard, sandboxing
-├── grok/             # tool schemas + legacy Grok client (compat)
+├── toolset/          # tool registry + tool schemas
 ├── tools/            # bash, file, grep, schedule, computer
 ├── ui/               # OpenTUI React shell (app.tsx, startup.tsx, modals)
 ├── storage/          # bun:sqlite sessions/transcripts/usage
@@ -61,7 +59,7 @@ src/
   combines repository evidence with official documentation or primary sources.
 - **Provider seam**: no AI-SDK or vendor object crosses the agent/UI boundary —
   enforced by `src/providers/architecture.test.ts`.
-- **Settings hierarchy**: env (`SHELRA_*`, legacy `GROK_*`) → user
+- **Settings hierarchy**: env (`SHELRA_*`) → user
   (`~/.shelra/user-settings.json`) → project (`.shelra/settings.json`).
 - **Custom instructions**: `AGENTS.md` discovered from git root through cwd.
 - **ESM only** (`"type": "module"`); imports omit extensions (`moduleResolution: Bundler`).

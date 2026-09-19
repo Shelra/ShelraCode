@@ -1,7 +1,7 @@
 /**
  * Shared types for Shelra's file-based project/agent memory layer.
  *
- * Modeled on the confirmed Claude Code auto-memory design (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §1):
+ * Modeled on the confirmed Claude Code auto-memory design (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §1):
  * a concise index file that is always cheap to read, plus one topic file per memory that loads on demand.
  * This is deliberately separate from the SQLite session store — memory is markdown on disk, not a DB row,
  * so it stays inspectable and editable outside the runtime.

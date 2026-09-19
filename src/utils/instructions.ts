@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { executeEventHooks } from "../hooks/index";
 import type { InstructionsLoadedHookInput } from "../hooks/types";
-import { getLegacyUserDir, getProductUserDir } from "../product/identity";
+import { getProductUserDir } from "../product/identity";
 import { findGitRoot } from "./git-root";
 
 const instructionsHookFiredFor = new Set<string>();
@@ -33,27 +33,43 @@ function directoryChain(fromRoot: string, toCwd: string): string[] {
   return chain;
 }
 
-function loadAgentsSegments(canonicalCwd: string): string[] {
-  const segments: string[] = [];
+/** The instruction files that apply to `canonicalCwd`, in load order: user-wide first, then root to cwd. */
+function instructionFiles(canonicalCwd: string): Array<{ file: string; text: string }> {
+  const found: Array<{ file: string; text: string }> = [];
 
-  const globalAgents =
-    readNonEmptyFile(path.join(getProductUserDir(), "AGENTS.md")) ??
-    readNonEmptyFile(path.join(getLegacyUserDir(), "AGENTS.md"));
-  if (globalAgents) segments.push(globalAgents);
+  const globalFile = path.join(getProductUserDir(), "AGENTS.md");
+  const globalAgents = readNonEmptyFile(globalFile);
+  if (globalAgents) found.push({ file: globalFile, text: globalAgents });
 
   const root = findGitRoot(canonicalCwd) ?? canonicalCwd;
   for (const dir of directoryChain(root, canonicalCwd)) {
     const overridePath = path.join(dir, "AGENTS.override.md");
     if (fs.existsSync(overridePath)) {
       const text = readNonEmptyFile(overridePath);
-      if (text) segments.push(text);
+      if (text) found.push({ file: overridePath, text });
       continue;
     }
-    const text = readNonEmptyFile(path.join(dir, "AGENTS.md"));
-    if (text) segments.push(text);
+    const file = path.join(dir, "AGENTS.md");
+    const text = readNonEmptyFile(file);
+    if (text) found.push({ file, text });
   }
 
-  return segments;
+  return found;
+}
+
+function loadAgentsSegments(canonicalCwd: string): string[] {
+  return instructionFiles(canonicalCwd).map((entry) => entry.text);
+}
+
+/** Paths of the instruction files (AGENTS.md and overrides) a session in `cwd` loads. */
+export function listInstructionFiles(cwd: string): string[] {
+  let canonical: string;
+  try {
+    canonical = fs.realpathSync.native(cwd);
+  } catch {
+    canonical = path.resolve(cwd);
+  }
+  return instructionFiles(canonical).map((entry) => entry.file);
 }
 
 export function loadCustomInstructions(cwd: string): string | null {

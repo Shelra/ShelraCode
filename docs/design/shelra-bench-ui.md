@@ -36,7 +36,7 @@ stable integration boundary.
 - **Read-first, act-second**: The leaderboard and history are read-heavy surfaces; keep them scannable before adding actions.
 - **Harness-first analysis**: Agent identity is the subject; model/provider/version remain visible so a model change cannot be mistaken for a harness improvement.
 - **Color carries meaning, structure carries hierarchy**: Use color only for semantic emphasis. Layout, indentation, and alignment do the structural work.
-- **Aurora is a highlight, not a wallpaper**: The emerald→cyan→violet gradient is reserved for active/live states and top-ranked accents. Static surfaces use solid theme roles.
+- **Flat colour only**: Shelra draws no gradients, glows or fades; every colour is flat. The single accent (`t.accent`, `#00FF88` in the dark theme) is reserved for active/live states and top-ranked accents. Static surfaces use solid theme roles.
 - **Same app, same rules**: Reuse the existing modal system, keyboard grammar, and theme contract from `src/ui/theme.ts` and `src/ui/app.tsx`.
 
 ## 3. Layout Approach
@@ -158,29 +158,29 @@ In comparison views, deltas are shown per dimension and overall. Keep deltas to 
 
 Use the existing `Spinner` component for running states; respect `reducedMotion` by falling back to a static `●`.
 
-### 5.4 Aurora Accent Usage
+### 5.4 Accent Usage
 
-The Aurora gradient (`t.aurora.green` → `t.aurora.cyan` → `t.aurora.violet`) is used **sparingly**:
+Shelra draws no gradients, glows or fades; every colour is flat. The dark palette is background `#080808`, surfaces `#111111` / `#1A1A1A`, text `#F0F0F0` / `#888888`, a single accent `#00FF88` (pressed `#00CF6E`), amber `#FFB84D` for warnings and Plan mode, red `#FF5C6C`, blue `#5CB8FF`, and hairline borders `#222222`. The single accent (`t.accent`) is used **sparingly**:
 
-- **Live progress bar**: a thin horizontal bar that animates through the gradient while a run is active.
-- **Top-ranked highlight**: only when the terminal is wide enough, a subtle 1-cell gradient underline under the `#1` row.
-- **Sparkline trend**: optional gradient stroke for the current-baseline sparkline in the leaderboard.
+- **Live progress bar**: a thin horizontal bar in one flat colour that fills as a run advances.
+- **Top-ranked highlight**: only when the terminal is wide enough, a 1-cell flat underline in the accent colour under the `#1` row.
+- **Sparkline trend**: optional accent-coloured stroke for the current-baseline sparkline in the leaderboard.
 
-Static tables, headers, borders, and text bodies use solid theme roles. Never fill a table row with an Aurora gradient background.
+Static tables, headers, borders, and text bodies use solid theme roles. Never fill a table row with the accent colour.
 
 ## 6. Dark/Light Parity
 
 The feature uses the existing `resolveTheme()` helper. Both themes must be visually equivalent in meaning:
 
-- **Dark** (`#090B0A` background): scores pop against dark surfaces; `t.success` is `#3ABF81`, `t.danger` is `#F07178`.
-- **Light** (`#F7F9F8` background): same semantic mapping; `t.success` becomes `#167C5B`, `t.danger` becomes `#C1333D`.
+- **Dark** (`#080808` background): scores pop against dark surfaces; `t.success` is `#00CF6E`, `t.danger` is `#FF5C6C`.
+- **Light** (`#F0F0F0` background): same semantic mapping; `t.success` becomes `#087A47`, `t.danger` becomes `#C42B3A`.
 
 Requirements:
 
 1. All score/status colors must be readable against `t.backgroundPanel` in both themes (contrast ratio ≥ 4.5:1).
 2. Selected row background (`t.selectedBg`) must remain distinguishable from panel background in both themes.
 3. `t.textDim` and `t.textMuted` must not be used as the sole indicator of state; pair with a glyph or number.
-4. Aurora colors shift with the theme (`#28E59A`→`#087D4C` green, `#00CFE8`→`#087E8F` cyan, `#7967FF`→`#5E4EDB` violet) but the usage rules stay the same.
+4. The accent shifts with the theme (`#00FF88` in dark, `#007A40` in light) but the usage rules stay the same.
 
 ## 7. Screens & Information Architecture
 
@@ -259,7 +259,7 @@ A two-pane modal:
 A modal that opens when a benchmark is running. It is non-blocking to the rest of the app but provides a dedicated view.
 
 - Header: run ID, agent/model, start time, elapsed.
-- Progress bar: thin Aurora-gradient bar showing completed/total tasks.
+- Progress bar: thin flat-colour bar showing completed/total tasks.
 - Current task: task name + spinner + elapsed.
 - Live log: tail of task events (tool calls, verification steps, errors) using the same grammar as `RuntimeActivityTree`.
 - Footer: `esc` backgrounds the modal without cancelling the run; `ctrl+c` cancels.
@@ -282,7 +282,7 @@ All components are new and live alongside existing modal components in `src/ui/`
 | `BenchDeltaCell` | `src/ui/bench/` | Yes — table cell helper | Renders ▲/▼/= delta |
 | `BenchStatusBadge` | `src/ui/bench/` | Yes — inline helper | Renders status glyph + label |
 | `BenchSparkline` | `src/ui/bench/` | Yes — chart helper | ASCII sparkline for trends |
-| `BenchProgressBar` | `src/ui/bench/` | Yes — progress helper | Aurora-gradient progress bar |
+| `BenchProgressBar` | `src/ui/bench/` | Yes — progress helper | Flat-colour progress bar |
 | `BenchRunRow` | `src/ui/bench/` | Yes — row helper | Reusable run summary row |
 | `BenchDimensionRow` | `src/ui/bench/` | Yes — row helper | Reusable dimension score row |
 
@@ -385,7 +385,7 @@ All list navigation clamps to bounds and scrolls the selected item into view usi
 - Replace the live progress bar animation with a static filled bar when reduced motion is enabled.
 - Replace `Spinner` with a static `●` in running states.
 - Disable any score/count-up animations; render final values immediately.
-- Aurora gradient accents remain static (no shimmer/scroll animation).
+- The accent colour stays static (no shimmer/scroll animation).
 
 ### 11.4 Screen Reader / Terminal Assistive Tech
 

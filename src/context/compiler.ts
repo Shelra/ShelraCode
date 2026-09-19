@@ -13,7 +13,6 @@ const IGNORED = new Set([
   "build",
   "coverage",
   ".shelra",
-  ".grok",
   // The local Shelra checkout is migration evidence, not part of the target
   // workspace. Scanning it first can consume MAX_FILES before package.json
   // and src/ are even considered.

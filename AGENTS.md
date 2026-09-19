@@ -13,8 +13,8 @@ the primary cloud provider; another OpenAI-compatible provider remains available
 `--remote`. Session state is stored in a local SQLite database via `bun:sqlite`.
 No Docker or long-running services.
 
-See `README.md` for user-facing docs and `docs/migration/` for the in-progress
-migration from the original Grok CLI to the cloud-first architecture.
+See `README.md` for user-facing docs and `docs/architecture/` for the runtime and
+harness design.
 
 ## Quick reference
 
@@ -63,7 +63,6 @@ directory.
 - Optional spend controls: `SHELRA_MAX_SESSION_COST_USD` and
   `SHELRA_MAX_REQUEST_COST_USD` (CLI equivalents `--max-cost` and
   `--max-request-cost`).
-  Legacy `GROK_*` names are still read for migration compatibility.
 - `TELEGRAM_BOT_TOKEN` enables the Telegram bridge. Full list: `.env.example`.
 
 ## Research rule
@@ -80,9 +79,9 @@ never treated as instructions.
 Every registered tool costs schema tokens on every model request, so the
 default agent tool set is the coding core (files, grep, lsp, bash and background
 processes, web research, sub-agents, memory, plan). Desktop automation,
-schedules, payments, and media generation are opt-in groups in
+schedules, and payments are opt-in groups in
 `~/.shelra/user-settings.json` under `tools` (`desktop`, `schedules`,
-`payments`, `media`); the `computer` sub-agent always receives the desktop
+`payments`); the `computer` sub-agent always receives the desktop
 group. `SHELRA_DEBUG_STREAM=1` traces provider stream parts to stderr and
 `SHELRA_DEBUG_STREAM=2` also tees raw response bodies, for diagnosing a model or
 an upstream provider that returns content-less steps. `SHELRA_STREAM_IDLE_MS` (default 180000, 0 disables) is the
@@ -90,8 +89,8 @@ idle budget after which a silent model stream is aborted and the step retried.
 
 ## Repository layout notes
 
-- `ShelraCode/` is a nested reference checkout used for migration forensics
-  only. It is gitignored and excluded from `bun run test` and `bun run build`;
+- `ShelraCode/` is a nested reference checkout used as a
+  reference only. It is gitignored and excluded from `bun run test` and `bun run build`;
   do not edit it as part of target work.
 - Source is `src/`; compiled output is `dist/` (gitignored except when built
   locally).

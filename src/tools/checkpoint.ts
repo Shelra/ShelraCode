@@ -10,7 +10,7 @@ export interface RevertResult {
 
 /**
  * Restores a file to the content captured by its most recent checkpoint in this workspace
- * (recorded by `checkpointBeforeMutation` in `src/grok/tools.ts`, immediately before
+ * (recorded by `checkpointBeforeMutation` in `src/toolset/tools.ts`, immediately before
  * write_file/edit_file/delete_file touched it). If the file did not exist before that mutation, revert
  * deletes it instead of writing empty content — matching the checkpoint's own
  * `previousExisted` record.

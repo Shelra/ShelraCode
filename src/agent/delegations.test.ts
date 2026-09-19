@@ -55,8 +55,8 @@ afterEach(() => {
 
 describe("DelegationManager sandbox propagation", () => {
   it("persists sandbox mode in background delegation records", async () => {
-    const home = makeTempDir("grok-delegation-home-");
-    const cwd = makeTempDir("grok-delegation-cwd-");
+    const home = makeTempDir("shelra-delegation-home-");
+    const cwd = makeTempDir("shelra-delegation-cwd-");
     const spawnMock = vi.fn(() => ({
       pid: 2468,
       unref: vi.fn(),
@@ -71,7 +71,7 @@ describe("DelegationManager sandbox propagation", () => {
         prompt: "Find the execution path.",
       },
       {
-        model: "grok-test-model",
+        model: "test-model",
         sandboxMode: "shuru",
         maxToolRounds: 25,
         maxTokens: 2048,
@@ -95,8 +95,8 @@ describe("DelegationManager sandbox propagation", () => {
   });
 
   it("persists sandbox settings in background delegation records", async () => {
-    const home = makeTempDir("grok-delegation-home-");
-    const cwd = makeTempDir("grok-delegation-cwd-");
+    const home = makeTempDir("shelra-delegation-home-");
+    const cwd = makeTempDir("shelra-delegation-cwd-");
     const spawnMock = vi.fn(() => ({
       pid: 3579,
       unref: vi.fn(),
@@ -118,7 +118,7 @@ describe("DelegationManager sandbox propagation", () => {
         prompt: "Look around",
       },
       {
-        model: "grok-test-model",
+        model: "test-model",
         sandboxMode: "shuru",
         sandboxSettings,
         maxToolRounds: 25,
@@ -138,36 +138,5 @@ describe("DelegationManager sandbox propagation", () => {
 
     expect(record.sandboxMode).toBe("shuru");
     expect(record.sandboxSettings).toEqual(sandboxSettings);
-  });
-});
-
-describe("legacy delegation mirror", () => {
-  async function startDelegation(home: string) {
-    const cwd = makeTempDir("grok-delegation-cwd-");
-    const spawnMock = vi.fn(() => ({ pid: 1234, unref: vi.fn() }));
-    const mod = await importDelegationsModule({ home, spawnMock });
-    const manager = new mod.DelegationManager(() => cwd, spawnMock as never);
-    await manager.start(
-      { agent: "explore", description: "Inspect", prompt: "Look around" },
-      { model: "grok-test-model", sandboxMode: "shuru", maxToolRounds: 25, maxTokens: 2048 },
-    );
-  }
-
-  it("never creates the legacy directory for a fresh install", async () => {
-    const home = makeTempDir("grok-delegation-home-");
-    await startDelegation(home);
-
-    expect(fs.existsSync(path.join(home, ".shelra", "delegations"))).toBe(true);
-    expect(fs.existsSync(path.join(home, ".grok", "delegations"))).toBe(false);
-  });
-
-  it("still mirrors when the legacy directory already exists", async () => {
-    const home = makeTempDir("grok-delegation-home-");
-    fs.mkdirSync(path.join(home, ".grok", "delegations"), { recursive: true });
-    await startDelegation(home);
-
-    const canonical = readStoredDelegationRecord(home);
-    const legacy = readStoredDelegationRecord(home, ".grok");
-    expect(legacy).toEqual(canonical);
   });
 });

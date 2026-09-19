@@ -12,7 +12,7 @@ import type {
 } from "../providers/types";
 
 /**
- * End-to-end proof for §14 Phase 2 item 3 (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md):
+ * End-to-end proof for §14 Phase 2 item 3 (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md):
  * a plan's acceptance criteria published in an early turn are still present, verbatim, in the
  * persisted compaction summary once a later turn's context pressure forces real compaction to
  * run — not just the pure `appendActiveCriteriaBlock` unit, but the actual `Agent` wiring.

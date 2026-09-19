@@ -4,9 +4,8 @@
 
 | | |
 | --- | --- |
-| Repository | `D:\PROYECTS\grok-cli` |
+| Repository | `D:\PROYECTS\shelra` |
 | Branch | `main` |
-| HEAD | `fb97af83f06dca873281d60168430f06c8de6324` ("bump version") |
 | Dirty before audit | **YES** — large migration in progress |
 | Dirty after audit | **YES** — identical set of source changes, **preserved untouched** |
 | Files created by this audit | `docs/audits/local-model-startup-audit/*.md` (21 files) — **nothing else** |
@@ -60,7 +59,7 @@ Run twice. Both runs exited **0**.
 The increase between runs is caused by concurrent work by another agent in this
 session (§5), not by the audit.
 
-`docs/migration/10-IMPLEMENTATION-STATUS.md` records "66 test files / 268 tests";
+`docs/architecture/10-IMPLEMENTATION-STATUS.md` records "66 test files / 268 tests";
 the file count matched at audit start, the test count did not (**+5**). Recorded
 as doc/code drift in `17-GAP-ANALYSIS.md` §3.
 
@@ -109,7 +108,7 @@ The four `agent.ts` entries confirm the dead post-refactor helpers documented in
 **Drift note:** at the start of the audit the same command reported
 **158 errors / 12 warnings across 188 files**; the +2 files / +2 errors come from
 `src/cli/installation.ts` added concurrently (§5).
-`docs/migration/10-IMPLEMENTATION-STATUS.md` records "157 errors and 12
+`docs/architecture/10-IMPLEMENTATION-STATUS.md` records "157 errors and 12
 warnings" — a third value, consistent with the file having been written before
 further changes.
 
@@ -181,8 +180,8 @@ module and called the pure function:
 
 ```
 src/index.ts    => OK  src/index.ts
-newdir/file.ts  => ERR ENOENT: no such file or directory, realpath 'D:\PROYECTS\grok-cli\newdir'
-a/b/c.ts        => ERR ENOENT: no such file or directory, realpath 'D:\PROYECTS\grok-cli\a\b'
+newdir/file.ts  => ERR ENOENT: no such file or directory, realpath 'D:\PROYECTS\shelra\newdir'
+a/b/c.ts        => ERR ENOENT: no such file or directory, realpath 'D:\PROYECTS\shelra\a\b'
 src/newfile.ts  => OK  src/newfile.ts
 ```
 
@@ -205,8 +204,6 @@ src/newfile.ts  => OK  src/newfile.ts
     manual.zip                                      18,412,429 bytes
     manual/                                         contains llama-server.exe
     (no b10826/)
-~/.grok/
-  delegations/  ← 9 project directories, recreated post-migration
 ```
 
 **Sidecar validity check:**
@@ -278,7 +275,7 @@ citations can be trusted.
 | mid-audit | `src/cli/installation.ts` (new, 375 lines) | Not audited. Accounts for the +2 files / +2 lint errors between the two lint runs. |
 | mid-audit | `src/agent/agent.ts` grew 2 937 → 2 967 lines; ~30 lines inserted between `:1925` and `:1987` (a new `maxOutputTokensForTurn(runtime, "repository", …)` call at `:1966`) | **All `src/agent/agent.ts` citations above `:1925` were re-verified and updated to the final numbering.** Citations at or below `:1925` are unaffected. |
 | mid-audit | `src/runtimes/managed-llama.ts` grew 284 → 304 lines; `stopChild` (`:256-288`) gained a force-kill: `taskkill /PID <pid> /T /F` on win32, `SIGKILL` elsewhere, after a 2 s grace, guarded by a `settled` flag | **Directly relevant.** Its own comment states *"Windows `child_process.kill()` can report success while a native llama-server process is still alive"* — independently corroborating the orphan behaviour observed in §2a. It mitigates the **dispose** path only; the three orphan paths in R-05 (crash, SIGTERM, re-discovery overwrite at `src/index.ts:373`) bypass `dispose()` entirely and are unaffected. All cited line numbers in `managed-llama.ts` **≤ 253** were re-verified and are unchanged. |
-| mid-audit | `docs/migration/11-STARTUP-ONBOARDING.md` gained a paragraph about a compiled Spanish-language repository-review run | Noted; does not change any finding. |
+| mid-audit | `docs/architecture/11-STARTUP-ONBOARDING.md` gained a paragraph about a compiled Spanish-language repository-review run | Noted; does not change any finding. |
 
 ### File hashes at the end of the audit
 

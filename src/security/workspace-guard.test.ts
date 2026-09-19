@@ -6,7 +6,7 @@ import { resolveWorkspacePath } from "./workspace-guard";
 
 describe("workspace path guard", () => {
   it("allows contained paths and rejects traversal", () => {
-    const root = mkdtempSync(join(tmpdir(), "grok-workspace-"));
+    const root = mkdtempSync(join(tmpdir(), "shelra-workspace-"));
     mkdirSync(join(root, "src"));
     writeFileSync(join(root, "src", "file.ts"), "ok");
     expect(resolveWorkspacePath("src/file.ts", root).relativePath).toBe("src/file.ts");
@@ -14,7 +14,7 @@ describe("workspace path guard", () => {
   });
 
   it("resolves paths several levels deep into directories that do not exist yet", () => {
-    const root = mkdtempSync(join(tmpdir(), "grok-workspace-"));
+    const root = mkdtempSync(join(tmpdir(), "shelra-workspace-"));
     expect(resolveWorkspacePath("newdir/file.ts", root).relativePath).toBe("newdir/file.ts");
     expect(resolveWorkspacePath("a/b/c/deep.ts", root).relativePath).toBe("a/b/c/deep.ts");
     expect(resolveWorkspacePath("a/b/c/deep.ts", root).path).toBe(join(root, "a", "b", "c", "deep.ts"));
@@ -22,15 +22,15 @@ describe("workspace path guard", () => {
   });
 
   it("rejects a not-yet-existing path under a symlinked directory that escapes the workspace", () => {
-    const root = mkdtempSync(join(tmpdir(), "grok-workspace-"));
-    const outside = mkdtempSync(join(tmpdir(), "grok-outside-"));
+    const root = mkdtempSync(join(tmpdir(), "shelra-workspace-"));
+    const outside = mkdtempSync(join(tmpdir(), "shelra-outside-"));
     symlinkSync(outside, join(root, "escape"), "junction");
     expect(() => resolveWorkspacePath("escape/new/file.ts", root)).toThrow("resolves outside");
   });
 
   it("rejects a symlink that points outside the workspace", () => {
-    const root = mkdtempSync(join(tmpdir(), "grok-workspace-"));
-    const outside = mkdtempSync(join(tmpdir(), "grok-outside-"));
+    const root = mkdtempSync(join(tmpdir(), "shelra-workspace-"));
+    const outside = mkdtempSync(join(tmpdir(), "shelra-outside-"));
     writeFileSync(join(outside, "secret.txt"), "secret");
     symlinkSync(outside, join(root, "linked"), "junction");
     expect(() => resolveWorkspacePath("linked/secret.txt", root)).toThrow("resolves outside");

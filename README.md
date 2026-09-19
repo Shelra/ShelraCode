@@ -1,19 +1,16 @@
 # ShelraCode: a cloud-first terminal coding agent
 
-[![CI](https://github.com/superagent-ai/grok-cli/actions/workflows/typecheck.yml/badge.svg)](https://github.com/superagent-ai/grok-cli/actions/workflows/typecheck.yml)
+[![CI](https://github.com/yosoyjavieruiz/ShelraCode/actions/workflows/typecheck.yml/badge.svg)](https://github.com/yosoyjavieruiz/ShelraCode/actions/workflows/typecheck.yml)
 [![npm](https://img.shields.io/npm/v/shelra.svg)](https://www.npmjs.com/package/shelra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.x-000000?logo=bun&logoColor=white)](https://bun.sh/)
 
-ShelraCode preserves the OpenTUI terminal interaction model of its upstream
-Grok CLI foundation while routing coding work through OpenRouter first. The
+ShelraCode routes coding work through OpenRouter first. The
 default route is OpenRouter Free, with dynamic model discovery, capability
 filtering, budgets, tool execution, and verification in the real agent loop.
 Local inference remains available as an explicit private/offline mode with
 `--local`; it is not downloaded or started by the default cloud path.
-
-[https://github.com/user-attachments/assets/7ca4f6df-50ca-4e9c-91b2-d4abad5c66cb](https://github.com/user-attachments/assets/7ca4f6df-50ca-4e9c-91b2-d4abad5c66cb)
 
 ---
 
@@ -214,19 +211,6 @@ shelra models
 shelra fix the flaky test in src/foo.test.ts
 ```
 
-**Generate images or short videos from chat:**
-
-```bash
-shelra "Generate a retro-futuristic logo for my CLI called ShelraCode"
-shelra "Edit ./assets/hero.png into a watercolor poster"
-shelra "Animate ./assets/cover.jpg into a 6 second cinematic push-in"
-```
-
-Image and video generation remain optional compatibility tools. They are exposed
-only when the selected provider advertises those capabilities; local runtimes
-otherwise receive a clear unavailable result. Generated media uses the existing
-`.grok/generated-media/` compatibility path until that subsystem is replaced.
-
 ---
 
 ## What you actually get
@@ -235,14 +219,10 @@ ShelraCode is cloud-first by default. `shelra models` discovers and prints the
 OpenRouter catalog first, then shows managed local models as a secondary
 catalog. The default routing policy is Free; use `--model-policy auto` (or a
 paid policy) only when paid routing is allowed by the configured budget. Use
-`--local` to opt into the managed local runtime. Search and media tools are
+`--local` to opt into the managed local runtime. Search tools are
 capability-gated, while the built-in web research tools are provider-neutral.
 
-### Legacy feature compatibility matrix
-
-The inherited table below lists capabilities that remain available only when an
-adapter implements them. It is retained to document the existing Grok CLI
-surface while each capability is being replaced or removed.
+### Capabilities
 
 
 | Thing | What it means |
@@ -251,7 +231,6 @@ surface while each capability is being replaced or removed.
 | **Persistent project memory** | Every turn retrieves the project memory under `.shelra/memory/` ranked against the request (lexical, no embeddings) and injects the relevant entries; after a turn that changed and verified files or worked through a failure, one bounded reflection call proposes durable facts and a deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text, human statements never overwritten by inferences). Standing rules the user states are captured directly; procedures used repeatedly become `.agents/skills`. See `docs/design/shelra-memory-engine.md`. |
 | **Web research** | The agent uses `search_web` plus `open_web` when a task depends on an external library, API, or protocol; nothing is fetched for turns that do not need it. Results are treated as untrusted leads and the agent is instructed to verify them. |
 | **X + web search** | `search_x` remains provider-specific; `search_web` and `open_web` are provider-neutral and available to the real agent loop. |
-| **Media generation** | `generate_image` and `generate_video` tools for text-to-image, image editing, text-to-video, and image-to-video. Capability-gated; generated files are saved locally under `.grok/generated-media/` (compatibility path). |
 | **Sub-agents (default behavior)** | Foreground `task` delegation (explore, plan, general, vision, verify, or computer) plus background `delegate` for read-only deep dives. Every delegated task follows intent -> context -> plan -> verify -> deliver: gather context before acting, plan non-trivial changes (directly or via `plan`), and verify results before reporting done. |
 | **Verify** | `/verify` or `--verify` — inspects your app, builds, tests, boots it, and runs browser smoke checks in a sandboxed environment. Screenshots and video included. |
 | **Computer use** | Built-in `computer` sub-agent for host desktop automation via `agent-desktop` (macOS). Prefers semantic accessibility snapshots and stable refs; screenshots saved under `.shelra/computer/`. |
@@ -410,8 +389,7 @@ Optional `**subAgents**` — custom foreground sub-agents. Each entry needs `**n
 
 Names cannot be `general`, `explore`, `plan`, `vision`, `verify`, `verify-detect`, `verify-manifest`, or `computer` because those are reserved for the built-in sub-agents.
 
-The legacy `GROK_*` environment variables and `~/.grok` settings are read only
-for migration. New settings and state are written under `~/.shelra`.
+Settings and state are written under `~/.shelra`.
 
 ---
 
@@ -428,7 +406,7 @@ Send a voice note or audio attachment in Telegram and ShelraCode will transcribe
 
 #### Prerequisites
 
-- A remote provider key (`SHELRA_API_KEY` / `SHELRA_BASE_URL`, or legacy `GROK_API_KEY`). Transcription reuses the CLI's `apiKey` / `baseURL` resolution. In local-only mode (no remote provider), voice messages are not transcribed.
+- A remote provider key (`SHELRA_API_KEY` / `SHELRA_BASE_URL`). Transcription reuses the CLI's `apiKey` / `baseURL` resolution. In local-only mode (no remote provider), voice messages are not transcribed.
 
 #### Configure in `~/.shelra/user-settings.json`
 
@@ -527,8 +505,7 @@ When sandbox mode is active you can configure:
 
 Non-secret preferences are saved in `~/.shelra/user-settings.json` (user) and
 `.shelra/settings.json` (project). OpenRouter credentials are stored separately
-in `~/.shelra/auth.json` with restrictive permissions; legacy `.grok` settings
-remain readable during migration.
+in `~/.shelra/auth.json` with restrictive permissions.
 
 ### Verify
 
@@ -558,7 +535,7 @@ Make sure you have a modern shell and `curl` available:
 which curl
 
 # If using an outdated shell, try with bash explicitly
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/superagent-ai/grok-cli/main/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/yosoyjavieruiz/ShelraCode/main/install.sh)"
 ```
 
 **Bun not found**
@@ -594,8 +571,7 @@ export SHELRA_BASE_URL=https://provider.example/v1
 shelra --remote --api-key your_key_here --base-url https://provider.example/v1
 ```
 
-The legacy `GROK_API_KEY` and `~/.grok` settings are accepted only for
-compatibility. Cloud mode requires an OpenRouter key; local mode does not.
+Cloud mode requires an OpenRouter key; local mode does not.
 
 ### Terminal UI issues
 
@@ -653,7 +629,7 @@ If you're on Intel Mac or Linux, sandbox mode is not available. Use standard mod
 
 ### Getting help
 
-- Check existing [issues](https://github.com/superagent-ai/grok-cli/issues)
+- Check existing [issues](https://github.com/yosoyjavieruiz/ShelraCode/issues)
 - Open a new issue with:
   - OS and terminal emulator version
   - ShelraCode version (`shelra --version`)
@@ -680,12 +656,6 @@ bun run dev      # run from source (Bun)
 bun run typecheck
 bun run lint
 ```
-
----
-
-## Trademarks
-
-"Grok" is a registered trademark of xAI Corp. This project is not affiliated with, endorsed by, or sponsored by xAI Corp. All trademarks belong to their respective owners.
 
 ---
 

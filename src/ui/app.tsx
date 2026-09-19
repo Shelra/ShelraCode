@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { KeyBinding, KeyEvent, ScrollBoxRenderable, TextareaRenderable } from "@opentui/core";
 import { decodePasteBytes, type PasteEvent, parseKeypress } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
@@ -5,11 +7,17 @@ import os from "os";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Agent, type ProcessMessageObserver } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
+import { type HookIssue, setHookIssueListener } from "../hooks/index";
 import { POPULAR_MCP_CATALOG } from "../mcp/catalog";
 import { parseEnvLines, parseHeaderLines } from "../mcp/parse-headers";
 import { toMcpServerId, validateMcpServerConfig } from "../mcp/validate";
-import { formatMemoryForChat } from "../memory/report";
-import { projectMemoryScope, readMemoryIndex } from "../memory/store";
+import {
+  confirmMemoryEntry,
+  deleteMemoryEntry,
+  projectMemoryScope,
+  readMemoryIndex,
+  userMemoryScope,
+} from "../memory/store";
 import {
   getEffectiveReasoningEffort,
   getModelInfo,
@@ -24,7 +32,6 @@ import type {
   AgentMode,
   ChatEntry,
   DelegationRun,
-  FileDiff,
   ModelInfo,
   Plan,
   PlanQuestion,
@@ -61,9 +68,10 @@ import {
   saveRecapsEnabled,
   saveUserSettings,
 } from "../utils/settings";
-import { discoverSkills, formatSkillsForChat } from "../utils/skills";
+import { discoverSkills } from "../utils/skills";
 import { formatSubagentName } from "../utils/subagent-display";
 import { checkForUpdate, runUpdate, type UpdateCheckResult } from "../utils/update-checker";
+import { type ActivityPhrase, describeStatusStage, describeToolCall, phraseText, reasoningPreview } from "./activity";
 import {
   buildSubagentBrowseRows,
   SUBAGENT_EDITOR_FIELDS,
@@ -73,26 +81,39 @@ import {
 } from "./agents-modal";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
+import { DiffView } from "./diff-view";
+import { HelpModal } from "./help-modal";
 import { type TypeaheadState, useTypeahead } from "./hooks/useTypeahead.js";
+import { buildKnowledge, type KnowledgeTab } from "./knowledge";
+import { KnowledgeModal, knowledgeRowsFor } from "./knowledge-modal";
+import { gatherLoadedContext } from "./loaded-context";
 import { Markdown } from "./markdown";
 import { buildMcpBrowseRows, McpBrowserModal, McpEditorModal } from "./mcp-modal";
 import { createEmptyMcpEditorDraft, type McpEditorDraft, type McpEditorField } from "./mcp-modal-types";
 import {
+  emptyViewNotice,
+  type MissionTab,
+  missionAvailability,
+  missionTabForKey,
+  missionViewForCommand,
+} from "./mission";
+import {
   changedFiles,
   describeReasoningEffort,
-  groupLiveActivity,
   nextPlanStepLabel,
   phaseLabel,
   projectTranscript,
   resolvePlanState,
   type SessionUsageSummary,
+  summarizeChanges,
+  summarizeChecks,
   summarizeMemoryStatus,
   summarizeSessionUsage,
-  type TranscriptActivityItem,
+  type TurnThought,
   type UiActivityEvent,
   upsertActivity,
-  visibleRuntimeActivity,
 } from "./observability";
+import { compactCwd, projectName } from "./paths";
 import {
   formatPlanAnswers,
   initialPlanQuestionsState,
@@ -106,10 +127,10 @@ import {
   ActiveAgentsStrip,
   type InspectorContextStats,
   type InspectorTab,
+  MissionPanel,
   SessionInspector,
-  SessionStatusStrip,
-  WorkspaceSidebar,
 } from "./session-inspector";
+import { fitHints, type Hint, IDLE_HINTS, SUGGESTION_HINTS, WORKING_HINTS, withViewHints } from "./shortcuts";
 import { filterSlashMenuItems, SLASH_MENU_ITEMS, type SlashMenuItem } from "./slash-menu";
 import {
   buildAssistantEntry,
@@ -125,11 +146,21 @@ import {
   type MotionPreference,
   reducedMotionEnabled,
   resolveTheme,
+  scrollbarStyle,
   type TerminalThemeMode,
   type Theme,
   type ThemePreference,
 } from "./theme";
-import { resolveWorkspaceLayout } from "./workspace-layout";
+import {
+  ActivityLine,
+  ErrorBlock,
+  GLYPH,
+  LiveTurn,
+  PlanBlock,
+  ThoughtView,
+  TranscriptActivityView,
+  TurnSummaryLine,
+} from "./transcript";
 
 const THEME_OPTIONS: ThemePreference[] = ["system", "dark", "light"];
 const MOTION_OPTIONS: MotionPreference[] = ["full", "reduced"];
@@ -206,7 +237,7 @@ function HeroLogo({ t, width }: { t: Theme; width: number }) {
   if (logo.length === 0) return null;
 
   return (
-    <box flexDirection="column" alignItems="center">
+    <box flexDirection="column" alignItems="flex-start">
       {logo.map((line, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static logo rows never reorder
         <text key={index} style={{ fg: t.primary }} wrapMode="none">
@@ -217,20 +248,62 @@ function HeroLogo({ t, width }: { t: Theme; width: number }) {
   );
 }
 
-const SPLIT = {
-  topLeft: "",
-  bottomLeft: "",
-  vertical: "┃",
-  topRight: "",
-  bottomRight: "",
-  horizontal: " ",
-  bottomT: "",
-  topT: "",
-  cross: "",
-  leftT: "",
-  rightT: "",
-};
-const _SPLIT_END = { ...SPLIT, bottomLeft: "╹" };
+function parentOf(path: string): string {
+  const cut = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
+  return cut > 0 ? path.slice(0, cut) : path;
+}
+
+/** What Shelra knows about the folder it opened in, before the first message. */
+function HomeContext({
+  t,
+  cwd,
+  width,
+  memoryCount,
+  skillCount,
+}: {
+  t: Theme;
+  cwd: string;
+  width: number;
+  memoryCount: number;
+  skillCount: number;
+}) {
+  const chips = [
+    memoryCount > 0 ? `${memoryCount} ${memoryCount === 1 ? "memory" : "memories"}` : "no memory yet",
+    skillCount > 0 ? `${skillCount} ${skillCount === 1 ? "skill" : "skills"}` : null,
+    existsSync(join(cwd, "AGENTS.md")) ? "AGENTS.md" : null,
+  ].filter((chip): chip is string => chip !== null);
+  const name = projectName(cwd);
+
+  return (
+    <box width={width} flexShrink={0} flexDirection="column">
+      <text wrapMode="none">
+        <span style={{ fg: t.textDim }}>{"[ "}</span>
+        <span style={{ fg: t.brand }}>
+          <b>{"PROJECT"}</b>
+        </span>
+        <span style={{ fg: t.textDim }}>{" ]"}</span>
+      </text>
+      <text wrapMode="none">
+        <span style={{ fg: t.text }}>
+          <b>{name}</b>
+        </span>
+        <span style={{ fg: t.textDim }}>{`  ${compactCwd(parentOf(cwd), Math.max(12, width - name.length - 6))}`}</span>
+      </text>
+      <box height={1} />
+      <text wrapMode="none">
+        <span style={{ fg: t.textDim }}>{"[ "}</span>
+        <span style={{ fg: t.brand }}>
+          <b>{"KNOWS"}</b>
+        </span>
+        <span style={{ fg: t.textDim }}>{" ]"}</span>
+      </text>
+      <text fg={t.textMuted} wrapMode="none">
+        {chips.join("  ·  ")}
+      </text>
+    </box>
+  );
+}
+
 const _EMPTY = {
   topLeft: "",
   bottomLeft: "",
@@ -584,8 +657,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const initialHasApiKey = agent.hasApiKey();
   const [hasApiKey, setHasApiKey] = useState(initialHasApiKey);
   const [messages, setMessages] = useState<ChatEntry[]>(() => agent.getChatEntries());
+  const messagesRef = useRef<ChatEntry[]>(messages);
+  messagesRef.current = messages;
   const [streamContent, setStreamContent] = useState("");
-  const [_streamReasoning, setStreamReasoning] = useState("");
+  const [streamReasoning, setStreamReasoning] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [liveTurnSourceLabel, setLiveTurnSourceLabel] = useState<string | null>(null);
   const [model, setModel] = useState(agent.getModel());
@@ -652,6 +727,47 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [publishedPlan, setPublishedPlan] = useState<Plan | null>(() => findLatestPlan(agent.getChatEntries()));
   const [kernelState, setKernelState] = useState<KernelState | null>(() => agent.getKernelState());
   const [activityEvents, setActivityEvents] = useState<UiActivityEvent[]>([]);
+  /** Ctrl+O: show every step with its evidence instead of the folded summary. */
+  const [showDetails, setShowDetails] = useState(false);
+  const [missionTab, setMissionTab] = useState<MissionTab>("log");
+  // Opens a view from a command or a key; assigned every render, once the availability is known.
+  const openMissionRef = useRef<(tab: MissionTab) => void>(() => {});
+  // How many memories retrieval injected in each turn, indexed like `turnThoughts`.
+  const [turnRecalls, setTurnRecalls] = useState<ReadonlyArray<number | undefined>>([]);
+  // Hooks are silent when they succeed; a hook that fails or blocks is shown for the turn.
+  const [hookIssues, setHookIssues] = useState<HookIssue[]>([]);
+  const [showHelp, setShowHelp] = useState(false);
+  /** "What Shelra knows": memory, skills and cross-project rules, inspectable and correctable. */
+  const [knowledgeTab, setKnowledgeTab] = useState<KnowledgeTab | null>(null);
+  const [knowledgeIndex, setKnowledgeIndex] = useState(0);
+  const [knowledgeOpen, setKnowledgeOpen] = useState<ReadonlySet<string>>(() => new Set());
+  const [knowledgePendingDelete, setKnowledgePendingDelete] = useState<string | null>(null);
+  const [knowledgeVersion, setKnowledgeVersion] = useState(0);
+  const knowledgeTabRef = useRef<KnowledgeTab | null>(null);
+  knowledgeTabRef.current = knowledgeTab;
+  const knowledgePendingDeleteRef = useRef<string | null>(null);
+  knowledgePendingDeleteRef.current = knowledgePendingDelete;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: knowledgeVersion re-reads the stores after an edit
+  const knowledge = useMemo(
+    () => (knowledgeTab ? buildKnowledge(agent.getCwd()) : null),
+    [agent, knowledgeTab, knowledgeVersion],
+  );
+  /** The last request's failure, shown as an explained block until the next message. */
+  const [turnError, setTurnError] = useState<string | null>(null);
+  const showHelpRef = useRef(false);
+  showHelpRef.current = showHelp;
+  /** A short message that temporarily replaces the composer hints (never a modal). */
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitArmedUntilRef = useRef(0);
+  const [toolDurations, setToolDurations] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const [turnThoughts, setTurnThoughts] = useState<ReadonlyArray<TurnThought | undefined>>([]);
+  /** Latest host status stage ("Compiling workspace context"); cleared by the first real event. */
+  const [liveStatus, setLiveStatus] = useState<{ stage: string; detail: string; at: number } | null>(null);
+  const [livePhase, setLivePhase] = useState<{ kind: "waiting" | "thinking" | "writing" | "tool"; at: number }>({
+    kind: "waiting",
+    at: Date.now(),
+  });
   const [usageSummary, setUsageSummary] = useState<SessionUsageSummary>(() =>
     summarizeSessionUsage(agent.getSessionUsage()),
   );
@@ -665,7 +781,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   /**
    * When the foreground sub-agent last reported a new action. Set from real `onSubagentStatus`
    * emissions (one per child tool call) — never a synthetic heartbeat — and consumed by the
-   * three-tier disclosure rule in `resolveAgentDisclosure` (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §19).
+   * three-tier disclosure rule in `resolveAgentDisclosure` (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §19).
    */
   const [activeSubagentActivityAt, setActiveSubagentActivityAt] = useState<number | null>(null);
   const [delegations, setDelegations] = useState<DelegationRun[]>([]);
@@ -679,6 +795,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const { width, height } = useTerminalDimensions();
   const processedInitial = useRef(false);
   const contentAccRef = useRef("");
+  const toolStartedAtRef = useRef<Map<string, number>>(new Map());
+  const reasoningRef = useRef({ text: "", startedAt: null as number | null, totalMs: 0, steps: 0 });
+  const turnOrdinalRef = useRef<number | null>(null);
   const startTimeRef = useRef(0);
   const sessionStartedAtRef = useRef(agent.getSessionInfo()?.createdAt.getTime() ?? Date.now());
   const isProcessingRef = useRef(false);
@@ -830,7 +949,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   modeInfoRef.current = modeInfo;
   const modelInfo = agent.getModelInfo() ?? getModelInfo(model);
   const contextStats = modelInfo ? agent.getContextStats(modelInfo.contextWindow, streamContent) : null;
-  const memoryStatus = summarizeMemoryStatus(readMemoryIndex(projectMemoryScope(agent.getCwd())));
+  const memoryVersion = activityEvents.reduce((count, event) => (event.kind === "memory" ? count + 1 : count), 0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read only when the memory engine reports a write
+  const memoryStatus = useMemo(
+    () => summarizeMemoryStatus(readMemoryIndex(projectMemoryScope(agent.getCwd()))),
+    [agent, memoryVersion],
+  );
+  const skillCount = useMemo(() => discoverSkills(agent.getCwd()).length, [agent]);
   const modelCatalog = useMemo(
     () =>
       [...(startupConfig.localModels ?? [])].sort((a, b) => {
@@ -1482,7 +1607,39 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setActiveSubagentStartedAt(null);
     setActiveSubagentActivityAt(null);
     setLiveTurnSourceLabel(null);
+    setLiveStatus(null);
     contentAccRef.current = "";
+  }, []);
+
+  useEffect(() => {
+    setHookIssueListener((issue) => setHookIssues((current) => [...current.slice(-2), issue]));
+    return () => setHookIssueListener(null);
+  }, []);
+
+  const enterPhase = useCallback((kind: "waiting" | "thinking" | "writing" | "tool") => {
+    setLivePhase((current) => (current.kind === kind ? current : { kind, at: Date.now() }));
+  }, []);
+
+  const noteReasoning = useCallback(
+    (delta: string) => {
+      const reasoning = reasoningRef.current;
+      if (reasoning.startedAt === null) {
+        reasoning.startedAt = Date.now();
+        reasoning.steps += 1;
+      }
+      reasoning.text = `${reasoning.text}${delta}`.slice(-1600);
+      setStreamReasoning(reasoning.text);
+      setLiveStatus(null);
+      enterPhase("thinking");
+    },
+    [enterPhase],
+  );
+
+  const closeReasoning = useCallback(() => {
+    const reasoning = reasoningRef.current;
+    if (reasoning.startedAt === null) return;
+    reasoning.totalMs += Date.now() - reasoning.startedAt;
+    reasoning.startedAt = null;
   }, []);
 
   const syncKernelState = useCallback(() => {
@@ -1500,7 +1657,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       // Usage stays in runtime accounting; "Step N" never enters the chat presentation.
       onStepStart: syncKernelState,
       onStepFinish: syncKernelState,
+      onStatus: (info) => setLiveStatus({ stage: info.stage, detail: info.detail, at: info.timestamp }),
       onToolStart: (info) => {
+        toolStartedAtRef.current.set(info.toolCall.id, info.timestamp);
         recordActivity({
           id: `tool:${runId}:${info.toolCall.id}`,
           kind: "tool",
@@ -1514,6 +1673,12 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         syncKernelState();
       },
       onToolFinish: (info) => {
+        const startedAt = toolStartedAtRef.current.get(info.toolCall.id);
+        if (startedAt !== undefined) {
+          toolStartedAtRef.current.delete(info.toolCall.id);
+          const durationMs = Math.max(0, info.timestamp - startedAt);
+          setToolDurations((current) => new Map(current).set(info.toolCall.id, durationMs));
+        }
         recordActivity({
           id: `tool:${runId}:${info.toolCall.id}`,
           kind: "tool",
@@ -1613,6 +1778,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const beginLiveTurn = useCallback(
     (turn: Omit<ActiveTurnState, "latestAssistantText" | "flushedAssistantChars">) => {
       clearLiveTurnUi();
+      // Hook problems stay readable after their turn ends and clear when the next one begins.
+      setHookIssues([]);
+      // A new turn is about the conversation: leave any open view.
+      setMissionTab("log");
       activeTurnRef.current = {
         ...turn,
         latestAssistantText: "",
@@ -2018,6 +2187,26 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     startTelegramBridge();
   }, [hasApiKey, startTelegramBridge]);
 
+  const openKnowledge = useCallback((tab: KnowledgeTab) => {
+    setKnowledgeTab(tab);
+    setKnowledgeIndex(0);
+    setKnowledgeOpen(new Set());
+    setKnowledgePendingDelete(null);
+  }, []);
+
+  const showNotice = useCallback((text: string, durationMs = 2200) => {
+    setNotice(text);
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => setNotice(null), durationMs);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    },
+    [],
+  );
+
   const handleExit = useCallback(() => {
     void bridgeRef.current?.stop();
     bridgeRef.current = null;
@@ -2028,7 +2217,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setCopyFlashId((n) => n + 1);
   }, []);
 
-  /** Match OpenCode: OSC 52 + real OS clipboard; used from keyboard and root onMouseUp. */
+  /** OSC 52 plus the real OS clipboard; used from the keyboard and the root onMouseUp. */
   const copyTuiSelectionToHost = useCallback((): boolean => {
     if (!renderer.hasSelection) return false;
     const sel = renderer.getSelection();
@@ -2260,6 +2449,20 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
   const interruptActiveRun = useCallback(
     (key?: KeyEvent) => {
+      if (showHelpRef.current) {
+        setShowHelp(false);
+        key?.preventDefault();
+        key?.stopPropagation();
+        return true;
+      }
+      if (knowledgeTabRef.current) {
+        // First Esc backs out of an armed delete; the next one closes the panel.
+        if (knowledgePendingDeleteRef.current) setKnowledgePendingDelete(null);
+        else setKnowledgeTab(null);
+        key?.preventDefault();
+        key?.stopPropagation();
+        return true;
+      }
       if (showInspector) {
         setShowInspector(false);
         setInspectorTab("overview");
@@ -2351,6 +2554,12 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setPublishedPlan(null);
     setKernelState(null);
     setActivityEvents([]);
+    setTurnThoughts([]);
+    setTurnRecalls([]);
+    setHookIssues([]);
+    setMissionTab("log");
+    setTurnError(null);
+    setToolDurations(new Map());
     setUsageSummary(summarizeSessionUsage(agent.getSessionUsage()));
     sessionStartedAtRef.current = snapshot?.session.createdAt.getTime() ?? Date.now();
     setNowTick(Date.now());
@@ -2371,6 +2580,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       setIsProcessing(true);
       setKernelState(null);
       setPublishedPlan(null);
+      setTurnError(null);
+      reasoningRef.current = { text: "", startedAt: null, totalMs: 0, steps: 0 };
+      turnOrdinalRef.current = messagesRef.current.filter((entry) => entry.type === "user").length;
+      setStreamReasoning("");
+      setLivePhase({ kind: "waiting", at: Date.now() });
       setActivityEvents((current) =>
         current.map((event) => (event.status === "active" ? { ...event, status: "complete" } : event)),
       );
@@ -2396,19 +2610,26 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
             switch (chunk.type) {
               case "content":
+                closeReasoning();
+                setLiveStatus(null);
+                enterPhase("writing");
                 applyLocalAssistantDelta(chunk.content || "");
                 break;
               case "reasoning":
-                setStreamReasoning((p) => p + (chunk.content || ""));
+                noteReasoning(chunk.content || "");
                 break;
               case "tool_calls":
                 if (chunk.toolCalls) {
+                  closeReasoning();
+                  setLiveStatus(null);
+                  enterPhase("tool");
                   showLiveToolCalls(chunk.toolCalls);
                 }
                 break;
               case "tool_result":
                 if (chunk.toolCall && chunk.toolResult) {
                   appendLiveToolResult(chunk.toolCall, chunk.toolResult);
+                  enterPhase("waiting");
                 }
                 break;
               case "tool_approval_request":
@@ -2439,8 +2660,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 if (chunk.isAuthError) {
                   turnHadAuthError = true;
                 }
-                contentAccRef.current += `\n${chunk.content || "Unknown error"}`;
-                setStreamContent(contentAccRef.current);
+                setTurnError(chunk.content || "Unknown error");
                 break;
               case "done":
                 break;
@@ -2449,10 +2669,30 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           syncKernelState();
         } catch {
           turnHadError = true;
-          if (!isStale()) {
-            contentAccRef.current += "\nAn unexpected error occurred.";
-            setStreamContent(contentAccRef.current);
-          }
+          if (!isStale()) setTurnError("An unexpected error occurred.");
+        }
+        closeReasoning();
+        const reasoning = reasoningRef.current;
+        const thoughtOrdinal = turnOrdinalRef.current;
+        if (!isStale() && thoughtOrdinal !== null && reasoning.steps > 0 && reasoning.text.trim()) {
+          const thought: TurnThought = {
+            durationMs: reasoning.totalMs,
+            text: reasoning.text.trim(),
+            steps: reasoning.steps,
+          };
+          setTurnThoughts((current) => {
+            const next = [...current];
+            next[thoughtOrdinal] = thought;
+            return next;
+          });
+        }
+        const recalled = agent.getLastMemoryContext()?.expanded.length ?? 0;
+        if (!isStale() && thoughtOrdinal !== null && recalled > 0) {
+          setTurnRecalls((current) => {
+            const next = [...current];
+            next[thoughtOrdinal] = recalled;
+            return next;
+          });
         }
         const wasInterrupted = interruptedRunIdRef.current === runId;
         if (isStale()) {
@@ -2479,8 +2719,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       appendLiveToolResult,
       applyLocalAssistantDelta,
       beginLiveTurn,
+      closeReasoning,
       createProcessObserver,
+      enterPhase,
       finalizeActiveTurn,
+      noteReasoning,
       scrollToBottom,
       sessionTitle,
       showLiveToolCalls,
@@ -2753,34 +2996,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           handleExit();
           break;
         case "help":
-          setMessages((p) => [
-            ...p,
-            {
-              type: "assistant",
-              content: SLASH_MENU_ITEMS.map((i) => `/${i.label} — ${i.description}`).join("\n"),
-              timestamp: new Date(),
-            },
-          ]);
+          setShowHelp(true);
           break;
         case "skills":
-          setMessages((p) => [
-            ...p,
-            {
-              type: "assistant",
-              content: formatSkillsForChat(discoverSkills(agent.getCwd()), agent.getCwd()),
-              timestamp: new Date(),
-            },
-          ]);
+          openKnowledge("skills");
           break;
         case "memory":
-          setMessages((p) => [
-            ...p,
-            {
-              type: "assistant",
-              content: formatMemoryForChat(agent.getCwd()),
-              timestamp: new Date(),
-            },
-          ]);
+          openKnowledge("memory");
           break;
         case "mcp":
           openMcpModal();
@@ -2788,6 +3010,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         case "agents":
           openAgentsModal();
           break;
+        case "plan":
+        case "diff":
+        case "checks":
+        case "context": {
+          const view = missionViewForCommand(item.id);
+          if (view) openMissionRef.current(view);
+          break;
+        }
         case "status":
           setInspectorTab("overview");
           setShowInspector(true);
@@ -2826,7 +3056,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       }
     },
     [
-      agent,
       handleExit,
       openAgentsModal,
       openEffortPicker,
@@ -2840,10 +3069,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       resetToNewSession,
       runHostVerification,
       startupConfig.version,
+      openKnowledge,
     ],
   );
 
   const blockPrompt =
+    showHelp ||
+    knowledgeTab !== null ||
     showConnectModal ||
     showTelegramTokenModal ||
     showTelegramPairModal ||
@@ -2966,6 +3198,81 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           const direction = key.name === "left" || key.shift ? -1 : 1;
           setInspectorTab(inspectorTabs[(current + direction + inspectorTabs.length) % inspectorTabs.length]);
           return;
+        }
+        return;
+      }
+      if (knowledgeTab && knowledge) {
+        const tabs: KnowledgeTab[] = ["memory", "skills", "user"];
+        const rows = knowledgeRowsFor(knowledge, knowledgeTab);
+        const current = rows[knowledgeIndex];
+        const switchTo = (tab: KnowledgeTab) => {
+          setKnowledgeTab(tab);
+          setKnowledgeIndex(0);
+          setKnowledgePendingDelete(null);
+        };
+        key.preventDefault();
+        key.stopPropagation();
+        if (isEscapeKey(key)) {
+          if (knowledgePendingDelete) setKnowledgePendingDelete(null);
+          else setKnowledgeTab(null);
+          return;
+        }
+        if (key.name === "left" || key.name === "right" || key.name === "tab") {
+          const step = key.name === "left" || (key.name === "tab" && key.shift) ? -1 : 1;
+          switchTo(tabs[(tabs.indexOf(knowledgeTab) + step + tabs.length) % tabs.length] ?? "memory");
+          return;
+        }
+        if (key.sequence === "1" || key.sequence === "2" || key.sequence === "3") {
+          switchTo(tabs[Number(key.sequence) - 1] ?? "memory");
+          return;
+        }
+        if (key.name === "up") {
+          setKnowledgeIndex((index) => Math.max(0, index - 1));
+          setKnowledgePendingDelete(null);
+          return;
+        }
+        if (key.name === "down") {
+          setKnowledgeIndex((index) => Math.min(Math.max(0, rows.length - 1), index + 1));
+          setKnowledgePendingDelete(null);
+          return;
+        }
+        if (!current || knowledgeTab === "skills" || !("slug" in current)) return;
+        const scope = current.scope === "user" ? userMemoryScope() : projectMemoryScope(agent.getCwd());
+        if (key.name === "return") {
+          setKnowledgeOpen((open) => {
+            const next = new Set(open);
+            if (!next.delete(current.key)) next.add(current.key);
+            return next;
+          });
+          return;
+        }
+        if (key.sequence === "c") {
+          showNotice(
+            confirmMemoryEntry(scope, current.slug, "confirmed in the memory panel")
+              ? "Marked as still true"
+              : "Could not update that memory",
+          );
+          setKnowledgeVersion((version) => version + 1);
+          return;
+        }
+        if (key.sequence === "x") {
+          if (knowledgePendingDelete !== current.key) {
+            setKnowledgePendingDelete(current.key);
+            return;
+          }
+          const result = deleteMemoryEntry(scope, current.slug, "deleted in the memory panel");
+          showNotice(result.ok ? "Memory deleted" : "That memory was already gone");
+          setKnowledgePendingDelete(null);
+          setKnowledgeIndex((index) => Math.max(0, Math.min(index, rows.length - 2)));
+          setKnowledgeVersion((version) => version + 1);
+        }
+        return;
+      }
+      if (showHelp) {
+        if (isEscapeKey(key) || key.name === "return" || key.sequence === "?") {
+          key.preventDefault();
+          key.stopPropagation();
+          setShowHelp(false);
         }
         return;
       }
@@ -3677,12 +3984,31 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         return;
       }
 
+      if (isEscapeKey(key) && missionTab !== "log") {
+        setMissionTab("log");
+        return;
+      }
+      if (key.meta && !key.ctrl) {
+        const tab = missionTabForKey(key.name ?? key.sequence?.slice(-1));
+        if (tab) {
+          key.preventDefault();
+          key.stopPropagation();
+          openMissionRef.current(tab);
+          return;
+        }
+      }
       if (isEscapeKey(key) && interruptActiveRun(key)) {
         return;
       }
 
       if (!hasApiKeyRef.current && shouldOpenApiKeyModalForKey(key)) {
         openApiKeyModal();
+        return;
+      }
+      if (key.sequence === "?" && !key.ctrl && !key.meta && !(inputRef.current?.plainText || "").trim()) {
+        key.preventDefault();
+        key.stopPropagation();
+        setShowHelp(true);
         return;
       }
       if (key.sequence === "/" && !isProcessing) {
@@ -3695,6 +4021,12 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
       }
 
+      if (key.name === "o" && key.ctrl) {
+        const next = !showDetails;
+        setShowDetails(next);
+        showNotice(next ? "Details on: every step with its evidence" : "Details off: steps are folded");
+        return;
+      }
       if (key.name === "e" && key.ctrl) {
         let lastUserIdx = -1;
         for (let i = messages.length - 1; i >= 0; i--) {
@@ -3739,13 +4071,20 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           key.stopPropagation();
           return;
         }
+        if (interruptActiveRun(key)) return;
         const text = inputRef.current?.plainText || "";
         if (text.trim()) {
           inputRef.current?.clear();
           replacePasteBlocks([]);
-        } else {
-          handleExit();
+          return;
         }
+        // Idle and empty: one press arms the exit, the second within 2s quits. Never lose a session to a stray key.
+        if (Date.now() < exitArmedUntilRef.current) {
+          handleExit();
+          return;
+        }
+        exitArmedUntilRef.current = Date.now() + 2000;
+        showNotice("Press ctrl+c again to exit");
         return;
       }
       if (typeaheadRef.current.visible) {
@@ -3864,6 +4203,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       messages,
       modelCatalog,
       startupConfig.version,
+      showDetails,
+      missionTab,
+      showHelp,
+      showNotice,
+      knowledge,
+      knowledgeIndex,
+      knowledgePendingDelete,
+      knowledgeTab,
     ],
   );
   useKeyboard(handleKey);
@@ -3975,17 +4322,101 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     if (activeEvent) return activeEvent.at;
     return isProcessing ? startTimeRef.current || null : null;
   }, [activeSubagent, activeSubagentStartedAt, activeToolCalls, activityEvents, isProcessing]);
-  const currentActivityElapsedMs = currentActivityStartedAt ? Math.max(0, nowTick - currentActivityStartedAt) : null;
+  const _currentActivityElapsedMs = currentActivityStartedAt ? Math.max(0, nowTick - currentActivityStartedAt) : null;
   const inspectorContextSummary = agent.getContextSummary();
   const inspectorContextStats: InspectorContextStats | null = contextStats;
-  const transcriptItems = useMemo(() => projectTranscript(messages), [messages]);
-  const liveActivityItems = useMemo(() => visibleRuntimeActivity(activityEvents), [activityEvents]);
+  const transcriptItems = useMemo(
+    () =>
+      projectTranscript(messages, {
+        durations: toolDurations,
+        thoughts: turnThoughts,
+        recalls: turnRecalls,
+        live: isProcessing,
+      }),
+    [messages, toolDurations, turnThoughts, turnRecalls, isProcessing],
+  );
+  // While the agent works on an unfinished plan, the checklist sits under the log where it is always
+  // in view; the history keeps the line that created it and folds to `✓ Plan 4/4` when the turn ends.
+  const showLivePlan =
+    isProcessing &&
+    inspectorPlan !== null &&
+    inspectorPlan.steps.length > 0 &&
+    inspectorPlan.steps.some((step) => step.status !== "complete");
+  // Only the newest plan is a live checklist; earlier ones stay a line in the history.
+  const latestPlanItemId = useMemo(() => {
+    for (let index = transcriptItems.length - 1; index >= 0; index -= 1) {
+      const item = transcriptItems[index];
+      if (item?.kind === "activity" && item.group === "plan") return item.id;
+    }
+    return null;
+  }, [transcriptItems]);
+  const changeSummaries = useMemo(() => summarizeChanges(messages), [messages]);
+  const checkSummaries = useMemo(() => summarizeChecks(transcriptItems), [transcriptItems]);
+  const activePresentationTool = useMemo(
+    () => [...activeToolCalls].reverse().find(isPresentationToolCall) ?? null,
+    [activeToolCalls],
+  );
+  // The single answer to "what is Shelra doing right now?": built only from real events, in
+  // priority order (a running tool beats a stage; a stage beats waiting on the model).
+  const livePhrase = useMemo<ActivityPhrase>(() => {
+    if (activePresentationTool) return describeToolCall(activePresentationTool);
+    if (liveStatus && livePhase.kind === "waiting") return describeStatusStage(liveStatus.stage, liveStatus.detail);
+    if (livePhase.kind === "thinking") return { verb: "Thinking", object: "" };
+    if (livePhase.kind === "writing") return { verb: "Writing response", object: "" };
+    return { verb: "Waiting for", object: model };
+  }, [activePresentationTool, liveStatus, livePhase.kind, model]);
+  const liveElapsedMs = useMemo(() => {
+    if (activePresentationTool) {
+      const startedAt = toolStartedAtRef.current.get(activePresentationTool.id);
+      if (startedAt !== undefined) return Math.max(0, nowTick - startedAt);
+    }
+    return Math.max(0, nowTick - livePhase.at);
+  }, [activePresentationTool, livePhase.at, nowTick]);
+  // What the memory engine did with the latest turn: learning stays visible instead of assumed.
+  const latestMemoryEvent = useMemo(
+    () =>
+      [...activityEvents]
+        .reverse()
+        .find(
+          (event) =>
+            event.kind === "memory" &&
+            event.label !== "Memory unchanged" &&
+            event.id.startsWith(`memory:${activeRunIdRef.current}:`),
+        ) ?? null,
+    [activityEvents],
+  );
+  const liveWaitNote =
+    !activePresentationTool && livePhase.kind === "waiting" && !liveStatus && liveElapsedMs >= 12_000
+      ? "No response yet. Free models can queue; esc stops the request."
+      : null;
   const hasMessages = messages.length > 0 || streamContent.length > 0 || isProcessing;
-  const workspaceLayout = resolveWorkspaceLayout(width, hasMessages);
-  const { sidebarWidth, showSidebar: showWorkspaceSidebar, chatWidth } = workspaceLayout;
+  const chatWidth = width;
+  const missionAvailable = missionAvailability({
+    plan: inspectorPlan,
+    changes: changeSummaries,
+    checks: checkSummaries,
+    hasCriteria: (agent.getVerificationStatus()?.criteria?.length ?? 0) > 0,
+  });
+  openMissionRef.current = (tab) => {
+    if (tab === "log") {
+      setMissionTab("log");
+      return;
+    }
+    // The home screen has no views: a view opened there would be waiting on the first message.
+    if (!hasMessages || !missionAvailable[tab]) {
+      showNotice(emptyViewNotice(tab));
+      return;
+    }
+    setMissionTab(tab);
+  };
+  const hasMissionViews = missionAvailable.plan || missionAvailable.changes || missionAvailable.checks;
+  const loadedContext = useMemo(
+    () => (missionTab === "context" ? gatherLoadedContext(agent.getCwd()) : null),
+    [agent, missionTab],
+  );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: OpenCode-style copy-on-mouse-up on root surface
+    // biome-ignore lint/a11y/noStaticElementInteractions: copy-on-mouse-up on the root surface
     <box
       width={width}
       height={height}
@@ -3997,11 +4428,19 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       {hasMessages ? (
         <box flexGrow={1} flexDirection="row" minHeight={0}>
           <box width={chatWidth} flexDirection="column" minHeight={0}>
-            <SessionHeader t={t} modeInfo={modeInfo} sessionTitle={sessionTitle} sessionId={sessionId} />
+            <SessionHeader
+              t={t}
+              modeInfo={modeInfo}
+              sessionTitle={sessionTitle}
+              sessionId={sessionId}
+              width={chatWidth}
+            />
             <box flexGrow={1} paddingBottom={1} paddingTop={1} paddingLeft={2} paddingRight={2} gap={1}>
               {/* Scrollable messages */}
               <scrollbox
+                scrollbarOptions={scrollbarStyle(t)}
                 ref={scrollRef}
+                visible={missionTab === "log"}
                 flexGrow={1}
                 stickyScroll={true}
                 // biome-ignore lint/suspicious/noExplicitAny: OpenTUI type mismatch for stickyStart
@@ -4012,62 +4451,146 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 // lands below the messages instead of above them.
                 contentOptions={{ justifyContent: "flex-end" }}
               >
-                {transcriptItems.map((item) =>
-                  item.kind === "message" ? (
-                    <MessageView
+                {transcriptItems.map((item) => {
+                  if (item.kind === "message") {
+                    return (
+                      <MessageView
+                        key={item.id}
+                        entry={item.entry}
+                        index={item.sourceIndex}
+                        t={t}
+                        modeColor={modeAccent(t, modeInfo)}
+                        expandedMessages={expandedMessages}
+                      />
+                    );
+                  }
+                  if (item.kind === "thought") {
+                    return (
+                      <ThoughtView key={item.id} t={t} item={item} width={chatWidth - 10} detailed={showDetails} />
+                    );
+                  }
+                  if (item.kind === "summary") {
+                    return <TurnSummaryLine key={item.id} t={t} item={item} />;
+                  }
+                  return (
+                    <TranscriptActivityView
                       key={item.id}
-                      entry={item.entry}
-                      index={item.sourceIndex}
                       t={t}
-                      modeColor={modeAccent(t, modeInfo)}
-                      expandedMessages={expandedMessages}
+                      item={item}
+                      width={chatWidth - 10}
+                      detailed={showDetails}
+                      livePlan={item.id === latestPlanItemId && !showLivePlan ? inspectorPlan : null}
                     />
-                  ) : (
-                    <TranscriptActivityView key={item.id} t={t} item={item} />
-                  ),
-                )}
+                  );
+                })}
                 {liveTurnSourceLabel && (activeToolCalls.length > 0 || streamContent || isProcessing) && (
                   <box paddingLeft={3} marginTop={1} flexShrink={0}>
                     <text fg={t.textMuted}>{liveTurnSourceLabel}</text>
                   </box>
                 )}
-                {/* Active tool calls — pending inline */}
-                <RuntimeActivityTree
-                  t={t}
-                  title={isProcessing ? currentActivity : null}
-                  elapsedMs={currentActivityElapsedMs}
-                  activities={liveActivityItems}
-                  found={liveActivityItems.length > 0 ? streamContent || null : null}
-                  next={liveActivityItems.length > 0 ? nextPlanStepLabel(inspectorPlan) : null}
-                  isProcessing={isProcessing}
-                  reducedMotion={reducedMotion}
-                />
-                {/* Streaming assistant content — only when there's no live activity tree to fold it into */}
-                {streamContent && liveActivityItems.length === 0 && (
+                {/* Streaming assistant text */}
+                {streamContent && (
                   <box paddingLeft={3} marginTop={1} flexShrink={0}>
-                    <Markdown content={streamContent} t={t} />
+                    <Markdown content={streamContent} t={t} streaming={isProcessing} />
                   </box>
                 )}
+                {latestMemoryEvent ? (
+                  <box paddingLeft={3} marginTop={1} flexShrink={0}>
+                    <ActivityLine
+                      t={t}
+                      tone={latestMemoryEvent.status === "failed" ? "danger" : "neutral"}
+                      verb={latestMemoryEvent.label}
+                      meta={
+                        latestMemoryEvent.detail ? truncateActivity(latestMemoryEvent.detail).slice(0, 48) : undefined
+                      }
+                      width={chatWidth - 10}
+                      quiet
+                      glyph={GLYPH.quiet}
+                    />
+                  </box>
+                ) : null}
+                {hookIssues.map((issue) => (
+                  <box key={`${issue.event}:${issue.message}`} paddingLeft={3} marginTop={1} flexShrink={0}>
+                    <ActivityLine
+                      t={t}
+                      tone={issue.outcome === "blocking" ? "danger" : "warning"}
+                      verb={`${issue.event} hook ${issue.outcome === "blocking" ? "blocked" : "failed"}`}
+                      object={issue.message}
+                      width={chatWidth - 10}
+                      glyph={issue.outcome === "blocking" ? GLYPH.failed : "!"}
+                    />
+                  </box>
+                ))}
+                {turnError ? <ErrorBlock t={t} message={turnError} width={chatWidth - 10} /> : null}
+                {showLivePlan && inspectorPlan ? (
+                  <box paddingLeft={3} marginTop={1} flexShrink={0} flexDirection="column">
+                    <PlanBlock t={t} plan={inspectorPlan} width={chatWidth - 10} detailed={showDetails} />
+                  </box>
+                ) : null}
+                {/* What Shelra is doing right now */}
+                {isProcessing ? (
+                  <LiveTurn
+                    t={t}
+                    phrase={livePhrase}
+                    elapsedMs={liveElapsedMs}
+                    thought={livePhase.kind === "thinking" ? reasoningPreview(streamReasoning) : null}
+                    note={liveWaitNote}
+                    next={showLivePlan ? null : nextPlanStepLabel(inspectorPlan)}
+                    agentLine={
+                      activeSubagent
+                        ? `${formatSubagentName(activeSubagent.agent)}: ${truncateActivity(activeSubagent.detail)}`
+                        : null
+                    }
+                    reducedMotion={reducedMotion}
+                    width={chatWidth - 10}
+                  />
+                ) : null}
                 {/* Waiting indicator */}
-                {/* Plan questions panel — inline, OpenCode-style */}
+                {/* Plan questions panel, inline */}
                 {showPlanPanel && <PlanQuestionsPanel t={t} questions={planQuestions} state={pqs} />}
                 {pendingPaymentApproval && <PaymentApprovalPanel t={t} payment={pendingPaymentApproval} />}
               </scrollbox>
+              {missionTab !== "log" ? (
+                <MissionPanel
+                  view={missionTab}
+                  t={t}
+                  width={chatWidth - 4}
+                  isProcessing={isProcessing}
+                  kernel={kernelState}
+                  currentActivity={currentActivity}
+                  plan={inspectorPlan}
+                  changedFiles={inspectorChangedFiles}
+                  activities={activityEvents}
+                  activeSubagent={activeSubagent}
+                  lastActivityAt={activeSubagentActivityAt}
+                  delegations={delegations}
+                  activeToolCalls={activeToolCalls}
+                  contextSummary={inspectorContextSummary}
+                  contextStats={inspectorContextStats}
+                  usage={usageSummary}
+                  sessionStartedAt={sessionStartedAtRef.current}
+                  now={nowTick}
+                  model={model}
+                  modeLabel={modeInfo.label}
+                  reasoningEffort={describeReasoningEffort(
+                    reasoningEffort,
+                    reasoningEffortByModel[normalizeModelId(model)],
+                    agent.resolveReasoningEffort(model),
+                    getSupportedReasoningEfforts(model),
+                  )}
+                  verificationStatus={agent.getVerificationStatus()}
+                  memoryStatus={memoryStatus}
+                  memoryContext={agent.getLastMemoryContext()}
+                  loaded={loadedContext}
+                  changes={changeSummaries}
+                  checks={checkSummaries}
+                  requestFailed={turnError !== null}
+                />
+              ) : null}
               {btwState && <BtwOverlay state={btwState} theme={t} />}
               {/* Prompt */}
               <box flexShrink={0} flexDirection="column">
                 {sessionRecap ? <RecapBanner t={t} recap={sessionRecap} /> : null}
-                <SessionStatusStrip
-                  t={t}
-                  width={chatWidth}
-                  isProcessing={isProcessing}
-                  kernel={kernelState}
-                  currentActivity={currentActivity}
-                  elapsedMs={currentActivityElapsedMs}
-                  changedFileCount={inspectorChangedFiles.length}
-                  planStepCount={inspectorPlan?.steps.length ?? 0}
-                  activeAgent={activeSubagent}
-                />
                 <PromptBox
                   t={t}
                   inputRef={inputRef}
@@ -4089,6 +4612,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   queuedCount={queuedMessages.length}
                   queuedMessages={queuedMessages}
                   typeahead={typeahead}
+                  hasViews={hasMissionViews}
+                  viewOpen={missionTab !== "log"}
+                  width={chatWidth - 4}
+                  notice={notice}
                 />
                 <ActiveAgentsStrip
                   t={t}
@@ -4101,54 +4628,32 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
               </box>
             </box>
             <box paddingLeft={2} paddingRight={2} paddingBottom={1} flexDirection="row" flexShrink={0}>
-              <text fg={t.textDim}>{agent.getCwd().replace(os.homedir(), "~")}</text>
+              <text fg={t.textDim}>{compactCwd(agent.getCwd(), Math.max(20, chatWidth - 12))}</text>
               {sandboxMode === "shuru" ? <text fg={t.warning}>{" · sandbox"}</text> : null}
               <box flexGrow={1} />
             </box>
           </box>
-          {showWorkspaceSidebar ? (
-            <WorkspaceSidebar
-              t={t}
-              width={sidebarWidth}
-              isProcessing={isProcessing}
-              kernel={kernelState}
-              currentActivity={currentActivity}
-              plan={inspectorPlan}
-              changedFiles={inspectorChangedFiles}
-              activities={activityEvents}
-              activeSubagent={activeSubagent}
-              lastActivityAt={activeSubagentActivityAt}
-              delegations={delegations}
-              activeToolCalls={activeToolCalls}
-              contextSummary={inspectorContextSummary}
-              contextStats={inspectorContextStats}
-              usage={usageSummary}
-              sessionStartedAt={sessionStartedAtRef.current}
-              now={nowTick}
-              model={model}
-              modeLabel={modeInfo.label}
-              reasoningEffort={describeReasoningEffort(
-                reasoningEffort,
-                reasoningEffortByModel[normalizeModelId(model)],
-                agent.resolveReasoningEffort(model),
-                getSupportedReasoningEfforts(model),
-              )}
-              verificationStatus={agent.getVerificationStatus()}
-              memoryStatus={memoryStatus}
-              memoryContext={agent.getLastMemoryContext()}
-            />
-          ) : null}
         </box>
       ) : (
         /* ── Home ───────────────────────────────────────── */
         <>
-          <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
-            <box flexGrow={1} minHeight={0} />
-            <box flexShrink={0} alignItems="center">
+          <box flexGrow={1} flexDirection="column" paddingLeft={2} paddingRight={2} minHeight={0}>
+            <box height={2} minHeight={0} flexShrink={1} />
+            <box flexShrink={0} flexDirection="column">
               <HeroLogo t={t} width={width} />
             </box>
-            <box height={1} minHeight={0} flexShrink={1} />
-            <box width="100%" maxWidth={75} flexShrink={0}>
+            <box height={2} minHeight={0} flexShrink={1} />
+            <HomeContext
+              t={t}
+              cwd={agent.getCwd()}
+              width={width - 4}
+              memoryCount={memoryStatus.entryCount}
+              skillCount={skillCount}
+            />
+            <box flexGrow={1} minHeight={0} />
+          </box>
+          <box paddingLeft={2} paddingRight={2} flexShrink={0}>
+            <box width="100%" flexShrink={0}>
               <PromptBox
                 t={t}
                 inputRef={inputRef}
@@ -4169,10 +4674,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 contextStats={contextStats}
                 placeholder={"What are we building?"}
                 typeahead={typeahead}
+                width={width - 4}
+                notice={notice}
               />
             </box>
-            <box height={2} minHeight={0} flexShrink={1} />
-            <box flexGrow={1} minHeight={0} />
           </box>
           {updateInfo?.hasUpdate && (
             <box paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0}>
@@ -4199,13 +4704,25 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
             </box>
           )}
           <box paddingLeft={2} paddingRight={2} paddingBottom={1} flexDirection="row" flexShrink={0}>
-            <text fg={t.textDim}>{agent.getCwd().replace(os.homedir(), "~")}</text>
-            {sandboxMode === "shuru" ? <text fg={t.warning}>{" · sandbox"}</text> : null}
+            {sandboxMode === "shuru" ? <text fg={t.warning}>{"sandbox"}</text> : null}
             <box flexGrow={1} />
             <text fg={t.textDim}>{`v${startupConfig.version}`}</text>
           </box>
         </>
       )}
+      {showHelp ? <HelpModal t={t} width={width} height={height} commands={SLASH_MENU_ITEMS} /> : null}
+      {knowledgeTab && knowledge ? (
+        <KnowledgeModal
+          t={t}
+          width={width}
+          height={height}
+          tab={knowledgeTab}
+          knowledge={knowledge}
+          selected={knowledgeIndex}
+          expanded={knowledgeOpen}
+          pendingDelete={knowledgePendingDelete}
+        />
+      ) : null}
       {showApiKeyModal && (
         <ApiKeyModal
           t={t}
@@ -4421,12 +4938,17 @@ function SessionHeader({
   modeInfo,
   sessionTitle,
   sessionId,
+  width,
 }: {
   t: Theme;
   modeInfo: (typeof MODES)[number];
   sessionTitle: string | null;
   sessionId: string | null;
+  width: number;
 }) {
+  // One line, always: mode, separator, id and padding come off the width before the title gets the rest.
+  const room = Math.max(12, width - 4 - modeInfo.label.length - 5 - (sessionId ? 10 : 0));
+  const title = sessionTitle ? truncateLine(sessionTitle, room) : null;
   return (
     <box flexShrink={0} width="100%">
       <box flexDirection="row" width="100%" paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2}>
@@ -4434,17 +4956,15 @@ function SessionHeader({
           <span style={{ fg: modeAccent(t, modeInfo) }}>
             <b>{modeInfo.label}</b>
           </span>
-          {sessionTitle ? (
-            <span style={{ fg: t.text }}>
-              <b>
-                {": "}
-                {sessionTitle}
-              </b>
-            </span>
+          {title ? (
+            <>
+              <span style={{ fg: t.textDim }}>{"  ·  "}</span>
+              <span style={{ fg: t.text }}>{title}</span>
+            </>
           ) : null}
         </text>
         <box flexGrow={1} />
-        {sessionId ? <text fg={t.textDim}>{sessionId}</text> : null}
+        {sessionId ? <text fg={t.textDim}>{sessionId.slice(0, 8)}</text> : null}
       </box>
     </box>
   );
@@ -4474,11 +4994,17 @@ function formatTokenCount(tokens: number): string {
   return String(tokens);
 }
 
-function ContextMeter({ t, stats }: { t: Theme; stats: ContextStats }) {
+function contextMeterText(stats: ContextStats, wide: boolean): string {
+  return `${Math.round(stats.ratioRemaining * 100)}% ${wide ? "context left" : "left"}`;
+}
+
+/** Remaining context, in words. Amber under 20% and red under 10%: the moment it matters. */
+function ContextMeter({ t, stats, wide }: { t: Theme; stats: ContextStats; wide: boolean }) {
+  const left = Math.round(stats.ratioRemaining * 100);
+  const color = left <= 10 ? t.danger : left <= 20 ? t.warning : t.textMuted;
   return (
-    <text>
-      <span style={{ fg: t.textMuted }}>{`${Math.round(stats.ratioRemaining * 100)}%`}</span>
-      <span style={{ fg: t.textDim }}>{` ${formatTokenCount(stats.remainingTokens)}`}</span>
+    <text fg={color} wrapMode="none">
+      {contextMeterText(stats, wide)}
     </text>
   );
 }
@@ -4505,6 +5031,10 @@ function PromptBox({
   queuedCount,
   queuedMessages,
   typeahead,
+  hasViews,
+  viewOpen,
+  width,
+  notice,
 }: {
   t: Theme;
   inputRef: React.RefObject<TextareaRenderable | null>;
@@ -4527,6 +5057,13 @@ function PromptBox({
   queuedCount?: number;
   queuedMessages?: string[];
   typeahead?: TypeaheadState;
+  /** A view (plan, changes, checks, context) has something to open. */
+  hasViews?: boolean;
+  /** A view is open over the log. */
+  viewOpen?: boolean;
+  /** Outer width in cells; decides how many hints fit. */
+  width?: number;
+  notice?: string | null;
 }) {
   const hasQueue = (queuedMessages?.length ?? 0) > 0;
   const showSuggestions = typeahead?.visible ?? false;
@@ -4542,8 +5079,8 @@ function PromptBox({
 
   return (
     <box
-      backgroundColor={t.backgroundPanel}
       border={["top", "left", "right", "bottom"]}
+      borderStyle="rounded"
       borderColor={composerBorder}
       flexDirection="column"
     >
@@ -4610,64 +5147,94 @@ function PromptBox({
           </box>
         </box>
       </box>
-      <box
-        flexDirection="row"
-        justifyContent="space-between"
-        alignItems="center"
-        paddingLeft={2}
-        paddingRight={2}
-        height={1}
-        flexShrink={0}
-      >
-        <box flexDirection="row" gap={1} alignItems="center" height={1}>
-          <text fg={t.text}>{modelInfo?.name || model}</text>
-          {contextStats ? <ContextMeter t={t} stats={contextStats} /> : null}
-        </box>
-        <box flexDirection="row" gap={1} alignItems="center" height={1}>
-          {isProcessing ? (
-            <box flexDirection="row" gap={1}>
-              <text fg={t.text}>
-                {"enter "}
-                <span style={{ fg: t.textMuted }}>{"queue"}</span>
-              </text>
-              <text fg={t.danger}>
-                <b>{"■ Stop"}</b>
-                <span style={{ fg: t.textMuted }}>{`  esc${(queuedCount ?? 0) > 0 ? " clears queue first" : ""}`}</span>
-              </text>
-            </box>
-          ) : showSuggestions ? (
-            <box flexDirection="row" gap={1}>
-              <text fg={t.text}>
-                {"tab "}
-                <span style={{ fg: t.textMuted }}>{"accept"}</span>
-              </text>
-              <text fg={t.text}>
-                {"↑↓ "}
-                <span style={{ fg: t.textMuted }}>{"navigate"}</span>
-              </text>
-              <text fg={t.text}>
-                {"esc "}
-                <span style={{ fg: t.textMuted }}>{"dismiss"}</span>
-              </text>
-            </box>
-          ) : (
-            <>
-              <text fg={t.text}>
-                {"@ "}
-                <span style={{ fg: t.textMuted }}>{"files"}</span>
-              </text>
-              <text fg={t.text}>
-                {"shift+enter "}
-                <span style={{ fg: t.textMuted }}>{"new line"}</span>
-              </text>
-              <text fg={t.text}>
-                {"tab "}
-                <span style={{ fg: t.textMuted }}>{"modes"}</span>
-              </text>
-            </>
-          )}
-        </box>
+      <ComposerFooter
+        t={t}
+        width={width ?? 80}
+        model={modelInfo?.name || model}
+        contextStats={contextStats}
+        isProcessing={isProcessing}
+        showSuggestions={showSuggestions}
+        queuedCount={queuedCount ?? 0}
+        hasViews={hasViews ?? false}
+        viewOpen={viewOpen ?? false}
+        notice={notice}
+      />
+    </box>
+  );
+}
+
+function HintText({ t, hints, alertFirst }: { t: Theme; hints: readonly Hint[]; alertFirst?: boolean }) {
+  return (
+    <text wrapMode="none">
+      {hints.map((hint, index) => (
+        <span key={`${hint.key}:${hint.label}`}>
+          {index > 0 ? <span style={{ fg: t.textDim }}>{" · "}</span> : null}
+          <span style={{ fg: alertFirst && index === 0 ? t.danger : t.text }}>{`${hint.key} `}</span>
+          <span style={{ fg: t.textMuted }}>{hint.label}</span>
+        </span>
+      ))}
+    </text>
+  );
+}
+
+/**
+ * Model and context on the left, the keys that matter right now on the right. Hints are chosen
+ * by width (never clipped) and by state: working, picking a suggestion, or idle.
+ */
+function ComposerFooter({
+  t,
+  width,
+  model,
+  contextStats,
+  isProcessing,
+  showSuggestions,
+  queuedCount,
+  hasViews,
+  viewOpen,
+  notice,
+}: {
+  t: Theme;
+  width: number;
+  model: string;
+  contextStats?: ContextStats | null;
+  isProcessing: boolean;
+  showSuggestions: boolean;
+  queuedCount: number;
+  hasViews: boolean;
+  viewOpen: boolean;
+  notice?: string | null;
+}) {
+  const inner = Math.max(20, width - 6);
+  const modelLabel = model.length > 26 ? `${model.slice(0, 25)}…` : model;
+  const meter = contextStats ? contextMeterText(contextStats, inner >= 64) : "";
+  const leftWidth = modelLabel.length + (meter ? meter.length + 2 : 0);
+  const room = Math.max(0, inner - leftWidth - 3);
+  const base = isProcessing ? WORKING_HINTS : showSuggestions ? SUGGESTION_HINTS : IDLE_HINTS;
+  const current = isProcessing && queuedCount > 0 ? [{ key: "esc", label: "clear queue" }, ...base.slice(1)] : base;
+  const hints = fitHints(showSuggestions ? current : withViewHints(current, { hasViews, viewOpen }), room);
+
+  return (
+    <box
+      flexDirection="row"
+      justifyContent="space-between"
+      alignItems="center"
+      paddingLeft={2}
+      paddingRight={2}
+      height={1}
+      flexShrink={0}
+      backgroundColor={t.backgroundElement}
+    >
+      <box flexDirection="row" gap={2} alignItems="center" height={1}>
+        <text fg={t.text}>{modelLabel}</text>
+        {contextStats ? <ContextMeter t={t} stats={contextStats} wide={inner >= 64} /> : null}
       </box>
+      {notice ? (
+        <text fg={t.warning} wrapMode="none">
+          {notice.length > room && room > 8 ? `${notice.slice(0, room - 1)}…` : notice}
+        </text>
+      ) : (
+        <HintText t={t} hints={hints} alertFirst={isProcessing} />
+      )}
     </box>
   );
 }
@@ -4693,51 +5260,8 @@ function PromptModeLabel({
 }
 
 function PromptLoadingBoxes({ color }: { color: string }) {
-  // Aurora owns the only working animation. This static marker keeps the mode
-  // label useful to screen readers and reduced-motion users alike.
-  const step = { active: 0, forward: true };
-
-  return (
-    <text>
-      {[0, 1, 2].map((idx) => (
-        <span key={idx} style={{ fg: promptLoadingCellColor(color, idx, step.active, step.forward) }}>
-          {promptLoadingCellGlyph(idx, step.active, step.forward)}
-        </span>
-      ))}
-    </text>
-  );
-}
-
-function promptLoadingCellGlyph(index: number, active: number, forward: boolean): string {
-  const distance = forward ? active - index : index - active;
-  return distance >= 0 && distance < 2 ? "■" : "⬝";
-}
-
-function promptLoadingCellColor(color: string, index: number, active: number, forward: boolean): string {
-  const distance = forward ? active - index : index - active;
-  if (distance === 0) return color;
-  if (distance === 1) return withAlpha(color, 0.72);
-  return withAlpha(color, 0.22);
-}
-
-function withAlpha(color: string, alpha: number): string {
-  const normalized = color.trim();
-  const hex = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (!hex) return color;
-
-  const body = hex[1];
-  const expanded =
-    body.length === 3
-      ? body
-          .split("")
-          .map((ch) => ch + ch)
-          .join("")
-      : body;
-
-  const alphaHex = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
-    .toString(16)
-    .padStart(2, "0");
-  return `#${expanded}${alphaHex}`;
+  // A flat, static marker: the mode label stays useful to screen readers and reduced-motion users.
+  return <text fg={color}>{"■■⬝"}</text>;
 }
 
 function CopyFlashBanner({ t, width }: { t: Theme; width: number }) {
@@ -4863,140 +5387,6 @@ function ApiKeyModal({
 
 const USER_MSG_COLLAPSED_LINES = 5;
 
-function TranscriptActivityView({ t, item }: { t: Theme; item: TranscriptActivityItem }) {
-  const failed = item.status === "failed";
-  const tone = failed ? t.danger : item.activityKind === "agent" ? t.subagentAccent : t.text;
-  const marker = failed ? "×" : "✓";
-  const visibleDetails = item.details.slice(0, failed ? 6 : 4);
-  const hidden = Math.max(0, item.details.length - visibleDetails.length);
-
-  return (
-    <box paddingLeft={3} marginTop={1} marginBottom={1} flexShrink={0} flexDirection="column">
-      <text fg={tone}>{`${marker} ${item.title}`}</text>
-      {visibleDetails.map((detail, index) => (
-        <text
-          key={`${item.id}:detail:${detail}`}
-          fg={failed && index === visibleDetails.length - 1 ? t.danger : t.textMuted}
-        >
-          {`  ${truncateLine(detail, 110)}`}
-        </text>
-      ))}
-      {hidden > 0 ? <text fg={t.textDim}>{`  +${hidden} more operation${hidden === 1 ? "" : "s"}`}</text> : null}
-    </box>
-  );
-}
-
-interface ActivityTreeNode {
-  key: string;
-  /** The branch line itself, e.g. "Explored 3 files" or "Found". */
-  branch: string;
-  branchTone?: string;
-  /** Wrapped lines indented under the branch, e.g. the finding text under "Found". */
-  continuation?: string[];
-}
-
-/** Classic braille dots spinner — the same glyph set most CLI spinners (Vercel's included) use. */
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const SPINNER_INTERVAL_MS = 90;
-
-/** A single animated glyph in place of a static marker — proof of life for the current action. */
-function Spinner({ color, reducedMotion }: { color: string; reducedMotion: boolean }) {
-  const [frame, setFrame] = useState(0);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    const interval = setInterval(
-      () => setFrame((current) => (current + 1) % SPINNER_FRAMES.length),
-      SPINNER_INTERVAL_MS,
-    );
-    return () => clearInterval(interval);
-  }, [reducedMotion]);
-
-  return <span style={{ fg: color }}>{reducedMotion ? "●" : SPINNER_FRAMES[frame]}</span>;
-}
-
-/**
- * Live, in-progress activity as flat, indented lines — the same calm grammar
- * `TranscriptActivityView` uses for completed history, so a still-running phase reads as the
- * natural in-progress version of what it collapses into once done. No box-drawing connectors:
- * a marker (✓/●/×, spinning while active) plus indentation carries the hierarchy, not tree glyphs.
- * "Found" reuses the model's own real streamed text (never invented); "Next" reuses the
- * real next plan step (never invented) — see `nextPlanStepLabel` in observability.ts.
- */
-export function RuntimeActivityTree({
-  t,
-  title,
-  elapsedMs,
-  activities,
-  found,
-  next,
-  isProcessing,
-  reducedMotion,
-}: {
-  t: Theme;
-  title: string | null;
-  elapsedMs: number | null;
-  activities: UiActivityEvent[];
-  found: string | null;
-  next: string | null;
-  isProcessing: boolean;
-  reducedMotion: boolean;
-}) {
-  const failedEvent = [...activities].reverse().find((event) => event.status === "failed");
-  const counts = groupLiveActivity(activities);
-  // Each group gets a blank line before it (except the first) — sibling lines within a group
-  // (the count lines) stay tight together, while "Found" and "Next" are their own groups with
-  // a little more room above them.
-  const groups: ActivityTreeNode[][] = [];
-  if (counts.length > 0) groups.push(counts.map((line) => ({ key: line.key, branch: line.text })));
-  if (found) groups.push([{ key: "found", branch: "Found", continuation: found.split("\n"), branchTone: t.text }]);
-  if (!failedEvent && next) groups.push([{ key: "next", branch: "Next", continuation: [next] }]);
-
-  if (!title && groups.length === 0) return null;
-  const spinning = isProcessing && !failedEvent;
-  const marker = failedEvent ? "×" : isProcessing ? null : "✓";
-  const tone = failedEvent ? t.danger : isProcessing ? t.accent : t.success;
-  const elapsed = isProcessing && elapsedMs !== null ? formatActivityElapsed(elapsedMs) : null;
-
-  return (
-    <box paddingLeft={3} marginTop={1} marginBottom={1} flexShrink={0} flexDirection="column">
-      {title ? (
-        <box flexDirection="row">
-          <text fg={tone}>
-            {isProcessing ? (
-              <b>
-                {spinning ? <Spinner color={tone} reducedMotion={reducedMotion} /> : marker}
-                {` ${title}`}
-              </b>
-            ) : (
-              `${marker} ${title}`
-            )}
-          </text>
-          <box flexGrow={1} />
-          {elapsed ? <text fg={t.textMuted}>{elapsed}</text> : null}
-        </box>
-      ) : null}
-      {failedEvent ? (
-        <text fg={t.danger}>{`  ${truncateLine(failedEvent.detail || failedEvent.label, 110)}`}</text>
-      ) : null}
-      {groups.map((group, groupIndex) => (
-        <box key={`group:${groupIndex}`} flexDirection="column" marginTop={groupIndex > 0 ? 1 : 0}>
-          {group.map((node) => (
-            <box key={node.key} flexDirection="column">
-              <text fg={node.branchTone ?? t.textMuted}>{`  ${truncateLine(node.branch, 110)}`}</text>
-              {node.continuation?.map((line, lineIndex) => (
-                <text key={`${node.key}:${lineIndex}`} fg={t.textMuted}>
-                  {`  ${truncateLine(line, 108)}`}
-                </text>
-              ))}
-            </box>
-          ))}
-        </box>
-      ))}
-    </box>
-  );
-}
-
 function UserMessageContent({ content, t, expanded }: { content: string; t: Theme; expanded: boolean }) {
   const lines = content.split("\n");
   const isLong = lines.length > USER_MSG_COLLAPSED_LINES;
@@ -5051,26 +5441,27 @@ function MessageView({
   switch (entry.type) {
     case "user":
       return (
-        <box
-          border={["left"]}
-          customBorderChars={SPLIT}
-          borderColor={entryColor}
-          paddingLeft={2}
-          marginTop={index === 0 ? 0 : 1}
-          marginBottom={1}
-          flexDirection="column"
-        >
-          {entry.sourceLabel ? <text fg={t.textDim}>{entry.sourceLabel}</text> : null}
-          <UserMessageContent content={entry.content} t={t} expanded={expandedMessages?.has(index) ?? false} />
+        <box flexDirection="row" paddingLeft={1} marginTop={index === 0 ? 0 : 1} marginBottom={1}>
+          <text fg={entryColor}>
+            <b>{"> "}</b>
+          </text>
+          <box flexDirection="column" flexGrow={1}>
+            {entry.sourceLabel ? <text fg={t.textDim}>{entry.sourceLabel}</text> : null}
+            <UserMessageContent content={entry.content} t={t} expanded={expandedMessages?.has(index) ?? false} />
+          </box>
         </box>
       );
 
     case "assistant":
       return (
         <box paddingLeft={3} marginTop={1} flexShrink={0} flexDirection="column">
-          <text fg={t.textDim}>{"Shelra"}</text>
-          {entry.sourceLabel ? <text fg={t.textMuted}>{entry.sourceLabel}</text> : null}
-          <box paddingTop={1} flexDirection="column">
+          <text wrapMode="none">
+            <span style={{ fg: t.textDim }}>{"[ "}</span>
+            <span style={{ fg: t.textMuted }}>{"SHELRA"}</span>
+            <span style={{ fg: t.textDim }}>{" ]"}</span>
+            {entry.sourceLabel ? <span style={{ fg: t.textDim }}>{`  ${entry.sourceLabel}`}</span> : null}
+          </text>
+          <box flexDirection="column">
             <Markdown content={entry.content} t={t} />
           </box>
         </box>
@@ -5197,134 +5588,6 @@ function MessageView({
     default:
       return <text fg={t.textMuted}>{entry.content}</text>;
   }
-}
-
-/* ── Diff View ────────────────────────────────────────────────── */
-
-type DiffRow =
-  | { kind: "context"; oldNum: number; newNum: number; text: string }
-  | { kind: "added"; newNum: number; text: string }
-  | { kind: "removed"; oldNum: number; text: string }
-  | { kind: "separator"; count: number };
-
-const MAX_DIFF_ROWS = 20;
-const LINE_NUM_WIDTH = 4;
-
-function parsePatch(patch: string): DiffRow[] {
-  const lines = patch.split("\n");
-  const rows: DiffRow[] = [];
-  let oldLine = 0;
-  let newLine = 0;
-  let prevOldEnd = 0;
-
-  for (const line of lines) {
-    const hunkMatch = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (hunkMatch) {
-      oldLine = parseInt(hunkMatch[1], 10);
-      newLine = parseInt(hunkMatch[2], 10);
-      const skipped = oldLine - prevOldEnd - 1;
-      if (skipped > 0) {
-        rows.push({ kind: "separator", count: skipped });
-      }
-      continue;
-    }
-
-    if (line.startsWith("---") || line.startsWith("+++") || line.startsWith("\\")) continue;
-    if (line.startsWith("Index:") || line.startsWith("====")) continue;
-
-    if (line.startsWith("-")) {
-      rows.push({ kind: "removed", oldNum: oldLine, text: line.slice(1) });
-      oldLine++;
-      prevOldEnd = oldLine - 1;
-    } else if (line.startsWith("+")) {
-      rows.push({ kind: "added", newNum: newLine, text: line.slice(1) });
-      newLine++;
-    } else if (line.length > 0 || (oldLine > 0 && newLine > 0)) {
-      const content = line.startsWith(" ") ? line.slice(1) : line;
-      rows.push({ kind: "context", oldNum: oldLine, newNum: newLine, text: content });
-      oldLine++;
-      newLine++;
-      prevOldEnd = oldLine - 1;
-    }
-  }
-
-  return rows;
-}
-
-function DiffView({ t, diff }: { t: Theme; diff: FileDiff }) {
-  const rows = parsePatch(diff.patch);
-  if (rows.length === 0) return null;
-
-  const truncated = rows.length > MAX_DIFF_ROWS;
-  const visible = truncated ? rows.slice(0, MAX_DIFF_ROWS) : rows;
-
-  const pad = (n: number | undefined) =>
-    n !== undefined ? String(n).padStart(LINE_NUM_WIDTH) : " ".repeat(LINE_NUM_WIDTH);
-
-  return (
-    <box paddingLeft={5} marginTop={0} flexShrink={0}>
-      <box flexDirection="column">
-        {/* Header */}
-        <box backgroundColor={t.diffHeader} paddingLeft={1} paddingRight={1}>
-          <text>
-            <span style={{ fg: t.diffHeaderFg }}>{diff.filePath}</span>
-            <span style={{ fg: t.textDim }}>{"  "}</span>
-            <span style={{ fg: t.diffRemovedFg }}>{`-${diff.removals}`}</span>
-            <span style={{ fg: t.textDim }}> </span>
-            <span style={{ fg: t.diffAddedFg }}>{`+${diff.additions}`}</span>
-          </text>
-        </box>
-
-        {/* Rows */}
-        {visible.map((row, i) => {
-          if (row.kind === "separator") {
-            return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: separator rows lack unique identifiers
-              <box key={`sep-${i}`} backgroundColor={t.diffSeparator} paddingLeft={1}>
-                <text fg={t.diffSeparatorFg}>
-                  {"⌃  "}
-                  {row.count}
-                  {" unmodified lines"}
-                </text>
-              </box>
-            );
-          }
-          if (row.kind === "removed") {
-            return (
-              <box key={`rm-${row.oldNum}`} backgroundColor={t.diffRemoved} flexDirection="row">
-                <text fg={t.diffRemovedLineNum}>{pad(row.oldNum)}</text>
-                <text fg={t.diffRemovedFg}>{` ${row.text}`}</text>
-              </box>
-            );
-          }
-          if (row.kind === "added") {
-            return (
-              <box key={`add-${row.newNum}`} backgroundColor={t.diffAdded} flexDirection="row">
-                <text fg={t.diffAddedLineNum}>{pad(row.newNum)}</text>
-                <text fg={t.diffAddedFg}>{` ${row.text}`}</text>
-              </box>
-            );
-          }
-          return (
-            <box key={`ctx-${row.oldNum}`} backgroundColor={t.diffContext} flexDirection="row">
-              <text fg={t.diffLineNumber}>{pad(row.oldNum)}</text>
-              <text fg={t.diffContextFg}>{` ${row.text}`}</text>
-            </box>
-          );
-        })}
-
-        {truncated && (
-          <box backgroundColor={t.diffSeparator} paddingLeft={1}>
-            <text fg={t.diffSeparatorFg}>
-              {"⌃  "}
-              {rows.length - MAX_DIFF_ROWS}
-              {" more lines"}
-            </text>
-          </box>
-        )}
-      </box>
-    </box>
-  );
 }
 
 const MAX_LSP_RESULT_LINES = 10;
@@ -5469,7 +5732,7 @@ function DelegationTaskLine({ t, label, pending, id }: { t: Theme; label: string
   );
 }
 
-function SubagentActivity({ t, status }: { t: Theme; status: SubagentStatus }) {
+function _SubagentActivity({ t, status }: { t: Theme; status: SubagentStatus }) {
   return (
     <box paddingLeft={5}>
       <text fg={t.textMuted}>
@@ -5791,6 +6054,8 @@ function SlashMenuModal({
     if (item) listRef.current?.scrollChildIntoView(`slash-${item.id}`);
   }, [selectedIndex, filteredItems]);
 
+  const slashLabelWidth = Math.min(20, Math.max(10, ...filteredItems.map((item) => item.label.length + 3)));
+  const slashDescriptionRoom = Math.max(12, Math.min(64, width - 6) - 4 - slashLabelWidth);
   const itemCount = Math.max(filteredItems.length, 1);
   const contentHeight = itemCount + 5;
   const maxH = Math.floor(height * 0.6);
@@ -5809,7 +6074,7 @@ function SlashMenuModal({
       backgroundColor={overlayBg}
     >
       <box
-        width={Math.min(50, width - 6)}
+        width={Math.min(64, width - 6)}
         height={panelHeight}
         backgroundColor={t.backgroundPanel}
         paddingTop={1}
@@ -5825,7 +6090,7 @@ function SlashMenuModal({
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
           <text fg={t.text}>{searchQuery || <span style={{ fg: t.textMuted }}>{"Search..."}</span>}</text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
           {filteredItems.map((item, idx) => (
             <box
               key={item.id}
@@ -5834,13 +6099,16 @@ function SlashMenuModal({
               paddingLeft={2}
               paddingRight={2}
             >
-              <box flexDirection="row" justifyContent="space-between">
-                <text fg={idx === selectedIndex ? t.selected : t.text}>
-                  {"/"}
-                  {item.label}
-                </text>
-                <text fg={t.textMuted}>{item.description}</text>
-              </box>
+              <text wrapMode="none">
+                <span style={{ fg: idx === selectedIndex ? t.selected : t.text }}>
+                  {`/${item.label}`.padEnd(slashLabelWidth)}
+                </span>
+                <span style={{ fg: idx === selectedIndex ? t.textSecondary : t.textMuted }}>
+                  {item.description.length > slashDescriptionRoom
+                    ? `${item.description.slice(0, slashDescriptionRoom - 1)}…`
+                    : item.description}
+                </span>
+              </text>
             </box>
           ))}
           {filteredItems.length === 0 && (
@@ -5904,7 +6172,7 @@ function ConnectModal({
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
           <text fg={t.textMuted}>{"Choose a channel"}</text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
           {channels.map((ch, idx) => (
             <box
               key={ch.id}
@@ -6170,7 +6438,7 @@ function ModelPickerModal({
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
           <text fg={t.text}>{searchQuery || <span style={{ fg: t.textMuted }}>{"Search..."}</span>}</text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
           {filteredModels.map((m, idx) => {
             const selected = idx === selectedIndex;
             const current = m.id === currentModel;
@@ -6285,7 +6553,7 @@ function SandboxPickerModal({
           </text>
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
-        <scrollbox flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0}>
           {visibleRows.map((row, idx) => {
             const focused = idx === focusIndex;
             const isEditing = editing === row.key;
@@ -6430,6 +6698,7 @@ function ThemePickerModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -6569,27 +6838,14 @@ function PaymentApprovalPanel({
   return (
     <box
       flexDirection="column"
-      border={["left"]}
-      customBorderChars={{
-        topLeft: "",
-        bottomLeft: "",
-        vertical: "┃",
-        topRight: "",
-        bottomRight: "",
-        horizontal: " ",
-        bottomT: "",
-        topT: "",
-        cross: "",
-        leftT: "",
-        rightT: "",
-      }}
+      border={["top", "left", "right", "bottom"]}
+      borderStyle="rounded"
       borderColor={t.warning}
       marginTop={1}
       paddingLeft={2}
       paddingRight={2}
       paddingTop={1}
       paddingBottom={1}
-      backgroundColor={t.backgroundPanel}
     >
       <text>
         <span style={{ fg: t.planTitle ?? t.primary }}>
@@ -6692,7 +6948,7 @@ function WalletPickerModal({
           </text>
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
-        <scrollbox flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0}>
           {WALLET_ROWS.map((row, idx) => {
             const focused = idx === focusIndex;
             const display = row.getDisplay(settings, walletInfo);
@@ -6800,50 +7056,11 @@ function tryParseArg(tc: ToolCall | undefined, key: string): string {
   }
 }
 function toolLabel(tc: ToolCall): string {
-  const args = toolArgs(tc);
-  if (tc.function.name === "bash") {
-    try {
-      const parsed = JSON.parse(tc.function.arguments);
-      if (parsed.background) return `Background: ${trunc(args || "Starting process...", 70)}`;
-    } catch {
-      /* */
-    }
-    return commandActivityLabel(args);
-  }
-  if (tc.function.name === "read_file") return `Reading ${trunc(args, 60)}`;
-  if (tc.function.name === "grep") return `Searching repository${args ? `: ${trunc(args, 54)}` : ""}`;
-  if (tc.function.name === "write_file") return `Writing ${trunc(args, 60)}`;
-  if (tc.function.name === "edit_file") return `Editing ${trunc(args, 60)}`;
-  if (tc.function.name === "delete_file") return `Deleting ${trunc(args, 60)}`;
-  if (tc.function.name === "search_web") return `Researching ${trunc(args, 60)}`;
-  if (tc.function.name === "open_web") return `Inspecting source ${trunc(args, 56)}`;
-  if (tc.function.name === "search_x") return `Researching X ${trunc(args, 60)}`;
-  if (tc.function.name === "generate_image") return `Generate image "${trunc(args, 60)}"`;
-  if (tc.function.name === "generate_video") return `Generate video "${trunc(args, 60)}"`;
-  if (tc.function.name === "task") return `Task ${trunc(args, 60)}`;
-  if (tc.function.name === "delegate") return `Background ${trunc(args, 60)}`;
-  if (tc.function.name === "delegation_read") return `Read delegation ${trunc(args, 60)}`;
-  if (tc.function.name === "delegation_list") return "List delegations";
-  if (tc.function.name === "process_logs") return `Logs for process ${args}`;
-  if (tc.function.name === "process_stop") return `Stop process ${args}`;
-  if (tc.function.name === "process_list") return "List processes";
-  if (tc.function.name === "generate_plan") return "Generating plan...";
-  if (tc.function.name === "update_plan_step") return "Updating plan";
-  return trunc(`${tc.function.name} ${args}`, 80);
+  return phraseText(describeToolCall(tc));
 }
 
 function isPresentationToolCall(toolCall: ToolCall): boolean {
   return toolCall.function.name !== "update_plan_step";
-}
-
-function commandActivityLabel(command: string): string {
-  if (!command) return "Running command";
-  if (/\b(test|vitest|jest|playwright)\b/i.test(command)) return "Running tests";
-  if (/\b(typecheck|tsc\s+--noEmit)\b/i.test(command)) return "Checking types";
-  if (/\b(lint|biome\s+check)\b/i.test(command)) return "Running lint";
-  if (/\b(build|compile)\b/i.test(command)) return "Building project";
-  if (/\b(verify|verification)\b/i.test(command)) return "Running verification";
-  return `Running ${trunc(command, 68)}`;
 }
 
 function toolActivityDetail(tc: ToolCall): string {
@@ -6869,13 +7086,6 @@ function toolActivityDetail(tc: ToolCall): string {
     default:
       return args ? trunc(args, 100) : "Working";
   }
-}
-
-function formatActivityElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return minutes > 0 ? `${minutes}:${String(remainder).padStart(2, "0")}` : `${remainder}s`;
 }
 
 function truncateActivity(value: string): string {

@@ -15,11 +15,11 @@ describe("parseSubAgentsRawList", () => {
     ).toEqual([{ name: "docs", model: "qwen2.5-coder:7b", instruction: "Focus on documentation." }]);
   });
 
-  it("rejects legacy remote and Grok model identifiers", () => {
+  it("rejects xAI-hosted model identifiers", () => {
     expect(
       parseSubAgentsRawList([
-        { name: "research", model: "x-ai/grok-4.20-multi-agent-beta", instruction: "Focus on research." },
-        { name: "legacy", model: "grok-4.3", instruction: "Focus on research." },
+        { name: "research", model: "x-ai/example-model", instruction: "Focus on research." },
+        { name: "legacy", model: "xai/example-model", instruction: "Focus on research." },
       ]),
     ).toEqual([]);
   });

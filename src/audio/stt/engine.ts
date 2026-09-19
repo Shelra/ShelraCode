@@ -1,6 +1,6 @@
 import type { TelegramSettings } from "../../utils/settings";
 import { getApiKey, getBaseURL, resolveTelegramAudioInputSettings } from "../../utils/settings";
-import { GrokSttEngine, type GrokSttTranscriptionResult } from "./grok-stt";
+import { RemoteSttEngine, type RemoteSttTranscriptionResult } from "./remote-stt";
 
 export interface AudioTranscriptionInput {
   audioPath: string;
@@ -8,7 +8,7 @@ export interface AudioTranscriptionInput {
   mimeType?: string;
 }
 
-export type AudioTranscriptionResult = GrokSttTranscriptionResult;
+export type AudioTranscriptionResult = RemoteSttTranscriptionResult;
 
 export interface AudioTranscriptionEngine {
   transcribe(input: AudioTranscriptionInput): Promise<AudioTranscriptionResult>;
@@ -21,11 +21,11 @@ export function createTelegramAudioInputEngine(
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error(
-      "Grok STT requires an API key. Set GROK_API_KEY or configure apiKey in ~/.grok/user-settings.json.",
+      "Speech-to-text requires an API key. Set SHELRA_API_KEY or configure apiKey in ~/.shelra/user-settings.json.",
     );
   }
 
-  return new GrokSttEngine({
+  return new RemoteSttEngine({
     apiKey,
     baseURL: getBaseURL(),
     language: resolved.language,

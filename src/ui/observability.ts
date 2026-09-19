@@ -2,6 +2,13 @@ import type { KernelPhase, KernelState } from "../agent/kernel";
 import { MEMORY_INDEX_MAX_BYTES, MEMORY_INDEX_MAX_LINES } from "../memory/store";
 import type { MemoryIndexEntry, MemoryReadIndexResult } from "../memory/types";
 import type { ChatEntry, Plan, ReasoningEffort, UsageEvent } from "../types/index";
+import {
+  type ActivityGroup,
+  type ActivityRowModel,
+  type ActivityTone,
+  describeToolResult,
+  formatDuration,
+} from "./activity";
 
 export type UiActivityKind = "research" | "step" | "tool" | "agent" | "verification" | "memory" | "error";
 export type UiActivityStatus = "active" | "complete" | "failed";
@@ -18,23 +25,12 @@ export interface UiActivityEvent {
   at: number;
 }
 
-export type TranscriptActivityKind =
-  | "exploration"
-  | "research"
-  | "changes"
-  | "verification"
-  | "command"
-  | "plan"
-  | "agent";
-
 export interface TranscriptActivityItem {
   kind: "activity";
   id: string;
-  activityKind: TranscriptActivityKind;
-  status: "complete" | "failed";
-  title: string;
-  details: string[];
-  count: number;
+  group: ActivityGroup;
+  /** One evidence row per finished operation, oldest first. */
+  rows: ActivityRowModel[];
   at: number;
 }
 
@@ -45,7 +41,83 @@ export interface TranscriptMessageItem {
   sourceIndex: number;
 }
 
-export type TranscriptItem = TranscriptActivityItem | TranscriptMessageItem;
+/** What the model reasoned about during one turn, shown right after the user message. */
+export interface TurnThought {
+  durationMs: number;
+  /** Bounded tail of the streamed reasoning. Never persisted. */
+  text: string;
+  /** How many separate reasoning phases the turn had. */
+  steps: number;
+}
+
+export interface TranscriptThoughtItem extends TurnThought {
+  kind: "thought";
+  id: string;
+}
+
+/**
+ * What one finished turn did, in one line: files changed with their diffstat, checks that ran, and
+ * how long it took. Only emitted for turns that changed files or ran a check.
+ */
+export interface TranscriptSummaryItem {
+  kind: "summary";
+  id: string;
+  changes: ChangeSummary[];
+  checks: CheckSummary[];
+  /** Wall time from the user's message to the last thing that happened, when known. */
+  durationMs: number | null;
+}
+
+export type TranscriptItem =
+  | TranscriptActivityItem
+  | TranscriptMessageItem
+  | TranscriptThoughtItem
+  | TranscriptSummaryItem;
+
+export interface SummarySegment {
+  text: string;
+  tone: ActivityTone | "added" | "removed";
+}
+
+/**
+ * The parts of a turn's one-line summary, grouped as files, checks and time. The renderer joins the
+ * groups with a dot: `2 files +6 -1 · tests ✓ · 42s`.
+ */
+export function turnSummaryGroups(item: TranscriptSummaryItem): SummarySegment[][] {
+  const groups: SummarySegment[][] = [];
+  if (item.changes.length > 0) {
+    const additions = item.changes.reduce((sum, change) => sum + change.additions, 0);
+    const removals = item.changes.reduce((sum, change) => sum + change.removals, 0);
+    const files = item.changes.length;
+    const group: SummarySegment[] = [{ text: `${files} file${files === 1 ? "" : "s"}`, tone: "neutral" }];
+    if (additions > 0) group.push({ text: ` +${additions}`, tone: "added" });
+    if (removals > 0) group.push({ text: ` -${removals}`, tone: "removed" });
+    groups.push(group);
+  }
+  for (const check of item.checks.slice(0, 3)) {
+    const failed = check.tone === "danger";
+    const failures = /(\d+)\s*fail/i.exec(check.meta)?.[1];
+    groups.push([
+      { text: `${check.label} `, tone: "neutral" },
+      { text: failed ? (failures ? `× ${failures} failed` : "×") : "✓", tone: failed ? "danger" : "success" },
+    ]);
+  }
+  if (item.durationMs !== null && item.durationMs >= 1000) {
+    groups.push([{ text: formatDuration(item.durationMs), tone: "neutral" }]);
+  }
+  return groups;
+}
+
+export interface ProjectTranscriptOptions {
+  /** Wall time per tool call, keyed by tool call id. Absent for calls made before this process started. */
+  durations?: ReadonlyMap<string, number>;
+  /** Reasoning per user turn, indexed by the turn's ordinal (0 = first user message). */
+  thoughts?: ReadonlyArray<TurnThought | undefined>;
+  /** How many memories retrieval injected per user turn, indexed like `thoughts`. */
+  recalls?: ReadonlyArray<number | undefined>;
+  /** The last turn is still running, so it has no summary yet. */
+  live?: boolean;
+}
 
 export interface SessionUsageSummary {
   inputTokens: number;
@@ -180,55 +252,210 @@ export function summarizeSessionUsage(events: UsageEvent[]): SessionUsageSummary
 }
 
 /**
- * Converts persisted transcript tool traffic into calm, semantic activity rows.
- * Model-cycle events never enter this projection: they remain runtime telemetry,
- * not user-facing work.
+ * Converts persisted transcript tool traffic into evidence rows: what was read, what changed
+ * (with a diffstat), what ran and what it reported. Consecutive rows of one group share an item so
+ * the renderer can fold a run of reads into a single "Read 3 files" line. Model-cycle events never
+ * enter this projection: they remain runtime telemetry, not user-facing work.
  */
-export function projectTranscript(entries: ChatEntry[]): TranscriptItem[] {
+export function projectTranscript(entries: ChatEntry[], options: ProjectTranscriptOptions = {}): TranscriptItem[] {
   const items: TranscriptItem[] = [];
+  let userOrdinal = 0;
+
+  // The turn being read: from a user message up to the next one.
+  let turnEntries: ChatEntry[] = [];
+  let turnItemsFrom = 0;
+  let turnStartAt: number | null = null;
+  let turnLastAt: number | null = null;
+
+  const closeTurn = (isLast: boolean) => {
+    if (turnStartAt === null || (isLast && options.live)) return;
+    const changes = summarizeChanges(turnEntries);
+    const checks = summarizeChecks(items.slice(turnItemsFrom));
+    if (changes.length === 0 && checks.length === 0) return;
+    const elapsed = turnLastAt !== null ? turnLastAt - turnStartAt : 0;
+    items.push({
+      kind: "summary",
+      id: `summary:${userOrdinal - 1}`,
+      changes,
+      checks,
+      durationMs: elapsed > 0 ? elapsed : null,
+    });
+  };
 
   entries.forEach((entry, sourceIndex) => {
+    if (entry.type === "user") closeTurn(false);
+    else {
+      turnEntries.push(entry);
+      turnLastAt = entry.timestamp.getTime();
+    }
+
     if (entry.type === "tool_call") return;
     if (entry.type === "tool_result" && entry.toolCall?.function.name === "update_plan_step") return;
+
+    const messageItem = (): TranscriptMessageItem => ({
+      kind: "message",
+      id: `message:${sourceIndex}:${entry.timestamp.getTime()}`,
+      entry,
+      sourceIndex,
+    });
+
     if (entry.type !== "tool_result") {
-      items.push({
-        kind: "message",
-        id: `message:${sourceIndex}:${entry.timestamp.getTime()}`,
-        entry,
-        sourceIndex,
-      });
+      items.push(messageItem());
+      if (entry.type === "user") {
+        const thought = options.thoughts?.[userOrdinal];
+        if (thought) items.push({ ...thought, kind: "thought", id: `thought:${userOrdinal}` });
+        const recalled = options.recalls?.[userOrdinal] ?? 0;
+        if (recalled > 0) {
+          const at = entry.timestamp.getTime();
+          items.push({
+            kind: "activity",
+            id: `load:${userOrdinal}`,
+            group: "load",
+            at,
+            rows: [
+              {
+                id: `load:${userOrdinal}:memory`,
+                group: "load",
+                tone: "neutral",
+                verb: "Recalled",
+                object: `${recalled} ${recalled === 1 ? "memory" : "memories"}`,
+                lines: [],
+                operation: "memory_recall",
+              },
+            ],
+          });
+        }
+        userOrdinal += 1;
+        turnEntries = [];
+        turnItemsFrom = items.length;
+        turnStartAt = entry.timestamp.getTime();
+        turnLastAt = turnStartAt;
+      }
       return;
     }
 
-    const activity = activityFromToolResult(entry, sourceIndex);
-    if (!activity) {
-      items.push({
-        kind: "message",
-        id: `message:${sourceIndex}:${entry.timestamp.getTime()}`,
-        entry,
-        sourceIndex,
-      });
+    const at = entry.timestamp.getTime();
+    const row =
+      entry.toolCall && entry.toolResult
+        ? describeToolResult(entry.toolCall, entry.toolResult, {
+            id: `row:${sourceIndex}:${at}`,
+            durationMs: options.durations?.get(entry.toolCall.id),
+          })
+        : null;
+    if (!row) {
+      items.push(messageItem());
       return;
     }
 
     const previous = items.at(-1);
-    if (
-      previous?.kind === "activity" &&
-      previous.activityKind === activity.activityKind &&
-      isCollapsibleActivity(activity.activityKind)
-    ) {
-      previous.status = previous.status === "failed" || activity.status === "failed" ? "failed" : "complete";
-      previous.count += activity.count;
-      previous.details = uniqueDetails([...previous.details, ...activity.details]);
-      previous.at = activity.at;
-      previous.title = activityTitle(previous.activityKind, previous.status, previous.count, previous.details);
+    if (previous?.kind === "activity" && previous.group === row.group) {
+      previous.rows.push(row);
+      previous.at = at;
       return;
     }
-
-    items.push(activity);
+    items.push({ kind: "activity", id: `activity:${sourceIndex}:${at}`, group: row.group, rows: [row], at });
   });
 
+  closeTurn(true);
   return items;
+}
+
+export interface ChangeSummary {
+  path: string;
+  additions: number;
+  removals: number;
+  kind: "added" | "modified" | "deleted";
+}
+
+/**
+ * One line per file the session changed, with accumulated diffstat. Built from persisted tool
+ * results only, so every number can be traced to a real edit. Order = first time a file was touched.
+ */
+export function summarizeChanges(entries: readonly ChatEntry[]): ChangeSummary[] {
+  const byPath = new Map<string, ChangeSummary>();
+  for (const entry of entries) {
+    const name = entry.toolCall?.function.name;
+    const diff = entry.toolResult?.diff;
+    if (entry.type !== "tool_result" || !entry.toolResult?.success || !diff) continue;
+    if (name !== "write_file" && name !== "edit_file" && name !== "delete_file") continue;
+    const previous = byPath.get(diff.filePath);
+    const kind = name === "delete_file" ? "deleted" : previous?.kind === "added" || diff.isNew ? "added" : "modified";
+    byPath.set(diff.filePath, {
+      path: diff.filePath,
+      additions: (previous?.additions ?? 0) + diff.additions,
+      removals: (previous?.removals ?? 0) + diff.removals,
+      kind,
+    });
+  }
+  return [...byPath.values()];
+}
+
+export interface CheckSummary {
+  command: string;
+  /** What kind of check it is, in one word: "tests", "types", "lint", "build" — or the command itself. */
+  label: string;
+  tone: ActivityTone;
+  /** "5 pass · 1.1s", "3 pass · 2 fail". */
+  meta: string;
+}
+
+function checkLabel(row: Pick<ActivityRowModel, "verb" | "object">): string {
+  if (/^Tests?\b/i.test(row.verb)) return "tests";
+  if (/^Type/i.test(row.verb)) return "types";
+  if (/^Lint/i.test(row.verb)) return "lint";
+  if (/^Buil(?:t|d)\b/i.test(row.verb)) return "build";
+  return row.object.length > 24 ? `${row.object.slice(0, 23)}…` : row.object;
+}
+
+/** The latest result of each distinct check (tests, types, lint, build) the agent ran. */
+export function summarizeChecks(items: readonly TranscriptItem[], limit = 4): CheckSummary[] {
+  const latest = new Map<string, CheckSummary>();
+  for (const item of items) {
+    if (item.kind !== "activity" || item.group !== "verify") continue;
+    for (const row of item.rows) {
+      latest.delete(row.object);
+      latest.set(row.object, { command: row.object, label: checkLabel(row), tone: row.tone, meta: row.meta ?? "" });
+    }
+  }
+  return [...latest.values()].slice(-limit);
+}
+
+export interface WorkStatus {
+  tone: ActivityTone;
+  label: string;
+  hint?: string;
+}
+
+/**
+ * One honest answer to "where does this stand?", from the host gate and the checks that actually ran.
+ * A model-run test is evidence; it is not the same as host verification, and the label says so.
+ */
+export function workStatus(input: {
+  kernel: KernelState | null;
+  isProcessing: boolean;
+  changedCount: number;
+  checks: readonly CheckSummary[];
+  /** The last request failed at the provider; nothing about the work itself can be claimed. */
+  requestFailed?: boolean;
+}): WorkStatus {
+  const { kernel, isProcessing, changedCount, checks, requestFailed } = input;
+  if (isProcessing) return { tone: "active", label: "Working" };
+  if (requestFailed) return { tone: "danger", label: "Request failed", hint: "Retry with ↑ then enter" };
+  if (kernel?.phase === "blocked") return { tone: "danger", label: "Blocked", hint: kernel.blockedReason };
+  if (kernel?.phase === "cancelled") return { tone: "neutral", label: "Stopped" };
+  // The latest result of a check beats the kernel's opinion: "Verified" next to a red check is a contradiction.
+  const failing = checks.find((check) => check.tone === "danger");
+  if (failing) return { tone: "danger", label: "Checks failing", hint: failing.command };
+  // A turn that changed nothing and ran nothing has nothing to verify: "Verified" would be a claim without evidence.
+  if (kernel?.phase === "complete" && (changedCount > 0 || checks.length > 0)) {
+    return { tone: "success", label: "Verified" };
+  }
+  if (kernel?.phase === "review") return { tone: "warning", label: "Needs verification", hint: "Run /verify" };
+  if (changedCount > 0 && checks.length > 0) {
+    return { tone: "success", label: "Checks passed", hint: "Host verification not run · /verify" };
+  }
+  if (changedCount > 0) return { tone: "warning", label: "Unverified", hint: "No checks ran · try /verify" };
+  return { tone: "neutral", label: "Ready" };
 }
 
 /** Replays persisted, explicit plan updates over the latest published plan. */
@@ -259,103 +486,9 @@ export function resolvePlanState(entries: ChatEntry[]): Plan | null {
   return plan;
 }
 
-/** Only meaningful host activity belongs in the live tree. */
-export function visibleRuntimeActivity(events: UiActivityEvent[]): UiActivityEvent[] {
-  return events.filter(
-    (event) =>
-      event.kind !== "step" &&
-      event.operation !== "update_plan_step" &&
-      (event.status === "active" ||
-        event.kind === "research" ||
-        event.kind === "verification" ||
-        event.kind === "memory" ||
-        event.kind === "error"),
-  );
-}
-
-export interface LiveActivityLine {
-  key: string;
-  text: string;
-}
-
-/**
- * Collapses raw in-flight tool events into counted summary lines — "Explored 12 files",
- * "Searched 18 symbols" — instead of one row per tool call. Mirrors the categorization
- * `activityFromToolResult` already uses for the persisted transcript, so a still-running
- * phase and its eventual collapsed history line read the same way. Real counts only; a
- * category with zero events produces no line rather than a "0" line.
- */
-export function groupLiveActivity(events: UiActivityEvent[]): LiveActivityLine[] {
-  let filesRead = 0;
-  let symbolsSearched = 0;
-  let sourcesResearched = 0;
-  let filesChanged = 0;
-  let filesDeleted = 0;
-  let commandsRun = 0;
-  const agentLines: string[] = [];
-  const memoryLines: string[] = [];
-
-  for (const event of events) {
-    switch (event.operation) {
-      case "read_file":
-        filesRead += 1;
-        break;
-      case "grep":
-      case "lsp":
-        symbolsSearched += 1;
-        break;
-      case "search_web":
-      case "search_x":
-      case "open_web":
-        sourcesResearched += 1;
-        break;
-      case "write_file":
-      case "edit_file":
-        filesChanged += 1;
-        break;
-      case "delete_file":
-        filesDeleted += 1;
-        break;
-      case "bash":
-        commandsRun += 1;
-        break;
-      case "task":
-      case "delegate":
-        if (event.label) agentLines.push(event.label);
-        break;
-      case "memory":
-        if (event.label) memoryLines.push(event.label);
-        break;
-      default:
-        break;
-    }
-  }
-
-  const lines: LiveActivityLine[] = [];
-  if (filesRead > 0) lines.push({ key: "explored", text: `Explored ${filesRead} file${filesRead === 1 ? "" : "s"}` });
-  if (symbolsSearched > 0) {
-    lines.push({ key: "searched", text: `Searched ${symbolsSearched} symbol${symbolsSearched === 1 ? "" : "s"}` });
-  }
-  if (sourcesResearched > 0) {
-    lines.push({
-      key: "researched",
-      text: `Researched ${sourcesResearched} source${sourcesResearched === 1 ? "" : "s"}`,
-    });
-  }
-  if (filesChanged > 0)
-    lines.push({ key: "changed", text: `Updated ${filesChanged} file${filesChanged === 1 ? "" : "s"}` });
-  if (filesDeleted > 0)
-    lines.push({ key: "deleted", text: `Deleted ${filesDeleted} file${filesDeleted === 1 ? "" : "s"}` });
-  if (commandsRun > 0)
-    lines.push({ key: "commands", text: `Ran ${commandsRun} command${commandsRun === 1 ? "" : "s"}` });
-  for (const [index, line] of agentLines.entries()) lines.push({ key: `agent:${index}`, text: line });
-  for (const [index, line] of memoryLines.entries()) lines.push({ key: `memory:${index}`, text: line });
-  return lines;
-}
-
 /**
  * The SESSION sidebar's honest "Effort" line — never claims a level the model doesn't actually
- * support (see docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §11, §14 Phase 2 item 2).
+ * support (see docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §11, §14 Phase 2 item 2).
  * Mirrors `Agent.resolveReasoningEffort()`'s own precedence exactly: `override` (an explicit
  * `/effort` choice, session-wide) wins first; `perModel` (the `/models` picker's per-model
  * choice, `reasoningEffortByModel[modelId]`) wins next; otherwise `effective` is whatever the
@@ -383,7 +516,7 @@ export interface MemoryStatus {
 /**
  * Honest MEMORY sidebar summary — real entry count and real capacity usage against the same
  * `MEMORY_INDEX_MAX_BYTES`/`MEMORY_INDEX_MAX_LINES` caps `writeMemoryEntry` itself enforces
- * (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §16), never a placeholder. Takes the raw
+ * (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §16), never a placeholder. Takes the raw
  * `MemoryReadIndexResult` from `readMemoryIndex` directly so this stays a pure, testable function
  * independent of the filesystem call itself.
  */
@@ -395,7 +528,7 @@ export function summarizeMemoryStatus(index: Pick<MemoryReadIndexResult, "entrie
 }
 
 /**
- * Three-tier sub-agent disclosure threshold (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md
+ * Three-tier sub-agent disclosure threshold (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md
  * §19, §14 Phase 4). 30s is the same interval Claude Code's own changelog documents for its
  * subagent panel ("idle subagents auto-hide after 30s"), and here it is measured against the last
  * activity the host actually OBSERVED — never against total runtime. An agent that keeps reporting
@@ -460,171 +593,4 @@ export function nextPlanStepLabel(plan: Plan | null): string | null {
   const next = plan.steps.find((step) => (step.status ?? "pending") === "pending");
   if (!next) return null;
   return next.description && next.description !== next.title ? `${next.title} — ${next.description}` : next.title;
-}
-
-function activityFromToolResult(entry: ChatEntry, sourceIndex: number): TranscriptActivityItem | null {
-  const toolCall = entry.toolCall;
-  const result = entry.toolResult;
-  if (!toolCall || !result) return null;
-
-  const operation = toolCall.function.name;
-  const args = parseToolArguments(toolCall.function.arguments);
-  const status = result.success ? "complete" : "failed";
-  const at = entry.timestamp.getTime();
-  const id = `activity:${sourceIndex}:${at}`;
-  const output = firstUsefulLine(result.error || result.output || entry.content);
-
-  if (operation === "read_file" || operation === "grep" || operation === "lsp") {
-    const target = stringArg(args, "path") || stringArg(args, "filePath") || stringArg(args, "query");
-    const details = target
-      ? [`${operation === "read_file" ? "Read" : operation === "grep" ? "Searched" : "Inspected"} ${target}`]
-      : [];
-    return makeActivity(id, "exploration", status, details, at);
-  }
-
-  if (operation === "search_web" || operation === "search_x" || operation === "open_web") {
-    const target = stringArg(args, "query") || stringArg(args, "url");
-    return makeActivity(id, "research", status, target ? [target] : [], at);
-  }
-
-  if (operation === "write_file" || operation === "edit_file" || operation === "delete_file") {
-    const filePath = result.diff?.filePath || stringArg(args, "path");
-    const prefix = operation === "delete_file" ? "-" : result.diff?.isNew || operation === "write_file" ? "+" : "M";
-    return makeActivity(id, "changes", status, filePath ? [`${prefix} ${filePath}`] : [], at);
-  }
-
-  if (operation === "bash") {
-    const command = stringArg(args, "command") || stringArg(args, "cmd");
-    const kind: TranscriptActivityKind = isVerificationCommand(command) ? "verification" : "command";
-    const details = [command, status === "failed" ? output : kind === "verification" ? output : ""].filter(Boolean);
-    return makeActivity(id, kind, status, details, at);
-  }
-
-  if (operation === "generate_plan" && result.plan) {
-    const details = result.plan.goal ? [result.plan.goal] : result.plan.summary ? [result.plan.summary] : [];
-    return {
-      kind: "activity",
-      id,
-      activityKind: "plan",
-      status,
-      title: status === "failed" ? "Plan creation failed" : `Plan created · ${result.plan.steps.length} tasks`,
-      details,
-      count: result.plan.steps.length,
-      at,
-    };
-  }
-
-  if (operation === "task" || operation === "delegate") {
-    const task = result.task;
-    const delegation = result.delegation;
-    const agent = task?.agent || delegation?.agent || stringArg(args, "agent") || "agent";
-    const description = task?.description || delegation?.description || stringArg(args, "description");
-    const title =
-      status === "failed"
-        ? `${agent} failed`
-        : operation === "delegate" && delegation?.status === "running"
-          ? `Delegated to ${agent}`
-          : `${agent} completed`;
-    const details = [description, status === "failed" ? output : task?.summary || delegation?.summary || ""].filter(
-      Boolean,
-    );
-    return { kind: "activity", id, activityKind: "agent", status, title, details, count: 1, at };
-  }
-
-  return null;
-}
-
-function makeActivity(
-  id: string,
-  activityKind: TranscriptActivityKind,
-  status: "complete" | "failed",
-  details: string[],
-  at: number,
-): TranscriptActivityItem {
-  const cleanDetails = uniqueDetails(details.filter(Boolean));
-  return {
-    kind: "activity",
-    id,
-    activityKind,
-    status,
-    title: activityTitle(activityKind, status, 1, cleanDetails),
-    details: cleanDetails,
-    count: 1,
-    at,
-  };
-}
-
-function activityTitle(
-  kind: TranscriptActivityKind,
-  status: "complete" | "failed",
-  count: number,
-  details: string[],
-): string {
-  if (status === "failed") {
-    if (kind === "verification") return "Verification failed";
-    if (kind === "changes") return "File update failed";
-    if (kind === "research") return "Research failed";
-    if (kind === "exploration") return "Repository exploration failed";
-    if (kind === "command") return "Command failed";
-  }
-
-  switch (kind) {
-    case "exploration":
-      return count === 1 ? "Explored repository" : `Explored repository · ${count} operations`;
-    case "research":
-      return count === 1 ? "Researched external source" : `Researched external sources · ${count} operations`;
-    case "changes": {
-      const deleted = details.filter((detail) => detail.startsWith("- ")).length;
-      const changed = details.filter((detail) => !detail.startsWith("- ")).length;
-      if (deleted > 0 && changed > 0) {
-        return `Updated ${changed} file${changed === 1 ? "" : "s"} · deleted ${deleted}`;
-      }
-      if (deleted > 0) return `Deleted ${deleted} file${deleted === 1 ? "" : "s"}`;
-      const files = new Set(details.map((detail) => detail.replace(/^[+M]\s+/, ""))).size;
-      return `Updated ${files} file${files === 1 ? "" : "s"}`;
-    }
-    case "verification":
-      return count === 1 ? "Verification passed" : `Verification passed · ${count} checks`;
-    case "command":
-      return count === 1 ? "Ran command" : `Ran ${count} commands`;
-    case "plan":
-      return `Plan created · ${count} tasks`;
-    case "agent":
-      return "Agent completed";
-  }
-}
-
-function isCollapsibleActivity(kind: TranscriptActivityKind): boolean {
-  return ["exploration", "research", "changes", "verification", "command"].includes(kind);
-}
-
-function isVerificationCommand(command: string): boolean {
-  return /(^|\s|:)(test|tests|lint|typecheck|check|verify|build)(\s|$|:)/i.test(command);
-}
-
-function parseToolArguments(raw: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function stringArg(args: Record<string, unknown>, key: string): string {
-  const value = args[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function firstUsefulLine(value: string): string {
-  return (
-    value
-      .split("\n")
-      .map((line) => line.trim())
-      .find(Boolean) || ""
-  ).slice(0, 180);
-}
-
-function uniqueDetails(details: string[]): string[] {
-  return [...new Set(details.map((detail) => detail.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 12);
 }

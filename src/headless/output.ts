@@ -13,7 +13,7 @@ export interface HeadlessWrites {
   stderr?: string;
 }
 
-/** Semantic JSONL events for headless `--format json` (OpenCode-style). */
+/** Semantic JSONL events for headless `--format json`. */
 export type HeadlessJsonEvent =
   | {
       type: "model_selected";

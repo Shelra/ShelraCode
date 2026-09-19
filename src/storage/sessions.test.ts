@@ -14,8 +14,8 @@ describe("SessionStore recap persistence", () => {
 
   beforeEach(() => {
     fs.mkdirSync(tempRoot, { recursive: true });
-    tempHome = fs.mkdtempSync(path.join(tempRoot, "grok-session-home-"));
-    tempCwd = fs.mkdtempSync(path.join(tempRoot, "grok-session-cwd-"));
+    tempHome = fs.mkdtempSync(path.join(tempRoot, "shelra-session-home-"));
+    tempCwd = fs.mkdtempSync(path.join(tempRoot, "shelra-session-cwd-"));
     process.env.HOME = tempHome;
     vi.spyOn(os, "homedir").mockReturnValue(tempHome);
     closeDatabase();
@@ -32,29 +32,29 @@ describe("SessionStore recap persistence", () => {
 
   it("stores and reloads the latest recap metadata with the session", () => {
     const store = new SessionStore(tempCwd);
-    const session = store.createSession("grok-4.3", "agent", tempCwd);
+    const session = store.createSession("test-model-a", "agent", tempCwd);
     const updatedAt = new Date("2026-04-22T15:00:00.000Z");
 
     store.setRecap(session.id, {
       text: "Migrated billing sessions to the new schema. Next step is wiring the prompt banner.",
-      model: "grok-4.20-non-reasoning",
+      model: "test-model-b",
       updatedAt,
     });
 
     expect(store.getRequiredSession(session.id).recap).toEqual({
       text: "Migrated billing sessions to the new schema. Next step is wiring the prompt banner.",
-      model: "grok-4.20-non-reasoning",
+      model: "test-model-b",
       updatedAt,
     });
   });
 
   it("clears recap metadata when the recap is removed", () => {
     const store = new SessionStore(tempCwd);
-    const session = store.createSession("grok-4.3", "agent", tempCwd);
+    const session = store.createSession("test-model-a", "agent", tempCwd);
 
     store.setRecap(session.id, {
       text: "Temporary recap",
-      model: "grok-4.20-non-reasoning",
+      model: "test-model-b",
       updatedAt: new Date("2026-04-22T15:00:00.000Z"),
     });
     store.setRecap(session.id, null);

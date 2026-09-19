@@ -71,15 +71,15 @@ writes it (`index.ts:182`) and then `selectLocalModel` writes it again
 
 `createLocalProvider` (`local-provider.ts:127-129`),
 `createOpenAICompatibleProvider` (`:133-152`), and the dead
-`createProvider`/`GrokProviderAdapter` (`grok/client.ts:120,234`). The first two
+`createProvider` and the xAI-only adapter (`toolset/client.ts:120,234`; since removed). The first two
 both construct `LocalProviderAdapter`; the difference is a synthetic candidate
 and an api key.
 
 ### D-6 — Title/recap generation: two implementations
 
 `src/providers/auxiliary.ts:36-71` (`generateTitle`, `generateRecap`, provider-
-neutral) vs `src/grok/client.ts:267,304` (same names, xAI-flavoured).
-**Only the `providers/` pair is imported by runtime code**; the `grok/client.ts`
+neutral) vs `src/toolset/client.ts:267,304` (same names, xAI-flavoured).
+**Only the `providers/` pair is imported by runtime code**; the `toolset/client.ts`
 pair is dead with the rest of that file.
 
 ### D-7 — Stream-event helpers: two sets
@@ -103,11 +103,11 @@ a duplication of intent that behaves like one.
 | `getStepNumber` | `:2729` | same |
 | `getFinishReason` | `:2737` | same |
 | `getUsage` | `:2753` | same |
-| **`GrokProviderAdapter`** (114 lines) | `src/grok/client.ts:120-233` | no importer of `src/grok/client` outside `media.ts` (type-only) and `client.test.ts` |
-| `createProvider` | `src/grok/client.ts:234-266` | same |
-| `resolveModelRuntime` (module-level) | `src/grok/client.ts:79` | same |
-| `generateTitle`/`generateRecap` (xAI) | `src/grok/client.ts:267,304` | superseded by `src/providers/auxiliary.ts` |
-| `ResolvedModelRuntime`, `XaiProvider` types | `src/grok/client.ts:26,57` | `XaiProvider` has exactly one type-only consumer (`src/grok/media.ts:5`) |
+| **xAI-only provider adapter** (114 lines) | `src/toolset/client.ts:120-233` | no importer of `src/toolset/client` outside `media.ts` (type-only) and `client.test.ts` |
+| `createProvider` | `src/toolset/client.ts:234-266` | same |
+| `resolveModelRuntime` (module-level) | `src/toolset/client.ts:79` | same |
+| `generateTitle`/`generateRecap` (xAI) | `src/toolset/client.ts:267,304` | superseded by `src/providers/auxiliary.ts` |
+| `ResolvedModelRuntime`, `XaiProvider` types | `src/toolset/client.ts:26,57` | `XaiProvider` has exactly one type-only consumer (`src/toolset/media.ts:5`) |
 | `StartupState = "fatal-error"` | `src/startup/types.ts:21` | consumed at `src/ui/startup.tsx:128,230`; **never produced** by any emitter |
 | `ModelRecommendation.alternatives` | `src/models/recommendation.ts:9` | populated 4×, rendered 0× |
 | `LocalModelCandidate.estimatedTokensPerSecond` | `src/runtimes/types.ts:30` | read at `src/hardware/profile.ts:199`; **never written** |
@@ -120,22 +120,16 @@ a duplication of intent that behaves like one.
 | `estimateModelMemoryGb` lines `:157-167` | `src/hardware/profile.ts` | unreachable in production — `memoryRequiredGb` always set for managed candidates (`managed-llama.ts:55`), and endpoint candidates have no `parameters` |
 | `recommendBootstrapModel` RAM fallback | `src/models/recommendation.ts:44` (else-arm) | unreachable — `gpuMemory === 0` returned at `:34` |
 | `MODELS`, `getModelIds`, `isKnownModelId`, `getSupportedReasoningEfforts`, `getEffectiveReasoningEffort` | `src/models/catalog.ts:4,15,19,23,27` | constant stubs; imported but answer-free |
-| `src/grok/lsp-tools.ts` | — | **no importers** (only its own test) |
+| `src/toolset/lsp-tools.ts` | — | **no importers** (only its own test) |
 | `src/storage/sessions.test.ts` | — | excluded from both test scripts (`package.json:22-23`) |
 
-**Deleted during the migration** (git status): `src/grok/models.ts`,
-`src/grok/models.test.ts`.
+**Deleted during the migration** (git status): `src/toolset/models.ts`,
+`src/toolset/models.test.ts`.
 
 ## 3. Legacy (functional, intentionally retained, scheduled for removal)
 
 | Item | Location | Note |
 | --- | --- | --- |
-| `~/.grok` **write mirror** for delegations | `src/agent/delegations.ts:238-241,267-276` | Comments say *"can be removed in Phase 9"* / *"deliberately never read"*. Recreates the legacy tree on clean machines. **Field-confirmed: 9 project dirs under `~/.grok/delegations`.** |
-| `~/.grok` read fallbacks | `src/utils/settings.ts:228`; `src/storage/db.ts:26-33` | Correct one-way migration |
-| `GROK_*` env vars | `src/utils/settings.ts:342,346`; `src/agent/agent.ts:632,723`; `src/index.ts:626` | Compatibility |
-| `GROK_GITHUB_REPO = "superagent-ai/grok-cli"` and `GROK_RELEASES_API` | `src/utils/install-manager.ts:11-14` | The update checker still points at the **old repository**; `SHELRA_RELEASE_REPO` is an alias for it (`:13`) |
-| `src/grok/` directory name | — | `tools.ts`, `tool-schemas.ts`, `batch.ts`, `media.ts` are **live**; `client.ts`, `lsp-tools.ts` are dead |
-| `src/audio/stt/grok-stt.ts` | — | live, via `src/audio/stt/engine.ts` ← `src/telegram/audio-input.ts` |
 | `AGENTS.md` | root | **Stale to the point of being misleading** — see `01` §7 |
 
 ## 4. Partially wired
@@ -148,19 +142,19 @@ a duplication of intent that behaves like one.
 | `installAbort` | Wired through the whole download stack, **no UI action maps to it** |
 | `healthCheck` / `persistSelection` options | Correctly plumbed, **no production caller uses them** |
 
-## 5. Call-graph summary for `src/grok/`
+## 5. Call-graph summary for `src/toolset/`
 
 ```
-src/agent/agent.ts ──imports──> src/grok/tools.ts        (createTools)           LIVE
-                   ──imports──> src/grok/tool-schemas.ts (toolSetToBatchTools)   LIVE
-                   ──imports──> src/grok/batch.ts                                LIVE
-src/grok/tools.ts  ──imports──> src/grok/media.ts        (generateImage/Video)   LIVE
-src/grok/media.ts  ──type-only-> src/grok/client.ts      (XaiProvider)           TYPE ONLY
-src/grok/client.ts ──> (nothing imports it for values)                           DEAD
-src/grok/lsp-tools.ts ──> (no importers at all)                                  DEAD
+src/agent/agent.ts ──imports──> src/toolset/tools.ts        (createTools)           LIVE
+                   ──imports──> src/toolset/tool-schemas.ts (toolSetToBatchTools)   LIVE
+                   ──imports──> src/toolset/batch.ts                                LIVE
+src/toolset/tools.ts  ──imports──> src/toolset/media.ts        (generateImage/Video)   LIVE
+src/toolset/media.ts  ──type-only-> src/toolset/client.ts      (XaiProvider)           TYPE ONLY
+src/toolset/client.ts ──> (nothing imports it for values)                           DEAD
+src/toolset/lsp-tools.ts ──> (no importers at all)                                  DEAD
 ```
 
-**FACT — `src/grok/client.ts` survives only because `media.ts` needs one type
+**FACT — `src/toolset/client.ts` survives only because `media.ts` needs one type
 name from it.** Extracting `XaiProvider` would make the file removable.
 
 ## 6. Priority order for consolidation (no deletions recommended yet)
@@ -171,8 +165,8 @@ name from it.** Extracting `XaiProvider` would make the file removable.
 4. **Dead lint blockers** — the four orphan helpers in `agent.ts` are the only
    *lint-failing* dead code; removing them is a prerequisite for a green CI.
 5. **D-4** — a single "commit model selection" function.
-6. **Legacy `.grok` mirror** — remove once the migration window closes.
-7. **`src/grok/client.ts`** — extract the one type, then delete.
+6. **Legacy delegation mirror** — since removed.
+7. **`src/toolset/client.ts`** — extract the one type, then delete.
 
 **No deletion is recommended in this audit**; each item above needs its own
 verified change with a test.

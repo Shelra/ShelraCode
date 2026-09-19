@@ -8,7 +8,6 @@ import {
   completionLabel,
   completionStatus,
   describeReasoningEffort,
-  groupLiveActivity,
   nextPlanStepLabel,
   phaseLabel,
   projectTranscript,
@@ -18,7 +17,6 @@ import {
   summarizeSessionUsage,
   type UiActivityEvent,
   upsertActivity,
-  visibleRuntimeActivity,
 } from "./observability";
 
 function kernel(overrides: Partial<KernelState> = {}): KernelState {
@@ -149,107 +147,72 @@ describe("observability projections", () => {
     expect(summary.sources).toEqual(["message", "task"]);
   });
 
-  it("never presents internal model steps as user-facing activity", () => {
-    const visible = visibleRuntimeActivity([
-      {
-        id: "step:1",
-        kind: "step",
-        status: "active",
-        label: "Step 1",
-        detail: "Model turn started",
-        at: 1,
-      },
-      {
-        id: "tool:1",
-        kind: "tool",
-        status: "active",
-        label: "Running tests",
-        operation: "bash",
-        at: 2,
-      },
-    ]);
-
-    expect(visible.map((event) => event.label)).toEqual(["Running tests"]);
-  });
-
-  it("collapses consecutive repository exploration into one meaningful transcript row", () => {
+  it("groups consecutive repository exploration into one item of evidence rows", () => {
     const at = new Date("2026-01-01T00:00:00.000Z");
+    const call = (id: string, name: string, input: Record<string, unknown>) => ({
+      id,
+      type: "function" as const,
+      function: { name, arguments: JSON.stringify(input) },
+    });
     const entries: ChatEntry[] = [
       {
         type: "tool_call",
         content: "read_file",
         timestamp: at,
-        toolCall: {
-          id: "read-1",
-          type: "function",
-          function: { name: "read_file", arguments: JSON.stringify({ path: "src/a.ts" }) },
-        },
+        toolCall: call("read-1", "read_file", { path: "src/a.ts" }),
       },
       {
         type: "tool_result",
         content: "a",
         timestamp: at,
-        toolCall: {
-          id: "read-1",
-          type: "function",
-          function: { name: "read_file", arguments: JSON.stringify({ path: "src/a.ts" }) },
-        },
+        toolCall: call("read-1", "read_file", { path: "src/a.ts" }),
         toolResult: { success: true, output: "a" },
       },
       {
         type: "tool_result",
         content: "matches",
         timestamp: new Date(at.getTime() + 1),
-        toolCall: {
-          id: "grep-1",
-          type: "function",
-          function: { name: "grep", arguments: JSON.stringify({ query: "hydrate" }) },
-        },
+        toolCall: call("grep-1", "grep", { pattern: "hydrate" }),
         toolResult: { success: true, output: "matches" },
       },
     ];
 
-    expect(projectTranscript(entries)).toMatchObject([
-      {
-        kind: "activity",
-        activityKind: "exploration",
-        status: "complete",
-        title: "Explored repository · 2 operations",
-        details: ["Read src/a.ts", "Searched hydrate"],
-        count: 2,
-      },
-    ]);
+    const projected = projectTranscript(entries, { durations: new Map([["read-1", 240]]) });
+    expect(projected).toHaveLength(1);
+    expect(projected[0]).toMatchObject({ kind: "activity", group: "explore" });
+    const rows = projected[0]?.kind === "activity" ? projected[0].rows : [];
+    expect(rows.map((row) => `${row.verb} ${row.object}`)).toEqual(["Read src/a.ts", "Searched for hydrate"]);
+    expect(rows[0]?.meta).toBe("240ms");
   });
 
-  it("keeps failed verification visible and separate from successful checks", () => {
+  it("keeps a failed test run visible with its numbers and failing names", () => {
     const at = new Date("2026-01-01T00:00:00.000Z");
     const command = (id: string, success: boolean, offset: number): ChatEntry => ({
       type: "tool_result",
-      content: success ? "18 passed" : "1 failed",
+      content: "",
       timestamp: new Date(at.getTime() + offset),
       toolCall: {
         id,
         type: "function",
-        function: { name: "bash", arguments: JSON.stringify({ command: `bun run test ${id}` }) },
+        function: { name: "bash", arguments: JSON.stringify({ command: "bun test" }) },
       },
-      toolResult: { success, output: success ? "18 passed" : "1 failed", error: success ? undefined : "1 failed" },
+      toolResult: success
+        ? { success, output: " 5 pass\n 0 fail" }
+        : { success, error: "(fail) suite > case one [1.00ms]\n 3 pass\n 2 fail" },
     });
 
-    const projected = projectTranscript([command("one", true, 0), command("two", false, 1)]);
-    expect(projected).toMatchObject([
-      {
-        kind: "activity",
-        activityKind: "verification",
-        status: "failed",
-        title: "Verification failed",
-        count: 2,
-      },
-    ]);
+    const projected = projectTranscript([command("one", false, 0), command("two", true, 1)]);
+    expect(projected).toHaveLength(1);
+    const rows = projected[0]?.kind === "activity" ? projected[0].rows : [];
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ verb: "Tests failed", tone: "danger", meta: "3 pass · 2 fail" });
+    expect(rows[0]?.lines).toEqual(["suite > case one"]);
+    expect(rows[1]).toMatchObject({ verb: "Tests passed", tone: "success", meta: "5 pass" });
   });
 
-  it("reports deleted files separately from updated files in the collapsed transcript title", () => {
+  it("shows each changed file with its diffstat and separates deletions", () => {
     const at = new Date("2026-01-01T00:00:00.000Z");
-    const fileOp = (id: string, name: string, filePath: string, offset: number): ChatEntry => ({
+    const fileOp = (id: string, name: string, filePath: string, offset: number, isNew: boolean): ChatEntry => ({
       type: "tool_result",
       content: name,
       timestamp: new Date(at.getTime() + offset),
@@ -261,18 +224,54 @@ describe("observability projections", () => {
       toolResult: {
         success: true,
         output: name,
-        diff: { filePath, additions: 1, removals: 0, patch: "", isNew: true },
+        diff: { filePath, additions: 3, removals: isNew ? 0 : 1, patch: "", isNew },
       },
     });
 
-    const onlyDeletes = projectTranscript([fileOp("del-1", "delete_file", "src/old.ts", 0)]);
-    expect(onlyDeletes).toMatchObject([{ activityKind: "changes", title: "Deleted 1 file" }]);
-
-    const mixed = projectTranscript([
-      fileOp("write-1", "write_file", "src/new.ts", 0),
-      fileOp("del-2", "delete_file", "src/old.ts", 1),
+    const projected = projectTranscript([
+      fileOp("edit-1", "edit_file", "src/a.ts", 0, false),
+      fileOp("write-1", "write_file", "src/new.ts", 1, true),
+      fileOp("del-1", "delete_file", "src/old.ts", 2, false),
     ]);
-    expect(mixed).toMatchObject([{ activityKind: "changes", title: "Updated 1 file · deleted 1" }]);
+    const rows = projected[0]?.kind === "activity" ? projected[0].rows : [];
+    expect(rows.map((row) => `${row.verb} ${row.object} ${row.meta}`)).toEqual([
+      "Edited src/a.ts +3 -1",
+      "Created src/new.ts +3",
+      "Deleted src/old.ts +3 -1",
+    ]);
+  });
+
+  it("inserts the turn's reasoning right after its user message", () => {
+    const at = new Date("2026-01-01T00:00:00.000Z");
+    const entries: ChatEntry[] = [
+      { type: "user", content: "first", timestamp: at },
+      { type: "assistant", content: "one", timestamp: at },
+      { type: "user", content: "second", timestamp: at },
+      { type: "assistant", content: "two", timestamp: at },
+    ];
+    const projected = projectTranscript(entries, {
+      thoughts: [undefined, { durationMs: 4200, text: "Comparing the boundary.", steps: 2 }],
+    });
+    expect(projected.map((item) => item.kind)).toEqual(["message", "message", "message", "thought", "message"]);
+    expect(projected[3]).toMatchObject({ kind: "thought", durationMs: 4200, steps: 2 });
+  });
+
+  it("does not turn plan bookkeeping into activity", () => {
+    const at = new Date("2026-01-01T00:00:00.000Z");
+    const entries: ChatEntry[] = [
+      {
+        type: "tool_result",
+        content: "ok",
+        timestamp: at,
+        toolCall: {
+          id: "u1",
+          type: "function",
+          function: { name: "update_plan_step", arguments: JSON.stringify({ index: 1, status: "working" }) },
+        },
+        toolResult: { success: true, output: "ok" },
+      },
+    ];
+    expect(projectTranscript(entries)).toEqual([]);
   });
 
   it("replays explicit runtime plan updates without inferring progress", () => {
@@ -314,74 +313,6 @@ describe("observability projections", () => {
     expect(resolvePlanState(entries)?.steps).toMatchObject([
       { status: "complete", evidence: "Hydration path traced" },
       { status: "working" },
-    ]);
-  });
-});
-
-function toolEvent(operation: string, overrides: Partial<UiActivityEvent> = {}): UiActivityEvent {
-  return {
-    id: `tool:${operation}:${Math.random()}`,
-    kind: "tool",
-    status: "active",
-    label: operation,
-    operation,
-    at: 0,
-    ...overrides,
-  };
-}
-
-describe("groupLiveActivity", () => {
-  it("counts routine operations instead of listing one line per tool call", () => {
-    const events = [
-      toolEvent("read_file"),
-      toolEvent("read_file"),
-      toolEvent("grep"),
-      toolEvent("read_file"),
-      toolEvent("grep"),
-    ];
-
-    expect(groupLiveActivity(events)).toEqual([
-      { key: "explored", text: "Explored 3 files" },
-      { key: "searched", text: "Searched 2 symbols" },
-    ]);
-  });
-
-  it("uses singular phrasing for a single occurrence", () => {
-    expect(groupLiveActivity([toolEvent("read_file")])).toEqual([{ key: "explored", text: "Explored 1 file" }]);
-  });
-
-  it("produces no line for a category with zero events", () => {
-    expect(groupLiveActivity([toolEvent("read_file")])).not.toContainEqual(
-      expect.objectContaining({ key: "searched" }),
-    );
-  });
-
-  it("counts research, file changes, and commands separately", () => {
-    const events = [
-      toolEvent("search_web"),
-      toolEvent("open_web"),
-      toolEvent("write_file"),
-      toolEvent("bash"),
-      toolEvent("bash"),
-    ];
-
-    expect(groupLiveActivity(events)).toEqual([
-      { key: "researched", text: "Researched 2 sources" },
-      { key: "changed", text: "Updated 1 file" },
-      { key: "commands", text: "Ran 2 commands" },
-    ]);
-  });
-
-  it("returns an empty list for events with no groupable operation", () => {
-    expect(groupLiveActivity([toolEvent("update_plan_step")])).toEqual([]);
-  });
-
-  it("counts deleted files separately from updated files", () => {
-    const events = [toolEvent("write_file"), toolEvent("delete_file"), toolEvent("delete_file")];
-
-    expect(groupLiveActivity(events)).toEqual([
-      { key: "changed", text: "Updated 1 file" },
-      { key: "deleted", text: "Deleted 2 files" },
     ]);
   });
 });
@@ -483,7 +414,7 @@ describe("summarizeMemoryStatus", () => {
 });
 
 /**
- * Three-tier sub-agent disclosure (docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §19, §14
+ * Three-tier sub-agent disclosure (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §19, §14
  * Phase 4). The tier decision is a pure function precisely so the threshold rule can be proven
  * here rather than inferred from a rendered frame.
  */

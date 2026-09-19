@@ -1,14 +1,14 @@
 # 00 — Executive summary
 
 **Audit type:** forensic architecture & implementation audit (read-only).
-**Repository:** `D:\PROYECTS\grok-cli`
-**Branch:** `main` · **HEAD:** `fb97af83f06dca873281d60168430f06c8de6324`
+**Repository:** `D:\PROYECTS\shelra`
+**Branch:** `main`
 **Working tree at audit time:** dirty (large in-progress migration) — preserved untouched.
 **Scope exclusions honoured:** `ShelraCode/`, `node_modules/`, `dist/`, `tmp-runtime-smoke/`, `.git/`.
 
 Every claim below is labelled **FACT** (traced to code, cited `path:line`) or
 **INFERENCE** (reasoned, with confidence). Documentation (`README.md`,
-`AGENTS.md`, `docs/migration/*`) was used only to direct investigation; where it
+`AGENTS.md`, `docs/architecture/*`) was used only to direct investigation; where it
 disagrees with code, the code wins and the disagreement is recorded.
 
 ---
@@ -170,8 +170,8 @@ model is loaded". **FACT.**
    (`:122-132`). It duplicates ranking (`:76-83`) and its own model chooser
    ranks with `localModelFitScore(model)` using **no hardware argument** at
    all (`:105`), so it silently scores against `gpu: []`.
-2. **`src/grok/client.ts`** — a full 351-line `GrokProviderAdapter` +
-   `createProvider` that **no runtime code imports**. Only `src/grok/media.ts:5`
+2. **`src/toolset/client.ts`** — a full 351-line xAI-only provider adapter +
+   `createProvider` that **no runtime code imports** (both since removed). Only `src/toolset/media.ts:5`
    takes a `type`-only import and `client.test.ts` exercises it. Backend-only,
    zero callers.
 3. **Persisted local selection** — `localRuntimeId` and `lastLocalHealthCheck`

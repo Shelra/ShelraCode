@@ -29,7 +29,7 @@ models are bundled."*
 
 **FACT — the only function with behaviour is `normalizeModelId` (a `trim()`).**
 It is imported in 6 places (`src/index.ts:17`, `src/agent/agent.ts:36`,
-`src/ui/app.tsx`, `src/grok/client.ts:5`, `src/utils/settings.ts`,
+`src/ui/app.tsx`, `src/toolset/client.ts:5`, `src/utils/settings.ts`,
 `src/models/catalog.test.ts`).
 
 **FACT — consequences of the stubs, traced:**

@@ -42,6 +42,17 @@ model selection use the same provider abstraction. `openrouter/free` is kept as
 a distinct router strategy because the underlying model is selected by
 OpenRouter at request time.
 
+With no explicit or saved model, the `free` policy does not use the router as
+its primary: every free model costs the same, so cost cannot rank them and the
+router may answer with a very small model. Candidates are ranked by
+`capabilityScore` (reasoning support, parameter-size class parsed from the model
+id, a size-tier keyword, then context). That is a documented heuristic over what
+the catalog exposes, not a benchmark. The route's fallback list is the best
+model, the second best, then `openrouter/free`, so a busy or rate-limited top
+model degrades to "some free model" instead of failing the turn. A saved model
+that is still free (including a deliberately saved router) and any explicit
+`--model` win over this ranking; a saved paid model is ignored under `free`.
+
 The current CLI surfaces are:
 
 - `shelra models [--refresh] [--json]`

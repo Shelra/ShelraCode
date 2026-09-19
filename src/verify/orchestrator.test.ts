@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe("verify orchestrator", () => {
   it("uses the environment manifest as the highest-priority recipe source", async () => {
-    const dir = makeTempDir("grok-verify-orch-manifest-");
+    const dir = makeTempDir("shelra-verify-orch-manifest-");
     fs.writeFileSync(
       path.join(dir, "environment.json"),
       JSON.stringify(
@@ -61,8 +61,8 @@ describe("verify orchestrator", () => {
     expect(agent.detectVerifyRecipe).not.toHaveBeenCalled();
   });
 
-  it("creates .grok/environment.json from verify-detect when no manifest exists", async () => {
-    const dir = makeTempDir("grok-verify-orch-generate-");
+  it("creates .shelra/environment.json from verify-detect when no manifest exists", async () => {
+    const dir = makeTempDir("shelra-verify-orch-generate-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev", build: "next build" } }, null, 2),
@@ -93,7 +93,7 @@ describe("verify orchestrator", () => {
     };
 
     const prepared = await prepareVerifyRun(agent, {});
-    expect(prepared.manifestPath).toBe(path.join(dir, ".grok", "environment.json"));
+    expect(prepared.manifestPath).toBe(path.join(dir, ".shelra", "environment.json"));
     expect(fs.existsSync(prepared.manifestPath!)).toBe(true);
     expect(prepared.usedVerifyDetect).toBe(true);
     expect(prepared.profile.recipe.installCommands).toEqual(["npm ci"]);
@@ -101,7 +101,7 @@ describe("verify orchestrator", () => {
   });
 
   it("does not create a manifest when verify-detect returns no recipe", async () => {
-    const dir = makeTempDir("grok-verify-orch-no-manifest-");
+    const dir = makeTempDir("shelra-verify-orch-no-manifest-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev", build: "next build" } }, null, 2),
@@ -118,12 +118,12 @@ describe("verify orchestrator", () => {
 
     const prepared = await prepareVerifyRun(agent, {});
     expect(prepared.manifestPath).toBeUndefined();
-    expect(fs.existsSync(path.join(dir, ".grok", "environment.json"))).toBe(false);
+    expect(fs.existsSync(path.join(dir, ".shelra", "environment.json"))).toBe(false);
     expect(prepared.usedVerifyDetect).toBe(false);
   });
 
   it("restores sandbox settings after running verification and wires checkpoint settings", async () => {
-    const dir = makeTempDir("grok-verify-orch-run-");
+    const dir = makeTempDir("shelra-verify-orch-run-");
     fs.writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ dependencies: { next: "15.0.0" }, scripts: { dev: "next dev", build: "next build" } }, null, 2),
@@ -133,7 +133,7 @@ describe("verify orchestrator", () => {
     ensureVerifyCheckpointMock.mockResolvedValue({
       created: true,
       checkpointName: "verify-next-demo",
-      guestWorkdir: "/grok/verify/worktree",
+      guestWorkdir: "/shelra/verify/worktree",
     });
 
     const originalSettings = { allowNet: false, from: "base" };
@@ -150,7 +150,7 @@ describe("verify orchestrator", () => {
     expect(agent.setSandboxSettings).toHaveBeenCalledTimes(2);
     expect(agent.setSandboxSettings.mock.calls[0]?.[0]).toMatchObject({
       from: "verify-next-demo",
-      guestWorkdir: "/grok/verify/worktree",
+      guestWorkdir: "/shelra/verify/worktree",
       syncHostWorkspace: true,
       allowNet: true,
     });

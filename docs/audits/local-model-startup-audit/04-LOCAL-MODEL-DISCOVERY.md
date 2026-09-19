@@ -12,14 +12,14 @@ and model-id sources. **Nothing was assumed from filenames.**
 | D3 | **Explicit OpenAI-compatible endpoint `/models`** | `explicitEndpointRuntime.listModels` `src/runtimes/discovery.ts:37-67` | `GET {baseURL}/models` | `LocalModelCandidate[]` prefixed `local-openai/` | `discoverLocalRuntimes` | **ACTIVE but opt-in** — adapter only created when `SHELRA_LOCAL_ENDPOINT` or `OPENAI_BASE_URL` is set (`:82-83`) |
 | D4 | **Discovery aggregator** | `discoverLocalRuntimes` `src/runtimes/discovery.ts:87-113` | adapters, signal | `{runtimes, health, models}` | `runStartup:73`, `configureLocalProvider:460`, `collectOnboardingState:24`, `models` cmd `src/index.ts:880` | **ACTIVE — the single entry point** |
 | D5 | **Reviewed HF seed catalog** | `HUGGING_FACE_MODELS` `src/models/huggingface.ts:43-70` | — | 2 hard-coded specs | `getHuggingFaceModelSpec:74-77`, `recommendBootstrapModel:23,35,41,…` | **ACTIVE** — *installable* catalog, not a discovery source |
-| D6 | **Provider model catalog** | `src/models/catalog.ts:4-32` | — | `MODELS = []`, `DEFAULT_MODEL = ""`, `getModelInfo → undefined`, `getModelIds → []`, `isKnownModelId → false` | `src/agent/agent.ts:36,566,656`, `src/ui/app.tsx:804`, `src/index.ts:17`, `src/grok/client.ts:5`, `src/utils/settings.ts` | **PLACEHOLDER — deliberately emptied stub.** Every consumer gets `undefined`/`[]`. |
+| D6 | **Provider model catalog** | `src/models/catalog.ts:4-32` | — | `MODELS = []`, `DEFAULT_MODEL = ""`, `getModelInfo → undefined`, `getModelIds → []`, `isKnownModelId → false` | `src/agent/agent.ts:36,566,656`, `src/ui/app.tsx:804`, `src/index.ts:17`, `src/toolset/client.ts:5`, `src/utils/settings.ts` | **PLACEHOLDER — deliberately emptied stub.** Every consumer gets `undefined`/`[]`. |
 | D7 | **Persisted `defaultModel`** | `~/.shelra/user-settings.json` via `getCurrentModel` `src/utils/settings.ts:349-365` | settings file | model id string | `new Agent(...)` `src/agent/agent.ts:614`; `runStartup({requestedModel})` `src/index.ts:369` | **ACTIVE but advisory only** — see §4 |
 | D8 | **Project `model` setting** | `loadProjectSettings().model` `src/utils/settings.ts:316-320`; written by the picker `src/ui/app.tsx:830` | `./.shelra/settings.json` | model id | `getCurrentModel` `settings.ts:349-365` | **ACTIVE (write) / partially read** |
 | D9 | **`--model` CLI flag** | `src/index.ts:741,692,710` | argv | model id | `resolveConfig` → `startInteractive` → `runStartup({requestedModel})` | **ACTIVE, advisory only** |
 | D10 | **`SHELRA_ONBOARDING_MODEL`** | `src/models/recommendation.ts:21-31` | env | forces a recommendation id | `recommendBootstrapModel` | **ACTIVE** (escape hatch) |
 | D11 | **Model sidecar metadata** | `<file>.gguf.json` written `src/models/huggingface.ts:177-181`, read `:208-217` | JSON | `HuggingFaceModelSpec` | D1 | **ACTIVE — fragile, see §5** |
-| D12 | **Legacy `src/grok/models.ts`** | — | — | — | — | **DELETED** (git status: ` D src/grok/models.ts`, ` D src/grok/models.test.ts`) |
-| D13 | **xAI/Grok remote model resolution** | `resolveModelRuntime` / `GrokProviderAdapter` `src/grok/client.ts:79,120,234` | model id | xAI runtime | **nothing** — only `src/grok/media.ts:5` takes a `type`-only import, plus `client.test.ts` | **DEAD** |
+| D12 | **Legacy `src/toolset/models.ts`** | — | — | — | — | **DELETED** (git status: ` D src/toolset/models.ts`, ` D src/toolset/models.test.ts`) |
+| D13 | **xAI remote model resolution** | `resolveModelRuntime` / the xAI-only adapter `src/toolset/client.ts:79,120,234` | model id | xAI runtime | **nothing** — only `src/toolset/media.ts:5` takes a `type`-only import, plus `client.test.ts` | **DEAD** (since removed) |
 
 **Not found anywhere in `src/` (verified by grep):** Ollama (`11434`,
 `/api/tags`), LM Studio (`1234`), MLX, vLLM, llamafile, koboldcpp, GPT4All,
@@ -203,7 +203,7 @@ effect.
 | D7/D8/D9 persisted / project / flag model id | **ACTIVE but advisory** (outranked by fit score) |
 | D10 `SHELRA_ONBOARDING_MODEL` | **ACTIVE** |
 | D11 sidecar | **ACTIVE, FRAGILE** (silent degradation, observed live) |
-| D12 `src/grok/models.ts` | **DELETED** |
+| D12 `src/toolset/models.ts` | **DELETED** |
 | D13 xAI model resolution | **DEAD** (no runtime importers) |
 </content>
 </invoke>

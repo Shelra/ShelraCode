@@ -43,7 +43,7 @@ export function execCommandHook(
     const child = spawn("sh", ["-c", hook.command], {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, [HOOK_EVENT_ENV]: input.hook_event_name, GROK_HOOK_EVENT: input.hook_event_name },
+      env: { ...process.env, [HOOK_EVENT_ENV]: input.hook_event_name },
     });
 
     child.stdout?.on("data", (chunk: Buffer) => {

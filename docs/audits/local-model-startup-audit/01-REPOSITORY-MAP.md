@@ -30,7 +30,7 @@ executable bit set.
 | Runtime | Bun (dev), Node ≥18 (published) | `package.json` scripts, `src/index.ts:1` |
 | TUI | `@opentui/core` + `@opentui/react` + React 19, `jsx: react-jsx`, `jsxImportSource: @opentui/react` | `tsconfig.json`, `package.json` deps |
 | CLI parsing | `commander` v12 | `src/index.ts:3,734-828` |
-| AI SDK | `ai` v6 + `@ai-sdk/openai-compatible` (+ `@ai-sdk/xai`, legacy) | `src/runtimes/local-provider.ts:1-2`, `src/grok/client.ts:1` |
+| AI SDK | `ai` v6 + `@ai-sdk/openai-compatible` (+ `@ai-sdk/xai`, legacy) | `src/runtimes/local-provider.ts:1-2`, `src/toolset/client.ts:1` |
 | Storage | `bun:sqlite` | `src/storage/db.ts:1` |
 | Schemas | `zod` v4 | deps |
 | MCP | `@modelcontextprotocol/sdk`, `@ai-sdk/mcp` | `src/mcp/*` |
@@ -62,11 +62,10 @@ bunx vitest run --pool=forks --exclude="ShelraCode/**" --exclude="ShelraCode/nod
 
 ```
 branch: main
-HEAD:   fb97af83f06dca873281d60168430f06c8de6324  "bump version"
 ```
 
 Working tree at audit start and end (verified unchanged): **45 modified**,
-**2 deleted** (`src/grok/models.ts`, `src/grok/models.test.ts`), **16 untracked**
+**2 deleted** (`src/toolset/models.ts`, `src/toolset/models.test.ts`), **16 untracked**
 entries. Untracked new source trees: `src/context/`, `src/hardware/`,
 `src/models/`, `src/product/`, `src/providers/`, `src/router/`, `src/runtimes/`,
 `src/security/`, `src/setup/`, `src/startup/`, plus `src/agent/kernel.ts(.test)`,
@@ -75,7 +74,7 @@ entries. Untracked new source trees: `src/context/`, `src/hardware/`,
 **INFERENCE (high confidence):** every subsystem central to this audit
 (startup, hardware, models, runtimes, router, providers, product identity,
 security guard, context compiler) is **untracked new work**; the tracked
-baseline is the pre-migration Grok CLI. That is why doc/code drift is so
+baseline is the earlier runtime. That is why doc/code drift is so
 pronounced.
 
 ## 4. Source tree (`src/`) — role and audit relevance
@@ -83,10 +82,10 @@ pronounced.
 | Directory | Role | Relevant to this audit |
 | --- | --- | --- |
 | `agent/` | `Agent` façade (2 937 lines), compaction, delegations, reasoning, vision, `kernel.ts` | **Yes** — provider install, context, readiness consumption |
-| `audio/stt/` | Grok STT for Telegram voice | No |
+| `audio/stt/` | Remote STT for Telegram voice | No |
 | `context/` | Host-side turn classifier + repo evidence compiler | **Yes** — runs on every turn |
 | `daemon/` | Schedule daemon | No |
-| `grok/` | Legacy xAI adapter, tools registry, batch, media | Partly (`tools.ts`, `batch.ts` live; `client.ts` dead) |
+| `toolset/` | Tools registry and batch; the xAI-only adapter and media tools it once held have been removed | Partly (`tools.ts`, `batch.ts` live) |
 | `hardware/` | Hardware profile + fit score | **Yes** |
 | `headless/` | `--prompt` output rendering | **Yes** (error UX) |
 | `hooks/` | Lifecycle hook config/executor | No |
@@ -115,7 +114,7 @@ pronounced.
 src/ui/app.tsx              5902 lines
 src/agent/agent.ts          2937
 src/utils/settings.ts        707
-src/grok/client.ts           351   (dead in runtime graph)
+src/toolset/client.ts           351   (dead in runtime graph)
 src/ui/startup.tsx           250
 src/startup/orchestrator.ts  236
 src/runtimes/managed-llama.ts 284
@@ -163,19 +162,17 @@ Default-command flags relevant here: `--remote` (`:742`), `-m/--model` (`:741`),
 | `~/.shelra/runtime/llama-cpp/<release>/` | `installManagedRuntime` (`src/runtimes/bootstrap.ts:246`) | `findManagedLlamaServer` (`:207-212`) |
 | `~/.shelra/shelra.db` (+ `-wal`, `-shm`) | `src/storage/db.ts:23-34` | sessions/transcripts/usage |
 | `~/.shelra/delegations/<projectId>/` | `src/agent/delegations.ts:234-243` | same |
-| `~/.grok/**` (legacy) | read-fallback (`src/utils/settings.ts:228`, `src/storage/db.ts:26-33`) **and an unconditional write mirror** (`src/agent/delegations.ts:238-241,267-276`) | reads only for migration |
 | `./.shelra/settings.json` (project) | `saveProjectSettings` (`src/utils/settings.ts:322`) | `loadProjectSettings` (`:316`) |
 | `~/.shelra/workspace-trust.json` | `src/utils/workspace-trust.ts` | `getWorkspaceTrustDecision` (`src/index.ts:629`) |
 
 ### Environment variables (`src/product/identity.ts:9-14`)
 
 `SHELRA_API_KEY`, `SHELRA_BASE_URL`, `SHELRA_MODEL`, `SHELRA_MAX_TOKENS`,
-`SHELRA_BACKGROUND_CHILD`, `SHELRA_HOOK_EVENT`. Legacy `GROK_*` equivalents are
-still honoured (`src/utils/settings.ts:342,346`, `src/agent/agent.ts:632,723`).
+`SHELRA_BACKGROUND_CHILD`, `SHELRA_HOOK_EVENT`.
 Additional startup-relevant vars: `SHELRA_LOCAL_ENDPOINT` / `OPENAI_BASE_URL`
 (`src/runtimes/discovery.ts:82`), `SHELRA_ONBOARDING_MODEL`
 (`src/models/recommendation.ts:21`), `SHELRA_DISABLE_RUNTIME_INSTALL`
-(`src/runtimes/bootstrap.ts:216`), `SHELRA_TRUST_WORKSPACE`/`GROK_TRUST_WORKSPACE`
+(`src/runtimes/bootstrap.ts:216`), `SHELRA_TRUST_WORKSPACE`
 (`src/index.ts:626`). `dotenv.config()` runs at module load
 (`src/index.ts:54`).
 
@@ -183,13 +180,13 @@ Additional startup-relevant vars: `SHELRA_LOCAL_ENDPOINT` / `OPENAI_BASE_URL`
 
 | File | State |
 | --- | --- |
-| `AGENTS.md` | **STALE — do not trust.** Calls the project "Grok CLI (`@vibe-kit/grok-cli`)", documents a "broken ESLint config" (the repo uses Biome), references `src/utils/model-config.ts` and `settings-manager.ts` (**neither exists**), and says `GROK_API_KEY` is required. Verified by grep: no `.eslintrc*`, no `model-config.ts`, no `settings-manager.ts` under `src/`. |
+| `AGENTS.md` | **STALE — do not trust.** Documents a "broken ESLint config" (the repo uses Biome) and references `src/utils/model-config.ts` and `settings-manager.ts` (**neither exists**). Verified by grep: no `.eslintrc*`, no `model-config.ts`, no `settings-manager.ts` under `src/`. |
 | `README.md` | 21 KB, largely accurate about *intent*; several concrete claims contradict code — see `17-GAP-ANALYSIS.md` §"Docs vs code". |
 | `CLAUDE.md` | **Not present.** |
 | `.claude/` | **Not present.** |
 | `.cursor/` | Present (not audited — no startup/model impact found by grep). |
 | `.agents/skills/` | `agent-browser`, `agent-desktop`, `find-skills`. All three are host-tooling instructions for browser/desktop automation and skill discovery. **None touch startup, hardware, model discovery, runtime, or provider code.** Out of scope, verified by reading all three `SKILL.md` files. |
-| `docs/migration/` | 11 docs, untracked, self-aware and mostly honest. Divergences are recorded per-area in the relevant audit files and summarised in `17-GAP-ANALYSIS.md`. |
+| `docs/architecture/` | 11 docs, untracked, self-aware and mostly honest. Divergences are recorded per-area in the relevant audit files and summarised in `17-GAP-ANALYSIS.md`. |
 
 ## 8. CI
 

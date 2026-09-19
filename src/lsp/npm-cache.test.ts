@@ -35,7 +35,7 @@ describe("lspNpmWhich", () => {
 });
 
 async function createFakePackageCache(pkg: string, binEntries: Record<string, string>): Promise<string> {
-  const cacheRoot = path.join(os.homedir(), ".grok", "cache", "lsp", pkg);
+  const cacheRoot = path.join(os.homedir(), ".shelra", "cache", "lsp", pkg);
   tempDirs.push(cacheRoot);
 
   const binDir = path.join(cacheRoot, "node_modules", ".bin");

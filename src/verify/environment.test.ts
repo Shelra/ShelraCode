@@ -20,7 +20,7 @@ afterEach(() => {
 
 describe("verify environment manifest", () => {
   it("loads a root environment.json manifest and normalizes sandbox settings", () => {
-    const dir = makeTempDir("grok-verify-env-");
+    const dir = makeTempDir("shelra-verify-env-");
     fs.writeFileSync(
       path.join(dir, "environment.json"),
       JSON.stringify(
@@ -55,8 +55,8 @@ describe("verify environment manifest", () => {
     expect(loaded?.sandboxSettings.allowNet).toBe(true);
   });
 
-  it("prefers .grok/environment.json over the root manifest", () => {
-    const dir = makeTempDir("grok-verify-env-precedence-");
+  it("prefers .shelra/environment.json over the root manifest", () => {
+    const dir = makeTempDir("shelra-verify-env-precedence-");
     fs.writeFileSync(
       path.join(dir, "environment.json"),
       JSON.stringify({
@@ -67,9 +67,9 @@ describe("verify environment manifest", () => {
         smokeKind: "none",
       }),
     );
-    fs.mkdirSync(path.join(dir, ".grok"));
+    fs.mkdirSync(path.join(dir, ".shelra"));
     fs.writeFileSync(
-      path.join(dir, ".grok", "environment.json"),
+      path.join(dir, ".shelra", "environment.json"),
       JSON.stringify({
         ecosystem: "node",
         appKind: "nextjs",
@@ -80,13 +80,13 @@ describe("verify environment manifest", () => {
     );
 
     const loaded = loadVerifyEnvironment(dir);
-    expect(loaded?.path).toBe(path.join(dir, ".grok", "environment.json"));
+    expect(loaded?.path).toBe(path.join(dir, ".shelra", "environment.json"));
     expect(loaded?.recipe.appKind).toBe("nextjs");
     expect(loaded?.recipe.installCommands).toEqual(["npm ci"]);
   });
 
-  it("writes a generated .grok/environment.json manifest", () => {
-    const dir = makeTempDir("grok-verify-env-write-");
+  it("writes a generated .shelra/environment.json manifest", () => {
+    const dir = makeTempDir("shelra-verify-env-write-");
     const written = saveVerifyEnvironment(
       dir,
       {
@@ -108,7 +108,7 @@ describe("verify environment manifest", () => {
       { verifyBaseFrom: "verify-node-web", ports: ["3000:3000"], allowEphemeralInstall: true },
     );
 
-    expect(written).toBe(path.join(dir, ".grok", "environment.json"));
+    expect(written).toBe(path.join(dir, ".shelra", "environment.json"));
     const loaded = loadVerifyEnvironment(dir);
     expect(loaded?.path).toBe(written);
     expect(loaded?.recipe.installCommands).toEqual(["npm ci"]);

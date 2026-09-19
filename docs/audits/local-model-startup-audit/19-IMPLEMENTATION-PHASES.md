@@ -523,7 +523,7 @@ and `bun run format` both exit 1, failing CI at
 * Delete the 4 dead helpers; run `biome check --fix` for the CRLF formatting.
 
 ### Existing code to retire later
-The `~/.grok` delegation write mirror (`src/agent/delegations.ts:238-241,267-276`).
+The legacy delegation write mirror (`src/agent/delegations.ts:238-241,267-276`; since removed).
 
 ### Missing capability
 A capability cache; a settings schema version; error surfacing.

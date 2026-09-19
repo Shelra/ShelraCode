@@ -88,11 +88,9 @@ through ordinary organisational practice, the thesis loses its "why now".
 All measured directly in the repository on 8 September 2026.
 
 - **11,577 lines across 72 untracked TypeScript files** — `autonomy`, `intelligence`, `exec`, `runtimes`,
-  `providers`, `router`, `security`, and every other module that differentiates Shelra from its upstream.
+  `providers`, `router`, `security`, and every other core module.
   `git stash` is empty; no branch holds this work.
 - **Last commit 2026-05-15. Zero commits in 90 days.**
-- `git remote origin` still points at `superagent-ai/grok-cli`; the README's CI badge points at the
-  upstream's workflow; `package.json` still lists `"author": "Vibe Kit"`.
 - **`npm view shelra` returns 404** while the README carries an npm version badge and instructs
   `bun add -g shelra`.
 - `src/wallet/manager.ts` writes a private key as **plaintext JSON**; grepping the whole tree for

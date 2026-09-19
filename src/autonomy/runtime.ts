@@ -43,7 +43,7 @@ export interface RunObjectiveOptions {
 /**
  * Indexes an objective's durable state into the shared SQLite store so it is queryable
  * across runs and sessions without loading its file journal — see
- * `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6. `--autonomous` runs are not
+ * `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6. `--autonomous` runs are not
  * currently associated with a chat session, so `sessionId` is honestly null here; this is
  * the same table `src/agent/agent.ts` writes chat-turn objectives into, which is what makes
  * the two kernels' state cross-referenceable.

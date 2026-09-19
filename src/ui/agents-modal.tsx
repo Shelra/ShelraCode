@@ -3,7 +3,7 @@ import { type RefObject, useEffect, useRef } from "react";
 import type { ModelInfo } from "../types/index";
 import type { CustomSubagentConfig } from "../utils/settings";
 import { formatSubagentName } from "../utils/subagent-display";
-import type { Theme } from "./theme";
+import { scrollbarStyle, type Theme } from "./theme";
 
 const EDITOR_KEYBINDINGS = [{ name: "return", action: "submit" as const }];
 
@@ -82,6 +82,7 @@ export function SubagentsBrowserModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -98,7 +99,7 @@ export function SubagentsBrowserModal({
             {searchQuery || <span style={{ fg: t.textMuted }}>{"Search by name, model..."}</span>}
           </text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
           {rows.map((row, idx) => {
             const selected = idx === selectedIndex;
 
@@ -194,6 +195,7 @@ export function SubagentEditorModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -205,7 +207,14 @@ export function SubagentEditorModal({
           </text>
           <text fg={t.textMuted}>{"esc back"}</text>
         </box>
-        <scrollbox flexGrow={1} minHeight={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
+        <scrollbox
+          scrollbarOptions={scrollbarStyle(t)}
+          flexGrow={1}
+          minHeight={0}
+          paddingLeft={2}
+          paddingRight={2}
+          paddingTop={1}
+        >
           <box paddingBottom={1}>
             <text fg={focusedField === "name" ? t.primary : t.textMuted}>{"Name (task tool agent value)"}</text>
             <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>

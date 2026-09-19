@@ -10,8 +10,8 @@ export interface LoadedVerifyEnvironment {
   sandboxSettings: SandboxSettings;
 }
 
-const VERIFY_ENVIRONMENT_FILES = [".grok/environment.json", "environment.json"];
-const GENERATED_VERIFY_ENVIRONMENT = ".grok/environment.json";
+const VERIFY_ENVIRONMENT_FILES = [".shelra/environment.json", "environment.json"];
+const GENERATED_VERIFY_ENVIRONMENT = ".shelra/environment.json";
 
 function readJson(filePath: string): VerifyEnvironmentManifest | null {
   try {

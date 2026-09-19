@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveTelegramAudioInputSettings } from "./settings";
 
 describe("resolveTelegramAudioInputSettings", () => {
-  it("returns Grok STT defaults when audio input is unset", () => {
+  it("returns speech-to-text defaults when audio input is unset", () => {
     expect(resolveTelegramAudioInputSettings(undefined)).toEqual({
       enabled: true,
       language: "en",

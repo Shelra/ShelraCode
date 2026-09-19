@@ -12,7 +12,7 @@ import type {
 } from "../providers/types";
 
 /**
- * Behavioral proof for `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6: a Stop hook
+ * Behavioral proof for `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §5-6: a Stop hook
  * that blocks must actually prevent the turn from being presented as finished, and the kernel's
  * resulting phase must be persisted (queryable) rather than silently discarded. Before this
  * change, `Stop`'s hook result was awaited and thrown away (`.catch(() => {})` on the promise,

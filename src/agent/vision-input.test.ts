@@ -8,7 +8,7 @@ describe("buildVisionUserMessages", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "grok-vision-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-vision-"));
   });
 
   afterEach(() => {

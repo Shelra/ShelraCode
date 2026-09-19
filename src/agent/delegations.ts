@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
-import { BACKGROUND_CHILD_ENV, CONFIG_DIR_NAME, getHomeDir, LEGACY_CONFIG_DIR_NAME } from "../product/identity";
+import { BACKGROUND_CHILD_ENV, CONFIG_DIR_NAME, getHomeDir } from "../product/identity";
 import type { DelegationRun, DelegationStatus, TaskRequest, ToolResult } from "../types/index";
 import type { SandboxMode, SandboxSettings } from "../utils/settings";
 
@@ -53,7 +53,7 @@ export class DelegationManager {
   ) {}
 
   async start(request: TaskRequest, options: StartDelegationOptions): Promise<ToolResult> {
-    if (process.env[BACKGROUND_CHILD_ENV] === "1" || process.env.GROK_BACKGROUND_CHILD === "1") {
+    if (process.env[BACKGROUND_CHILD_ENV] === "1") {
       return {
         success: false,
         output: "Nested background delegations are disabled.",
@@ -102,7 +102,7 @@ export class DelegationManager {
         cwd,
         detached: true,
         stdio: "ignore",
-        env: { ...process.env, [BACKGROUND_CHILD_ENV]: "1", GROK_BACKGROUND_CHILD: "1" },
+        env: { ...process.env, [BACKGROUND_CHILD_ENV]: "1" },
       },
     );
     child.unref();
@@ -221,32 +221,10 @@ export async function failDelegation(jobPath: string, error: string, output = ""
   await writeRecord(jobPath, record);
 }
 
-function legacyDelegationsRoot(): string {
-  return path.join(getHomeDir(), LEGACY_CONFIG_DIR_NAME, "delegations");
-}
-
-/**
- * The legacy mirror exists only for installations that already used the old
- * on-disk location. It is never created for a fresh install, so new users get
- * the canonical directory and nothing else.
- */
-async function legacyMirrorEnabled(): Promise<boolean> {
-  try {
-    return (await fs.stat(legacyDelegationsRoot())).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
 async function ensureDelegationsDir(cwd: string): Promise<string> {
   const projectId = getProjectId(cwd);
   const dir = path.join(getHomeDir(), CONFIG_DIR_NAME, "delegations", projectId);
   await fs.mkdir(dir, { recursive: true });
-  // Keep a short-lived mirror for consumers written against the old on-disk
-  // location. Reads remain canonical; this mirror can be removed in Phase 9.
-  if (await legacyMirrorEnabled()) {
-    await fs.mkdir(path.join(legacyDelegationsRoot(), projectId), { recursive: true });
-  }
   return dir;
 }
 
@@ -270,20 +248,7 @@ async function readRecord(filePath: string): Promise<StoredDelegation | null> {
 
 async function writeRecord(filePath: string, record: StoredDelegation): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const serialized = JSON.stringify(record, null, 2);
-  await fs.writeFile(filePath, serialized, "utf8");
-  // Compatibility mirror for the previous settings location. It is deliberately
-  // never read by the application, is only written for installations that
-  // already have the legacy directory, and can be removed with the legacy bridge.
-  if (!(await legacyMirrorEnabled())) return;
-  const canonicalRoot = path.join(getHomeDir(), CONFIG_DIR_NAME);
-  const legacyRoot = path.join(getHomeDir(), LEGACY_CONFIG_DIR_NAME);
-  const canonicalPrefix = `${canonicalRoot}${path.sep}`;
-  if (filePath.startsWith(canonicalPrefix)) {
-    const legacyPath = path.join(legacyRoot, filePath.slice(canonicalPrefix.length));
-    await fs.mkdir(path.dirname(legacyPath), { recursive: true });
-    await fs.writeFile(legacyPath, serialized, "utf8");
-  }
+  await fs.writeFile(filePath, JSON.stringify(record, null, 2), "utf8");
 }
 
 async function generateUniqueId(dir: string): Promise<string> {

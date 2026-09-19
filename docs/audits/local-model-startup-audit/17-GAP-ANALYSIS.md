@@ -184,15 +184,15 @@ The in-chat picker path (`src/index.ts:168-190`) is correct — it skips
 
 | Claim | Source | Reality |
 | --- | --- | --- |
-| "scores the catalog using GPU/VRAM first, **then RAM/CPU/storage and context headroom**" | `docs/migration/11-STARTUP-ONBOARDING.md:16-19` | **False.** The RAM branch is unreachable (`recommendation.ts:34-44`); CPU and storage are never inputs |
-| "a startup lock that prevents parallel discovery calls from spawning duplicate servers" | `docs/migration/11:28-30` | **True per adapter instance only.** Each `discoverLocalRuntimes` builds a new instance (`discovery.ts:78`), so re-discovery still leaks (`src/index.ts:373`) |
-| "A missing, moved, corrupt or incompatible saved artifact triggers rediscovery **and recovery**" | `docs/migration/11:42-43` | **Half true.** Rediscovery yes; "recovery" is a silent substitution with no message and no repair |
-| "A memory/load failure can move to a smaller ranked candidate" | `docs/migration/11:43-44` | **Only if a smaller model is already installed**, and a real OOM crashes before the fallback is reached |
-| "`--remote` … is not contacted by normal local-first startup" | `docs/migration/11:45-46` | True — but the converse fails: `--remote` **does** run local discovery it never uses (`src/index.ts:459-482`) |
+| "scores the catalog using GPU/VRAM first, **then RAM/CPU/storage and context headroom**" | `docs/architecture/11-STARTUP-ONBOARDING.md:16-19` | **False.** The RAM branch is unreachable (`recommendation.ts:34-44`); CPU and storage are never inputs |
+| "a startup lock that prevents parallel discovery calls from spawning duplicate servers" | `docs/architecture/11:28-30` | **True per adapter instance only.** Each `discoverLocalRuntimes` builds a new instance (`discovery.ts:78`), so re-discovery still leaks (`src/index.ts:373`) |
+| "A missing, moved, corrupt or incompatible saved artifact triggers rediscovery **and recovery**" | `docs/architecture/11:42-43` | **Half true.** Rediscovery yes; "recovery" is a silent substitution with no message and no repair |
+| "A memory/load failure can move to a smaller ranked candidate" | `docs/architecture/11:43-44` | **Only if a smaller model is already installed**, and a real OOM crashes before the fallback is reached |
+| "`--remote` … is not contacted by normal local-first startup" | `docs/architecture/11:45-46` | True — but the converse fails: `--remote` **does** run local discovery it never uses (`src/index.ts:459-482`) |
 | "Discovers local models, scores them against your hardware, and keeps inference on the machine by default" | `README.md:190` | True, except "scores against your hardware" excludes the GPU on non-NVIDIA machines and never affects execution |
-| lint "reports 157 errors and 12 warnings" | `docs/migration/10:...` | **158 errors / 12 warnings** measured; `bun run format` also fails (not mentioned) |
-| "66 test files / 268 tests" | `docs/migration/10:...` | **66 files / 273 tests** measured |
-| "Grok CLI … `GROK_API_KEY` … broken ESLint config … `src/utils/model-config.ts`" | `AGENTS.md` | **Entirely stale** — Biome, `SHELRA_API_KEY`, and neither named file exists |
+| lint "reports 157 errors and 12 warnings" | `docs/architecture/10:...` | **158 errors / 12 warnings** measured; `bun run format` also fails (not mentioned) |
+| "66 test files / 268 tests" | `docs/architecture/10:...` | **66 files / 273 tests** measured |
+| "… broken ESLint config … `src/utils/model-config.ts`" | `AGENTS.md` | **Entirely stale** — the repo uses Biome and the named file does not exist |
 
 ## 4. Security & privacy — what actually leaves the machine
 
@@ -205,7 +205,7 @@ citations, not the product's claims.
 | --- | --- | --- | --- |
 | `https://huggingface.co/<repo>/resolve/<rev>/<file>?download=true` | Only when the user presses `[Enter] Install recommended` and a model download begins | A plain `GET`, plus `Range: bytes=N-` when resuming. **No auth header, no telemetry, no query parameters beyond `?download=true`.** | `src/models/huggingface.ts:79-83,133-137` |
 | `https://github.com/ggml-org/llama.cpp/releases/download/b10826/<asset>` | Only when the engine is being installed | A plain `GET` (+ `Range` on resume) | `src/runtimes/bootstrap.ts:65,76,86,123` |
-| `https://api.github.com/repos/superagent-ai/grok-cli/releases/latest` | **On every chat mount**, automatically | A plain `GET` with a 5 s timeout | `src/utils/install-manager.ts:11-14,168-171`; `src/utils/update-checker.ts:16-29`; invoked from `src/ui/app.tsx:1863-1873` |
+| `https://api.github.com/repos/yosoyjavieruiz/ShelraCode/releases/latest` | **On every chat mount**, automatically | A plain `GET` with a 5 s timeout | `src/utils/install-manager.ts:11-14,168-171`; `src/utils/update-checker.ts:16-29`; invoked from `src/ui/app.tsx:1863-1873` |
 | `http://127.0.0.1:<ephemeral>/health` and `/v1/*` | Continuously during startup and chat | Prompts and model output | `src/runtimes/managed-llama.ts:114`; `src/runtimes/local-provider.ts:52-58` — **loopback only** |
 | `{SHELRA_LOCAL_ENDPOINT}` / `{OPENAI_BASE_URL}` `/models` | Only when that env var is set | A plain `GET` | `src/runtimes/discovery.ts:15,23,39,82-83` |
 
@@ -232,7 +232,7 @@ a real, enforced boundary.
 or any other local service; the only non-managed endpoint is opt-in via
 `SHELRA_LOCAL_ENDPOINT`/`OPENAI_BASE_URL` (`src/runtimes/discovery.ts:82-83`).
 
-**FACT — three things nevertheless deserve attention:**
+**FACT — two things nevertheless deserve attention:**
 
 1. **An unannounced GitHub call on every chat mount.** `checkForUpdate` runs
    automatically in a `useEffect` (`src/ui/app.tsx:1863-1873`) with no opt-out
@@ -241,12 +241,9 @@ or any other local service; the only non-managed endpoint is opt-in via
    remote provider is required"* and *"PRIVATE BY DEFAULT"*
    (`src/ui/startup.tsx:158,245`). GitHub sees the client's IP and User-Agent on
    every launch. No user data is sent, but the call is undisclosed.
-2. **The update check still points at the old repository** —
-   `superagent-ai/grok-cli` (`src/utils/install-manager.ts:11`), with
-   `SHELRA_RELEASE_REPO` defined as an alias for it (`:13`).
-3. **The full parent environment is handed to `llama-server`.**
+2. **The full parent environment is handed to `llama-server`.**
    `src/runtimes/managed-llama.ts:153-155` forwards every defined `process.env`
-   entry to the child, including `SHELRA_API_KEY`/`GROK_API_KEY` and any other
+   entry to the child, including `SHELRA_API_KEY` and any other
    secrets in the shell. A local third-party binary receives credentials it has
    no use for. Low severity (the binary is hash-pinned) but unnecessary.
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const RELEASE_URL = "https://api.github.com/repos/superagent-ai/grok-cli/releases/latest";
+const RELEASE_URL = "https://api.github.com/repos/yosoyjavieruiz/ShelraCode/releases/latest";
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
@@ -153,7 +153,7 @@ describe("runUpdate", () => {
       const actual = await vi.importActual<typeof import("./install-manager")>("./install-manager");
       return {
         ...actual,
-        runScriptManagedUpdate: vi.fn().mockResolvedValue({ success: true, output: "Updated to Grok 2.0.0." }),
+        runScriptManagedUpdate: vi.fn().mockResolvedValue({ success: true, output: "Updated to ShelraCode 2.0.0." }),
       };
     });
 

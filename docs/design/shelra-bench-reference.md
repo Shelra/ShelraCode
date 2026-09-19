@@ -515,8 +515,9 @@ Current surfaces:
 7. live/progress state when a persisted run is active.
 
 The visual system reuses `src/ui/theme.ts` and the existing modal grammar.
-Shelra Aurora is restrained: emerald/cyan/violet accents identify current or
-active context, while tables and charts use solid semantic colors.
+Shelra draws no gradients, glows or fades; every colour is flat. The dark palette is background `#080808`, surfaces `#111111` / `#1A1A1A`, text `#F0F0F0` / `#888888`, a single accent `#00FF88` (pressed `#00CF6E`), amber `#FFB84D` for warnings and Plan mode, red `#FF5C6C`, blue `#5CB8FF`, and hairline borders `#222222`.
+The accent identifies current or active context, while tables and charts use
+solid semantic colors.
 
 Dark and light themes preserve the same semantics. Scores always include their
 number. Status includes text or a glyph. Improvements and regressions include

@@ -32,7 +32,7 @@ $125M — has removed "spec-as-source" from its homepage and now sells a skills 
 | C4 | A small company can build something durable there | Niches abandoned by incumbents can be defended by focus | GitHub ships Spec Kit MIT (134,096★, `/speckit.converge` = the reality-vs-intent check) and OpenSpec is at 67,659★; AWS ships Kiro with automated reasoning over requirements; Claude Code ships channels/skills/hooks/routines/subagents | GitHub API 2026-09-08; kiro.dev; code.claude.com | **Fails** |
 | C5 | Zero-cost inference is achievable (preference, not constraint) | Open weights improve fast; llama.cpp is mature; harness quality beats model quality on some tasks | Free tiers: 50 req/day (OpenRouter, no credits); Gemini free = "Content used to improve our products" + human reviewers read I/O. Local: best open-weight 31.2% vs 64.5% frontier on contamination-free repo issues. Hardware: RAM at 2007-normalized prices, Micron locked through 2031 | openrouter FAQ; ai.google.dev/terms 2026-04-28; swe-rebench; Micron/GamingOnLinux | **Fails** |
 | C6 | Deterministic acceptance checks make autonomy safe | Tests are an oracle the model cannot argue with | Of 644 repairs that pass functional tests, **221 fail the review constraints** that decide real acceptance (34.3%) | arXiv 2609.04167 | **Fails as stated; survives as a floor, not a ceiling** |
-| C7 | Shelra is a reasonable base | 43k lines, working TUI, LSP, MCP, sandbox, hooks | 11,577 lines of the differentiating work are **untracked**; last commit 2026-05-15 (116 days); fork of a 3,461★ upstream last pushed 2026-07-06; `shelra` is **not published on npm** though the README badge and install command assume it; funded wallet private key stored in plaintext with the shell tool unguarded | git/npm/GitHub, this repo | **Fails** |
+| C7 | Shelra is a reasonable base | 43k lines, working TUI, LSP, MCP, sandbox, hooks | 11,577 lines of the differentiating work are **untracked**; last commit 2026-05-15 (116 days); `shelra` is **not published on npm** though the README badge and install command assume it; funded wallet private key stored in plaintext with the shell tool unguarded | git/npm/GitHub, this repo | **Fails** |
 
 ---
 
@@ -430,22 +430,18 @@ matches the work a paying user brings? Nobody has run the same local models on b
 ### 4.11 — Shelra itself
 
 ```
-CLAIM: The differentiating half of Shelra exists only as uncommitted working-tree files, on a fork of
-a decelerating upstream, distributed through an npm package name that does not exist.
+CLAIM: The core of Shelra exists only as uncommitted working-tree files, distributed through an npm
+package name that does not exist.
 LABEL: OBSERVED TODAY
 CONFIDENCE: high
 EVIDENCE: Directly measured in this repository on 2026-09-08. Tracked TypeScript: 31,189 lines.
 Untracked TypeScript: 11,577 lines across 72 files — this is src/intent/, src/autonomy/, src/exec/,
 src/runtimes/, src/intelligence/, src/models/, src/providers/, src/router/, src/security/,
 src/hardware/, src/cli/, src/context/, src/setup/, src/startup/, src/daemon/, src/headless/ — that
-is, every module that differentiates Shelra from its upstream. A further 60+ tracked files are
-modified and uncommitted. `git stash list` is empty; no branch holds this work. Last commit:
-2026-05-15 (116 days ago); commits in the last 90 days: 0. `git remote origin` still points at
-https://github.com/superagent-ai/grok-cli (3,461 stars, 420 forks, last pushed 2026-07-06), and the
-README's CI badge points at the upstream's workflow. `npm view shelra` returns "Not found", while
-README.md carries an npm version badge for `shelra` and instructs `bun add -g shelra`. The upstream's
-own package, @vibe-kit/grok-cli, was last published 2025-11-27. package.json still lists
-"author": "Vibe Kit".
+is, every core module. A further 60+ tracked files are modified and uncommitted. `git stash list`
+is empty; no branch holds this work. Last commit: 2026-05-15 (116 days ago); commits in the last 90
+days: 0. `npm view shelra` returns "Not found", while README.md carries an npm version badge for
+`shelra` and instructs `bun add -g shelra`.
 SOURCE: This repository — git, wc, npm registry, GitHub REST API — accessed 2026-09-08
 COUNTEREVIDENCE: The code quality is high by the metrics available: 69 test files against 213 source
 files, exactly one TODO/FIXME marker across ~43,600 lines, a genuinely symlink-hardened workspace

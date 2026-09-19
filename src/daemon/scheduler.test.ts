@@ -58,7 +58,7 @@ describe("SchedulerDaemon", () => {
         name: "Daily Security Scan",
         instruction: "Scan the repo.",
         cron: "0 9 * * 1-5",
-        model: "grok-test-model",
+        model: "test-model",
         directory: "/repo",
         enabled: true,
         maxToolRounds: 400,
@@ -81,7 +81,7 @@ describe("SchedulerDaemon", () => {
     expect(startDetachedHeadlessRun).toHaveBeenCalledWith({
       instruction: "Scan the repo.",
       directory: "/repo",
-      model: "grok-test-model",
+      model: "test-model",
       maxToolRounds: 400,
       logPath: "/tmp/daily-security-scan.log",
     });
@@ -101,7 +101,7 @@ describe("SchedulerDaemon", () => {
         name: "Daily Security Scan",
         instruction: "Scan the repo.",
         cron: "* * * * *",
-        model: "grok-test-model",
+        model: "test-model",
         directory: "/repo",
         enabled: true,
         maxToolRounds: 400,

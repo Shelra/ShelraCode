@@ -65,7 +65,7 @@ whose tests depend on an undocumented codegen step; phase B (two arms, both copi
 finished workspace) changes the schema and must regenerate — once with the memory phase A wrote,
 once with `.shelra/memory` and `.agents/skills` wiped. The oracle verifies a hash of the schema inside
 the generated module, so only real regeneration passes. Results are recorded per run in
-`benchmark_runs`; see `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md` §24 for the table.
+`benchmark_runs`; see `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §24 for the table.
 
 First valid sample (run #14, 2026-09-17, qwen3-coder-30b): phase A learned the procedure
 (`schema-generation-workflow`); phase B with memory retrieved all three entries and passed the

@@ -4,7 +4,7 @@ Internal repo audit, not external research. SOURCE fields below are `file:line` 
 `D:\PROYECTS\shelra` as of 2026-09-15, HEAD `af7e7bd` plus the uncommitted working tree (`git status`
 snapshot reproduced at the end of this file). Every subsystem was read directly and cross-checked with
 `grep`-verified import/call sites — no claim here is taken from README/doc/comment text without an
-independent code check. Where `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md` ("doc 14") is cited,
+independent code check. Where `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` ("doc 14") is cited,
 it is cited as a *hypothesis to verify*, and the verification result is stated explicitly.
 
 ## 1. Summary
@@ -47,11 +47,11 @@ just a pure-function unit test).
 | `AutonomyKernel` / `Objective` ledger | Yes `src/autonomy/kernel.ts`, `types.ts:183` (`Objective`), `:25` (`StopReason`), `:40` (`CheckSpec`), `:89` (`modelJudged`) | Yes, `src/autonomy/runtime.ts` | Yes, `runObjective()` | **No** — only `--autonomous` CLI / `shelra objectives` / (new) `shelra bench` | Yes, `objectives`/`objective_tasks` tables + file journal (`src/autonomy/journal.ts`) | Yes, `upsertObjectiveIndex` | Yes, within its own path | Yes, `kernel.test.ts`(agent)/`kernel-events.test.ts`(autonomy) | Partial — no test drives it through a real CLI invocation end-to-end |
 | Hooks (`Stop`/`PreToolUse`) | Yes `src/hooks/executor.ts` | Yes, `agent.ts` | Yes, chat path only | Yes for chat | N/A (transient) | N/A | Yes — exit-2/JSON block (`executor.ts:6` `BLOCKING_EXIT_CODE=2`, `:186-191` decision aggregation) | Yes | Partial |
 | Hooks from `AutonomyKernel` | **No** — `grep "fireHook\|executeEventHooks\|executePreToolHooks\|hooks/" src/autonomy/kernel.ts` returns zero matches (verified this session) | — | — | — | — | — | **No** — the weaker path stays invisible to any hook-based policy tooling | No | No |
-| Checkpoints (chat mode) | Yes `src/tools/file.ts:47 snapshotForCheckpoint` | Yes, `grok/tools.ts` | Yes, on `write_file`/`edit_file`/`delete_file` | Yes | Yes, `checkpoints` table (`migrations.ts:181-197`) | Yes, `revertLatestCheckpoint` | Yes, `/revert` | Yes | Partial |
+| Checkpoints (chat mode) | Yes `src/tools/file.ts:47 snapshotForCheckpoint` | Yes, `toolset/tools.ts` | Yes, on `write_file`/`edit_file`/`delete_file` | Yes | Yes, `checkpoints` table (`migrations.ts:181-197`) | Yes, `revertLatestCheckpoint` | Yes, `/revert` | Yes | Partial |
 | Checkpoints (autonomy mode) | **No** — `grep "checkpointBeforeMutation\|recordCheckpoint\|onCheckpoint" src/exec/files.ts` returns zero matches (verified this session) | — | — | — | — | — | No | No | No |
 | Plan/criteria cross-restart recovery | Yes `src/plans/state.ts` (new, untracked), `resolvePlanResults`/`resolvePlanState` | Yes, `src/storage/transcript.ts:287 loadPersistedPlanState` | Yes, `agent.ts:896 restorePersistedPlanState()` in constructor, `:1079` definition | **Yes** — runs on every `Agent` construction when `persistSession !== false` | Yes, replayed from `tool_results`/`tool_calls` (immutable history, independent of the compacted view) | Yes | Yes — `activeAcceptanceCriteria`/`activePlanSteps` seed the completion gate before any turn runs | Yes, `src/storage/plan-state.test.ts` (untracked) | **Yes** — genuinely appends messages + a compaction row to a real SQLite DB, closes it, reopens it, and asserts step status/evidence survive both compaction and the close/reopen cycle |
 | Compaction survival of structured plan data | Yes `src/agent/compaction.ts:243 appendActiveCriteriaBlock` | Yes, `Agent.compactOnce()` | Yes | Yes | Yes, appended verbatim into the persisted summary text | Yes | Partial — only acceptance criteria, not full per-step status, survive as *structured* fields; the rest is prose | Yes, `compaction-plan-survival.test.ts` | Yes, forces a real compaction through a live turn loop with a tiny context window |
-| Project/agent memory (`src/memory/`) | Yes `src/memory/store.ts`, `types.ts` | Yes, `agent.ts`, `grok/tools.ts` (8 files import memory functions, verified this session) | Yes, `memory_write`/`memory_read`/`memory_list`/`memory_delete` tools + automatic index injection | **Partial** — auto-injected only for coding-classified turns (`agent.ts:460,485 formatMemoryIndexPromptSection`); purely conversational turns use `buildConversationSystemPrompt` (`agent.ts:492`) which omits it entirely | Yes, flat files under `.shelra/memory/` | Yes | Yes | Yes, `store.test.ts`, `memory-context.test.ts` | Partial |
+| Project/agent memory (`src/memory/`) | Yes `src/memory/store.ts`, `types.ts` | Yes, `agent.ts`, `toolset/tools.ts` (8 files import memory functions, verified this session) | Yes, `memory_write`/`memory_read`/`memory_list`/`memory_delete` tools + automatic index injection | **Partial** — auto-injected only for coding-classified turns (`agent.ts:460,485 formatMemoryIndexPromptSection`); purely conversational turns use `buildConversationSystemPrompt` (`agent.ts:492`) which omits it entirely | Yes, flat files under `.shelra/memory/` | Yes | Yes | Yes, `store.test.ts`, `memory-context.test.ts` | Partial |
 | Memory write cap / anti-corruption | Yes, `store.ts:26-27 MEMORY_INDEX_MAX_BYTES=25*1024, MEMORY_INDEX_MAX_LINES=200`, `:183-190` refuses over-cap writes rather than truncating | Yes | Yes | Yes | Yes | Yes | Yes (refuses instead of corrupting) | Yes | Yes |
 | `src/intent/*` (pre-empted experiment) | Yes, 5 files, `arms.ts`, `corpus.ts`, `experiment.ts`, `probes.ts`, `scoring.ts`, ~92KB total | **No** — `grep "from \"../intent/\|from \"./intent/\|src/intent\"" src/` returns zero matches anywhere outside the directory itself | No | No | No | No | **No** | Only its own files | No |
 | Shelra Bench (`src/bench/`, `bench/`, `scripts/bench-dashboard.ts`) | Yes, untracked, ~8 files + design docs | Yes, `src/index.ts:17-21,62`, `src/ui/app.tsx:89` | Yes, real `shelra bench` CLI command (`index.ts:1439-1441`), `/bench` UI modal (`slash-menu.ts:14`, `app.tsx:2862`) | **No** — opt-in command, not the default chat path | Yes, new `benchmark_*` tables (`migrations.ts:211-389`, uncommitted, `LATEST_DB_VERSION` 4→8) | Yes, `src/storage/benchmarks.ts` accessors + UI modal | Yes, for benchmark runs only | Yes, `manifest.test.ts`, `runner.test.ts` | Partial |
@@ -70,7 +70,7 @@ tree** (committed + uncommitted); where the two differ materially, both are stat
 | Row | Shelra Today | Evidence | Maturity | Missing | Priority |
 |---|---|---|---|---|---|
 | Intent persistence | Partial | `src/autonomy/types.ts:183` (`Objective.request`, verbatim original request) is autonomy-only; chat path has `activeAcceptanceCriteria` (`src/agent/agent.ts:896,1079`) session-scoped and now restart-durable via `src/plans/state.ts` + `src/storage/transcript.ts:287` (uncommitted) | Working prototype | No single intent record shared by both execution paths; no versioning (v1→v2 intent drift) | High |
-| Specifications | Partial | `src/autonomy/types.ts:40` `CheckSpec` union (deterministic, `modelJudged:true` escape hatch); chat path's `generate_plan.acceptanceCriteria` (`src/grok/tools.ts`, schema `.min(1)`) | Working prototype, two vocabularies | No shared spec type between `Objective.acceptance` and `Plan.acceptanceCriteria`; bench adds a third (`src/bench/types.ts:133-139 BenchmarkAcceptanceCriterion`) | Medium |
+| Specifications | Partial | `src/autonomy/types.ts:40` `CheckSpec` union (deterministic, `modelJudged:true` escape hatch); chat path's `generate_plan.acceptanceCriteria` (`src/toolset/tools.ts`, schema `.min(1)`) | Working prototype, two vocabularies | No shared spec type between `Objective.acceptance` and `Plan.acceptanceCriteria`; bench adds a third (`src/bench/types.ts:133-139 BenchmarkAcceptanceCriterion`) | Medium |
 | Task ledger | Partial | `objectives`/`objective_tasks` tables, `src/storage/migrations.ts:151-179` (committed, HEAD) | Working prototype | `objective_tasks` FK'd only to autonomy objectives, not to chat-mode plan steps (`activePlanSteps` has no SQL table of its own — recovered by replaying `tool_results`, not stored as rows) | Medium |
 | Verification | Partial-to-yes on chat path | `src/agent/agent.ts:3109 describeVerificationEvidence`, `:2670-2680` gate, `:155 MAX_VERIFICATION_RETRIES=3` | Production-tested on chat path (`completion-gate.test.ts`) | Per-criterion causal linkage stays "turn co-occurrence," not proof (doc 14 §18, independently plausible given the design — not re-verified line-by-line this pass); autonomy path verification (`src/autonomy/acceptance.ts`) is a parallel, unconnected implementation | Medium |
 | Repair loops | Partial | `src/autonomy/types.ts` has a `repairs[]` field on `Objective`; `src/bench/types.ts:39 BENCHMARK_FAILURE_TYPES` includes `repair_failure`; `BenchmarkBehavior.repairsAttempted/repairsSucceeded` (`src/bench/types.ts:110-111`) | Instrumented for measurement, not for chat-mode | Chat path (`agent.ts`) has no first-class "repair" concept — a failed verification triggers a *nudge*, not a tracked repair record | Medium |
@@ -96,7 +96,7 @@ tree** (committed + uncommitted); where the two differ materially, both are stat
    `autonomy` import in `agent.ts`'s kernel usage). The new, uncommitted `src/bench/shelra-executor.ts:1,38`
    wires the benchmark harness to `runObjective()` — i.e., to the weaker of the two paths, the one
    without hooks (§2, row 4) or checkpoints (§2, row 6). Any benchmark score this harness produces will
-   not reflect the hardening documented at length in `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md`
+   not reflect the hardening documented at length in `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md`
    §8-22, because that hardening lives entirely in the path Bench does not execute.
 
 2. **`src/intent/{arms,corpus,experiment,probes,scoring}.ts` is confirmed dead code.**
@@ -128,19 +128,17 @@ tree** (committed + uncommitted); where the two differ materially, both are stat
    it from dead to precedence-ordered; not re-verified independently this pass, flagged as a doc claim
    worth a follow-up spot-check rather than repeated as fact.
 
-6. **Compatibility/legacy surface still present**: `GROK_*` env var fallback (`AGENTS.md:66`,
-   `.env.example` diff) for the pre-rebrand name, and `src/grok/` as a directory name for what is now
-   the live tool-execution path (`src/grok/tools.ts` is not legacy — it is the actual production tool
-   set; the directory name itself is inherited from the original fork and is the kind of naming debt
-   that makes "is this dead" audits harder than necessary, exactly the ambiguity doc 14 had to resolve
-   by hand for `src/grok/client.ts`, which *was* dead and was removed).
+6. **Compatibility/legacy surface**: the pre-rebrand environment-variable fallback and the old
+   tool-directory name have since been removed. The live tool-execution path is `src/toolset/tools.ts`,
+   which is the actual production tool set (doc 14 had to resolve by hand whether the adjacent xAI-only
+   client was dead; it *was* dead and was removed).
 
 ## 5. Contradictions between docs/comments and actual behavior
 
 **5.1 — The benchmark harness does not measure the thing the harness-reconstruction doc spent 20
 sections hardening.**
 CLAIM: Shelra Bench (`src/bench/`, uncommitted) evaluates the un-hardened `--autonomous`/`AutonomyKernel`
-execution path, not the interactive-chat path that `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md`
+execution path, not the interactive-chat path that `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md`
 documents receiving a completion gate, checkpoints, memory-tool wiring, cross-turn/cross-restart plan
 persistence, and reasoning-effort control.
 LABEL: OBSERVED TODAY
@@ -155,7 +153,7 @@ contradiction is that the *new* benchmark work, built in the same working tree, 
 that flagged-as-weaker path rather than the hardened one, without stating this tradeoff anywhere in
 `docs/design/shelra-bench-architecture.md` (read in full — it discusses SQLite reuse and scoring
 philosophy at length but never mentions which execution kernel it drives).
-SOURCE: src/bench/shelra-executor.ts:1,38-46; src/autonomy/kernel.ts (grep, no hook calls); src/exec/files.ts (grep, no checkpoint calls); docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md (Known limitations section)
+SOURCE: src/bench/shelra-executor.ts:1,38-46; src/autonomy/kernel.ts (grep, no hook calls); src/exec/files.ts (grep, no checkpoint calls); docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md (Known limitations section)
 COUNTEREVIDENCE: none found — this was checked directly, not inferred from a doc claim.
 OPEN QUESTION: is this an intentional near-term scoping decision (bench the simpler path first) or an
 oversight? Nothing in `docs/design/shelra-bench-*.md` states it either way.
@@ -198,7 +196,7 @@ document's own earlier phase and later self-corrected in §9.5's prose — this 
 contradiction, but it is exactly the kind of doc content the ground rules warn against trusting at face
 value without independent verification, since §2.2 alone (if read out of context, e.g. by a future
 contributor skimming just that section) would misstate current behavior.
-SOURCE: src/agent/agent.ts:1036; src/ui/app.tsx:671,1667; src/agent/observer.test.ts:90; docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md §2.2 vs §9.5
+SOURCE: src/agent/agent.ts:1036; src/ui/app.tsx:671,1667; src/agent/observer.test.ts:90; docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §2.2 vs §9.5
 COUNTEREVIDENCE: doc 14 does self-correct later in the same file, so this is a mild internal-consistency
 issue rather than a live misrepresentation.
 OPEN QUESTION: none — resolved by reading further in the same document, flagged here only because the
@@ -235,7 +233,7 @@ ground rules require checking doc claims against code rather than assuming the f
 
 ```
 Committed HEAD: af7e7bd (branch main)
-Modified (uncommitted): .env.example, README.md, docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md,
+Modified (uncommitted): .env.example, README.md, docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md,
   package.json, src/agent/agent.ts, src/agent/compaction.ts, src/agent/{cross-turn-criteria,observer}.test.ts,
   src/autonomy/{acceptance,kernel,runtime}.ts + acceptance.test.ts + kernel-events.test.ts, src/index.ts,
   src/intelligence/{openrouter,types}.ts + openrouter.test.ts, src/mcp/runtime.ts,

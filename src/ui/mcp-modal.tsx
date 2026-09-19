@@ -4,7 +4,7 @@ import type { McpCatalogEntry } from "../mcp/catalog";
 import { toMcpServerId } from "../mcp/validate";
 import type { McpServerConfig } from "../utils/settings";
 import type { McpBrowserRow, McpEditorDraft, McpEditorField } from "./mcp-modal-types";
-import type { Theme } from "./theme";
+import { scrollbarStyle, type Theme } from "./theme";
 
 const EDITOR_KEYBINDINGS = [{ name: "return", action: "submit" as const }];
 
@@ -105,6 +105,7 @@ export function McpBrowserModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -119,7 +120,7 @@ export function McpBrowserModal({
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
           <text fg={t.text}>{searchQuery || <span style={{ fg: t.textMuted }}>{"Search servers..."}</span>}</text>
         </box>
-        <scrollbox ref={listRef} flexGrow={1} minHeight={0}>
+        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
           {rows.map((row, idx) => {
             const selected = idx === selectedIndex;
 
@@ -271,6 +272,7 @@ export function McpEditorModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
+        borderStyle="rounded"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -301,7 +303,14 @@ export function McpEditorModal({
             })}
           </box>
         </box>
-        <scrollbox flexGrow={1} minHeight={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
+        <scrollbox
+          scrollbarOptions={scrollbarStyle(t)}
+          flexGrow={1}
+          minHeight={0}
+          paddingLeft={2}
+          paddingRight={2}
+          paddingTop={1}
+        >
           <box paddingBottom={1}>
             <text fg={focusedField === "label" ? t.primary : t.textMuted}>{"Label"}</text>
             <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>

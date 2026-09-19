@@ -6,7 +6,7 @@ import type { VerifyRecipe } from "../types/index";
 import type { SandboxSettings } from "../utils/settings";
 import type { VerifyProjectProfile } from "./recipes";
 
-const DEFAULT_VERIFY_GUEST_WORKDIR = "/grok/verify/worktree";
+const DEFAULT_VERIFY_GUEST_WORKDIR = "/shelra/verify/worktree";
 
 function execFileAsync(command: string, args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {

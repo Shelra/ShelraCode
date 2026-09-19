@@ -68,7 +68,7 @@ lane 11) — the first useful result is simply *the number*, not beating a prior
 ## 3. Kernel parity (ShelraCode-specific, cheapest to build, most urgent)
 
 **Gap closed:** the forensic audit's contradiction 5.1 — Shelra Bench currently measures `AutonomyKernel`
-(no hooks, no checkpoints) while the hardening documented in `docs/migration/14-AGENT-HARNESS-RECONSTRUCTION.md`
+(no hooks, no checkpoints) while the hardening documented in `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md`
 lives entirely in `AgentKernel` (the chat path). Nobody has quantified the actual completion-quality delta
 between the two kernels — the forensic audit found the *structural* gap (hooks/checkpoints absent) but not
 its *behavioral* consequence.
