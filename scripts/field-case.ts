@@ -114,15 +114,20 @@ function boardCommand(write: boolean): void {
   }
 }
 
+/** The harness commit, marked `-dirty` when tracked files have changes it does not hold. */
 function currentCommit(): string | undefined {
   const result = spawnSync("git", ["-C", root, "rev-parse", "--short", "HEAD"], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : undefined;
+  if (result.status !== 0) return undefined;
+  const changes = spawnSync("git", ["-C", root, "status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" });
+  return `${result.stdout.trim()}${changes.stdout.trim() ? "-dirty" : ""}`;
 }
 
 function rerunCommand(caseId: string, model: string | undefined): void {
   const item = loadCases().find((candidate) => candidate.id === caseId || candidate.id.startsWith(`${caseId}-`));
   if (!item) throw new Error(`No field case ${caseId} in bench/field/cases.`);
   const chosen = model ?? item.shelra.model;
+  // Taken before the run: a commit made while it runs is not the harness it used.
+  const commit = currentCommit();
   // Never the user's own folders: the prompt runs in a fresh temporary folder.
   const workspace = mkdtempSync(join(tmpdir(), `shelra-field-${item.id}-`));
   if (item.workspace?.repository === "self") {
@@ -151,7 +156,7 @@ function rerunCommand(caseId: string, model: string | undefined): void {
   const turn = sessionId ? sessionMetrics(sessionId).turns[0] : undefined;
   const run: FieldRun = {
     date: localDateStamp(),
-    commit: currentCommit(),
+    commit,
     model: chosen,
     cost: chosen.endsWith(":free") || chosen === "openrouter/free" ? "free" : chosen.includes("/") ? "paid" : "local",
     session: sessionId,
