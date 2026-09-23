@@ -11,7 +11,7 @@ export type ColorMode = "truecolor" | "256";
 export const PALETTE = {
   /** App background, every full-screen surface. */
   base: { hex: "#080808", ansi256: 232 },
-  /** Panels, cards, inputs. */
+  /** Filled cards: code blocks, inputs inside a panel. A bordered panel has no fill. */
   surface: { hex: "#111111", ansi256: 233 },
   /** Hairlines, dividers, the empty part of a progress bar. */
   border: { hex: "#1A1A1A", ansi256: 234 },
@@ -25,7 +25,7 @@ export const PALETTE = {
   hover: { hex: "#00CF6E", ansi256: 41 },
   /** Text on an accent surface. */
   onLight: { hex: "#080808", ansi256: 232 },
-  /** Accent at 16% on base: the cursor row, badge fills. */
+  /** Accent at 16% on base: the cursor row in lists. */
   accent16: { hex: "#073020", ansi256: 234 },
   /** Accent at 40% on base: the border of the focused panel. */
   accent40: { hex: "#056B3B", ansi256: 22 },
@@ -82,7 +82,7 @@ export function colorModeFrom(environment: Record<string, string | undefined>): 
  */
 export interface Theme {
   background: string;
-  /** Standard application surface: composer, pickers, panels. */
+  /** Filled cards: code blocks, inputs inside a panel. A bordered panel has no fill. */
   surface: string;
   /** Hover on base. */
   surfaceRaised: string;

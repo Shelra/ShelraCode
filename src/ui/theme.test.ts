@@ -60,13 +60,15 @@ describe("Shelra palette", () => {
     }
   });
 
-  it("keeps text readable: 4.5:1 for default and subtle on base and surface", () => {
-    for (const text of [dark.text, dark.textMuted]) {
-      expect(contrast(text, dark.background)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(text, dark.surface)).toBeGreaterThanOrEqual(4.5);
+  it("keeps text readable in both colour modes: 4.5:1 for default and subtle on base and surface", () => {
+    for (const theme of [dark, dark256]) {
+      for (const text of [theme.text, theme.textMuted]) {
+        expect(contrast(text, theme.background)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(text, theme.surface)).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(theme.onAccent, theme.accent)).toBeGreaterThanOrEqual(4.5);
     }
     expect(contrast(dark.textMuted, dark.background)).toBeCloseTo(5.65, 1);
-    expect(contrast(dark.onAccent, dark.accent)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("maps each token to its exact xterm-256 colour", () => {

@@ -193,7 +193,7 @@ export function PlanQuestionsPanel({ t, questions, state }: PlanQuestionsPanelPr
         {!isSingle && (
           <text>
             <span style={{ fg: t.text }}>{"tab"}</span>
-            <span style={{ fg: t.planHint }}>{" tab"}</span>
+            <span style={{ fg: t.planHint }}>{" next question"}</span>
           </text>
         )}
         <text>

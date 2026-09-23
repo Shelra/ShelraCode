@@ -2,8 +2,9 @@
 
 The approved reference is the landing page in `frontend/` (tokens in `frontend/src/app/globals.css`,
 motifs in `frontend/src/components/**`). The tokens live in `src/ui/theme.ts`; this page is the
-translation to terminal cells. The audit that led to it is `docs/ui/audit/2026-09-22-achilles`, and
-`src/ui/acceptance.test.ts` fails a change that breaks the colour, glyph or border rules.
+translation to terminal cells. The audit that led to it is `docs/ui/audit/2026-09-22-achilles`.
+`src/ui/acceptance.test.ts` reads the source of `src/ui` and fails a change that breaks the colour, blend,
+glyph, border or bordered-fill rules; a colour chosen at run time needs a render test (`app.test.tsx`).
 
 ## Rules
 
@@ -50,14 +51,14 @@ A terminal cannot load fonts, so the site's roles become weight, case and colour
 | Section badge (JetBrains Mono 12) | `[ PLAN ]` in accent |
 | Body (Inter 14, subtle) | subtle text |
 | Body strong | bold default |
-| Small mono metadata | `model · cost · tokens · elapsed`, joined by ` · ` |
+| Small mono metadata | subtle, joined by ` · `: `2 files +6 −1 · tests ✓ · 42s`. The site's `model · cost · tokens · elapsed` line is not built |
 
 Recommended fonts: Geist Mono or JetBrains Mono, without ligatures.
 
 ## Glyphs
 
 Only `─ │ ┌ ┐ └ ┘ ├ ┤ ● ○ ▸ ▪ ✓ ✗ › · → █ ░`, which render the same in Windows Terminal and Warp.
-Prose may use `…`, `—` and `−`. The one exception is the scrollbar: OpenTUI draws the ends of its thumb
+Prose may use `…`, `–` (a range), `—` and `−`. The one exception is the scrollbar: OpenTUI draws the ends of its thumb
 with `▀` and `▄`.
 
 | Meaning | Glyph |
@@ -69,7 +70,7 @@ with `▀` and `▄`.
 | folded / open | `▸` / `▪` |
 | quiet row | `·` |
 | setting on / off | `──●` / `○──` in accent |
-| progress | `████████░░` accent on border, with `step 4 of 6 · 80%` |
+| progress | `████████░░` accent on border, then the percent (the local model download); the plan counts steps: `[ PLAN 2/5 ]` |
 | numbered step | ` 01 ` on an accent chip, dark text |
 
 ## Motion
