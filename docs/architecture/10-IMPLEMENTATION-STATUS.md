@@ -49,7 +49,7 @@ without changing the runtime contract.
 
 ## Verification evidence
 
-- `C:\Users\Javie\.shelra\models\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` exists at **1,117,320,768 bytes**. The downloader verified SHA-256 `cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046` before finalization.
+- `%USERPROFILE%\.shelra\models\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` exists at **1,117,320,768 bytes**. The downloader verified SHA-256 `cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046` before finalization.
 - `llama-server` build `b10826` (llama.cpp `0.4.0-dev`) was started against that file. `/health` returned HTTP 200 and `/v1/models` exposed the local model.
 - A direct local chat-completions request returned HTTP 200 with the assistant content `READY`. The provider adapter and the compiled headless CLI both completed the same deterministic local turn (`bun dist/index.js --prompt ... --max-tool-rounds 1`) with exit code 0. This proves local runtime, normalized adapter, and a real conversation turn; it does **not** prove a complete autonomous coding task.
 - A compiled CLI PTY run rendered the startup/onboarding surface, showed real download byte progress, entered chat after model readiness, and accepted cancellation. A final second-launch PTY run entered the chat shell without onboarding/API-key prompts and exited cleanly; `shelra models` also terminates without leaving a runtime child.

@@ -7,9 +7,8 @@ describe("compactCwd", () => {
   });
 
   it("drops the middle instead of wrapping, keeping the project folder", () => {
-    const long =
-      "C:\\Users\\Javie\\AppData\\Local\\Temp\\claude\\D--PROYECTS-shelra\\scratchpad\\cap\\fixture-fix-auth-120";
-    const shown = compactCwd(long, 44, "C:\\Users\\Javie");
+    const long = "C:\\Users\\dev\\AppData\\Local\\Temp\\shelra\\scratchpad\\cap\\fixture-fix-auth-120";
+    const shown = compactCwd(long, 44, "C:\\Users\\dev");
     expect(shown.length).toBeLessThanOrEqual(44);
     expect(shown.endsWith("fixture-fix-auth-120")).toBe(true);
     expect(shown).toContain("…");
@@ -22,13 +21,13 @@ describe("compactCwd", () => {
   });
 
   it("leaves a short path alone", () => {
-    expect(compactCwd("D:\\PROYECTS\\shelra", 40, "C:\\Users\\dev")).toBe("D:\\PROYECTS\\shelra");
+    expect(compactCwd("D:\\code\\shelra", 40, "C:\\Users\\dev")).toBe("D:\\code\\shelra");
   });
 });
 
 describe("projectName", () => {
   it("returns the last path segment", () => {
-    expect(projectName("D:\\PROYECTS\\shelra\\")).toBe("shelra");
+    expect(projectName("D:\\code\\shelra\\")).toBe("shelra");
     expect(projectName("/home/dev/acme-api")).toBe("acme-api");
   });
 });

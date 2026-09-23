@@ -34,7 +34,7 @@ its React/OpenTUI entrypoint.
   `dist/shelra.exe` were produced.
 - `dist/shelra.exe --version` — PASS (`1.1.7`).
 - `bun run build` — PASS; active executable installed at
-  `C:\\Users\\Javie\\.shelra\\bin\\shelra.exe`, manifest version `1.1.7`,
+  `%USERPROFILE%\\.shelra\\bin\\shelra.exe`, manifest version `1.1.7`,
   and user PATH registration reported success.
 - A refreshed child shell resolved `shelra` from the persisted user PATH and
   returned `1.1.7` from a temporary directory.
