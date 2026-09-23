@@ -1,10 +1,9 @@
 # Line endings
 # --------------------------------------------------------------------------
-# This repository's tracked source is stored with CRLF endings, and
-# `biome.json` (formatter.lineEnding = "crlf") is configured to match so that
-# `bun run format` / `bun run lint` and the CI check pass on every platform.
-# No repo-wide renormalization to LF is applied here on purpose: that is a
-# deliberate, separate cleanup that should land in its own commit.
+# Git stores text files with LF endings. A checkout converts them to the
+# platform's own (core.autocrlf: CRLF on Windows, LF on Linux and in CI), and
+# `biome.json` (formatter.lineEnding = "auto") expects exactly that, so
+# `bun run format` / `bun run lint` pass locally and in CI alike.
 
 # Binary assets — never run text or line-ending filters over these.
 *.exe   binary

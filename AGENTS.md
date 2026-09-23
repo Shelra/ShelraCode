@@ -48,9 +48,9 @@ directory.
   `bun run format` → `bun run lint` → `bun run typecheck` →
   `bun run build:binary`. All four must stay green.
 - Line endings: git stores LF and `core.autocrlf=true` checks files out as CRLF on
-  the maintainer's Windows machine, while `biome.json` requires CRLF
-  (`formatter.lineEnding: "crlf"`). A file written with LF fails `bun run format`
-  and `bun run lint` locally, and CI's Linux checkout (LF) fails its Format Check.
+  the maintainer's Windows machine; `biome.json` uses `formatter.lineEnding: "auto"`
+  (CRLF on Windows, LF elsewhere), so CI's Linux checkout passes too. On Windows a
+  tool that writes LF makes `bun run format` fail: run `bunx biome format --write <file>`.
 
 ## Environment
 
