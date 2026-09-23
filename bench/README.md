@@ -144,6 +144,20 @@ but not retrieved in B). One run is one sample; repeat before concluding.
 bun run src/index.ts bench --manifest bench/suites/shelra-memory-v0.1.json --model <fixed-model>
 ~~~
 
+## Silent core suite
+
+`bench/suites/shelra-agent-core-silent-v0.2.json` is the core suite with the
+closing sentence "Run bun test before completing." removed from every prompt and
+nothing else changed. With that sentence the user already asks for the check, so
+the core suite cannot tell whether the completion gate makes an agent verify on
+its own; the silent suite can. It is the manifest the 2026-09-23 audit ran
+(doc 15, §15.3 category 19). Compare it with the core suite on the same model,
+and with `--ablate gate`.
+
+~~~text
+bun run src/index.ts bench --manifest bench/suites/shelra-agent-core-silent-v0.2.json --model <fixed-model> --repeat 3
+~~~
+
 ## Public task set: aider polyglot
 
 `scripts/build-polyglot-suite.ts` builds a suite from the public aider polyglot task set (Exercism

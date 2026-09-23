@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { existsSync } from "node:fs";
 import type { KeyEvent } from "@opentui/core";
 import { InvalidArgumentError, program } from "commander";
 import * as dotenv from "dotenv";
@@ -20,6 +21,7 @@ import { createClaudeCodeExecutor } from "./bench/claude-code-executor";
 import { enterBenchCleanRoom } from "./bench/clean-room";
 import { createCodexExecutor } from "./bench/codex-executor";
 import { collectBenchmarkEnvironment, collectRepositorySnapshot, resolveBenchmarkPath } from "./bench/environment";
+import { appendRunsToHistory } from "./bench/history";
 import { loadBenchmarkManifest } from "./bench/manifest";
 import { formatRepeatSummary, type RepeatTaskOutcome, summarizeRepeats } from "./bench/repeat";
 import { runBenchmark } from "./bench/runner";
@@ -68,6 +70,7 @@ import {
   recoverInterruptedBenchmarkRuns,
   updateBenchmarkRunMetadata,
 } from "./storage/benchmarks";
+import { getDatabasePath } from "./storage/index";
 import { runTelegramHeadlessBridge } from "./telegram/headless-bridge";
 import { isShuruSupported } from "./tools/bash";
 import { startScheduleDaemon } from "./tools/schedule";
@@ -1026,6 +1029,8 @@ async function runBenchCommand(options: {
   ablate?: string;
   /** How many times to run the suite (`--repeat`). */
   repeat?: string;
+  /** Commander's `--no-history` sets this to false. */
+  history?: boolean;
 }): Promise<void> {
   const manifestCandidate = options.manifest || ".shelra/bench/manifest.json";
   const agentName = ((options.agent || "shelra").trim() || "shelra").toLowerCase();
@@ -1121,6 +1126,7 @@ async function runBenchCommand(options: {
   // Repeats are ordinary runs that share a group id, so history can put them back together.
   const repeatGroup = repeat > 1 ? `repeat_${Date.now().toString(36)}` : null;
   const outcomes: RepeatTaskOutcome[][] = [];
+  const runIds: string[] = [];
   try {
     for (let index = 1; index <= repeat; index += 1) {
       const runOutcomes: RepeatTaskOutcome[] = [];
@@ -1271,6 +1277,7 @@ async function runBenchCommand(options: {
         type: "run_finished",
         message: `Benchmark run #${summary.runNumber} ${summary.status}`,
       });
+      runIds.push(summary.runId);
       if (summary.status !== "completed") process.exitCode = 1;
       if (summary.status === "cancelled" || summary.status === "interrupted") break;
     }
@@ -1283,7 +1290,25 @@ async function runBenchCommand(options: {
     if (options.json) printBenchJson({ type: "repeat_summary", summary: repeatSummary });
     else for (const line of formatRepeatSummary(repeatSummary)) console.log(line);
   }
+
+  // Every run joins the versioned history of the repository it ran from, cleaned of personal data.
+  if (options.history !== false && runIds.length > 0 && existsSync(resolveBenchmarkPath(process.cwd(), HISTORY_FILE))) {
+    try {
+      const merged = appendRunsToHistory({
+        repositoryRoot: process.cwd(),
+        databasePath: getDatabasePath(),
+        source: "shelra-bench",
+        runIds,
+      });
+      if (options.json) printBenchJson({ type: "history_updated", added: merged.added, runs: merged.runs });
+      else console.log(`History: ${merged.added} run(s) added to ${HISTORY_FILE} (${merged.runs} in all)`);
+    } catch (error) {
+      console.error(`History not updated: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 }
+
+const HISTORY_FILE = "bench/history/benchmark-history.json";
 
 function printBenchJsonOrText(json: boolean, value: { type: string; message: string; run: unknown }): void {
   if (json) {
@@ -1650,6 +1675,7 @@ program
     "--no-clean-room",
     "Run the tasks under .shelra/bench/runs with your own settings, memory and skills, as runs before 2026-09-23 did",
   )
+  .option("--no-history", "Do not add the runs to bench/history/benchmark-history.json")
   .action(async (_options, command) => {
     // Commander assigns options shared with the root command (for example --model and
     // --max-cost) to the root even when they appear after `bench`. Merge both scopes so
