@@ -85,15 +85,16 @@ Search Console keeps 16 months of data; export monthly through its API if a long
 
 ## What only the owner can do
 
-1. **Deploy.** Everything above is in the working tree; production changes when `main` is pushed and Vercel builds.
+1. **Deploy.** A push to `main` deploys through Vercel; the work in [audit.md](audit.md) went live on 2026-09-23.
+   After each deploy, run the check against production (`--origin https://www.shelra.dev --external`).
 2. **Search Console.** Add a *Domain* property for `shelra.dev` with the DNS TXT record (in Cloudflare DNS); it covers
    `www` and survives every redeploy. Submit `https://www.shelra.dev/sitemap.xml`; inspect `/` and request indexing;
    keep Settings › Search generative AI at *Include* (the default) so AI Overviews may cite the site.
 3. **Bing Webmaster Tools.** Import the site from Search Console, submit the sitemap, and watch AI Performance.
 4. **Cloudflare.** Keep the AI crawler setting at *Allow* or *Disallow AI Training*; since 2026-09-15 *Block* also
    blocks Googlebot and Bingbot. Turning on Crawler Hints sends IndexNow pings to Bing and others on content changes.
-   Cloudflare prepends its managed block to our robots.txt; check `curl https://www.shelra.dev/robots.txt` after
-   changing either setting.
+   With its managed robots.txt on, Cloudflare prepends its own block to ours (on 2026-09-23 production served ours
+   alone); check `curl https://www.shelra.dev/robots.txt` after changing either setting.
 5. **Vercel** (optional; the code already redirects): the project's Domains page can also redirect
    `shelra-code.vercel.app` to `www.shelra.dev`.
 6. **npm.** The site no longer links to `npmjs.com/package/shelra`: that package is not published (the registry

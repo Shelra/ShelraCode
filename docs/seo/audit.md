@@ -70,7 +70,7 @@ Status after each round; the rounds below say what was done and how it was check
 
 | ID | P | Issue | Evidence (baseline) | Status |
 | --- | --- | --- | --- | --- |
-| SEO-001 | P0 | No canonical on any page while `shelra-code.vercel.app` serves the same bytes, indexable | curl: identical build id `yoPBpoqFjcyCz6WmzOIsr`, no `<link rel=canonical>` | fixed R1 (canonical + host redirect); live after deploy |
+| SEO-001 | P0 | No canonical on any page while `shelra-code.vercel.app` serves the same bytes, indexable | curl: identical build id `yoPBpoqFjcyCz6WmzOIsr`, no `<link rel=canonical>` | fixed R1 (canonical + host redirect); live since 2026-09-23: the vercel.app host answers 308 to `www` |
 | SEO-002 | P0 | No sitemap | `/sitemap.xml` 404 | fixed R1 |
 | SEO-003 | P0 | No robots.txt of our own; production shows Cloudflare's comment-only file, no `Sitemap:` | curl of `/robots.txt` on both hosts | fixed R1 |
 | SEO-004 | P1 | Social images and `metadataBase` on the vercel.app host | `og:image` = `https://shelra-code.vercel.app/images/og-shelra.png` | fixed R1 |
@@ -267,5 +267,10 @@ the four pages at 1440, 1000 and 390 px have no horizontal overflow and no conso
 and the pricing switch work by mouse and keyboard at 390 px; all 103 image and font URLs the build references are in
 the repository; `bench-summary.json` regenerates byte-identically from `bench/history`.
 
-Not verified: production until the deploy, and anything about indexing or rankings (no Search Console data yet).
-Google's Rich Results Test was not run; SEO-038 rests on Google's documented required properties.
+Production, after the deploy of 2026-09-23 (`1b214d9`, CI and security scan green): `bun run seo:check --origin
+https://www.shelra.dev --external` reports 0 errors and 1 warning (GitHub rate-limited one outbound link during the
+crawl; requested alone it answers 200). robots.txt and the sitemap are the site's own, with no Cloudflare block in
+front, and `https://shelra-code.vercel.app/memory?x=1` answers 308 to `https://www.shelra.dev/memory?x=1`.
+
+Not verified: anything about indexing or rankings (no Search Console data yet). Google's Rich Results Test was not
+run; SEO-038 rests on Google's documented required properties.
