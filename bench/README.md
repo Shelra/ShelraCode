@@ -158,6 +158,34 @@ and with `--ablate gate`.
 bun run src/index.ts bench --manifest bench/suites/shelra-agent-core-silent-v0.2.json --model <fixed-model> --repeat 3
 ~~~
 
+On that suite the free model tests its own work, so the completion gate and the
+task contract never have to act (doc 15, §6.4): it cannot show what they add.
+
+## Contract suite
+
+`bench/suites/shelra-agent-contract-v0.1.json` has three tasks where what the
+harness decides about "done" changes the outcome (doc 15, §15.3 categories 18,
+11 and 3). None of the prompts asks for the tests to be run.
+
+- `01-regression-invoice`: the obvious change to `formatPrice` breaks
+  `invoiceTotalCents`, which parses printed amounts back; only the whole suite
+  shows it.
+- `02-unrelated-red-test`: a legacy calendar test failed before the request;
+  the task is `truncate`, and neither test may be changed to hide the failure.
+- `03-duration-from-prose`: `parseDuration` with nine stated behaviors, two of
+  them covered by visible tests.
+
+The oracle (`bench/oracles/shelra-agent-contract-v0.1.ts`) checks every stated
+behavior and that the tests are unchanged. It fails on the untouched fixtures,
+fails on the obvious change of task 01, and passes on reference solutions (kept
+out of the repository). Measure the contract with it: full Shelra against
+`--ablate contract` on the same model, k ≥ 3.
+
+~~~text
+bun run src/index.ts bench --manifest bench/suites/shelra-agent-contract-v0.1.json --model <fixed-model> --repeat 3
+bun run src/index.ts bench --manifest bench/suites/shelra-agent-contract-v0.1.json --model <fixed-model> --repeat 3 --ablate contract
+~~~
+
 ## Public task set: aider polyglot
 
 `scripts/build-polyglot-suite.ts` builds a suite from the public aider polyglot task set (Exercism

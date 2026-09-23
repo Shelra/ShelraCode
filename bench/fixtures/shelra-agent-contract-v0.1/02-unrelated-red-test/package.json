@@ -1,0 +1,7 @@
+{
+  "name": "shelra-bench-unrelated-red-test",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}

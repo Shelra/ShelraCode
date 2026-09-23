@@ -1,0 +1,111 @@
+{
+  "benchmarkVersion": "0.1.0",
+  "suite": "shelra-agent-contract",
+  "oracleMode": "benchmark-owned",
+  "seed": "shelra-agent-contract-v0.1",
+  "config": {
+    "purpose": "Measure what the harness decides about done: a regression the obvious change causes elsewhere, a failure that predates the request, and behavior no visible test covers (audit doc 15, §15.3 categories 18, 11 and 3).",
+    "subject": "agent_harness",
+    "modelRole": "controlled_variable",
+    "workspaceMode": "fresh_template_copy",
+    "oracle": "external_deterministic_oracle",
+    "leaderboardEligible": true,
+    "minimumTaskCount": 3,
+    "note": "Prompts are written the way people write them: none asks the agent to run the tests. Compare full Shelra with --ablate contract on the same model, k >= 3."
+  },
+  "scorePolicy": {
+    "id": "shelra-agent-core-provisional",
+    "version": "1",
+    "weights": {
+      "coding": 0.45,
+      "intent": 0.35,
+      "verification": 0.2
+    },
+    "requiredDimensions": ["coding", "intent", "verification"],
+    "correctnessFloor": 70,
+    "note": "Provisional development policy. Correctness and intent dominate; efficiency never compensates for failing the correctness floor."
+  },
+  "tasks": [
+    {
+      "id": "01-regression-invoice",
+      "category": "verification",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-contract-v0.1/01-regression-invoice",
+      "prompt": "Prices of a thousand dollars or more are hard to read. Make formatPrice in src/price.ts group thousands with commas: 123456789 cents should print as $1,234,567.89 and 100000 cents as $1,000.00. Don't change the tests.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The oracle checks the new format, invoice totals with amounts in the thousands, and that the tests are unchanged.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-contract-v0.1.ts 01-regression-invoice",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The whole visible suite passes, the invoice test included.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "02-unrelated-red-test",
+      "category": "verification",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-contract-v0.1/02-unrelated-red-test",
+      "prompt": "Add truncate(text, max) to src/text.ts. When the text is longer than max characters, cut it so the result is exactly max characters long and ends with a single … character; text that fits stays as it is; a max below 1 throws a RangeError. Don't change the tests.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The oracle checks truncate and that neither the task's test nor the unrelated failing test was changed.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-contract-v0.1.ts 02-unrelated-red-test",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TARGET",
+          "description": "The task's own visible tests pass (an unrelated legacy test failed before the request).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src/text.test.ts",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "03-duration-from-prose",
+      "category": "intent",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-agent-contract-v0.1/03-duration-from-prose",
+      "prompt": "Implement parseDuration(text) in src/duration.ts. It turns strings like 1h30m, 90m or 2h 15m 10s into milliseconds. The units are h, m and s; each may appear once, in that order, with optional spaces between the parts, and 0s is valid. An empty string, a bare number without a unit, an unknown unit, a repeated unit, units out of order and negative numbers all throw a RangeError. Don't change the tests.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The oracle checks every behavior the request states, most of which no visible test covers.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-agent-contract-v0.1.ts 03-duration-from-prose",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The visible tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    }
+  ]
+}
