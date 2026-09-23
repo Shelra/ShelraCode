@@ -29,6 +29,23 @@ describe("requirement extraction", () => {
     expect(isRequirementDense("The parser must reject empty input.")).toBe(false);
   });
 
+  it("reads Spanish requests too (audit 2026-09-23: this one used to extract nothing)", () => {
+    const prompt =
+      "Implementa slugify en src/slug.ts. Debe eliminar los espacios al inicio y al final, pasar las letras a minúsculas, reemplazar cada grupo de caracteres no alfanuméricos por un guion y quitar los guiones del principio y del final. No modifiques los tests. Ejecuta bun test antes de terminar.";
+    const requirements = extractRequirements(prompt);
+    expect(requirements).toEqual([
+      "Implementa slugify en src/slug.ts.",
+      "Debe eliminar los espacios al inicio y al final, pasar las letras a minúsculas, reemplazar cada grupo de caracteres no alfanuméricos por un guion y quitar los guiones del principio y del final.",
+    ]);
+    expect(countStatedBehaviors([requirements[1] as string])).toBe(4);
+    expect(isRequirementDense(prompt)).toBe(true);
+  });
+
+  it("does not take Spanish working instructions for requirements", () => {
+    expect(extractRequirements("Ejecuta los tests antes de terminar. No modifiques el README.")).toEqual([]);
+    expect(isRequirementDense("El parser debe rechazar la entrada vacía.")).toBe(false);
+  });
+
   it("caps and deduplicates", () => {
     const sentence = "The parser must reject empty input. ";
     expect(extractRequirements(sentence.repeat(5))).toHaveLength(1);
