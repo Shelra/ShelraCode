@@ -1,0 +1,35 @@
+{
+  "backstage_backstage": {
+    "candidates": 2507,
+    "eligible": 1189,
+    "excluded": {
+      "bot author": 788,
+      "no source file": 518,
+      "release or dependency bump": 12
+    },
+    "sampled": 50,
+    "draw_reproduces": true
+  },
+  "mozilla_fxa": {
+    "candidates": 1457,
+    "eligible": 1137,
+    "excluded": {
+      "bot author": 146,
+      "no source file": 160,
+      "release or dependency bump": 14
+    },
+    "sampled": 50,
+    "draw_reproduces": true
+  },
+  "Sylius_Sylius": {
+    "candidates": 215,
+    "eligible": 171,
+    "excluded": {
+      "bot author": 1,
+      "no source file": 37,
+      "release or dependency bump": 6
+    },
+    "sampled": 50,
+    "draw_reproduces": true
+  }
+}
