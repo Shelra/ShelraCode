@@ -386,6 +386,37 @@ describe("a failing model connection never ends the turn", () => {
     expect(sent).not.toContain("Let me write the file now.");
   });
 
+  it("retries an upstream provider's failure that OpenRouter reports as 404 (the audit's 2026-09-23 run)", async () => {
+    // Nvidia failed upstream; OpenRouter answered 404 "Provider returned error"; the same model answered 200
+    // minutes later. Treated as "model unavailable", it paused a pinned benchmark turn after one attempt.
+    const upstreamFailure = new APICallError({
+      message: "Provider returned error",
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 404,
+      responseBody: JSON.stringify({
+        error: { message: "Provider returned error", code: 404, metadata: { raw: "", provider_name: "Nvidia" } },
+      }),
+      isRetryable: false,
+    });
+    const provider = new ScriptedProvider([{ events: [], fail: upstreamFailure }, answer("Answered on the retry.")]);
+    const { text } = await run(provider);
+
+    expect(provider.requests.map((request) => request.modelId)).toEqual(["primary-model", "primary-model"]);
+    expect(text).toContain("Answered on the retry.");
+    expect(text).not.toContain("cannot serve this request");
+  });
+
+  it("still treats a model with no endpoint as unavailable", async () => {
+    const provider = new ScriptedProvider([
+      { events: [], fail: apiError(404, "No endpoints found for primary-model.") },
+    ]);
+    const { text } = await run(provider);
+
+    expect(provider.requests).toHaveLength(1);
+    expect(text).toContain("cannot serve this request");
+  });
+
   it("stops at once when retrying cannot help and no fallback is left", async () => {
     const provider = new ScriptedProvider([{ events: [], fail: apiError(402, "This request requires more credits") }]);
     const { chunks, text } = await run(provider);

@@ -3636,8 +3636,23 @@ function isRejectedCredentialError(error: unknown): boolean {
   );
 }
 
+/**
+ * OpenRouter reports an upstream provider's own failure as HTTP 404 "Provider returned error". It is not a
+ * missing model: in the audit of 2026-09-23 the same model answered 200 minutes later, but the 404 paused a
+ * pinned benchmark turn after one attempt and cost three tasks. Such a failure is retried like a stall.
+ */
+function isUpstreamProviderFailure(error: unknown): boolean {
+  const text = APICallError.isInstance(error)
+    ? `${error.message} ${error.responseBody ?? ""}`
+    : error instanceof Error
+      ? error.message
+      : String(error ?? "");
+  return /provider returned error/i.test(text);
+}
+
 /** Failures that retrying the same model cannot fix: no credits, no endpoint, a spend limit, a daily quota. */
 function isModelUnavailableError(error: unknown): boolean {
+  if (isUpstreamProviderFailure(error)) return false;
   if (APICallError.isInstance(error) && [402, 403, 404].includes(error.statusCode ?? 0)) return true;
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /blocked by budget|insufficient (credits|balance|funds)|more credits|no endpoints found|model .*not (found|available)|not a valid model|does not support tool|free-models-per-day|quota/i.test(
