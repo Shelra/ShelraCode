@@ -304,6 +304,24 @@ and the contract ablation A4 at k ≥ 3 are needed for that.
 Scheduled after the next quota reset: A1 (core, compare S1), A5 (memory, compare S5), A4 (silent with
 the contract switched off, the contract's own ablation) and A6 (a second silent sample).
 
+### 6.5 The decision battery against Claude Code and Codex
+
+The same project rule, with its check, written where each agent reads its instructions (`AGENTS.md`,
+`CLAUDE.md`); three tasks whose obvious implementation breaks it; the clean room for every agent; k = 3
+(`15-evidence/decision-head-to-head.md`, suite `shelra-decision-ledger-native-v0.1`):
+
+| Agent | Model | Tasks passed | Rule kept |
+| --- | --- | --- | --- |
+| Shelra with the ledger | Nemotron 3 Ultra (open) | 9/9 (one re-graded after an oracle fix) | 9/9 |
+| Shelra without the ledger | Nemotron 3 Ultra (open) | 9/9 | 9/9 |
+| Claude Code | Sonnet 5 | 6/9 | broke the logging rule in 3 of 3 runs |
+| Codex | gpt-5.6-luna | 9/9 | 9/9 |
+
+Shelra's six runs cost $1.23. Claude Code logged e-mail addresses to "tell users apart" every time, in
+10-16 seconds and without running the check `CLAUDE.md` names. The ledger's enforcement did not decide
+these results: without it the model followed `AGENTS.md` just as well. What the ledger adds is measured
+by the ledger-only battery against `--ablate ledger`.
+
 ## 7. Memory audit: does Shelra learn?
 
 **Mechanism** `CODE`. Four writers share one deterministic gate (`memory/gate.ts`): the model's

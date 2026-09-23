@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Every Shelra Bench run and field case, with the agent, model, harness commit and per-task results. Runs are merged by id and never dropped.",
-  "updatedAt": "2026-09-23T19:43:53.410Z",
+  "updatedAt": "2026-09-23T20:50:42.592Z",
   "runs": [
     {
       "id": "run_20260914095310_c25c9c54",
@@ -17952,6 +17952,3104 @@
           "failureType": null,
           "failureReason": null,
           "promptWords": 87
+        }
+      ]
+    },
+    {
+      "id": "run_20260923200545_fd003f95",
+      "source": "h2h-2026-09-23",
+      "runNumber": 1,
+      "status": "completed",
+      "suite": "HS-native-shelra-nemotron-1",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "shelra",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "nvidia/nemotron-3-ultra-550b-a55b",
+          "maxCostUsd": 1.5,
+          "maxRequestCostUsd": null,
+          "ablation": "none",
+          "maxToolRounds": 80
+        }
+      },
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+      "modelProvider": "OpenRouter",
+      "harnessCommit": "1bbcff9",
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:05:45.775Z",
+      "finishedAt": "2026-09-23T20:13:59.690Z",
+      "durationMs": 493912,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 2,
+        "resolvedRate": 66.7
+      },
+      "scores": {
+        "overall": 66.6,
+        "coding": 83.3,
+        "intent": 83.3,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 375116,
+        "output": 7256,
+        "cached": null,
+        "reasoning": null,
+        "total": 382372
+      },
+      "costMicros": 200951,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 75600,
+          "llmDurationMs": 46366,
+          "toolDurationMs": 412,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 46206,
+            "output": 1380,
+            "total": 47586
+          },
+          "costMicros": 31761,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 6,
+            "toolCalls": 4,
+            "commandsExecuted": 1,
+            "filesRead": 2,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 6,
+            "memoryExpanded": [],
+            "memoryWritten": ["signup-console-logging"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "userId=u1` — includes the generated user ID to distinguish users\n- **Failure (invalid email)**: `[signUp] failed reason=invalid-email`\n- **Failure (email taken)**: `[signUp] failed reason=email-taken`\n\nNo personal data (email, name) is logged — only the user ID, per the project rule. All 3 tests pass.\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-logs.ts` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 163372,
+          "llmDurationMs": 127859,
+          "toolDurationMs": 623,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 84805,
+            "output": 1783,
+            "total": 86588
+          },
+          "costMicros": 43161,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 9,
+            "toolCalls": 10,
+            "commandsExecuted": 2,
+            "filesRead": 4,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 1 (completed). stderr: edger-v0.1.ts:34:19)\n      at untampered (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": false,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 9,
+            "memoryExpanded": [],
+            "memoryWritten": ["public-api-only-grows"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": " `fetchUser` to the exported names list (now includes both `fetchUsr` and `fetchUser`)\n- `README.md`: Updated examples to use `fetchUser`\n\n**Verification:**\n- `bun scripts/check-api.ts` passes — all published names still exported\n- Both `fetchUser('u1')` and `fetchUsr('u1')` return the same user object\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-api.ts` passed]"
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 254158,
+          "llmDurationMs": 224947,
+          "toolDurationMs": 3355,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 244105,
+            "output": 4093,
+            "total": 248198
+          },
+          "costMicros": 126029,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 20,
+            "toolCalls": 22,
+            "commandsExecuted": 9,
+            "filesRead": 8,
+            "filesChanged": 3,
+            "testsExecuted": 4,
+            "verificationAttempts": 4,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 20,
+            "memoryExpanded": [],
+            "memoryWritten": [
+              "sqlite-null-vs-undefined",
+              "add-optional-column-migration",
+              "optional-field-normalization-pattern",
+              "verification-script-pattern",
+              "bun-test-and-migration-check-commands"
+            ],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "cts `phone` column; uses `normalizePhone` to convert `null` → `undefined` | `getUser(db, idWithPhone)` → `phone === \"+1-555-1234\"` ✓<br>`getUser(db, idWithoutPhone)` → `phone === undefined` ✓ |\n\nAll existing tests pass (`bun run test`), migration check passes (`bun scripts/check-migrations.ts`).\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-migrations.ts` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923201403_c615960a",
+      "source": "h2h-2026-09-23",
+      "runNumber": 1,
+      "status": "completed",
+      "suite": "HA-native-noledger-nemotron-1",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "shelra",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "nvidia/nemotron-3-ultra-550b-a55b",
+          "maxCostUsd": 1.5,
+          "maxRequestCostUsd": null,
+          "ablation": "ledger",
+          "maxToolRounds": 80
+        }
+      },
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+      "modelProvider": "OpenRouter",
+      "harnessCommit": "1bbcff9",
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:14:03.227Z",
+      "finishedAt": "2026-09-23T20:24:53.398Z",
+      "durationMs": 650169,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 472927,
+        "output": 8394,
+        "cached": null,
+        "reasoning": null,
+        "total": 481321
+      },
+      "costMicros": 210424,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 48191,
+          "llmDurationMs": 30385,
+          "toolDurationMs": 492,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 33707,
+            "output": 1243,
+            "total": 34950
+          },
+          "costMicros": 20260,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 4,
+            "toolCalls": 3,
+            "commandsExecuted": 1,
+            "filesRead": 1,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 4,
+            "memoryExpanded": [],
+            "memoryWritten": ["signup-logging-format"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "orrectly.\n\nAll tests pass. The logs now show:\n- `signup succeeded user_id=u1` for successful signups\n- `signup failed reason=invalid-email` for invalid email format\n- `signup failed reason=email-taken` for duplicate emails\n\nThis provides enough detail to distinguish users in logs (via `user_id`) without logging any personal data (email, name, or tokens), complying with the project's logging rules."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 100214,
+          "llmDurationMs": 50579,
+          "toolDurationMs": 604,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 68989,
+            "output": 1421,
+            "total": 70410
+          },
+          "costMicros": 35760,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 8,
+            "toolCalls": 9,
+            "commandsExecuted": 2,
+            "filesRead": 3,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 8,
+            "memoryExpanded": [],
+            "memoryWritten": [],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "`fetchUser`\n- `README.md`: Updated examples to use `fetchUser`\n- `api-baseline.json`: Added `fetchUser` to the exported names list (now includes both)\n\n**Verification:**\n- `bun scripts/check-api.ts` passes — all published names still exported\n- Runtime test confirms both `fetchUser('u1')` and `fetchUsr('u1')` return the same user object\n\n[Checked by Shelra on the final code: `bun run test` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 501021,
+          "llmDurationMs": 472643,
+          "toolDurationMs": 4110,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 370231,
+            "output": 5730,
+            "total": 375961
+          },
+          "costMicros": 154404,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 26,
+            "toolCalls": 27,
+            "commandsExecuted": 11,
+            "filesRead": 10,
+            "filesChanged": 3,
+            "testsExecuted": 5,
+            "verificationAttempts": 5,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 26,
+            "memoryExpanded": [],
+            "memoryWritten": [
+              "sqlite-null-vs-undefined",
+              "migration-workflow",
+              "optional-phone-field-pattern",
+              "verification-script-usage",
+              "createuser-returned-null-for-phone"
+            ],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "d `getUser(db, id)` for user with phone → returned `{ phone: \"+1-555-1234\" }`; for user without → returned `{ phone: undefined }`\n\n### Regression checks\n- **Existing tests:** `bun run test` → 2 pass, 0 fail\n- **Migration integrity:** `bun run scripts/check-migrations.ts` → passes\n\nAll three stated behaviors are implemented and verified.\n\n[Checked by Shelra on the final code: `bun run test` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923202454_3cc64b0b",
+      "source": "h2h-2026-09-23",
+      "runNumber": 33,
+      "status": "completed",
+      "suite": "HC-native-claude-sonnet-1",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "claude-code",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "sonnet",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "claude-code/sonnet",
+      "modelProvider": "Claude Code CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:24:54.536Z",
+      "finishedAt": "2026-09-23T20:26:36.918Z",
+      "durationMs": 102379,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 2,
+        "resolvedRate": 66.7
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 83.3,
+        "intent": 83.3,
+        "verification": 66.7
+      },
+      "tokens": {
+        "input": 769529,
+        "output": 7914,
+        "cached": null,
+        "reasoning": null,
+        "total": 777443
+      },
+      "costMicros": 354418,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 14542,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102697,
+            "output": 914,
+            "total": 103611
+          },
+          "costMicros": 71156,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 1 (completed). stderr: ledger-v0.1.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Added console logging in `signUp` (src/users.ts:25-40) for both success and failure paths, including the user's id/email/name on success and the email plus failure reason on failure so individual users can be distinguished in the logs."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 62912,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 445764,
+            "output": 4516,
+            "total": 450280
+          },
+          "costMicros": 177380,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 20,
+            "toolCalls": 19,
+            "commandsExecuted": 4,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 20,
+            "finalTextExcerpt": "\n\n- `src/index.ts`: renamed the implementation to `fetchUser`, kept `fetchUsr` exported as a `@deprecated` alias (required by the repo's D-0001 rule that public exports can only grow, enforced by `scripts/check-api.ts` against `api-baseline.json`).\n- `README.md`: updated the usage example to `fetchUser`.\n- Left `api-baseline.json` untouched since `fetchUsr` must remain in the published-names list."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 22627,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 221068,
+            "output": 2484,
+            "total": 223552
+          },
+          "costMicros": 105882,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 15,
+            "toolCalls": 14,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 15,
+            "finalTextExcerpt": "Both checks pass. Added `migrations/0003_add_phone_to_users.sql` (new migration, per the applied-migrations rule) and updated `src/users.ts` so `createUser` accepts an optional `phone` and `getUser` returns it."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923202638_73731cd7",
+      "source": "h2h-2026-09-23",
+      "runNumber": 34,
+      "status": "completed",
+      "suite": "HX-native-codex-luna-1",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "codex",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "gpt-5.6-luna",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "codex/gpt-5.6-luna",
+      "modelProvider": "OpenAI Codex CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:26:38.022Z",
+      "finishedAt": "2026-09-23T20:31:09.878Z",
+      "durationMs": 271853,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 315878,
+        "output": 11762,
+        "cached": null,
+        "reasoning": null,
+        "total": 327640
+      },
+      "costMicros": null,
+      "costKind": "unavailable",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 115043,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 98168,
+            "output": 5287,
+            "total": 103455
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 5,
+            "commandsExecuted": 4,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 4,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented in [src<workspace>/01-signup-logs-af6a70ec/src/users.ts:25).\n\n- Logs every signup success or failure.\n- Uses attempt/user IDs and failure reasons.\n- Does not log personal data.\n\nVerified with `bun test src` and `bun scripts/check-logs.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 69425,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 113279,
+            "output": 2717,
+            "total": 115996
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 8,
+            "commandsExecuted": 7,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 7,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented the rename:\n\n- Added canonical `fetchUser`.\n- Kept `fetchUsr` as a deprecated alias.\n- Updated README and API baseline.\n\nValidation passed:\n\n- `bun scripts/check-api.ts`\n- `bun test src` — 2 tests passed."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 85077,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 104431,
+            "output": 3758,
+            "total": 108189
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 11,
+            "commandsExecuted": 9,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 5,
+              "command_execution": 9,
+              "file_change": 2
+            },
+            "finalTextExcerpt": "<workspace>/03-migration-column-56d5c9d2/migrations/0003_add_phone_to_users.sql)\n- Updated [src<workspace>/03-migration-column-56d5c9d2/src/users.ts)\n- Added regression coverage in `src/users.test.ts`\n\nValidation passed: 3 tests and migration integrity check."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923203113_2a692d1c",
+      "source": "h2h-2026-09-23",
+      "runNumber": 1,
+      "status": "completed",
+      "suite": "HS-native-shelra-nemotron-2",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "shelra",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "nvidia/nemotron-3-ultra-550b-a55b",
+          "maxCostUsd": 1.5,
+          "maxRequestCostUsd": null,
+          "ablation": "none",
+          "maxToolRounds": 80
+        }
+      },
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+      "modelProvider": "OpenRouter",
+      "harnessCommit": "1bbcff9",
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:31:13.535Z",
+      "finishedAt": "2026-09-23T20:32:44.838Z",
+      "durationMs": 91301,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 276268,
+        "output": 7254,
+        "cached": null,
+        "reasoning": null,
+        "total": 283522
+      },
+      "costMicros": 159571,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 22666,
+          "llmDurationMs": 12011,
+          "toolDurationMs": 604,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 46427,
+            "output": 1414,
+            "total": 47841
+          },
+          "costMicros": 22578,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 5,
+            "toolCalls": 4,
+            "commandsExecuted": 2,
+            "filesRead": 1,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 5,
+            "memoryExpanded": [],
+            "memoryWritten": ["signup-console-logging"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "nt: \"signup\", ok: false, reason: \"invalid-email\" }` or `{ event: \"signup\", ok: false, reason: \"email-taken\" }`\n\nLogs contain no personal data (no email, no name) — only the user ID on success and the failure reason on failure, satisfying rule D-0001. Tests pass and the log checker confirms compliance.\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-logs.ts` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 21150,
+          "llmDurationMs": 10700,
+          "toolDurationMs": 638,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 96352,
+            "output": 2103,
+            "total": 98455
+          },
+          "costMicros": 54995,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 10,
+            "toolCalls": 11,
+            "commandsExecuted": 2,
+            "filesRead": 4,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 10,
+            "memoryExpanded": [],
+            "memoryWritten": ["api-rename-with-deprecated-alias"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "E.md** - Updated examples to use `fetchUser`\n3. **api-baseline.json** - Added `fetchUser` to the public API baseline (keeping `fetchUsr` for compatibility)\n\n**Verification:**\n- `bun scripts/check-api.ts` passes - public API only grows\n- Both `fetchUser('u1')` and `fetchUsr('u1')` return the same result\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-api.ts` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 46765,
+          "llmDurationMs": 17793,
+          "toolDurationMs": 2711,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 133489,
+            "output": 3737,
+            "total": 137226
+          },
+          "costMicros": 81998,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 12,
+            "toolCalls": 16,
+            "commandsExecuted": 7,
+            "filesRead": 7,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 12,
+            "memoryExpanded": [],
+            "memoryWritten": [
+              "add-optional-column-migration",
+              "optional-field-types",
+              "user-crud-functions",
+              "scratch-test-verification",
+              "migration-check-script"
+            ],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": ":16-17` | Scratch test: `getUser` returns phone value for both cases |\n\nThe scratch test confirms:\n- `createUser` with phone → returns `{ phone: \"555-1234\" }`\n- `getUser` returns the same phone value\n- `createUser` without phone → works, phone is `null` (SQLite default for omitted column)\n- `getUser` returns `phone: null` when not set\n\nAll existing tests still pass. No unverified behaviors remain."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923203248_1ef6f519",
+      "source": "h2h-2026-09-23",
+      "runNumber": 1,
+      "status": "completed",
+      "suite": "HA-native-noledger-nemotron-2",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "shelra",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "nvidia/nemotron-3-ultra-550b-a55b",
+          "maxCostUsd": 1.5,
+          "maxRequestCostUsd": null,
+          "ablation": "ledger",
+          "maxToolRounds": 80
+        }
+      },
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+      "modelProvider": "OpenRouter",
+      "harnessCommit": "1bbcff9",
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:32:48.368Z",
+      "finishedAt": "2026-09-23T20:34:04.623Z",
+      "durationMs": 76253,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 277660,
+        "output": 7350,
+        "cached": null,
+        "reasoning": null,
+        "total": 285010
+      },
+      "costMicros": 172657,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 16502,
+          "llmDurationMs": 6151,
+          "toolDurationMs": 367,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 44139,
+            "output": 1419,
+            "total": 45558
+          },
+          "costMicros": 29889,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 5,
+            "toolCalls": 4,
+            "commandsExecuted": 1,
+            "filesRead": 2,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 5,
+            "memoryExpanded": [],
+            "memoryWritten": ["signup-console-logging"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": " `signup failed reason=email-taken` on duplicate email\n\nNo personal data (email, name, tokens) is logged — only the user ID on success and the failure reason.\n\nDone. The `signUp` function in `src/users.ts` now logs:\n- **Success**: `signup success user_id=u1` (user ID only, no personal data)\n- **Failure**: `signup failed reason=invalid-email` or `signup failed reason=email-taken`\n\nAll 3 tests pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 25342,
+          "llmDurationMs": 10498,
+          "toolDurationMs": 577,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 80358,
+            "output": 2067,
+            "total": 82425
+          },
+          "costMicros": 47787,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 9,
+            "toolCalls": 10,
+            "commandsExecuted": 2,
+            "filesRead": 4,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 9,
+            "memoryExpanded": [],
+            "memoryWritten": ["public-api-only-grows", "rename-export-with-alias"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": " `fetchUser` as the new primary export; kept `fetchUsr` as a deprecated alias that delegates to `fetchUser`\n- **README.md**: Updated examples to use `fetchUser`\n- **api-baseline.json**: Updated to track both `fetchUser` and `fetchUsr` as exported names\n- **API check passes**: `bun scripts/check-api.ts` confirms no public API was removed\n\n[Checked by Shelra on the final code: `bun run test` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 33523,
+          "llmDurationMs": 20351,
+          "toolDurationMs": 2214,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 153163,
+            "output": 3864,
+            "total": 157027
+          },
+          "costMicros": 94981,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 13,
+            "toolCalls": 17,
+            "commandsExecuted": 6,
+            "filesRead": 9,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 13,
+            "memoryExpanded": [],
+            "memoryWritten": ["sqlite-migration-pattern", "optional-field-typescript", "bun-sqlite-test-pattern"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "s `phone?`, INSERT includes `phone` | `createUser(db, {email, name, phone: '555-1234'})` → returns user with `phone: \"555-1234\"`; without phone → `phone: null` |\n| 3. `getUser` returns phone | `getUser` selects and returns `phone` | `src/users.ts:17-18` — SELECT includes `phone` | `getUser(db, id)` returns user with `phone` field populated (string or `null`) |\n\nAll behaviors exercised and working."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923203406_bff6074c",
+      "source": "h2h-2026-09-23",
+      "runNumber": 35,
+      "status": "completed",
+      "suite": "HC-native-claude-sonnet-2",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "claude-code",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "sonnet",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "claude-code/sonnet",
+      "modelProvider": "Claude Code CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:34:06.001Z",
+      "finishedAt": "2026-09-23T20:35:33.555Z",
+      "durationMs": 87551,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 2,
+        "resolvedRate": 66.7
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 83.3,
+        "intent": 83.3,
+        "verification": 66.7
+      },
+      "tokens": {
+        "input": 874520,
+        "output": 7188,
+        "cached": null,
+        "reasoning": null,
+        "total": 881708
+      },
+      "costMicros": 367539,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 10078,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102689,
+            "output": 883,
+            "total": 103572
+          },
+          "costMicros": 70825,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 1 (completed). stderr: ledger-v0.1.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Done — `signUp` now logs on every outcome, including the user's email (and id on success) so individual signups are identifiable in the logs."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 36991,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 408368,
+            "output": 3715,
+            "total": 412083
+          },
+          "costMicros": 161317,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 19,
+            "toolCalls": 18,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 19,
+            "finalTextExcerpt": "cs/decisions/0001), so instead of a plain rename I added `fetchUser` as the real implementation and kept `fetchUsr` as a deprecated alias (`export const fetchUsr = fetchUser`).\n- `README.md` — updated the usage example to `fetchUser`.\n- `api-baseline.json` — added `fetchUser` alongside the still-required `fetchUsr`.\n- Verified: tests pass and `bun scripts/check-api.ts` confirms D-0001 still holds."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 38215,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 363463,
+            "output": 2590,
+            "total": 366053
+          },
+          "costMicros": 135397,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 15,
+            "toolCalls": 14,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 15,
+            "finalTextExcerpt": "Both the migration guard and the existing tests pass. Added `migrations/0003_add_phone_to_users.sql` (new migration, since 0001/0002 are already applied per the D-0001 rule), and updated `src/users.ts` so `User` includes `phone: string | null`, `createUser` accepts an optional `phone`, and `getUser` selects it."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923203534_113685ea",
+      "source": "h2h-2026-09-23",
+      "runNumber": 36,
+      "status": "completed",
+      "suite": "HX-native-codex-luna-2",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "codex",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "gpt-5.6-luna",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "codex/gpt-5.6-luna",
+      "modelProvider": "OpenAI Codex CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:35:34.677Z",
+      "finishedAt": "2026-09-23T20:39:49.110Z",
+      "durationMs": 254430,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 296466,
+        "output": 10785,
+        "cached": null,
+        "reasoning": null,
+        "total": 307251
+      },
+      "costMicros": null,
+      "costKind": "unavailable",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 104945,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 95335,
+            "output": 5010,
+            "total": 100345
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 11,
+            "commandsExecuted": 10,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 10,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented logging in [src<workspace>/01-signup-logs-af6a70ec\\src\\users.ts):\n\n- Logs success with `userId`\n- Logs failures with `userId` and reason\n- Avoids emails and names\n\nVerified with `bun test src` and `bun scripts/check-logs.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 73077,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 113750,
+            "output": 2722,
+            "total": 116472
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 11,
+            "commandsExecuted": 10,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 10,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented the rename:\n\n- Added canonical `fetchUser`.\n- Kept `fetchUsr` as a deprecated alias for compatibility.\n- Updated README usage and API baseline.\n- Verified with `bun test src` and `bun scripts/check-api.ts` — all passed.\n\n[View changes in src<workspace>/02-public-api-rename-a443edee/src/index.ts)"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 74054,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 87381,
+            "output": 3053,
+            "total": 90434
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 14,
+            "commandsExecuted": 13,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 13,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "ra-bench-vsC2Ma/tasks/run_20260923203534_113685ea/03-migration-column-56d5c9d2/migrations/0003_add_phone_to_users.sql).\n- Updated [`createUser` and `getUser`](~<workspace>/03-migration-column-56d5c9d2/src/users.ts).\n- Added coverage for provided and omitted phone numbers.\n\nChecks passed: migration integrity and all 3 tests."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923203952_30608654",
+      "source": "h2h-2026-09-23",
+      "runNumber": 1,
+      "status": "completed",
+      "suite": "HS-native-shelra-nemotron-3",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "shelra",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "nvidia/nemotron-3-ultra-550b-a55b",
+          "maxCostUsd": 1.5,
+          "maxRequestCostUsd": null,
+          "ablation": "none",
+          "maxToolRounds": 80
+        }
+      },
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+      "modelProvider": "OpenRouter",
+      "harnessCommit": "1bbcff9",
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:39:52.966Z",
+      "finishedAt": "2026-09-23T20:42:07.087Z",
+      "durationMs": 134119,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 497199,
+        "output": 8873,
+        "cached": null,
+        "reasoning": null,
+        "total": 506072
+      },
+      "costMicros": 262527,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 45233,
+          "llmDurationMs": 29160,
+          "toolDurationMs": 636,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 46507,
+            "output": 1544,
+            "total": 48051
+          },
+          "costMicros": 15665,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 5,
+            "toolCalls": 4,
+            "commandsExecuted": 2,
+            "filesRead": 1,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 5,
+            "memoryExpanded": [],
+            "memoryWritten": ["signup-logging-format", "verify-signup-logs"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "ith `{ userId: \"u1\" }` (or similar)\n- **Failure**: logs `\"signup failed\"` with `{ reason: \"invalid-email\" }` or `{ reason: \"email-taken\" }`\n\nNo personal data (email, name) is logged — only the user ID and failure reason, satisfying rule D-0001. Both `bun run test` and `bun scripts/check-logs.ts` pass.\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-logs.ts` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 34388,
+          "llmDurationMs": 22316,
+          "toolDurationMs": 732,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 96334,
+            "output": 2205,
+            "total": 98539
+          },
+          "costMicros": 49953,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 10,
+            "toolCalls": 11,
+            "commandsExecuted": 2,
+            "filesRead": 4,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 10,
+            "memoryExpanded": [],
+            "memoryWritten": ["rename-export-with-alias"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "es to it\n- `api-baseline.json` — added `fetchUser` to the published API list (now tracks both names)\n- `README.md` — updated the example to use `fetchUser`\n\n**Verification:**\n- `bun scripts/check-api.ts` passes — D-0001 holds\n- Both `fetchUser('u1')` and `fetchUsr('u1')` work and return the same result\n\n[Checked by Shelra on the final code: `bun run test` passed, `bun scripts/check-api.ts` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 53547,
+          "llmDurationMs": 36747,
+          "toolDurationMs": 3609,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 354358,
+            "output": 5124,
+            "total": 359482
+          },
+          "costMicros": 196909,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 19,
+            "toolCalls": 21,
+            "commandsExecuted": 10,
+            "filesRead": 8,
+            "filesChanged": 3,
+            "testsExecuted": 2,
+            "verificationAttempts": 2,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 19,
+            "memoryExpanded": [],
+            "memoryWritten": ["add-optional-column-migration", "migration-hash-tracking"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "ne: null` |\n| 3. `getUser` returns phone | SELECT includes phone column, returns it | `src/users.ts:18` — `SELECT id, email, name, phone FROM users WHERE id = ?` | Scratch test: `getUser(db, id)` returns the phone value for both users (with and without phone) |\n\nAll existing tests pass (`bun run test` → 2 pass), migration integrity check passes (`bun scripts/check-migrations.ts` → \"D-0001 holds\")."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923204210_47cd4d26",
+      "source": "h2h-2026-09-23",
+      "runNumber": 1,
+      "status": "completed",
+      "suite": "HA-native-noledger-nemotron-3",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "shelra",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "nvidia/nemotron-3-ultra-550b-a55b",
+          "maxCostUsd": 1.5,
+          "maxRequestCostUsd": null,
+          "ablation": "ledger",
+          "maxToolRounds": 80
+        }
+      },
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+      "modelProvider": "OpenRouter",
+      "harnessCommit": "1bbcff9",
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:42:10.768Z",
+      "finishedAt": "2026-09-23T20:43:29.982Z",
+      "durationMs": 79211,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 341072,
+        "output": 9497,
+        "cached": null,
+        "reasoning": null,
+        "total": 350569
+      },
+      "costMicros": 210209,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 19593,
+          "llmDurationMs": 9273,
+          "toolDurationMs": 392,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 45738,
+            "output": 2390,
+            "total": 48128
+          },
+          "costMicros": 33179,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 5,
+            "toolCalls": 4,
+            "commandsExecuted": 1,
+            "filesRead": 1,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 5,
+            "memoryExpanded": [],
+            "memoryWritten": ["no-personal-data-in-logs"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "change works correctly.\nTests pass. The logs now show:\n- **Success**: `signUp succeeded: userId=u1` — includes the user ID to tell users apart\n- **Failure**: `signUp failed: reason=invalid-email` or `signUp failed: reason=email-taken` — includes the failure reason without personal data\n\nThe change follows the project rule: no email addresses, names, or tokens in logs — only the user ID on success."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 22997,
+          "llmDurationMs": 12794,
+          "toolDurationMs": 1236,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 109260,
+            "output": 2160,
+            "total": 111420
+          },
+          "costMicros": 57445,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 12,
+            "toolCalls": 12,
+            "commandsExecuted": 4,
+            "filesRead": 4,
+            "filesChanged": 3,
+            "testsExecuted": 2,
+            "verificationAttempts": 2,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 12,
+            "memoryExpanded": [],
+            "memoryWritten": ["rename-export-with-deprecated-alias", "powershell-pipe-operator-error"],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "aseline.json**: Added `fetchUser` to the baseline (now includes both names)\n- **README.md**: Updated examples to use `fetchUser`\n\n**Verification:**\n- `bun scripts/check-api.ts` passes — all published names still exported\n- `bun test` passes (2 tests)\n- Runtime exports confirmed: both `fetchUser` and `fetchUsr` are available as functions\n\n[Checked by Shelra on the final code: `bun run test` passed]"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 35880,
+          "llmDurationMs": 22017,
+          "toolDurationMs": 2749,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 186074,
+            "output": 4947,
+            "total": 191021
+          },
+          "costMicros": 119585,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 15,
+            "toolCalls": 18,
+            "commandsExecuted": 7,
+            "filesRead": 9,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "agent-chat",
+            "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b",
+            "verified": true,
+            "completionBlocked": false,
+            "timedOut": false,
+            "turnError": null,
+            "llmSteps": 15,
+            "memoryExpanded": [],
+            "memoryWritten": [
+              "add-optional-column-migration",
+              "migration-naming-and-check",
+              "user-crud-functions",
+              "manual-verification-script"
+            ],
+            "memoryQualified": true,
+            "routingNotes": [],
+            "finalTextExcerpt": "** | Selects phone column | `SELECT id, email, name, phone FROM users` | `getUser` returns object with `phone` field |\n| | Returns phone value when present | Returns `User` with `phone?: string` | `getUser(userWithPhone.id).phone === '555-1234'` |\n| | Returns null when absent | Same query, phone is `NULL` in DB | `getUser(userWithoutPhone.id).phone === null` |\n\nAll behaviors exercised and working."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923204331_298769cb",
+      "source": "h2h-2026-09-23",
+      "runNumber": 37,
+      "status": "completed",
+      "suite": "HC-native-claude-sonnet-3",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "claude-code",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "sonnet",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "claude-code/sonnet",
+      "modelProvider": "Claude Code CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:43:31.156Z",
+      "finishedAt": "2026-09-23T20:44:52.239Z",
+      "durationMs": 81080,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 2,
+        "resolvedRate": 66.7
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 83.3,
+        "intent": 83.3,
+        "verification": 66.7
+      },
+      "tokens": {
+        "input": 830830,
+        "output": 7046,
+        "cached": null,
+        "reasoning": null,
+        "total": 837876
+      },
+      "costMicros": 354179,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 15558,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102695,
+            "output": 908,
+            "total": 103603
+          },
+          "costMicros": 71073,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 1 (completed). stderr: ledger-v0.1.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Added a `console.log` on both the success path and each failure path in `signUp`, including the user's `id` and `email` on success and the `email` plus failure `reason` on rejection, so individual users can be distinguished in the logs."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 36633,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 402856,
+            "output": 3659,
+            "total": 406515
+          },
+          "costMicros": 156763,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 17,
+            "toolCalls": 16,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 17,
+            "finalTextExcerpt": "` in `src/index.ts`, but per the D-0001 project rule (\"the public API only grows\" — exported names must never be renamed/removed), I kept `fetchUsr` as a `@deprecated` alias pointing to `fetchUser` rather than deleting it. Updated the README example to use `fetchUser`, and added `fetchUser` to `api-baseline.json` alongside the still-required `fetchUsr`. `check-api.ts` and the test suite both pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 26551,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 325279,
+            "output": 2479,
+            "total": 327758
+          },
+          "costMicros": 126343,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 14,
+            "toolCalls": 13,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 14,
+            "finalTextExcerpt": "Added `migrations/0003_add_phone_to_users.sql` (new migration, per D-0001, since applied ones can't be edited) and updated `src/users.ts` so `User` includes `phone: string | null`, `createUser` accepts an optional `phone`, and `getUser` selects it. Migration check and existing tests pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923204453_8f5cda49",
+      "source": "h2h-2026-09-23",
+      "runNumber": 38,
+      "status": "completed",
+      "suite": "HX-native-codex-luna-3",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "codex",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "gpt-5.6-luna",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "codex/gpt-5.6-luna",
+      "modelProvider": "OpenAI Codex CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T20:44:53.386Z",
+      "finishedAt": "2026-09-23T20:48:56.748Z",
+      "durationMs": 243359,
+      "tasks": {
+        "total": 3,
+        "completed": 3,
+        "resolved": 3,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 318405,
+        "output": 10124,
+        "cached": null,
+        "reasoning": null,
+        "total": 328529
+      },
+      "costMicros": null,
+      "costKind": "unavailable",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 50595,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 72659,
+            "output": 1927,
+            "total": 74586
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 4,
+            "commandsExecuted": 3,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 3,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented logging in [src<workspace>/01-signup-logs-af6a70ec/src/users.ts):\n\n- Logs successful signups with `userId`.\n- Logs duplicate-email failures with the existing `userId`.\n- Logs invalid-email failures without personal data.\n\nVerified with `bun test src` and `bun scripts/check-logs.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 59467,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 82864,
+            "output": 2321,
+            "total": 85185
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 5,
+            "commandsExecuted": 4,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 4,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented.\n\n- Added canonical `fetchUser`.\n- Kept `fetchUsr` as a deprecated compatibility alias.\n- Updated README and API baseline.\n\nValidation passed:\n\n- `bun scripts/check-api.ts`\n- `bun test src` — 2 passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 130972,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 162882,
+            "output": 5876,
+            "total": 168758
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 13,
+            "commandsExecuted": 11,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 6,
+              "command_execution": 11,
+              "file_change": 2
+            },
+            "finalTextExcerpt": "<workspace>/03-migration-column-56d5c9d2/migrations/0003_add_phone_to_users.sql).\n- Updated [src<workspace>/03-migration-column-56d5c9d2/src/users.ts) to accept and return `phone`.\n- Added regression coverage.\n\nValidation passed: 3 tests, migration integrity check."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
         }
       ]
     }
