@@ -1,0 +1,135 @@
+{
+  "updatedAt": "2026-09-23",
+  "suite": {
+    "name": "shelra-agent-core",
+    "version": "0.2.0",
+    "tasks": 8
+  },
+  "runsTotal": 32,
+  "rows": [
+    {
+      "agent": "shelra",
+      "label": "ShelraCode",
+      "model": "deepseek/deepseek-v4-flash",
+      "free": false,
+      "variant": null,
+      "resolved": 5,
+      "total": 8,
+      "infra": 0,
+      "costUsd": 0.03,
+      "minutes": 15,
+      "runNumber": 22,
+      "date": "2026-09-17",
+      "commit": "572c0e0",
+      "source": "owner-db-2026-09"
+    },
+    {
+      "agent": "shelra",
+      "label": "ShelraCode",
+      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "free": false,
+      "variant": null,
+      "resolved": 5,
+      "total": 8,
+      "infra": 0,
+      "costUsd": 1.32,
+      "minutes": 27,
+      "runNumber": 11,
+      "date": "2026-09-17",
+      "commit": "af7e7bd",
+      "source": "owner-db-2026-09"
+    }
+  ],
+  "progress": {
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "runs": [
+      {
+        "runNumber": 8,
+        "date": "2026-09-17",
+        "resolved": 1,
+        "total": 8,
+        "infra": 0,
+        "commit": "af7e7bd"
+      },
+      {
+        "runNumber": 11,
+        "date": "2026-09-17",
+        "resolved": 5,
+        "total": 8,
+        "infra": 0,
+        "commit": "af7e7bd"
+      },
+      {
+        "runNumber": 24,
+        "date": "2026-09-18",
+        "resolved": 2,
+        "total": 8,
+        "infra": 6,
+        "commit": "572c0e0"
+      }
+    ]
+  },
+  "fieldCases": [
+    {
+      "id": "001-meet-camera-busy",
+      "date": "2026-09-22",
+      "title": "Google Meet says the camera is in use by another app",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "solved": true,
+      "tries": 1,
+      "reference": {
+        "agent": "Claude Sonnet 5",
+        "tries": 3
+      },
+      "reruns": [
+        {
+          "commit": "e16b716",
+          "minutes": 7,
+          "toolCalls": 29,
+          "gateLoops": 0
+        },
+        {
+          "commit": "a795732",
+          "minutes": 5.3,
+          "toolCalls": 22,
+          "gateLoops": 0
+        },
+        {
+          "commit": "50ac81b",
+          "minutes": 3.1,
+          "toolCalls": 14,
+          "gateLoops": 0
+        }
+      ]
+    },
+    {
+      "id": "002-project-audit",
+      "date": "2026-09-23",
+      "title": "A broad audit of the Shelra project: research plan, market validation and a code review",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "solved": null,
+      "tries": null,
+      "reference": null,
+      "reruns": [
+        {
+          "commit": "b77af2d",
+          "minutes": 26.9,
+          "toolCalls": 102,
+          "gateLoops": 3
+        },
+        {
+          "commit": "a381a54",
+          "minutes": 40.1,
+          "toolCalls": 81,
+          "gateLoops": 1
+        },
+        {
+          "commit": "1386ea7",
+          "minutes": 15.5,
+          "toolCalls": 61,
+          "gateLoops": 1
+        }
+      ]
+    }
+  ]
+}

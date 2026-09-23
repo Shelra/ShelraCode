@@ -19,6 +19,9 @@ bun run scripts/bench-history.ts summary                     # one line per run
 Runs are merged by id: a run already in the file is replaced by its newer copy and nothing is ever
 dropped. Field cases are re-read from `bench/field/cases/` on every import.
 
+The website's "Benchmark" section is derived from this file: after an import, run
+`bun run bench:sync` in `frontend/` and commit `frontend/src/lib/bench-summary.json` with it.
+
 ## What a run records
 
 `agent.name` and `agent.config` (the harness, the model policy, and `ablation` when subsystems were

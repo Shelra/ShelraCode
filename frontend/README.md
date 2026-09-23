@@ -5,7 +5,8 @@ template (`https://distinct-cube-212471.framer.app`): every text style, colour t
 breakpoint (1200 / 810 / 390), animation and interaction is reproduced 1:1, with two
 deliberate improvements (a fixed noise layer and an interruptible, momentum-based slider).
 The content is ShelraCode's own: the copy in `src/lib/content.ts` comes from the repository
-(README, `shelra --help`, `bench/field/SCOREBOARD.md`, `docs/design`), the "Field notes"
+(README, `shelra --help`, `bench/field/SCOREBOARD.md`, `docs/design`), the "Benchmark"
+section is generated from the versioned run history (below), the "Field notes"
 section shows measured results instead of testimonials, pricing describes the real cost model
 (Free · your key · local), and every product image is a capture of the real TUI
 (`public/images/tui-*.png`, made with the `scripts/ui-demo` harness: real app, scripted model,
@@ -24,6 +25,19 @@ bun run start    # serve the production build
 
 Type-check with `bunx tsc --noEmit`. Lint and format with the repository's Biome
 config from the repo root: `bunx biome check frontend/src`.
+
+## Benchmark section
+
+The "Benchmark" section of the home page shows Shelra Bench as recorded in
+`../bench/history/benchmark-history.json` (every run and field case, see `bench/history/README.md`):
+the best completed run per agent and model on the core suite (tasks resolved, cost, wall time,
+run number, date and harness commit), the product path's progression on the model it was
+measured on most, and the field cases with their reference agent and re-runs. The page reads
+`src/lib/bench-summary.json`, which `bun run bench:sync` (`scripts/bench-summary.ts`) derives
+from the history; nothing is typed in by hand. Reference agents (Claude Code, Codex) appear as
+"being recorded" until their runs are imported into the history, then fill in on the next sync.
+After importing runs (`bun run scripts/bench-history.ts import …` at the repo root), run
+`bun run bench:sync` here and commit both files.
 
 ## Sign-in (GitHub, Google, email + password)
 
@@ -77,10 +91,11 @@ reseeds the workspace. Replacing the demo with a real API means swapping `store.
   overlay menu, noise overlay, final call to action and footer.
 - `src/components/hero/` — hero section and the WebGL2 "Bands" shader background (same GLSL and
   uniforms as the original, with the still image as fallback).
-- `src/components/sections/` — social proof (sliding logos), features (with the three terminal
-  illustrations), use cases (tabs), how it works, benefits, testimonials (`Carousel.tsx`: drag
-  with momentum, arrows, keyboard, trackpad),
-  pricing (monthly/yearly toggle with the animated price) and FAQ (accordion).
+- `src/components/sections/` — social proof (sliding logos), benchmark (`Benchmark.tsx`, data
+  from `src/lib/bench-summary.json`), features (with the three terminal illustrations), use
+  cases (tabs), how it works, benefits, testimonials (`Carousel.tsx`: drag with momentum,
+  arrows, keyboard, trackpad), pricing (monthly/yearly toggle with the animated price) and
+  FAQ (accordion).
 - `src/components/ui/` — Button, Badge, SectionBadge, Toggle, SocialsButton and the icon set.
 - `src/components/motion/` — `Appear` (scroll-triggered appear effect) and `TextAppear`
   (word/line tokenised text reveal).
