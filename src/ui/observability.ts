@@ -9,6 +9,7 @@ import {
   describeToolResult,
   formatDuration,
 } from "./activity";
+import { GLYPH } from "./glyphs";
 
 export type UiActivityKind = "research" | "step" | "tool" | "agent" | "verification" | "memory" | "error";
 export type UiActivityStatus = "active" | "complete" | "failed";
@@ -99,7 +100,10 @@ export function turnSummaryGroups(item: TranscriptSummaryItem): SummarySegment[]
     const failures = /(\d+)\s*fail/i.exec(check.meta)?.[1];
     groups.push([
       { text: `${check.label} `, tone: "neutral" },
-      { text: failed ? (failures ? `✗ ${failures} failed` : "✗") : "✓", tone: failed ? "danger" : "success" },
+      {
+        text: failed ? (failures ? `${GLYPH.failed} ${failures} failed` : GLYPH.failed) : GLYPH.done,
+        tone: failed ? "danger" : "success",
+      },
     ]);
   }
   if (item.durationMs !== null && item.durationMs >= 1000) {

@@ -2,7 +2,7 @@ import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { describe, expect, it } from "vitest";
 import { Markdown } from "./markdown";
-import { dark, dark256 as light, type Theme } from "./theme";
+import { dark, dark256, type Theme } from "./theme";
 
 const CONTENT =
   "Fixed both failures.\n\n## What changed\n\n- one\n- two\n\n## Verification\n\nDone.\n\n```ts\nconst a = 1;\n```\n\nAfter code.";
@@ -63,7 +63,7 @@ describe("Markdown", () => {
 
   it.each([
     ["dark", dark],
-    ["256-colour", light],
+    ["256-colour", dark256],
   ] as const)("draws fenced code from theme tokens in the %s theme", async (_name, t) => {
     const { frame, spans } = await render(t);
     expect(frame).toContain("const a = 1;");

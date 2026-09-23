@@ -83,6 +83,7 @@ import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
 import { TextArea } from "./components/text-area";
 import { DiffView } from "./diff-view";
+import { GLYPH } from "./glyphs";
 import { HelpModal } from "./help-modal";
 import { type TypeaheadState, useTypeahead } from "./hooks/useTypeahead.js";
 import { buildKnowledge, type KnowledgeTab } from "./knowledge";
@@ -148,7 +149,6 @@ import { type MotionPreference, reducedMotionEnabled, resolveTheme, scrollbarSty
 import {
   ActivityLine,
   ErrorBlock,
-  GLYPH,
   LiveTurn,
   PlanBlock,
   ThoughtView,
@@ -5191,7 +5191,7 @@ function PromptModeLabel({
   }
 
   // While a turn runs, a static dot stands in for the label; the activity line carries the motion.
-  return <text fg={t.brand}>{"●"}</text>;
+  return <text fg={t.brand}>{GLYPH.active}</text>;
 }
 
 function CopyFlashBanner({ t, width }: { t: Theme; width: number }) {
@@ -5658,7 +5658,7 @@ function SubagentTaskLine({ t, agent, label, pending }: { t: Theme; agent: strin
   return (
     <box paddingLeft={3}>
       <text>
-        {pending ? <span style={{ fg: t.subagentAccent }}>{"○"}</span> : null}
+        {pending ? <span style={{ fg: t.subagentAccent }}>{GLYPH.queued}</span> : null}
         {pending ? " " : ""}
         <span style={{ fg: t.subagentAccent }}>
           <b>{`${displayAgent}: ${displayLabel}`}</b>
@@ -5675,7 +5675,7 @@ function DelegationTaskLine({ t, label, pending, id }: { t: Theme; label: string
     <box paddingLeft={3}>
       <text>
         {pending ? (
-          <span style={{ fg: t.subagentAccent }}>{"○"}</span>
+          <span style={{ fg: t.subagentAccent }}>{GLYPH.queued}</span>
         ) : (
           <span style={{ fg: t.subagentAccent }}>{"▪"}</span>
         )}{" "}

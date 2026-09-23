@@ -10,6 +10,7 @@ import type {
   BenchmarkRunSummary,
   BenchmarkTaskResult,
 } from "../bench/types";
+import { GLYPH } from "./glyphs";
 import { scrollbarStyle, type Theme } from "./theme";
 
 export type BenchView = "leaderboard" | "history" | "trend" | "compare" | "tasks" | "live";
@@ -580,7 +581,7 @@ function TaskRow({ t, task }: { t: Theme; task: BenchmarkTaskResult }) {
           key={criterion.id}
           fg={criterion.status === "passed" ? t.success : criterion.status === "failed" ? t.danger : t.warning}
         >
-          {`${criterion.status === "passed" ? "✓" : criterion.status === "failed" ? "✗" : "·"} ${criterion.id} ${criterion.description}`}
+          {`${criterion.status === "passed" ? GLYPH.done : criterion.status === "failed" ? GLYPH.failed : GLYPH.quiet} ${criterion.id} ${criterion.description}`}
         </text>
       ))}
     </box>

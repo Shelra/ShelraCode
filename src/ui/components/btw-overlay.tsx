@@ -1,3 +1,4 @@
+import { GLYPH } from "../glyphs.js";
 import { Markdown } from "../markdown.js";
 import type { Theme } from "../theme.js";
 
@@ -29,7 +30,7 @@ export function BtwOverlay({ state, theme: t }: { state: BtwState; theme: Theme 
 
       {state.status === "loading" && (
         <text>
-          <span style={{ fg: t.textMuted }}>{"○"}</span>
+          <span style={{ fg: t.textMuted }}>{GLYPH.queued}</span>
           <span style={{ fg: t.textMuted }}> Answering…</span>
         </text>
       )}

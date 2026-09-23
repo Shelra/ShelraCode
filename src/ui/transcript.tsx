@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Plan } from "../types/index";
+import type { Plan, PlanStepStatus } from "../types/index";
 import {
   type ActivityPhrase,
   type ActivityRowModel,
@@ -9,6 +9,7 @@ import {
   truncateText,
 } from "./activity";
 import { DiffView } from "./diff-view";
+import { GLYPH } from "./glyphs";
 import {
   type TranscriptActivityItem,
   type TranscriptSummaryItem,
@@ -18,18 +19,9 @@ import {
 import type { Theme } from "./theme";
 
 /* ── Vocabulary ──────────────────────────────────────────────────
- * One glyph and one colour per state, shared by history rows, the live line, the sidebar and the
- * inspector. Colour reinforces the glyph; it is never the only signal.
+ * One glyph and one colour per state (`glyphs.ts`), shared by history rows, the live line, the plan
+ * and the inspector. Colour reinforces the glyph; it is never the only signal.
  */
-
-export const GLYPH = {
-  done: "✓",
-  failed: "✗",
-  active: "●",
-  quiet: "·",
-  collapsed: "▸",
-  expanded: "▪",
-} as const;
 
 /** The glyph that goes with a work status; colour reinforces it, never replaces it. */
 export function statusGlyph(tone: ActivityTone): string {
@@ -38,6 +30,28 @@ export function statusGlyph(tone: ActivityTone): string {
   if (tone === "warning") return "!";
   if (tone === "success") return GLYPH.done;
   return GLYPH.quiet;
+}
+
+/** How a plan step draws in the log and in the inspector: its glyph, the glyph's colour and its title's. */
+export function planStepLook(
+  status: PlanStepStatus | undefined,
+  t: Theme,
+): { glyph: string; glyphColor: string; titleColor: string } {
+  switch (status) {
+    case "working":
+      return { glyph: GLYPH.active, glyphColor: t.brand, titleColor: t.text };
+    case "complete":
+      return { glyph: GLYPH.done, glyphColor: t.success, titleColor: t.textMuted };
+    case "failed":
+      return { glyph: GLYPH.failed, glyphColor: t.danger, titleColor: t.danger };
+    default:
+      return { glyph: GLYPH.queued, glyphColor: t.textDim, titleColor: t.textDim };
+  }
+}
+
+/** A step number as the site's accent chip: ` 01 `. */
+export function stepChipText(step: number): string {
+  return ` ${String(step).padStart(2, "0")} `;
 }
 
 export function toneColor(t: Theme, tone: ActivityTone): string {
@@ -265,36 +279,13 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
       {start > 0 ? <text fg={t.textDim}>{`  ${start} earlier`}</text> : null}
       {visible.map((step, offset) => {
         const status = step.status ?? "pending";
-        const glyph =
-          status === "complete"
-            ? GLYPH.done
-            : status === "failed"
-              ? GLYPH.failed
-              : status === "working"
-                ? GLYPH.active
-                : "○";
-        const glyphColor =
-          status === "complete"
-            ? t.success
-            : status === "failed"
-              ? t.danger
-              : status === "working"
-                ? t.brand
-                : t.textDim;
-        const titleColor =
-          status === "working"
-            ? t.text
-            : status === "failed"
-              ? t.danger
-              : status === "complete"
-                ? t.textMuted
-                : t.textDim;
+        const { glyph, glyphColor, titleColor } = planStepLook(status, t);
         const title = truncateText(step.title, room);
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: plan steps are ordered and titles may repeat
           <box key={`${start + offset}:${step.title}`} flexDirection="column" flexShrink={0}>
             <text wrapMode="none">
-              <span style={{ fg: t.onAccent, bg: t.brand }}>{` ${String(start + offset + 1).padStart(2, "0")} `}</span>
+              <span style={{ fg: t.onAccent, bg: t.brand }}>{stepChipText(start + offset + 1)}</span>
               <span> </span>
               <span style={{ fg: glyphColor }}>{`${glyph} `}</span>
               {status === "working" ? (

@@ -2,16 +2,10 @@ import type React from "react";
 import type { AgentContextSummary } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
 import type { MemoryContext } from "../memory/retrieval";
-import type {
-  DelegationRun,
-  Plan,
-  PlanAcceptanceCriterion,
-  PlanStepStatus,
-  SubagentStatus,
-  ToolCall,
-} from "../types/index";
+import type { DelegationRun, Plan, PlanAcceptanceCriterion, SubagentStatus, ToolCall } from "../types/index";
 import { formatSubagentName } from "../utils/subagent-display";
 import { SectionBadge } from "./components/badge";
+import { GLYPH } from "./glyphs";
 import { type LoadedContext, loadedContextRows } from "./loaded-context";
 import { MISSION_VIEWS, type MissionTab } from "./mission";
 import {
@@ -31,7 +25,7 @@ import {
 } from "./observability";
 import { PlanView } from "./plan";
 import { scrollbarStyle, type Theme } from "./theme";
-import { GLYPH, statusGlyph, toneColor } from "./transcript";
+import { planStepLook, statusGlyph, stepChipText, toneColor } from "./transcript";
 
 export type InspectorTab = "overview" | "plan" | "activity" | "evidence" | "agents";
 
@@ -67,7 +61,7 @@ export function SessionStatusStrip({
   // While a turn runs, the live line in the transcript is the single source of "what now".
   if (isProcessing || (status !== "blocked" && status !== "verification-needed")) return null;
 
-  const marker = isProcessing ? "●" : status === "blocked" ? "✗" : "!";
+  const marker = isProcessing ? GLYPH.active : status === "blocked" ? GLYPH.failed : "!";
   const statusColor = isProcessing ? t.accent : completionColor(status, t);
   const title = isProcessing
     ? currentActivity || phaseLabel(kernel, true)
@@ -155,7 +149,7 @@ export function ActiveAgentsStrip({
         ) : (
           <AgentStripRow
             t={t}
-            marker="●"
+            marker={GLYPH.active}
             name={formatSubagentName(activeSubagent.agent)}
             detail={activeSubagent.detail || activeSubagent.description}
             elapsed={elapsed}
@@ -177,7 +171,7 @@ export function ActiveAgentsStrip({
           <AgentStripRow
             key={delegation.id}
             t={t}
-            marker="●"
+            marker={GLYPH.active}
             name={formatSubagentName(delegation.agent)}
             detail={delegation.description}
             elapsed={elapsedFromIso(delegation.startedAt, now)}
@@ -189,7 +183,7 @@ export function ActiveAgentsStrip({
         <AgentStripRow
           key={delegation.id}
           t={t}
-          marker={delegation.status === "error" ? "✗" : "✓"}
+          marker={delegation.status === "error" ? GLYPH.failed : GLYPH.done}
           name={formatSubagentName(delegation.agent)}
           detail={delegation.summary}
           elapsed={null}
@@ -674,7 +668,7 @@ function RailRow({
   /** A step number, drawn as the site's accent chip: ` 01 `. */
   chip?: number;
 }) {
-  const chipText = chip !== undefined ? ` ${String(chip).padStart(2, "0")} ` : "";
+  const chipText = chip !== undefined ? stepChipText(chip) : "";
   const room = Math.max(6, width - 2 - chipText.length - (chip !== undefined ? 1 : 0) - (meta ? meta.length + 1 : 0));
   const shown = truncate(text, room);
   return (
@@ -725,6 +719,7 @@ function PlanRail({ t, plan, width, max = 6 }: { t: Theme; plan: Plan; width: nu
       {visible.map((step, offset) => {
         const status = step.status ?? "pending";
         const active = status === "working";
+        const look = planStepLook(status, t);
         const description = active && max > 6 ? normalizeText(step.description ?? "") : "";
         return (
           <box
@@ -736,12 +731,10 @@ function PlanRail({ t, plan, width, max = 6 }: { t: Theme; plan: Plan; width: nu
             <RailRow
               t={t}
               chip={start + offset + 1}
-              glyph={planStepMark(status)}
-              glyphColor={status === "complete" ? t.success : planStepColor(status, t)}
+              glyph={look.glyph}
+              glyphColor={look.glyphColor}
               text={step.title}
-              textColor={
-                active ? t.text : status === "failed" ? t.danger : status === "complete" ? t.textMuted : t.textDim
-              }
+              textColor={look.titleColor}
               width={width}
               bold={active}
             />
@@ -1202,7 +1195,7 @@ function AgentsTab({
         finished.slice(0, 12).map((delegation) => (
           <box key={delegation.id} paddingBottom={1} flexDirection="column">
             <text fg={delegation.status === "error" ? t.danger : t.success}>
-              {`${delegation.status === "error" ? "✗" : "✓"} ${formatSubagentName(delegation.agent)} · ${delegation.id}`}
+              {`${delegation.status === "error" ? GLYPH.failed : GLYPH.done} ${formatSubagentName(delegation.agent)} · ${delegation.id}`}
             </text>
             <text fg={t.textMuted}>{normalizeText(delegation.summary)}</text>
             <text fg={t.textDim}>{describeFinishedAgo(delegation.completedAt, now)}</text>
@@ -1418,15 +1411,15 @@ function criterionMark(
 function criterionMarkSymbol(mark: CriterionMark): string {
   switch (mark) {
     case "verified":
-      return "✓";
+      return GLYPH.done;
     case "linked":
-      return "●";
+      return GLYPH.active;
     case "unverified":
-      return "✗";
+      return GLYPH.failed;
     case "attempted":
-      return "○";
+      return GLYPH.queued;
     case "pending":
-      return "○";
+      return GLYPH.queued;
   }
 }
 
@@ -1521,32 +1514,6 @@ function ContextBar({ t, ratio, width }: { t: Theme; ratio: number; width: numbe
       <span style={{ fg: t.border }}>{"░".repeat(cells - filled)}</span>
     </text>
   );
-}
-
-function planStepMark(status: PlanStepStatus | undefined): string {
-  switch (status) {
-    case "working":
-      return "●";
-    case "complete":
-      return "✓";
-    case "failed":
-      return "✗";
-    default:
-      return "○";
-  }
-}
-
-function planStepColor(status: PlanStepStatus | undefined, t: Theme): string {
-  switch (status) {
-    case "working":
-      return t.accent;
-    case "complete":
-      return t.success;
-    case "failed":
-      return t.danger;
-    default:
-      return t.textMuted;
-  }
 }
 
 function isoToMs(value: string | undefined): number | null {

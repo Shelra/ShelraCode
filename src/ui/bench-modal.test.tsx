@@ -9,7 +9,7 @@ import type {
   BenchmarkTaskResult,
 } from "../bench/types";
 import { BenchModal } from "./bench-modal";
-import { dark, dark256 as light } from "./theme";
+import { dark, dark256 } from "./theme";
 
 const NOW = new Date("2026-09-13T22:05:15.000Z");
 
@@ -174,7 +174,7 @@ describe("Shelra Bench visual contract", () => {
   it("shows failed/interrupted history and per-criterion evidence in the 256-colour palette", async () => {
     const screen = await testRender(
       <BenchModal
-        t={light}
+        t={dark256}
         width={120}
         height={36}
         view="history"
@@ -202,7 +202,7 @@ describe("Shelra Bench visual contract", () => {
     expect(frame).toContain("FAIL");
     expect(frame).toContain("INTERRUPTED");
     expect(frame).toContain("Model is a controlled variable");
-    expect(colors.lines.some((line) => line.spans.some((span) => span.fg.equals(RGBA.fromHex(light.accent))))).toBe(
+    expect(colors.lines.some((line) => line.spans.some((span) => span.fg.equals(RGBA.fromHex(dark256.accent))))).toBe(
       true,
     );
     screen.renderer.destroy();
@@ -296,7 +296,7 @@ describe("Shelra Bench visual contract", () => {
 
     const liveScreen = await testRender(
       <BenchModal
-        t={light}
+        t={dark256}
         width={120}
         height={32}
         view="live"

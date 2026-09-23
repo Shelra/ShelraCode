@@ -5,7 +5,7 @@ import type { KernelState } from "../agent/kernel";
 import type { DelegationRun, Plan, SubagentStatus } from "../types/index";
 import type { CheckSummary } from "./observability";
 import { ActiveAgentsStrip, MissionPanel, SessionInspector, type VerificationStatus } from "./session-inspector";
-import { dark as defaultDark, dark256 as light, type Theme } from "./theme";
+import { dark256, dark as defaultDark, type Theme } from "./theme";
 
 const dark = defaultDark;
 const NOW = new Date("2026-09-13T12:00:42.000Z").getTime();
@@ -207,9 +207,9 @@ describe("mission views", () => {
   });
 
   it("keeps every view legible in the 256-colour palette", async () => {
-    const { screen, frame, colors } = await renderView("working", "plan", light);
+    const { screen, frame, colors } = await renderView("working", "plan", dark256);
     expect(frame).toContain("PLAN");
-    expect(frameUsesForeground(colors, light.brand)).toBe(true);
+    expect(frameUsesForeground(colors, dark256.brand)).toBe(true);
     screen.renderer.destroy();
   });
 
