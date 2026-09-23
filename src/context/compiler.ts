@@ -1,33 +1,26 @@
-import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
-import { basename, isAbsolute, join, relative, sep } from "path";
+import { spawnSync } from "node:child_process";
+import { existsSync, statSync } from "node:fs";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { contractChecks } from "../contract/contract";
+import { discoverChecks } from "../contract/discover";
+import { listWorkspaceFiles } from "../contract/workspace-files";
 import type { ContextPacket, TurnClassification } from "./types";
 
-const MAX_FILES = 256;
-const MAX_WALK_DEPTH = 32;
-const MAX_MANIFEST_CHARS = 1_500;
 const MAX_CONTEXT_CHARS = 8_000;
-const IGNORED = new Set([
-  ".git",
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".shelra",
-  // The local Shelra checkout is migration evidence, not part of the target
-  // workspace. Scanning it first can consume MAX_FILES before package.json
-  // and src/ are even considered.
-  "ShelraCode",
-]);
+/** Uncommitted changes listed by name; the rest are counted. */
+const MAX_CHANGED_FILES = 12;
+const MAX_NAMED_FILES = 12;
+/** Path-like words examined in one request. */
+const MAX_NAME_CANDIDATES = 8;
+/** Files listed for a bare name such as `index.ts`; the rest are counted. */
+const MAX_MATCHES_PER_NAME = 5;
+const MAX_COMMIT_LINE_CHARS = 100;
+const GIT_TIMEOUT_MS = 3_000;
 
 const MUTATION_RE =
   /\b(add|create|edit|fix|update|change|modify|refactor|remove|delete|write|implement|replace|migrate|implementa|agrega|agregar|crea|crear|corrige|corregir|actualiza|actualizar|cambia|cambiar|modifica|modificar|elimina|eliminar|escribe|escribir)\b/i;
 const REPOSITORY_RE =
   /(?:\b(repo(?:sitory)?|repository|codebase|project|workspace|file|files|folder|directory|src|test|function|class|module|package|review|inspect|analy[sz]e|explore|read|list|proyecto|proyectos|repositorio|repositorios|c[oó]digo|c[oó]digos|carpeta|carpetas|directorio|directorios|archivo|archivos|fichero|ficheros|prueba|pruebas|funci[oó]n|clase|m[oó]dulo|paquete|revisa|revisar|revisi[oó]n|inspecciona|inspeccionar|analiza|analizar|examina|examinar|explora|explorar|lee|leer|lista|listar|muestra|mostrar|entiende|entender|estructura|estado)\b|[\\/]src[\\/]|\.(?:ts|tsx|js|jsx|py|go|rs|json)\b)/i;
-
-/** Manifests worth a bounded excerpt: they orient the model on runtime, scripts, and dependencies. */
-const MANIFEST_EVIDENCE = ["package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml", "build.gradle"];
-/** Files listed as relevant paths without excerpts; project instructions are injected separately. */
-const MANIFEST_PATHS = ["package.json", "README.md", "AGENTS.md", "CLAUDE.md", ...MANIFEST_EVIDENCE];
 
 /**
  * Informational only. Nothing here may restrict the model — the host once used this to strip
@@ -49,108 +42,153 @@ export function classifyTurn(prompt: string): TurnClassification {
   return { kind: "conversation", reason: "no repository or mutation signal" };
 }
 
-function isInsideRoot(realRoot: string, candidate: string): boolean {
-  const rel = relative(realRoot, candidate);
-  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+/** A read-only git command in the workspace: null when git is missing or did not finish in time. */
+function git(root: string, args: readonly string[]): { ok: boolean; stdout: string } | null {
+  const result = spawnSync("git", ["--no-optional-locks", ...args], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
+    maxBuffer: 4 * 1024 * 1024,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  });
+  if (result.error || typeof result.status !== "number") return null;
+  return { ok: result.status === 0, stdout: result.stdout ?? "" };
+}
+
+function clip(text: string, maxChars: number): string {
+  return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
+}
+
+/** Branch, uncommitted changes with their size, and the last commits, limited to this workspace. */
+function gitSummary(root: string): { text: string | null; truncated: boolean } {
+  const status = git(root, [
+    "-c",
+    "color.status=false",
+    "-c",
+    "core.quotepath=off",
+    "status",
+    "--short",
+    "--branch",
+    "--",
+    ".",
+  ]);
+  if (!status) return { text: null, truncated: false };
+  if (!status.ok) return { text: "Git: this workspace is not in a git repository.", truncated: false };
+  const [branch = "", ...changes] = status.stdout.split(/\r?\n/u).filter((line) => line.trim() !== "");
+  const lines = [`Git branch: ${branch.replace(/^##\s*/u, "")}`];
+  if (changes.length === 0) {
+    lines.push("Uncommitted changes: none.");
+  } else {
+    const stat = git(root, ["diff", "--shortstat", "--no-ext-diff", "--no-textconv", "HEAD", "--", "."]);
+    const size = stat?.ok && stat.stdout.trim() ? ` (${stat.stdout.trim()})` : "";
+    lines.push(`Uncommitted changes${size}:`, ...changes.slice(0, MAX_CHANGED_FILES).map((line) => `  ${line}`));
+    if (changes.length > MAX_CHANGED_FILES) lines.push(`  … and ${changes.length - MAX_CHANGED_FILES} more`);
+  }
+  const log = git(root, ["log", "--oneline", "--no-decorate", "--no-color", "--no-show-signature", "-3"]);
+  const commits = log?.ok ? log.stdout.split(/\r?\n/u).filter((line) => line.trim() !== "") : [];
+  if (commits.length > 0)
+    lines.push("Recent commits:", ...commits.map((line) => `  ${clip(line, MAX_COMMIT_LINE_CHARS)}`));
+  return { text: lines.join("\n"), truncated: changes.length > MAX_CHANGED_FILES };
+}
+
+/** Words of the request that look like paths: a separator or a file extension, and no URL or glob syntax. */
+function pathCandidates(prompt: string): string[] {
+  const candidates = new Set<string>();
+  for (const word of prompt.split(/[\s"'`()<>{},;]+/u)) {
+    const candidate = word
+      .replace(/^[*@]+/u, "")
+      .replace(/[.,:;!?*]+$/u, "")
+      .replace(/:\d+(?::\d+)?$/u, "");
+    if (!candidate || candidate === "." || candidate === ".." || candidate.length > 200) continue;
+    if (candidate.includes("://") || /[*?[\]]/u.test(candidate)) continue;
+    if (!/[\\/]/u.test(candidate) && !/\.[A-Za-z][A-Za-z0-9]{0,7}$/u.test(candidate)) continue;
+    candidates.add(candidate);
+    if (candidates.size >= MAX_NAME_CANDIDATES) break;
+  }
+  return [...candidates];
+}
+
+/** The workspace-relative form of a path the request names, or null when it points outside the workspace. */
+function insideWorkspace(root: string, candidate: string): string | null {
+  const rel = relative(root, resolve(root, candidate));
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
+  return rel.split(sep).join("/");
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Workspace files with one of these names, from git (tracked and unignored) or a bounded walk elsewhere. */
+function filesNamed(root: string, names: readonly string[]): Map<string, string[]> {
+  const listed = git(root, [
+    "ls-files",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "-z",
+    "--",
+    ...names.map((name) => `:(glob)**/${name}`),
+  ]);
+  const paths = listed?.ok
+    ? listed.stdout.split("\0").filter(Boolean)
+    : listWorkspaceFiles(root).files.map((file) => file.path);
+  const byName = new Map<string, string[]>(names.map((name) => [name, []]));
+  for (const path of [...new Set(paths)].sort()) byName.get(basename(path))?.push(path);
+  return byName;
 }
 
 /**
- * Depth-limited, cycle-safe directory walk. Real paths of visited directories
- * are remembered and symlinked directories are only followed when they resolve
- * back inside the workspace, so a `link -> .` cycle terminates instead of
- * recursing until the stack overflows.
+ * The files and folders the request names, resolved inside the workspace: a path as written, a bare
+ * name at the workspace root, or else every file with that name. Nothing the request does not name.
  */
-function walkDir(
-  root: string,
-  realRoot: string,
-  current: string,
-  paths: string[],
-  visited: Set<string>,
-  depth: number,
-): void {
-  if (paths.length >= MAX_FILES || depth > MAX_WALK_DEPTH) return;
-  let realCurrent: string;
-  try {
-    realCurrent = realpathSync(current);
-  } catch {
-    return;
-  }
-  if (visited.has(realCurrent)) return;
-  visited.add(realCurrent);
-
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(current, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  const orderedEntries = [...entries].sort(
-    (a, b) => Number(a.isDirectory()) - Number(b.isDirectory()) || a.name.localeCompare(b.name),
-  );
-  for (const entry of orderedEntries) {
-    if (paths.length >= MAX_FILES) return;
-    if (IGNORED.has(entry.name)) continue;
-    const absolute = join(current, entry.name);
-    if (entry.isDirectory()) {
-      walkDir(root, realRoot, absolute, paths, visited, depth + 1);
+function namedFiles(root: string, prompt: string): { lines: string[]; files: string[]; truncated: boolean } {
+  const lines: string[] = [];
+  const files: string[] = [];
+  const bareNames: string[] = [];
+  for (const candidate of pathCandidates(prompt)) {
+    const rel = insideWorkspace(root, candidate);
+    if (!rel || !existsSync(resolve(root, rel))) {
+      if (!/[\\/]/u.test(candidate)) bareNames.push(candidate);
       continue;
     }
-    if (entry.isFile()) {
-      paths.push(relative(root, absolute).replaceAll("\\", "/"));
-      continue;
-    }
-    if (!entry.isSymbolicLink()) continue;
-    let realLinked: string;
-    let linkedIsDirectory: boolean;
-    try {
-      realLinked = realpathSync(absolute);
-      linkedIsDirectory = statSync(absolute).isDirectory();
-    } catch {
-      continue;
-    }
-    if (!linkedIsDirectory) {
-      paths.push(relative(root, absolute).replaceAll("\\", "/"));
-      continue;
-    }
-    if (isInsideRoot(realRoot, realLinked) && !visited.has(realLinked)) {
-      walkDir(root, realRoot, absolute, paths, visited, depth + 1);
+    const shown = isDirectory(resolve(root, rel)) ? `${rel}/` : rel;
+    lines.push(`- ${shown}`);
+    files.push(shown);
+  }
+  let truncated = false;
+  if (bareNames.length > 0) {
+    for (const [name, matches] of filesNamed(root, bareNames)) {
+      if (matches.length === 0) continue;
+      const shown = matches.slice(0, MAX_MATCHES_PER_NAME);
+      const more = matches.length - shown.length;
+      truncated ||= more > 0;
+      lines.push(
+        matches.length === 1
+          ? `- ${shown[0]}`
+          : `- ${name}: ${shown.join(", ")}${more > 0 ? ` (and ${more} more with this name)` : ""}`,
+      );
+      files.push(...shown);
     }
   }
-}
-
-function walk(root: string, current: string, paths: string[]): void {
-  let realRoot: string;
-  try {
-    realRoot = realpathSync(root);
-  } catch {
-    realRoot = root;
-  }
-  walkDir(root, realRoot, current, paths, new Set<string>(), 0);
-}
-
-function readBounded(path: string, maxChars: number): string | null {
-  if (!existsSync(path)) return null;
-  try {
-    const text = readFileSync(path, "utf8");
-    return text.length > maxChars ? `${text.slice(0, maxChars)}\n[truncated]` : text;
-  } catch {
-    return null;
-  }
-}
-
-function objectiveTerms(prompt: string): string[] {
-  return prompt
-    .toLowerCase()
-    .split(/[^a-z0-9_.-]+/i)
-    .filter((term) => term.length >= 3)
-    .slice(0, 24);
+  const unique = [...new Set(files)];
+  return {
+    lines,
+    files: unique.slice(0, MAX_NAMED_FILES),
+    truncated: truncated || unique.length > MAX_NAMED_FILES,
+  };
 }
 
 /**
- * Bounded orientation for a repository-related turn: which paths look relevant to the request
- * and a short excerpt of the project manifest. Project instructions (AGENTS.md, CLAUDE.md) are
- * merged into the system prompt separately, and README content is left for the model to read
- * on demand, so nothing here is injected twice.
+ * What a model cannot cheaply discover for itself (audit doc 15, Phase 3.1): the checks the project
+ * states, the git state, and the files the request names. A generated overview of path names was
+ * noise on any real repository, and read files on demand beat an injected map. Project instructions
+ * (AGENTS.md, CLAUDE.md) are merged into the system prompt separately.
  */
 export function compileContextPacket(root: string, prompt: string, maxChars = MAX_CONTEXT_CHARS): ContextPacket {
   const classification = classifyTurn(prompt);
@@ -158,59 +196,24 @@ export function compileContextPacket(root: string, prompt: string, maxChars = MA
     return { classification, promptAppendix: "", files: [], truncated: false };
   }
 
-  const allFiles: string[] = [];
-  walk(root, root, allFiles);
-  const terms = objectiveTerms(prompt);
-  const ranked = allFiles
-    .map((path) => ({
-      path,
-      score: terms.reduce((score, term) => score + (path.toLowerCase().includes(term) ? 2 : 0), 0),
-    }))
-    .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
-  const files = ranked
-    .filter((entry) => entry.score > 0)
-    .slice(0, 24)
-    .map((entry) => entry.path);
-  const manifestPaths = MANIFEST_PATHS.filter((path) => allFiles.includes(path));
-  const selected = [...new Set([...manifestPaths, ...files])];
-
+  const checks = contractChecks(discoverChecks(root));
+  const repository = gitSummary(root);
+  const named = namedFiles(root, prompt);
   const sections: string[] = [
-    "HOST-COMPILED REPOSITORY CONTEXT:",
-    `Turn classification: ${classification.kind} (${classification.reason}).`,
+    "HOST-COMPILED REPOSITORY CONTEXT (read by Shelra at the start of this turn):",
     `Workspace root: ${root}`,
-    "The host selected bounded evidence; read files on demand instead of requesting the entire repository.",
-    selected.length > 0
-      ? `Relevant paths:\n${selected.map((path) => `- ${path}`).join("\n")}`
-      : "No matching repository paths were found yet.",
+    checks.length > 0
+      ? `Checks this project states:\n${checks.map((check) => `- ${check.kind}: \`${check.command}\` (${check.source})`).join("\n")}`
+      : "The project states no test, type-check or lint command.",
   ];
-  const manifest = MANIFEST_EVIDENCE.find((path) => allFiles.includes(path));
-  if (manifest) {
-    const content = readBounded(join(root, manifest), MAX_MANIFEST_CHARS);
-    if (content) sections.push(`Evidence: ${manifest}\n${content}`);
-  }
+  if (repository.text) sections.push(repository.text);
+  if (named.lines.length > 0) sections.push(`Files the request names:\n${named.lines.join("\n")}`);
   const appendix = sections.join("\n\n");
   return {
     classification,
     promptAppendix:
       appendix.length > maxChars ? `${appendix.slice(0, maxChars)}\n[context truncated by host]` : appendix,
-    files: selected,
-    truncated: appendix.length > maxChars || allFiles.length >= MAX_FILES,
+    files: named.files,
+    truncated: appendix.length > maxChars || repository.truncated || named.truncated,
   };
-}
-
-export function formatContextForDebug(packet: ContextPacket): string {
-  return JSON.stringify(
-    {
-      classification: packet.classification,
-      files: packet.files,
-      truncated: packet.truncated,
-      characters: packet.promptAppendix.length,
-    },
-    null,
-    2,
-  );
-}
-
-export function pathLabel(path: string): string {
-  return basename(path);
 }

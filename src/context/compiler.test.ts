@@ -1,8 +1,53 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { classifyTurn, compileContextPacket } from "./compiler";
+
+const roots: string[] = [];
+const ceiling = process.env.GIT_CEILING_DIRECTORIES;
+
+// A scratch folder must not be read as part of a repository that happens to contain the temp folder.
+beforeAll(() => {
+  process.env.GIT_CEILING_DIRECTORIES = tmpdir();
+});
+
+afterAll(() => {
+  if (ceiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
+  else process.env.GIT_CEILING_DIRECTORIES = ceiling;
+});
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+function scratch(prefix: string, files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  roots.push(root);
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    writeFileSync(join(root, path), content);
+  }
+  return root;
+}
+
+function git(root: string, ...args: string[]): void {
+  const result = spawnSync(
+    "git",
+    ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "init.defaultBranch=main", ...args],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
+}
+
+function repository(prefix: string, files: Record<string, string>): string {
+  const root = scratch(prefix, files);
+  git(root, "init", "--template=");
+  git(root, "add", ".");
+  git(root, "commit", "--no-verify", "-m", "Initial state");
+  return root;
+}
 
 describe("host context compiler", () => {
   it("classifies without ever carrying a tool policy", () => {
@@ -21,20 +66,6 @@ describe("host context compiler", () => {
     }
   });
 
-  it("compiles bounded repository evidence and ranks objective paths", () => {
-    const root = mkdtempSync(join(tmpdir(), "shelra-context-"));
-    mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
-    writeFileSync(join(root, "src", "parser.ts"), "export function parse() {}\n");
-    writeFileSync(join(root, "src", "other.ts"), "export function other() {}\n");
-    const packet = compileContextPacket(root, "Fix parser.ts in the repository", 3_000);
-
-    expect(packet.classification.kind).toBe("coding");
-    expect(packet.files).toContain("src/parser.ts");
-    expect(packet.promptAppendix).toContain("package.json");
-    expect(packet.promptAppendix.length).toBeLessThanOrEqual(3_000 + 30);
-  });
-
   it.each([
     "revisa el proyecto",
     "analiza el repositorio",
@@ -43,47 +74,97 @@ describe("host context compiler", () => {
     expect(classifyTurn(prompt)).toMatchObject({ kind: "repository" });
   });
 
-  it("does not inject README or instruction files as evidence, only the manifest", () => {
-    const root = mkdtempSync(join(tmpdir(), "shelra-context-manifest-"));
-    writeFileSync(join(root, "package.json"), '{"name":"fixture","scripts":{"test":"bun test"}}');
-    writeFileSync(join(root, "README.md"), "README BODY SHOULD NOT BE INJECTED");
-    writeFileSync(join(root, "AGENTS.md"), "AGENTS BODY SHOULD NOT BE INJECTED");
+  it("attaches nothing to a conversation turn", () => {
+    const root = scratch("shelra-context-chat-", { "package.json": '{"scripts":{"test":"bun test"}}' });
+    expect(compileContextPacket(root, "What is a closure?")).toEqual({
+      classification: { kind: "conversation", reason: "no repository or mutation signal" },
+      promptAppendix: "",
+      files: [],
+      truncated: false,
+    });
+  });
+
+  it("supplies the project's checks, its git state and the files the request names", () => {
+    const root = repository("shelra-context-git-", {
+      "package.json": JSON.stringify({ scripts: { test: "bun test", lint: "biome check .", build: "bun build" } }),
+      "src/parser.ts": "export function parse() {}\n",
+      "src/other.ts": "export function other() {}\n",
+      "src/unrelated.ts": "export const unrelated = 1;\n",
+      ".gitignore": "vendor/\n",
+    });
+    writeFileSync(join(root, "src", "parser.ts"), "export function parse() {\n  return 1;\n}\n");
+    writeFileSync(join(root, "notes.md"), "draft\n");
+    mkdirSync(join(root, "vendor"));
+    writeFileSync(join(root, "vendor", "parser.ts"), "ignored copy\n");
+
+    const packet = compileContextPacket(root, "Fix the bug in parser.ts, then update `src/other.ts:12`.");
+
+    expect(packet.files).toEqual(["src/other.ts", "src/parser.ts"]);
+    expect(packet.promptAppendix).toContain(`Workspace root: ${root}`);
+    expect(packet.promptAppendix).toContain("- test: `bun run test` (package.json scripts.test)");
+    expect(packet.promptAppendix).toContain("- lint: `bun run lint` (package.json scripts.lint)");
+    // A build is not a check: it can have side effects, and the contract never runs it.
+    expect(packet.promptAppendix).not.toContain("bun run build");
+    expect(packet.promptAppendix).toContain("Git branch: main");
+    expect(packet.promptAppendix).toMatch(
+      /Uncommitted changes \(1 file changed, 3 insertions\(\+\), 1 deletion\(-\)\):/u,
+    );
+    expect(packet.promptAppendix).toContain(" M src/parser.ts");
+    expect(packet.promptAppendix).toContain("?? notes.md");
+    expect(packet.promptAppendix).toMatch(/Recent commits:\n {2}[0-9a-f]{7,} Initial state/u);
+    expect(packet.promptAppendix).toContain("Files the request names:\n- src/other.ts\n- src/parser.ts");
+    // Nothing the request does not name, and no file contents.
+    expect(packet.promptAppendix).not.toContain("src/unrelated.ts");
+    expect(packet.promptAppendix).not.toContain("vendor/parser.ts");
+    expect(packet.promptAppendix).not.toContain('"scripts"');
+    expect(packet.truncated).toBe(false);
+  });
+
+  it("lists no paths for a request that names none", () => {
+    const root = repository("shelra-context-unnamed-", {
+      "package.json": '{"name":"fixture"}',
+      "README.md": "README BODY SHOULD NOT BE INJECTED",
+      "src/index.ts": "export const a = 1;\n",
+    });
 
     const packet = compileContextPacket(root, "revisa el proyecto");
 
-    expect(packet.files).toEqual(expect.arrayContaining(["package.json", "README.md", "AGENTS.md"]));
-    expect(packet.promptAppendix).toContain('"test":"bun test"');
-    expect(packet.promptAppendix).not.toContain("README BODY");
-    expect(packet.promptAppendix).not.toContain("AGENTS BODY");
+    expect(packet.files).toEqual([]);
+    expect(packet.promptAppendix).toContain("The project states no test, type-check or lint command.");
+    expect(packet.promptAppendix).toContain("Uncommitted changes: none.");
+    expect(packet.promptAppendix).not.toContain("src/index.ts");
+    expect(packet.promptAppendix).not.toContain("README");
   });
 
-  it("terminates on a directory symlink cycle", () => {
-    const root = mkdtempSync(join(tmpdir(), "shelra-context-cycle-"));
-    mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "package.json"), '{"name":"cycle"}');
-    writeFileSync(join(root, "src", "index.ts"), "export const a = 1;\n");
+  it("ignores names outside the workspace and names that do not exist", () => {
+    const root = scratch("shelra-context-outside-", { "src/index.ts": "export const a = 1;\n" });
+
+    const packet = compileContextPacket(root, "Read ../secret.txt, missing.ts, https://example.com/a.ts and src/*.ts");
+
+    expect(packet.files).toEqual([]);
+    expect(packet.promptAppendix).not.toContain("Files the request names");
+  });
+
+  it("finds a bare name outside git with a bounded walk that survives a directory cycle", () => {
+    const root = scratch("shelra-context-cycle-", {
+      "package.json": '{"name":"cycle"}',
+      "src/index.ts": "export const a = 1;\n",
+      "lib/index.ts": "export const b = 2;\n",
+    });
     // `loop` points back at the directory that contains it.
     symlinkSync(root, join(root, "src", "loop"), "junction");
 
-    const packet = compileContextPacket(root, "revisa el proyecto");
+    const packet = compileContextPacket(root, "fix index.ts and read the src/ folder");
 
-    expect(packet.files).toContain("package.json");
+    expect(packet.files).toEqual(["src/", "lib/index.ts", "src/index.ts"]);
+    expect(packet.promptAppendix).toContain("- index.ts: lib/index.ts, src/index.ts");
+    expect(packet.promptAppendix).toContain("Git: this workspace is not in a git repository.");
   });
 
-  it("prioritizes target manifests and ignores a nested reference checkout", () => {
-    const root = mkdtempSync(join(tmpdir(), "shelra-context-root-"));
-    mkdirSync(join(root, "ShelraCode", "src"), { recursive: true });
-    mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "package.json"), '{"name":"target"}');
-    writeFileSync(join(root, "README.md"), "target readme");
-    writeFileSync(join(root, "ShelraCode", "src", "reference.ts"), "reference");
-    writeFileSync(join(root, "src", "index.ts"), "target");
-
-    const packet = compileContextPacket(root, "revisa el proyecto");
-
-    expect(packet.files).toContain("package.json");
-    expect(packet.files).toContain("README.md");
-    expect(packet.files.some((file) => file.startsWith("ShelraCode/"))).toBe(false);
-    expect(packet.promptAppendix).toContain(`Workspace root: ${root}`);
+  it("stays within the character budget", () => {
+    const root = scratch("shelra-context-budget-", { "package.json": '{"scripts":{"test":"bun test"}}' });
+    const packet = compileContextPacket(root, "Fix the project", 60);
+    expect(packet.promptAppendix.length).toBeLessThanOrEqual(60 + "\n[context truncated by host]".length);
+    expect(packet.truncated).toBe(true);
   });
 });

@@ -2579,7 +2579,7 @@ export class Agent {
     this.kernel.transition("discover");
     this.persistKernelIndex();
     reportStatus("context", "Compiling workspace context");
-    // Let the TUI paint the stage before the synchronous, bounded workspace walk starts.
+    // Let the TUI paint the stage before the synchronous git and check-discovery reads start.
     await yieldToEventLoop();
     const userModelMessages =
       runtime.modelInfo?.supportsVision === false
