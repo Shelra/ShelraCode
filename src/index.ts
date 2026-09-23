@@ -1031,12 +1031,20 @@ async function runBenchCommand(options: {
   repeat?: string;
   /** Commander's `--no-history` sets this to false. */
   history?: boolean;
+  /** The root `--max-tool-rounds`: each task's tool-round bound on the shelra product path. */
+  maxToolRounds?: string;
 }): Promise<void> {
   const manifestCandidate = options.manifest || ".shelra/bench/manifest.json";
   const agentName = ((options.agent || "shelra").trim() || "shelra").toLowerCase();
   const repeat = Number(options.repeat ?? "1");
   if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {
     console.error("--repeat takes a whole number from 1 to 20.");
+    process.exitCode = 1;
+    return;
+  }
+  const maxToolRounds = Number(options.maxToolRounds ?? "400");
+  if (!Number.isInteger(maxToolRounds) || maxToolRounds < 1) {
+    console.error("--max-tool-rounds takes a whole number of at least 1.");
     process.exitCode = 1;
     return;
   }
@@ -1083,6 +1091,8 @@ async function runBenchCommand(options: {
       maxCostUsd: budget.maxSessionUsd ?? null,
       maxRequestCostUsd: budget.maxRequestUsd ?? null,
       ablation: ablations.length > 0 ? ablations.join(",") : "none",
+      // A reference agent's own CLI decides its turn limit.
+      ...(agentName === "shelra" ? { maxToolRounds } : {}),
     },
   } as const;
 
@@ -1268,6 +1278,7 @@ async function runBenchCommand(options: {
             benchmarkRoot: process.cwd(),
             budget,
             signal,
+            maxToolRounds,
             ...(ablations.length > 0 ? { agentOptions: { ablate: ablations } } : {}),
           });
         },
@@ -1669,7 +1680,7 @@ program
   )
   .option(
     "--ablate <list>",
-    "Switch harness subsystems off to measure what each adds (comma-separated): memory, gate, audit, plan, skills, context, subagents, web, or bare",
+    "Switch harness subsystems off to measure what each adds (comma-separated): memory, gate, contract, audit, plan, skills, context, subagents, web, or bare",
   )
   .option(
     "--no-clean-room",
