@@ -88,7 +88,7 @@ The objective moved five times in seventeen days. Reconstructed from memory and 
 | 2026-09-12/13 | Make the existing completion gate load-bearing; a "frontier-grade coding agent" roadmap (Phases 0-6) | doc 14 §5-§14 | Partly executed; Phase 6 ("real usage volume") never started |
 | 2026-09-08/15 | Research mission: the durable artifact is the *record of machine discretion* as executable checks; long-horizon memory as its storage layer | `docs/future-research/08`, `11`-`17` | Research only; zero implementation footprint |
 | 2026-09-17 | Hard rule: Shelra must not be stateless; every project must make it smarter over time, proven by benchmark | memory `shelra-memory-engine`, doc 14 §24 | Mechanism built; see §7 for what it does in practice |
-| 2026-09-18 | "The agent that never loses the project's thread": a decision ledger with re-verifiable evidence; kill test by 2026-10-16 | memory `shelra-objective-decision-ledger`, `PRODUCT.md` | Parked 2026-09-22; owner declared the gate passed 2026-09-23 on a live run, phase 2 not started |
+| 2026-09-18 | "The agent that never loses the project's thread": a decision ledger with re-verifiable evidence; kill test by 2026-10-16 | memory `shelra-objective-decision-ledger`, `PRODUCT.md` | Parked 2026-09-22; owner declared the gate passed 2026-09-23 on a live run; phases 2-3 built the same day (Phase 7 below), its proof still open |
 | 2026-09-19 | Hard rules: never abort the flow; model-agnostic guarantees live in deterministic harness code | `AGENTS.md`, doc 14 §26 | Implemented and tested (§4, stage 12) |
 | 2026-09-22 | "Es el objetivo realmente resolver": solve real tasks with any model, free models first | memory `shelra-objective-solve`, `CLAUDE.md` | Current objective |
 
@@ -964,6 +964,10 @@ suite; turning the contract off (ablation) measurably raises false completions.
 - The decision ledger of `docs/future-research/08` becomes *contracts that outlive their task*:
   commitments with executable checks, re-run when the files they cover change. Built this way it reuses
   the contract engine instead of becoming a parallel system.
+- Built early, on the owner's call (2026-09-23), in that shape: `src/ledger/` keeps the decisions the user
+  approved in `docs/decisions/`, and when a turn changes files a decision covers, its check joins that
+  turn's contract (kind `decision`), so a change that breaks it gets the same bounded repair and verdict.
+  Still Phase 7: re-running decision checks outside a turn, across sessions, and for `--autonomous`.
 - *Dependencies*: Phases 1, 2, 4. *Exit*: multi-session tasks complete with no human input beyond
   "continue".
 
@@ -979,7 +983,7 @@ suite; turning the contract off (ablation) measurably raises false completions.
 | More sub-agent types, agent teams, swarms | 6 calls in 2,522; multi-agent costs 4-15× tokens and degrades sequential work (§14) |
 | Embeddings, vector indexes, repository overviews | overviews measured unhelpful; agentic search is the documented winner for code (§14) |
 | More automatic reflection memory or auto-generated skills | measured null or negative (§14); Phase 4 first |
-| The decision ledger as a separate system | it is Phase 7's persistent contract; built first, it would be a fourth engine |
+| The decision ledger as a separate system | it is Phase 7's persistent contract; built first, it would be a fourth engine (the ledger built on 2026-09-23 is not one: its checks join the task contract) |
 | A new `--autonomous` before the contract | it would need rebuilding again on top of Phase 1 |
 | Mandatory plans or plan gates | removed once already; a scaffold only for weak models (§8, §14) |
 | An LLM judge without execution | noisy and gameable (§14) |
@@ -1117,7 +1121,7 @@ from the same clean root with a separate `HOME`, one benchmark at a time.
 | B6 | Memory "lives inside the repo … shareable via git" | memory-engine design, memory note | `.shelra/` is gitignored in this repository (`.gitignore:102`) |
 | B7 | "`search_x` remains provider-specific" | README capabilities | No provider implements `responseSearch`; the tool never appears |
 | B8 | "The copyright holder and year in LICENSE … still the unfilled MIT template" | `PRODUCT.md:60` | LICENSE names the holder since 2026-09-22 |
-| B9 | "The decision date is 2026-10-16" for the ledger kill test | `PRODUCT.md:26` | The owner declared the gate passed on 2026-09-23 (memory); `PRODUCT.md` not updated; phase 2 not started |
+| B9 | "The decision date is 2026-10-16" for the ledger kill test | `PRODUCT.md:26` | The owner declared the gate passed on 2026-09-23 (memory). Fixed the same day: phases 2-3 were built and `PRODUCT.md` says built, not yet proven |
 | B10 | "Quarantine is per process" | doc 14 §23.5 | Persisted since `provider-quarantine.ts` |
 | B11 | "Restart-safe session intent" | doc 14 §21 | The restored kernel is replaced at the start of the next turn (`agent.ts:2386`); display only |
 | B12 | "PreToolUse/PostToolUse wrappers exist but nothing calls them" | auto memory (UX log) | Outdated since `f9e8b4c`: every tool runs them (memory corrected during this audit) |

@@ -23,7 +23,7 @@ The agreed objective (2026-09-18) is an agent that does not lose the project's t
 Confirmed at init: **it never loses the project's thread.**
 
 - Shipped today: persistent project memory under `.shelra/memory/`. Retrieval ranks entries against every request and sub-agent brief; a bounded reflection call proposes durable facts and a deterministic write gate admits, merges or rejects them.
-- Not shipped and unproven: the decision ledger, meaning decisions and commitments recorded with re-verifiable evidence and checked before a task is reported done. It is under test. The decision date is 2026-10-16; if fewer than 5% of real merged PRs silently violate a prior commitment, the thesis stops. Do not present the ledger as a capability.
+- Built on 2026-09-23, not yet proven: the decision ledger, meaning decisions and commitments recorded in `docs/decisions/` with the user's approval and checked before a task is reported done (a decision's check joins the task contract when a change touches the files it covers). Its proof is still to come: dogfooding on real projects, a battery of changes that break a recorded decision, and the same battery with a free and a paid model. The decision date is 2026-10-16; if fewer than 5% of real merged PRs silently violate a prior commitment, the thesis stops. Describe what it does; claim no result for it until that proof exists.
 - Not selected as positioning: harness-enforced honesty and the free-first/private-local mix. Both are real properties of the product (see below), but the user did not stand behind them as the differentiator.
 
 ## Operating Context

@@ -165,6 +165,27 @@ never run for you. Where a project states no checks, a turn that changed files
 but ran no real check is asked to verify, and is marked "Not verified" if it
 never does. The existing Plan-mode view renders the same fields; plans without
 questions are retained when switching from Plan to Agent mode.
+
+**Project decisions:**
+
+```bash
+shelra decisions
+shelra decisions show D-0001
+shelra decisions approve D-0001
+shelra decisions reject D-0002
+```
+
+The decisions a project made live in `docs/decisions/`, one Markdown file per
+decision: the rule, why it was made, its evidence, the files it covers (globs)
+and, optionally, a check command. When a lasting choice comes up in a turn, the
+agent proposes it with `propose_decision`; nothing becomes a decision without
+your yes, given in the terminal UI or with `shelra decisions approve`. Active
+decisions are part of every request, and when a turn changes files a decision
+covers, its check joins the checks Shelra runs on the final code: a change that
+breaks it is sent back naming the decision, and the turn is marked "Not
+verified" if it still fails. To change a decision, approve one that supersedes
+it; the old one stays on record as superseded. Files in the folder without a
+ledger id, such as a project's own ADRs, are left alone.
 Autonomous mode begins executing after publishing its plan; use `Ctrl+C` to
 cancel. An explicit `--sandbox` autonomous run is currently refused instead of
 pretending that host execution is sandboxed.
