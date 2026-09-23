@@ -1,4 +1,4 @@
-import type { CheckSpec } from "../autonomy/types";
+import type { CheckSpec } from "../contract/types";
 
 export const BENCHMARK_DIMENSIONS = [
   "overall",

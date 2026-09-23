@@ -1,5 +1,5 @@
-import { evaluateAcceptance } from "../autonomy/acceptance";
-import type { AcceptanceCriterion, CheckSpec, CriterionResult, VerificationReport } from "../autonomy/types";
+import { evaluateAcceptance } from "../contract/evaluate";
+import type { AcceptanceCriterion, CheckSpec, CriterionResult, VerificationReport } from "../contract/types";
 import { observePage } from "../exec/browser";
 import { runCommand } from "../exec/command";
 import { probeHttp } from "../exec/http";

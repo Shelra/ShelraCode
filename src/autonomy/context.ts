@@ -1,6 +1,9 @@
-import { type Dirent, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, join, relative, sep } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { extname, join } from "node:path";
+import { listWorkspaceFiles, type RepoFile } from "../contract/workspace-files";
 import type { CriterionResult, Objective, Task } from "./types";
+
+export type { RepoFile } from "../contract/workspace-files";
 
 /**
  * The context engine.
@@ -10,26 +13,6 @@ import type { CriterionResult, Objective, Task } from "./types";
  * to show a model is a mechanical problem, and paying a model to do it would be exactly
  * the inefficiency the runtime exists to remove.
  */
-
-const IGNORED_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  ".next",
-  ".nuxt",
-  ".svelte-kit",
-  "out",
-  "target",
-  "vendor",
-  "__pycache__",
-  ".venv",
-  "venv",
-  ".shelra",
-  ".cache",
-  "coverage",
-  ".turbo",
-]);
 
 const TEXT_EXTENSIONS = new Set([
   ".ts",
@@ -63,11 +46,6 @@ const TEXT_EXTENSIONS = new Set([
   ".sql",
 ]);
 
-export interface RepoFile {
-  path: string;
-  size: number;
-}
-
 export interface WorkspaceSnapshot {
   root: string;
   files: RepoFile[];
@@ -77,43 +55,7 @@ export interface WorkspaceSnapshot {
 
 /** Bounded recursive listing. Depth and count caps keep this fast on large repos. */
 export function scanWorkspace(root: string, maxFiles = 400, maxDepth = 6): WorkspaceSnapshot {
-  const files: RepoFile[] = [];
-  let truncated = false;
-
-  const walk = (dir: string, depth: number): void => {
-    if (depth > maxDepth || files.length >= maxFiles) return;
-    let entries: Dirent<string>[];
-    try {
-      // Bun's Node declarations choose the Buffer overload for ReturnType<typeof readdirSync>
-      // even though an explicitly UTF-8 directory read returns string-named Dirents.
-      entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" }) as Dirent<string>[];
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (files.length >= maxFiles) {
-        truncated = true;
-        return;
-      }
-      if (entry.name.startsWith(".") && entry.name !== ".env.example") {
-        if (entry.isDirectory()) continue;
-      }
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (IGNORED_DIRS.has(entry.name)) continue;
-        walk(full, depth + 1);
-      } else if (entry.isFile()) {
-        try {
-          const st = statSync(full);
-          files.push({ path: relative(root, full).split(sep).join("/"), size: st.size });
-        } catch {
-          // Unreadable entry; skip.
-        }
-      }
-    }
-  };
-
-  walk(root, 0);
+  const { files, truncated } = listWorkspaceFiles(root, maxFiles, maxDepth);
 
   const manifests: Record<string, string> = {};
   for (const name of ["package.json", "pyproject.toml", "go.mod", "Cargo.toml", "requirements.txt"]) {

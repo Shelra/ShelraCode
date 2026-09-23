@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { CheckSpec, DomCheck } from "../autonomy/types";
+import type { CheckSpec, DomCheck } from "../contract/types";
 import { resolveBenchmarkPath, sanitizeJsonObject } from "./environment";
 import { normalizeBenchmarkScore } from "./scoring";
 import type {

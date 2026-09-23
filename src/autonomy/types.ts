@@ -1,5 +1,17 @@
+import type { AcceptanceCriterion, VerificationReport } from "../contract/types";
 import type { BrowserObservation, CommandOutcome, FileChange, HttpProbe } from "../exec/types";
 import type { IntelligenceLedger } from "../intelligence/types";
+
+// The check vocabulary moved to the neutral contract module; this runtime keeps its old names.
+export type {
+  AcceptanceCriterion,
+  CheckSpec,
+  CriterionResult,
+  DomCheck,
+  VerificationReport,
+  ViewportName,
+} from "../contract/types";
+export { verificationPassed } from "../contract/types";
 
 /**
  * The autonomy runtime's state model.
@@ -29,87 +41,12 @@ export type StopReason =
   | "impossible_environment"
   | "retry_exhausted";
 
-/**
- * A deterministic, machine-evaluable check. The runtime — not the model — decides whether
- * an objective is complete, and it decides using these.
- *
- * `judge` is the deliberate escape hatch for genuinely semantic requirements. It is the only
- * variant that consults intelligence, and it is recorded as such so evidence stays honest
- * about what was machine-verified versus model-judged.
- */
-export type CheckSpec =
-  | { kind: "file_exists"; path: string }
-  | { kind: "files_exist"; paths: string[] }
-  | { kind: "file_contains"; path: string; pattern: string; ignoreCase?: boolean }
-  | { kind: "no_external_urls"; paths?: string[] }
-  | { kind: "command_succeeds"; command: string; timeoutMs?: number; expectExitCode?: number }
-  | { kind: "http_ok"; path: string; expectStatus?: number }
-  | { kind: "dom"; assertion: DomCheck; viewport?: ViewportName }
-  | { kind: "no_console_errors" }
-  | { kind: "no_external_requests" }
-  | { kind: "no_horizontal_overflow"; viewport: ViewportName; tolerancePx?: number }
-  | { kind: "judge"; question: string };
-
-export type ViewportName = "mobile" | "desktop";
-
-export interface DomCheck {
-  description: string;
-  selector?: string;
-  minCount?: number;
-  textContains?: string;
-  expression?: string;
-  /** Require the selected element's text to change during the observation window. */
-  waitForChangeMs?: number;
-}
-
-export interface AcceptanceCriterion {
-  id: string;
-  description: string;
-  check: CheckSpec;
-  /** Non-required criteria are reported but do not block completion. */
-  required: boolean;
-}
-
 /** The user-visible contract that execution and verification must satisfy. */
 export interface ExecutableSpecification {
   /** Original user objective, preserved verbatim. */
   goal: string;
   requirements: string[];
   acceptance: AcceptanceCriterion[];
-}
-
-export interface CriterionResult {
-  id: string;
-  description: string;
-  passed: boolean;
-  /** Human- and model-readable reason. For failures this is the primary repair input. */
-  detail: string;
-  kind: CheckSpec["kind"];
-  /** True when a model decided this rather than a deterministic check. */
-  modelJudged: boolean;
-  checkedAt: number;
-  durationMs: number;
-}
-
-export interface VerificationReport {
-  attempt: number;
-  passed: boolean;
-  results: CriterionResult[];
-  startedAt: number;
-  durationMs: number;
-  /** Criteria that could not be evaluated at all (e.g. app never started). */
-  blocked: string[];
-}
-
-export function verificationPassed(report: VerificationReport, criteria: AcceptanceCriterion[]): boolean {
-  const requiredIds = new Set(criteria.filter((c) => c.required).map((c) => c.id));
-  if (report.blocked.some((id) => requiredIds.has(id))) return false;
-  const byId = new Map(report.results.map((r) => [r.id, r]));
-  for (const id of requiredIds) {
-    const result = byId.get(id);
-    if (!result || !result.passed) return false;
-  }
-  return true;
 }
 
 export type TaskStatus = "pending" | "active" | "done" | "failed" | "skipped";

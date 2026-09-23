@@ -1,6 +1,6 @@
 import { Agent, type AgentOptions, type ProcessMessageObserver } from "../agent/agent";
 import { isVerificationCommand } from "../agent/verification-evidence";
-import type { CheckSpec } from "../autonomy/types";
+import type { CheckSpec } from "../contract/types";
 import type { BudgetLimits } from "../models/budget";
 import type { ProviderAdapter } from "../providers/types";
 import type { ToolCall, ToolResult } from "../types/index";
