@@ -271,6 +271,9 @@ Production, after the deploy of 2026-09-23 (`1b214d9`, CI and security scan gree
 https://www.shelra.dev --external` reports 0 errors and 1 warning (GitHub rate-limited one outbound link during the
 crawl; requested alone it answers 200). robots.txt and the sitemap are the site's own, with no Cloudflare block in
 front, and `https://shelra-code.vercel.app/memory?x=1` answers 308 to `https://www.shelra.dev/memory?x=1`.
+Lighthouse on the live home page, median of three over the network (runs spread widely, mobile perf 50 to 82),
+against the baseline's single run: mobile perf 45 → 56, LCP 7.7 → 4.9 s, TBT 670 → 562 ms, CLS 0.186 → 0.000, bytes
+1,192 → 556 KB; desktop perf 85 → 96, LCP 2.0 → 1.2 s.
 
 Not verified: anything about indexing or rankings (no Search Console data yet). Google's Rich Results Test was not
 run; SEO-038 rests on Google's documented required properties.
