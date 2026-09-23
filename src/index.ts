@@ -1458,6 +1458,13 @@ function changeDirectoryOrExit(directory: string | undefined) {
 
 type CliOptions = Record<string, string | boolean | undefined>;
 
+/** Everything piped to the process, such as the JSON input an agent's hook receives. */
+async function readStandardInput(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 function stringOption(value: string | boolean | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
@@ -1992,10 +1999,30 @@ program
 
 program
   .command("decisions [action] [id]")
-  .description("List the project's decisions (docs/decisions), or show, approve or reject one by id")
-  .action(async (action: string | undefined, id: string | undefined) => {
+  .description(
+    "List the project's decisions (docs/decisions), show, approve or reject one by id, or check that the active ones hold",
+  )
+  .option("--changed", "check: only the decisions covering a file changed in the working tree")
+  .option("--hook <agent>", "check: answer as that agent's stop hook (claude-code)")
+  .action(async (action: string | undefined, id: string | undefined, options: { changed?: boolean; hook?: string }) => {
     changeDirectoryOrExit(stringOption(program.opts<CliOptions>().directory));
-    const { runDecisionsCommand } = await import("./ledger/cli");
+    const { checkDecisions, runDecisionsCommand } = await import("./ledger/cli");
+    if (action?.toLowerCase() === "check") {
+      if (options.hook !== undefined && options.hook !== "claude-code") {
+        console.error(`Unknown hook "${options.hook}". Use --hook claude-code.`);
+        process.exitCode = 1;
+        return;
+      }
+      const hook = options.hook === "claude-code" ? "claude-code" : undefined;
+      // Claude Code runs hooks with the project in CLAUDE_PROJECT_DIR and their input as JSON on stdin.
+      const workspace = (hook && process.env.CLAUDE_PROJECT_DIR) || process.cwd();
+      const hookInput = hook && !process.stdin.isTTY ? await readStandardInput() : undefined;
+      const result = await checkDecisions(workspace, { changed: options.changed === true, hook, hookInput });
+      if (result.stream === "stdout") console.log(result.output);
+      else console.error(result.output);
+      process.exitCode = result.exitCode;
+      return;
+    }
     const result = runDecisionsCommand(process.cwd(), action, id);
     if (result.exitCode === 0) console.log(result.output);
     else console.error(result.output);

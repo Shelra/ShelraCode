@@ -204,6 +204,26 @@ breaks it is sent back naming the decision, and the turn is marked "Not
 verified" if it still fails. To change a decision, approve one that supersedes
 it; the old one stays on record as superseded. Files in the folder without a
 ledger id, such as a project's own ADRs, are left alone.
+
+The same checks guard changes Shelra did not make. `shelra decisions check` runs
+the check of every active decision and exits 1 when one is broken, for CI or a
+git hook; `--changed` limits it to the decisions covering files changed in the
+working tree. As a Claude Code Stop hook it sends a broken decision back to
+Claude, once, so Claude repairs it before it stops (`.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "shelra decisions check --changed --hook claude-code", "timeout": 600 }
+        ]
+      }
+    ]
+  }
+}
+```
 Autonomous mode begins executing after publishing its plan; use `Ctrl+C` to
 cancel. An explicit `--sandbox` autonomous run is currently refused instead of
 pretending that host execution is sandboxed.
