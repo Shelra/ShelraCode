@@ -92,8 +92,8 @@ command and its result. Anything you could not check is reported as not verified
 | System prompt or tool text | a bench suite or field-case re-run: prompt text is behavior |
 | TUI / web app | `src/ui/CLAUDE.md` / `frontend/CLAUDE.md` |
 
-- CI runs format, lint, typecheck and build, not tests, and it currently stops at Format Check (line endings, see
-  AGENTS.md): run everything yourself.
+- CI runs format, lint, typecheck and build, not tests (green again since `7b6176c`, see line endings in
+  AGENTS.md): run the tests yourself.
 - `bun run test` is an `&&` chain: after the first failure the remaining Bun-only suites did not run. Re-run a timeout
   alone before calling it a regression.
 - A plain `bun run build` also replaces the owner's installed `shelra`; run it only when they want that.
