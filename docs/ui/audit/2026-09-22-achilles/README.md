@@ -36,6 +36,21 @@ the app still read mode `agent`, so the questions panel (state 29) never appeare
 (`src/ui/components/text-area.tsx`) now gives every textarea a stable handler that calls the latest
 one. Its test pins the library behaviour, so it will say when the wrapper is no longer needed.
 
+## After the passes (2026-09-23)
+
+The same 39 states, captured again the same way after the theme module, the component passes and the
+code-review fixes (at `8d80830`): [`after/80x24/`](after/80x24) and [`after/120x40/`](after/120x40), with
+the per-screen results in [`after/inventory.json`](after/inventory.json). The rest of this page describes
+the screens before the passes.
+
+- **Colours:** none outside the palette on any of the 78 captures (27 on the dark screens before, 39 with
+  the light theme, which is gone).
+- **Glyphs:** only `▀` and `▄`, the ends of OpenTUI's scrollbar thumb, the one documented exception: 20
+  cells in all (32 characters outside the set before, rounded corners on 76 of 78 captures).
+- **Not covered:** no state sends a message in Plan mode, so a magenta prompt there went unseen until the
+  code review (`src/ui/app.test.tsx` now renders it). These are xterm.js captures; the brief's captures
+  in Windows Terminal and Warp are not done yet.
+
 ## Screens and states
 
 | # | State | Reached by | Deviations |

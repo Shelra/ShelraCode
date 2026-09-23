@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ AGENT ]  Fix token refresh tests                                                                                    
+                                                                                                                        
+                                                                                                                        
+       · needsRefresh is unchanged and still uses the five minute window                                                
+     ▪ refreshSession rotates the token through the new rotateToken() helper                                            
+                                                                                                                        
+     Steps to verify                                                                                                    
+     1. Run bun test and confirm 5 pass                                                                                 
+     2. Call needsRefresh(session) at the boundary and check that it returns true, then confirm the token changed       
+        after refreshSession                                                                                            
+     3. Persist the rotated session with saveSession                                                                    
+                                                                                                                        
+     │ Tokens are never logged; see AGENTS.md for the rule that applies everywhere in this codebase.                    
+                                                                                                                        
+     ────────────────────────────────────────────────────────────────────────────────────────────────────────────────   
+                                                                                                                        
+                                                                                                                        
+      State                       Meaning                              Next                                             
+      active                      Token is valid                       refresh inside the window                        
+      expired                     now >= expiresAt                     re-authenticate                                  
+                                                                                                                        
+                                                                                                                        
+     Code                                                                                                               
+      ts                                                                                                                
+      export function isExpired(session: Session, now = Date.now()): boolean {                                          
+        return session.expiresAt <= now; // inclusive                                                                   
+      }                                                                                                                 
+                                                                                                                     ▄  
+     Add a regression test around the boundary next.                                                                 █  
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left         ? shortcuts · ctrl+o details · tab mode · @ files · shift+enter new line  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

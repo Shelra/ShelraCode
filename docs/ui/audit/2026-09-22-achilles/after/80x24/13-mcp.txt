@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │                                                                          │  
+  │  [ MCP ]                                                            esc  │  
+  │                                                                          │  
+  │  Search servers...                                                       │  
+  │                                                                          │  
+  │  ○ GitHub                                                      Popular  ▀│  
+  │  Integration with GitHub issues and related workflows.                   │  
+  │  ○ Supabase                                                    Popular   │  
+  │  PostgREST-backed operations for Postgres databases.                     │  
+  │                                                                          │  
+  │                                                                          │  
+  │  enter toggle  ·  ctrl+e edit  ·  ctrl+a add  ·  ctrl+x delete           │  
+  │                                                                          │  
+  │                                                                          │  
+  └──────────────────────────────────────────────────────────────────────────┘  
+                                                                                
+                                                                                
+                                                                                
+                                                                                

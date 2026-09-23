@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+                                                                                
+   ┌────────────────────────────────────────────────────────────────────────┐   
+   │                                                                        │   
+   │   ShelraCode                                               [ CLOUD ]   │   
+   │   OpenRouter Free is the primary model route.                          │   
+   │                                                                        │   
+   │                                                                        │   
+   │   Preparing OpenRouter Free mode                                       │   
+   │   Cloud models are primary. No local model download is started.        │   
+   │   Discovering current models, prices, context and tool capabilities.   │   
+   │   ..                                                                   │   
+   │                                                                        │   
+   │                                                                        │   
+   │                                                                        │   
+   │   ┌──────────────┐                                                     │   
+   │   │  Exit · esc  │                                                     │   
+   │   └──────────────┘                                                     │   
+   │                                                                        │   
+   │   Use --local only for explicit offline/private local inference.       │   
+   └────────────────────────────────────────────────────────────────────────┘   
+                                                                                
+                                                                                

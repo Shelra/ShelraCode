@@ -1,0 +1,24 @@
+                                                                                
+  [ AGENT ]  Fix token refresh tests                                            
+                                                                                
+                                                                                
+      {                                                                         
+        return session.expiresAt <= now;                                        
+      }                                                                         
+                                                                                
+     Next I would add a regression test around the refresh boundary (           
+     expiresAt - now === 5 min).                                                
+                                                                                
+     ─ 2 files +9 −2 · tests ✓ · 8.8s                                           
+                                                                                
+     · Memory updated · 1 entry                       failure-bun-test-failed▄  
+                                                                                
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left   Details on: every step with its evide…  │  
+  └──────────────────────────────────────────────────────────────────────────┘  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

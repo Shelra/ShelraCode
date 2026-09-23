@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ AGENT ]  Fix token refresh tests                                                                                    
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+   $ Get the usage report                                                                                               
+                                                                                                                        
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     The usage report API charges per request, so it needs your approval first.                                         
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  [ PAYMENT ]  needs your approval                                                                                │  
+  │                                                                                                                  │  
+  │  https://reports.example.invalid/v1/usage                                                                        │  
+  │  Security: 64/100 (caution, medium confidence)                                                                   │  
+  │  Price:  USDC on                                                                                                 │  
+  │                                                                                                                  │  
+  │  > Approve payment                                                                                               │  
+  │    Reject                                                                                                        │  
+  │                                                                                                                  │  
+  │  up/down select   enter confirm   esc reject                                                                     │  
+  │                                                                                                                  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left         ? shortcuts · ctrl+o details · tab mode · @ files · shift+enter new line  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

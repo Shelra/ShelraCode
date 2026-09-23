@@ -1,0 +1,24 @@
+                                                                                
+  [ AGENT ]  Fix token refresh tests                                            
+                                                                                
+                                                                                
+   Log  Plan  Changes  Checks  Context                                esc back  
+  ────────────────────────────────────────────────────────────────────────────  
+                                                                             █  
+  [ CHECKS ]                                                                 █  
+  ✓ bun test                                                   5 pass · 1.4s █  
+                                                                             █  
+  ● AC1: A session is expired at its exact expiry time                          
+  ● AC2: Refreshing inside the window rotates the token                         
+  ● AC3: No other test regresses                                                
+  1 verification action observed this turn — all criteria explicitly linked     
+                                                                                
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left        esc back to the log · ? shortcuts  │  
+  └──────────────────────────────────────────────────────────────────────────┘  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

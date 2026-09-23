@@ -1,0 +1,24 @@
+                                                                                
+  [ AGENT ]  Fix token refresh tests                                            
+                                                                                
+                                                                                
+                                                                                
+     [ SHELRA ]                                                                 
+     Trying the next route…                                                     
+                                                                                
+     [Model connection interrupted (429 Too Many Requests — free-models-per-    
+     min limit reached for qwen/qwen3-coder:free); retrying in 2s.]             
+                                                                                
+     That is everything I have scripted for this demo.                          
+                                                                                
+     ─ tests ✗ · 3.1s                                                        ▄  
+                                                                                
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  └──────────────────────────────────────────────────────────────────────────┘  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

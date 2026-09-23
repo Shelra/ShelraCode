@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+        ┌──────────────────────────────────────────────────────────────┐        
+        │  [ COMMANDS ]                                           esc  │        
+        │                                                              │        
+        │  Search...                                                   │        
+        │                                                              │        
+        │  /models          Choose a model                            ▀│        
+        │  /plan            The plan and what is left                  │        
+        │  /diff            Files changed in this session              │        
+        │  /checks          Tests, types and lint results              │        
+        │  /context         What is loaded and how full it is          │        
+        │  /status          Plan, activity and evidence                │        
+        │  /help            Shortcuts and commands                     │        
+        │  /verify          Run local verification                     │        
+        └──────────────────────────────────────────────────────────────┘        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                

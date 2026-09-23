@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                            ┌──────────────────────────────────────────────────────────────┐                            
+                            │  [ WALLET ]                                             esc  │                            
+                            │  Payments                                               ○──  │                            
+                            │  Chain                                     < base-sepolia >  │                            
+                            │  Auto-approve                                           ○──  │                            
+                            │  Address                                          No wallet  │                            
+                            │  ETH                                                    ...  │                            
+                            │  USDC                                                   ...  │                            
+                            │                                                              │                            
+                            │                                                              │                            
+                            │  arrows navigate  left/right toggle  esc close               │                            
+                            └──────────────────────────────────────────────────────────────┘                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

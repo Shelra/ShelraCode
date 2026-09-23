@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ PLAN ]  Fix token refresh tests                                                                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+     · Recalled 1 memory                                                                                                
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     Before I touch anything I need two decisions.                                                                      
+                                                                                                                        
+     [ PLAN 0/2 ]                                                                                                       
+      01  ○ Choose storage                                                                                              
+      02  ○ Wire it in                                                                                                  
+                                                                                                                        
+  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐   
+  │  [ QUESTIONS ]  1/2                                                                                             │   
+  │                                                                                                                 │█  
+  │  Storage  TTL  Confirm                                                                                          │█  
+  │                                                                                                                 │█  
+  │  Where should sessions be persisted?                                                                            │█  
+  │                                                                                                                 │█  
+  │   1. SQLite file (bun:sqlite)                                                                                   │█  
+  │   2. JSON file on disk                                                                                          │█  
+  │   3. Redis                                                                                                      │█  
+  │   4. Type your own answer                                                                                       │█  
+  │                                                                                                                 │█  
+  │  tab next question   up/down select   enter confirm   esc dismiss                                               │█  
+  │                                                                                                                 │█  
+  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘█  
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  Plan  Ask Shelra...                                                                                             │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left                ? shortcuts · ctrl+o details · alt+2-5 views · tab mode · @ files  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

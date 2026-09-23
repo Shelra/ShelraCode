@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                              ┌──────────────────────────────────────────────────────────┐                              
+                              │  [ MODELS ]                                         esc  │                              
+                              │                                                          │                              
+                              │  Search...                                               │                              
+                              │                                                          │                              
+                              │  DeepSeek V3.1                                          █│                              
+                              │  free · 164K ctx · tools                                █│                              
+                              │  Free Models Router                                     █│                              
+                              │  free · 200K ctx · tools                                ▀│                              
+                              │  gpt-oss-120b                                            │                              
+                              │  free · 131K ctx · tools, reasoning                      │                              
+                              │                                                          │                              
+                              │  enter select  esc close                                 │                              
+                              └──────────────────────────────────────────────────────────┘                              
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

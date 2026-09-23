@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ AGENT ]  Fix token refresh tests                                                                                    
+                                                                                                                        
+                                                                                                                        
+   Log  Plan  Changes  Checks  Context                                                                        esc back  
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+                                                                                                                        
+  ✓ Checks passed                                                                                                       
+    Host verification not run · /verify                                                                                 
+                                                                                                                        
+  [ PLAN ]                                                                                                        3/3   
+   01  ✓ Make expiry inclusive                                                                                          
+   02  ✓ Rotate the token on refresh                                                                                    
+   03  ✓ Run the full suite                                                                                             
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left                                                    Details off: steps are folded  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

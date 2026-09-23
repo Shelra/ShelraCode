@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+        ┌──────────────────────────────────────────────────────────────┐        
+        │                                                              │        
+        │  [ MOTION ]                                             esc  │        
+        │  Motion                                            < Full >  │        
+        │                                                              │        
+        │  Reduced motion stops the spinner and the paced text         │        
+        │  reveal.                                                     │        
+        │  left/right change  enter cycle  esc close                   │        
+        │                                                              │        
+        └──────────────────────────────────────────────────────────────┘        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                

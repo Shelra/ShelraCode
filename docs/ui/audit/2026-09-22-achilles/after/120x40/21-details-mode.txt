@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ AGENT ]  Fix token refresh tests                                                                                    
+                                                                                                                        
+                                                                                                                        
+       bun test v1.4.1 (4661e494f)                                                                                      
+       5 pass                                                                                                           
+       0 fail                                                                                                           
+       6 expect() calls                                                                                                 
+       Ran 5 tests across 1 file. [53.00ms]                                                                             
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     Fixed both failures in src/auth.ts.                                                                                
+                                                                                                                        
+     What changed                                                                                                       
+     ▪ isExpired now treats now === expiresAt as expired (< became <=).                                                 
+     ▪ refreshSession rotates the token through the new rotateToken() helper in src/token.ts.                           
+                                                                                                                        
+     Verification                                                                                                       
+     bun test passes with the public exports of src/index.ts unchanged.                                                 
+                                                                                                                        
+      ts                                                                                                                
+      export function isExpired(session: Session, now = Date.now()): boolean {                                          
+        return session.expiresAt <= now;                                                                                
+      }                                                                                                                 
+                                                                                                                        
+     Next I would add a regression test around the refresh boundary (expiresAt - now === 5 min).                        
+                                                                                                                        
+     ─ 2 files +9 −2 · tests ✓ · 8.8s                                                                                   
+                                                                                                                        
+     · Memory updated · 1 entry                                                               failure-bun-test-failed▄  
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left                                         Details on: every step with its evidence  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

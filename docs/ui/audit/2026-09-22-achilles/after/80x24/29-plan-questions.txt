@@ -1,0 +1,24 @@
+                                                                                
+  [ PLAN ]  Fix token refresh tests                                             
+                                                                                
+                                                                                
+  │  Where should sessions be persisted?                                    │   
+  │                                                                         │   
+  │   1. SQLite file (bun:sqlite)                                           │   
+  │   2. JSON file on disk                                                  │   
+  │   3. Redis                                                              │   
+  │   4. Type your own answer                                               │   
+  │                                                                         │   
+  │  tab next question   up/down select   enter confirm   esc dismiss       │   
+  │                                                                         │   
+  └─────────────────────────────────────────────────────────────────────────┘▄  
+                                                                                
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │                                                                          │  
+  │  Plan  Ask Shelra...                                                     │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  └──────────────────────────────────────────────────────────────────────────┘  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

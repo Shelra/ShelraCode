@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+          ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐          
+          │                                                                                                  │          
+          │   ShelraCode                                                                       [ PRIVATE ]   │          
+          │   A local coding environment that prepares itself                                                │          
+          │                                                                                                  │          
+          │   [ STARTUP ]              One step to a private coding session                                  │          
+          │                            No local model is installed yet.                                      │          
+          │   ✓ Hardware                                                                                     │          
+          │   ○ Local engine                                                                                 │          
+          │   ● Model                    [ THIS COMPUTER ]                                                   │          
+          │   ○ Readiness                NVIDIA GeForce GTX 1650                                             │          
+          │                              VRAM 4.0 GB · 32.0 GB RAM                                           │          
+          │                              0 local models detected                                             │          
+          │                                                                                                  │          
+          │                                                                                                  │          
+          │                            │  [ RECOMMENDED ]                                                    │          
+          │                            │  Qwen2.5 Coder 1.5B                                                 │          
+          │                            │  Fits the 4 GB GPU with room for the context window.                │          
+          │                            │  Approx. 1.4 GB memory                                              │          
+          │                            │  Downloaded from Hugging Face                                       │          
+          │                                                                                                  │          
+          │                                                                                                  │          
+          │                                                                                                  │          
+          │                                                                                                  │          
+          │                                                                                                  │          
+          │                                                                                                  │          
+          │   ┌───────────────────────────────┐ ┌──────────────────┐ ┌──────────────┐                        │          
+          │   │  Install recommended · enter  │ │  Scan again · r  │ │  Exit · esc  │                        │          
+          │   └───────────────────────────────┘ └──────────────────┘ └──────────────┘                        │          
+          │                                                                                                  │          
+          │   No account, API key, or remote provider is required                                            │          
+          └──────────────────────────────────────────────────────────────────────────────────────────────────┘          
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

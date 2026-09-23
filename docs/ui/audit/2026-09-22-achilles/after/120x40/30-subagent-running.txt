@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ AGENT ]  Fix token refresh tests                                                                                    
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+   $ Where are sessions stored?                                                                                         
+                                                                                                                        
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     I'll send an explorer to map where sessions are stored while I check the tests.                                    
+                                                                                                                        
+     ▪·· Delegating to explore Map session storage                                                                  2s  
+       › Explore: Read src/session-store.ts                                                                             
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  ●  Queue a follow-up...                                                                                         │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left                                          esc stop · enter queue · ctrl+o details  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  
+                                                                                                                        
+    AGENTS                                                                                                              
+                                                                                                                        
+    ● Explore                                                                                                     2s    
+      Read src/session-store.ts                                                                                         
+                                                                                                                        
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

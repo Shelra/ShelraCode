@@ -1,0 +1,40 @@
+                                                                                                                        
+  [ AGENT ]  Fix token refresh tests                                                                                    
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+   $ Fix the failing token refresh tests in src/auth.ts and keep the public API unchanged.                              
+                                                                                                                        
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     I'll read the auth module and its tests first, to see what the r                                                   
+                                                                                                                        
+     · Loaded skill release-notes                                                                                       
+                                                                                                                        
+     ·▪· Searching for refreshSession|isExpired                                                                     0s  
+       The reques                                                                                                       
+                                                                                                                        
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
+  │                                                                                                                  │  
+  │  ●  Queue a follow-up...                                                                                         │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left                                          esc stop · enter queue · ctrl+o details  │  
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+          ┌──────────────────────────────────────────────────────────┐          
+          │                                                          │          
+          │  [ AGENTS ]                                         esc  │          
+          │                                                          │          
+          │  Search by name, model...                                │          
+          │                                                          │          
+          │  No custom sub-agents yet                                │          
+          │                                                          │          
+          └──enter─open─selected─·─ctrl+a─add────────────────────────┘          
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                

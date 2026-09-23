@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                            ┌──────────────────────────────────────────────────────────────┐                            
+                            │  [ EFFORT ]                                             esc  │                            
+                            │  qwen/qwen3-coder:free does not support reasoning effort     │                            
+                            │  control.                                                    │                            
+                            │                                                              │                            
+                            │  auto = high in agent mode when the model supports it,       │                            
+                            │  otherwise the provider's default.                           │                            
+                            │  left/right toggle  enter cycle  esc close                   │                            
+                            └──────────────────────────────────────────────────────────────┘                            
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

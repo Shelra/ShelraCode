@@ -1,0 +1,24 @@
+                                                                                
+  [ AGENT ]  Fix token refresh tests                                            
+                                                                                
+                                                                                
+  │  https://reports.example.invalid/v1/usage                               │   
+  │  Security: 64/100 (caution, medium confidence)                          │   
+  │  Price:  USDC on                                                        │   
+  │                                                                         │   
+  │  > Approve payment                                                      │   
+  │    Reject                                                               │   
+  │                                                                         │   
+  │  up/down select   enter confirm   esc reject                            │   
+  │                                                                         │   
+  └─────────────────────────────────────────────────────────────────────────┘▄  
+                                                                                
+  ┌──────────────────────────────────────────────────────────────────────────┐  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  └──────────────────────────────────────────────────────────────────────────┘  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+        ┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐        
+        │  [ STATUS ]                                                                  no session · esc close  │        
+        │                                                                                                      │        
+        │  Agent · qwen/qwen3-coder:free · ~\projects\acme-api                                                 │        
+        │                                                                                                      │        
+        │   1 Overview   2 Plan   3 Activity   4 Evidence   5 Agents                                           │        
+        │                                                                                                      │        
+        │                                                                                                      │        
+        │  What Shelra is doing                                                                                │        
+        │                                                                                                      │        
+        │  State: Paused: Observing result · Last runtime state; not currently running                         │        
+        │  Current activity: Paused: Observing result                                                          │        
+        │                                                                                                      │        
+        │  Intent                                                                                              │        
+        │                                                                                                      │        
+        │  Original request:Fix the failing token refresh tests in src/auth.ts and keep the public API         │        
+        │                   unchanged.                                                                         │        
+        │  Runtime objectiveFix the failing token refresh tests in src/auth.ts and keep the public API         │        
+        │                   unchanged.                                                                         │        
+        │  Source: host-owned AgentKernel objective                                                            │        
+        │                                                                                                      │        
+        │  Work summary                                                                                        │        
+        │                                                                                                      │        
+        │  Plan: 3 structured steps                                                                            │        
+        │  Changed files: 2                                                                                    │        
+        │  Structured events: 18                                                                               │        
+        │  Live tools: 0                                                                                       │        
+        │  Live agent: None                                                                                    │        
+        │                                                                                                      │        
+        │                                                                                                      │        
+        │                                                                                                      │        
+        │  1-5 switch view · tab and shift+tab move · esc close                                                │        
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────┘        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

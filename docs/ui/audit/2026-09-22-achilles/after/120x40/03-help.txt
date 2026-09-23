@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+       [ KEYS ]                                                                                         esc close       
+                                                                                                                        
+       [ COMPOSE ]                                                 [ COMMANDS ]                                         
+       enter          Send the message                             /models         Choose a model                       
+       shift+enter    Insert a new line                            /plan           The plan and what is left            
+       @              Mention a file                               /diff           Files changed in this session        
+       /              Open the command list                        /checks         Tests, types and lint results        
+       tab            Next mode: agent, plan, ask                  /context        What is loaded and how full it       
+                                                                   /status         Plan, activity and evidence          
+       [ WHILE SHELRA WORKS ]                                      /help           Shortcuts and commands               
+       esc            Stop the current run                         /verify         Run local verification               
+       ctrl+c         Stop the current run                         /review         Review recent changes                
+       enter          Queue a follow-up                            /memory         What Shelra knows about this pr      
+                                                                   /skills         Skills available to Shelra           
+       [ REVIEW ]                                                  /agents         Custom sub-agents                    
+       alt+1…5        Switch view: Log, Plan, Changes, Checks,     /tasks          Background and delegated agents      
+       esc            Back to the log from another view            /effort         Reasoning effort                     
+       ctrl+o         Show or hide step details                    /new session    Start a new session                  
+       ctrl+e         Expand your last message                     /commit & push  Commit and push                      
+       /status        Plan, activity and evidence                  /commit & pr    Commit and open a PR                 
+       ctrl+y         Copy the selected text                       /btw            Ask a side question                  
+                                                                   /recaps         Session recaps on or off             
+       [ SESSION ]                                                 /theme          Full or reduced motion               
+       /new           Start a new session                          /sandbox        Shell sandbox mode                   
+       ctrl+c         Clear the prompt; twice to exit              /mcp            MCP servers                          
+                                                                   /schedule       Scheduled runs                       
+                                                                   /wallet         Wallet and payments                  
+                                                                   /remote-control Remote control                       
+                                                                   /update         Update ShelraCode                    
+                                                                   /exit           Quit Shelra                          
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

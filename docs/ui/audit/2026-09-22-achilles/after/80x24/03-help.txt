@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+     [ KEYS ]                                                     esc close     
+                                                                             ▀  
+     [ COMPOSE ]                                                                
+     enter          Send the message                                            
+     shift+enter    Insert a new line                                           
+     @              Mention a file                                              
+     /              Open the command list                                       
+     tab            Next mode: agent, plan, ask                                 
+                                                                                
+     [ WHILE SHELRA WORKS ]                                                     
+     esc            Stop the current run                                        
+     ctrl+c         Stop the current run                                        
+     enter          Queue a follow-up                                           
+                                                                                
+     [ REVIEW ]                                                                 
+     alt+1…5        Switch view: Log, Plan, Changes, Checks, Context            
+     esc            Back to the log from another view                           
+     ctrl+o         Show or hide step details                                   
+     ctrl+e         Expand your last message                                    
+     /status        Plan, activity and evidence                                 
+                                                                                
+                                                                                
