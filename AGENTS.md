@@ -13,8 +13,13 @@ the primary cloud provider; another OpenAI-compatible provider remains available
 `--remote`. Session state is stored in a local SQLite database via `bun:sqlite`.
 No Docker or long-running services.
 
-See `README.md` for user-facing docs and `docs/architecture/` for the runtime and
-harness design.
+See `README.md` for user-facing docs. The current runtime and harness design is in
+`docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` (§23–§26),
+`docs/architecture/OPENROUTER-RUNTIME.md`, `docs/design/` and `bench/README.md`.
+`docs/architecture/00`–`13`, `docs/audits/` and `docs/future-research/` are history:
+several describe `ShelraCode/`, an older local-first codebase, and files they name
+(`loop.ts`, `control-plane.ts`, `ollama.ts`) do not exist in `src/`. When a doc and
+the code disagree, the code is right.
 
 ## Quick reference
 
