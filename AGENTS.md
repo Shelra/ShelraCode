@@ -47,8 +47,10 @@ directory.
 - CI is `.github/workflows/typecheck.yml`: `bun install --frozen-lockfile` →
   `bun run format` → `bun run lint` → `bun run typecheck` →
   `bun run build:binary`. All four must stay green.
-- Line endings: this repo is stored with CRLF and `biome.json` is configured to
-  match (`formatter.lineEnding: "crlf"`); see `.gitattributes`.
+- Line endings: git stores LF and `core.autocrlf=true` checks files out as CRLF on
+  the maintainer's Windows machine, while `biome.json` requires CRLF
+  (`formatter.lineEnding: "crlf"`). A file written with LF fails `bun run format`
+  and `bun run lint` locally, and CI's Linux checkout (LF) fails its Format Check.
 
 ## Environment
 
@@ -94,6 +96,13 @@ idle budget after which a silent model stream is aborted and the step retried.
   do not edit it as part of target work.
 - Source is `src/`; compiled output is `dist/` (gitignored except when built
   locally).
+- `frontend/` is a separate Next.js app (the marketing site migrated from Framer,
+  see `frontend/README.md`) with its own `package.json` and lockfile. Root scripts
+  (`typecheck`, `lint`, `test`, `build`) do not cover it; run its commands from
+  `frontend/`. Biome at the root still formats and lints `frontend/src`. Its sign-in
+  pages use Auth.js (GitHub, Google, and email and password with users in libSQL;
+  JWT sessions); credentials go in `frontend/.env.local` (see `frontend/.env.example`),
+  never in the repo.
 
 ## Resilience (hard rule)
 
