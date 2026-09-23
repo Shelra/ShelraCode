@@ -122,7 +122,7 @@ import { todayLine } from "./prompt-date";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
 import { extractRequirements, isRequirementDense } from "./requirements";
 import { scratchLineFor } from "./scratch";
-import { describeVerificationEvidence } from "./verification-evidence";
+import { describeVerificationEvidence, maskedVerificationCommand } from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
 
 const MAX_TOOL_ROUNDS = 400;
@@ -2420,6 +2420,8 @@ export class Agent {
     if (memoryContext.expanded.length > 0) recordMemoryUse(memoryScope, memoryContext.expanded);
     const turnCommands: TurnCommand[] = [];
     const pendingCommands = new Map<string, string>();
+    /** Checks this turn ran whose exit status a later command replaced; the gate names them. */
+    const maskedChecks = new Set<string>();
     this.contextSummary = {
       classification: { ...contextPacket.classification },
       files: [...contextPacket.files],
@@ -2683,6 +2685,10 @@ export class Agent {
                     )
                   : null;
                 if (evidence) this.turnVerificationEvidence.push(evidence);
+                else if (tr.success) {
+                  const masked = maskedVerificationCommand(tc.function.name, tc.function.arguments);
+                  if (masked) maskedChecks.add(masked);
+                }
                 const digestCommand = pendingCommands.get(tc.id);
                 if (digestCommand !== undefined) {
                   pendingCommands.delete(tc.id);
@@ -2952,24 +2958,36 @@ export class Agent {
             requirementAudit !== null &&
             turnMutationEvents > requirementAudit.mutations &&
             this.turnVerificationEvidence.length === requirementAudit.evidence;
-          if (mutatedThisTurn && (this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)) {
+          // Nothing runs a document, and a code check says nothing about what one states. A turn
+          // that only wrote documents is asked once to check its facts, then reported unverified
+          // whatever else ran (live 2026-09-23: pressed three times for a command, a model wrote a
+          // copy of its own report as "evidence"; asked once, it ran the type-check).
+          const documentsOnly =
+            mutatedThisTurn && !unverifiedSinceAudit && mutations.every((path) => DOCUMENT_FILE_RE.test(path));
+          if (
+            mutatedThisTurn &&
+            (documentsOnly || this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)
+          ) {
             const criteria = this.activeAcceptanceCriteria ?? [];
             const criteriaList = criteria
               .map((c) => `- ${c.id}: ${c.description} (verify: ${c.verification})`)
               .join("\n");
-            // Nothing runs a document, so asking three times for a command only buys rounds, and a
-            // model pressed that way wrote a copy of its own report as "evidence" (live 2026-09-23).
-            // A turn that only wrote documents is asked once to check its facts, then reported unverified.
-            const documentsOnly = !unverifiedSinceAudit && mutations.every((path) => DOCUMENT_FILE_RE.test(path));
             const maxRetries = documentsOnly ? 1 : MAX_VERIFICATION_RETRIES;
 
             if (verificationRetries < maxRetries) {
               verificationRetries += 1;
-              const blockedLine = unverifiedSinceAudit
-                ? "Completion blocked: you changed files after your last verification run and nothing has run since."
-                : criteria.length > 0
-                  ? "Completion blocked: none of your stated acceptance criteria have been verified yet."
-                  : `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`;
+              const blockedLine = [
+                unverifiedSinceAudit
+                  ? "Completion blocked: you changed files after your last verification run and nothing has run since."
+                  : criteria.length > 0
+                    ? "Completion blocked: none of your stated acceptance criteria have been verified yet."
+                    : `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`,
+                ...(maskedChecks.size > 0
+                  ? [
+                      `Not counted: ${[...maskedChecks].map((check) => `\`${check}\``).join(", ")}. After a pipe, \`;\`, \`||\` or a line break the exit code is the next command's, not the check's. Run the check on its own; long output is shortened for you.`,
+                    ]
+                  : []),
+              ].join("\n");
               const nudge = documentsOnly
                 ? [
                     "Completion blocked: you only wrote documents, and re-reading them is not verification.",

@@ -270,6 +270,71 @@ describe("completion/verification gate", () => {
     expect(chunks.at(-1)).toEqual({ type: "done" });
   });
 
+  it("reports a turn that only wrote documents unverified even after a code check passes", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    // Live 2026-09-23: after the fact-check request the model ran the type-check, which says
+    // nothing about what an audit report states, and the turn ended as verified.
+    const provider = new ScenarioProvider(
+      [
+        toolCallEvent("call-tsc", "bash", { command: "bun run typecheck" }),
+        toolResultEvent(
+          "call-tsc",
+          "bash",
+          { success: true, output: "$ tsc --noEmit" },
+          { command: "bun run typecheck" },
+        ),
+        { type: "text-delta", text: "Checked the claims." },
+      ],
+      ["docs/AUDIT.md"],
+    );
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Write an audit report of this project")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(2);
+    const notice = chunks.find((c) => c.type === "content" && c.content?.includes("Not verified"));
+    expect(notice?.content).toContain("1 document(s) written");
+  });
+
+  it("does not count a check whose output was piped into another command", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    // Live 2026-09-23: the type-check failed, but `head` exited 0, so the command succeeded.
+    const piped = "bun run typecheck 2>&1 | head -50";
+    const provider = new ScenarioProvider([
+      [
+        toolCallEvent("call-piped", "bash", { command: piped }),
+        toolResultEvent("call-piped", "bash", { success: true, output: "error TS2307" }, { command: piped }),
+        { type: "text-delta", text: "Type-check done." },
+      ],
+      [
+        toolCallEvent("call-tsc", "bash", { command: "bun run typecheck" }),
+        toolResultEvent(
+          "call-tsc",
+          "bash",
+          { success: true, output: "$ tsc --noEmit" },
+          { command: "bun run typecheck" },
+        ),
+        { type: "text-delta", text: "Type-check passes." },
+      ],
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    // Round 2 ran the piped check and was asked again; round 3 ran it on its own.
+    expect(provider.round).toBe(3);
+    const request = lastUserText(provider.requests[2]);
+    expect(request).toContain(piped);
+    expect(request).toContain("Run the check on its own");
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+  });
+
   it("keeps all three requests when code changed alongside a document", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }], ["index.html", "README.md"]);

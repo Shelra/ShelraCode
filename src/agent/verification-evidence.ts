@@ -14,6 +14,49 @@
 export const VERIFICATION_COMMAND_RE =
   /(?:^|[\s;&|(])(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|http|xh|pytest|py\.test|jest|vitest|mocha|ava|tap|uvu|playwright|cypress|karma|bun\s+(?:test|run\s+(?:test|build|check|lint|typecheck|verify|e2e|coverage)[\w:-]*)|bunx\s+(?:vitest|jest|tsc|playwright|biome|eslint)|npm\s+(?:test|run\s+(?:test|build|check|lint|typecheck|verify|e2e|coverage)[\w:-]*)|npx\s+(?:vitest|jest|tsc|playwright|mocha|biome|eslint)|yarn\s+(?:test|build|lint|typecheck|check|verify|e2e)|pnpm\s+(?:test|build|lint|typecheck|check|verify|e2e|run\s+\S+)|deno\s+(?:test|check|lint)|go\s+(?:test|build|vet)|cargo\s+(?:test|build|check|clippy|run)|python3?\s+-m\s+(?:pytest|unittest)|dotnet\s+(?:test|build)|mvn\s+(?:test|verify|package)|gradlew?\s+(?:test|build|check)|make\s+(?:test|check|build|lint)|ctest|rspec|phpunit|mix\s+test|swift\s+test|flutter\s+test|tsc\b|biome\s+(?:check|lint)|eslint|ruff\s+(?:check|format)|mypy|pyright|black\s+--check|prettier\s+--check|gofmt|rustfmt\s+--check)\b/i;
 
+/**
+ * The part of a command whose exit status is the whole command's: its last `&&` chain. After a
+ * pipe, `;`, `||` or a line break, the status is what runs next, so a check there proves nothing
+ * (seen live 2026-09-23: a type-check that failed in a clone without dependencies counted as
+ * passing, because `bun run typecheck 2>&1 | head -50` exited with `head`'s 0).
+ */
+function decidingChain(command: string): string {
+  let start = 0;
+  let quote: "'" | '"' | null = null;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (quote) {
+      if (char === quote) quote = null;
+    } else if (char === "'" || char === '"') {
+      quote = char;
+    } else if (char === "`") {
+      index += 1;
+    } else if (char === "&" && command[index + 1] === "&") {
+      index += 1;
+    } else if (char === "|" || char === ";" || char === "\n") {
+      if (char === "|" && command[index + 1] === "|") index += 1;
+      start = index + 1;
+    }
+  }
+  return command.slice(start);
+}
+
+function bashCommand(argsJson: string): string | null {
+  try {
+    return (JSON.parse(argsJson) as { command?: string }).command ?? "";
+  } catch {
+    return null;
+  }
+}
+
+/** A bash command that ran a check whose exit status a later command replaced, or `null`. */
+export function maskedVerificationCommand(toolName: string, argsJson: string): string | null {
+  if (toolName !== "bash") return null;
+  const command = bashCommand(argsJson);
+  if (!command || !VERIFICATION_COMMAND_RE.test(command)) return null;
+  return VERIFICATION_COMMAND_RE.test(decidingChain(command)) ? null : command;
+}
+
 /** Files a command can run, directly or through an interpreter. */
 const RUNNABLE_FILE = /\.(?:ps1|psm1|bat|cmd|sh|bash|zsh|js|mjs|cjs|ts|mts|cts|py|rb|pl|php|lua)$/i;
 /** Programs that run the file named after them (`node x.js`, `powershell -File x.ps1`). */
@@ -63,15 +106,12 @@ export function describeVerificationEvidence(
   changedFiles: readonly string[] = [],
 ): string | null {
   if (toolName === "bash") {
-    try {
-      const command = (JSON.parse(argsJson) as { command?: string }).command ?? "";
-      if (VERIFICATION_COMMAND_RE.test(command)) return `bash: ${command.slice(0, 120)}`;
-      const ran = runsChangedFile(command, changedFiles);
-      if (ran) return `bash: ran the changed file ${ran}`;
-    } catch {
-      // malformed args; no evidence either way
-    }
-    return null;
+    const command = bashCommand(argsJson);
+    if (!command) return null;
+    const deciding = decidingChain(command);
+    if (VERIFICATION_COMMAND_RE.test(deciding)) return `bash: ${command.slice(0, 120)}`;
+    const ran = runsChangedFile(deciding, changedFiles);
+    return ran ? `bash: ran the changed file ${ran}` : null;
   }
   if (toolName === "computer_screenshot" || toolName === "computer_snapshot") {
     return `${toolName}: observed rendered output`;

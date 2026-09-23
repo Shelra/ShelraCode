@@ -25,9 +25,10 @@ sample. Principles, audience and brand: `PRODUCT.md`.
   executors in `src/tools/`) → completion gate → reflection into `src/memory/`. Providers: `src/providers/` (OpenRouter
   first); sessions: `src/storage/` (`bun:sqlite`). The bench drives this same path (`src/bench/agent-executor.ts`).
 - **What the harness enforces:** verification before "done" (after a change with no real check the gate asks up to
-  three times, once to check the facts when only documents changed, then reports `[Not verified …]`), a requirement
-  audit when a request lists many behaviors, blocking Stop hooks, and the resilience rule in AGENTS.md. Specs and
-  plans (`generate_plan` acceptance criteria) are model-driven.
+  three times, then reports `[Not verified …]`; a check piped into another command does not count, and a turn that
+  only wrote documents is asked once to check its facts, then always reported unverified), a requirement audit when
+  a request lists many behaviors, blocking Stop hooks, and the resilience rule in AGENTS.md. Specs and plans
+  (`generate_plan` acceptance criteria) are model-driven.
 - **No backend service exists.** The CLI is the runtime (Bun, local SQLite, no server framework). `frontend/` is a
   separate Next.js app (landing page, sign-in) whose server side is route handlers and server actions: `frontend/CLAUDE.md`.
 - **Retiring, do not extend:** `src/autonomy/` (`AutonomyKernel`), reached only by `--autonomous` and the
