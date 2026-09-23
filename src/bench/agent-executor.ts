@@ -1,5 +1,5 @@
 import { Agent, type AgentOptions, type ProcessMessageObserver } from "../agent/agent";
-import { VERIFICATION_COMMAND_RE } from "../agent/verification-evidence";
+import { isVerificationCommand } from "../agent/verification-evidence";
 import { evaluateAcceptance } from "../autonomy/acceptance";
 import type { AcceptanceCriterion, CheckSpec, CriterionResult, VerificationReport } from "../autonomy/types";
 import { observePage } from "../exec/browser";
@@ -337,7 +337,7 @@ function recordToolCall(counters: TurnCounters, pendingCommands: Map<string, str
     counters.commandsExecuted += 1;
     const command = parseCommand(call.function.arguments);
     if (command) pendingCommands.set(call.id, command);
-    if (command && VERIFICATION_COMMAND_RE.test(command)) counters.verificationCommands += 1;
+    if (command && isVerificationCommand(command)) counters.verificationCommands += 1;
     return;
   }
   if (name === "read_file") counters.filesRead += 1;

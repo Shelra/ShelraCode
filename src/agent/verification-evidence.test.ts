@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { describeVerificationEvidence, maskedVerificationCommand } from "./verification-evidence";
+import {
+  describeDelegatedEvidence,
+  describeVerificationEvidence,
+  isVerificationCommand,
+  maskedVerificationCommand,
+} from "./verification-evidence";
 
 const bash = (command: string) => JSON.stringify({ command });
 const changed = ["C:\\Users\\me\\check_camera.ps1", "C:\\Users\\me\\report.py", "D:/repo/src/app.ts"];
@@ -63,5 +68,67 @@ describe("describeVerificationEvidence", () => {
   it("does not count running a file the turn did not change", () => {
     expect(describeVerificationEvidence("bash", bash("python other.py"), changed)).toBeNull();
     expect(describeVerificationEvidence("bash", bash("python report.py"), [])).toBeNull();
+  });
+
+  it("decides on the program a command runs, not on words in its text (audit 2026-09-23)", () => {
+    // Each of these passed the earlier word-matching gate.
+    expect(describeVerificationEvidence("bash", bash('echo "all good, tsc passes"'))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("echo see http://localhost:3000"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("cat README.md # vitest"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("Write-Output 'eslint clean'"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("tsc --version"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("npx tsc -v"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("bun --help"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("git status"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("bun run dev"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("bun install"))).toBeNull();
+  });
+
+  it("counts a request only against a server running on this machine", () => {
+    expect(describeVerificationEvidence("bash", bash("curl https://example.com"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("Invoke-WebRequest https://api.github.com"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("curl -s http://localhost:3000/api/health"))).not.toBeNull();
+    expect(describeVerificationEvidence("bash", bash("Invoke-WebRequest -Uri http://127.0.0.1:8080/"))).not.toBeNull();
+    expect(describeVerificationEvidence("bash", bash("curl http://app.localhost:5173"))).not.toBeNull();
+  });
+
+  it("recognizes checks across ecosystems and through runners", () => {
+    for (const command of [
+      "npm test",
+      "npm t",
+      "pnpm lint",
+      "yarn build",
+      "bun run test:unit",
+      "bun x vitest run",
+      "bunx vitest run src/a.test.ts",
+      "npx -y jest --ci",
+      "python -m pytest -q",
+      "py -m unittest",
+      "uv run pytest",
+      "go test ./...",
+      "cargo clippy",
+      "dotnet test",
+      "make check",
+      "node --test",
+      "ruff check .",
+      "ruff format --check .",
+      "prettier --check src",
+      "biome ci",
+      "CI=1 bun test",
+      "deno test",
+    ]) {
+      expect(isVerificationCommand(command), command).toBe(true);
+    }
+    for (const command of ["prettier --write src", "biome format --write .", "ruff format .", "black src"]) {
+      expect(isVerificationCommand(command), command).toBe(false);
+    }
+  });
+});
+
+describe("describeDelegatedEvidence", () => {
+  it("counts a delegation only when the sub-agent itself ran a check", () => {
+    expect(describeDelegatedEvidence("verify", undefined)).toBeNull();
+    expect(describeDelegatedEvidence("verify", [])).toBeNull();
+    expect(describeDelegatedEvidence("verify", ["bash: bun test"])).toContain("bash: bun test");
   });
 });

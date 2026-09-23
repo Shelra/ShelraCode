@@ -429,14 +429,23 @@ describe("completion/verification gate", () => {
     expect(agent.getVerificationStatus().linkedCriteriaIds).toEqual([]);
   });
 
-  it("counts a successful delegation to the verify sub-agent as real verification evidence", async () => {
+  it("counts a delegation to the verify sub-agent that itself ran a check as real verification evidence", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([
       toolCallEvent("call-verify", "task", { agent: "verify", description: "Verify the clock renders and ticks" }),
       toolResultEvent(
         "call-verify",
         "task",
-        { success: true, output: "Started the app, opened it in a real browser, observed the clock ticking." },
+        {
+          success: true,
+          output: "Started the app, opened it in a real browser, observed the clock ticking.",
+          task: {
+            agent: "verify",
+            description: "Verify the clock renders and ticks",
+            summary: "Verified",
+            evidence: ["bash: curl -s http://localhost:3000"],
+          },
+        },
         { agent: "verify", description: "Verify the clock renders and ticks" },
       ),
       { type: "text-delta", text: "Verified via the verify sub-agent's real browser check." },
@@ -454,6 +463,34 @@ describe("completion/verification gate", () => {
     expect(provider.round).toBe(2);
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
     expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("does not credit a verify delegation whose sub-agent ran no check (audit 2026-09-23)", async () => {
+    // On Windows every command of the verify sub-agent failed (its sandbox needs macOS), yet the
+    // finished delegation counted as "delegated verification completed".
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([
+      toolCallEvent("call-verify", "task", { agent: "verify", description: "Verify the clock" }),
+      toolResultEvent(
+        "call-verify",
+        "task",
+        {
+          success: true,
+          output: "Shuru sandbox mode currently requires macOS on Apple Silicon. Could not run anything.",
+          task: { agent: "verify", description: "Verify the clock", summary: "Could not run anything" },
+        },
+        { agent: "verify", description: "Verify the clock" },
+      ),
+      { type: "text-delta", text: "Verified." },
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(true);
   });
 
   it("does not credit a delegation to a non-verification sub-agent (e.g. explore) as evidence", async () => {

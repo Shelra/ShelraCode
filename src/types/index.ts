@@ -75,6 +75,8 @@ export interface TaskRun {
   description: string;
   summary: string;
   activity?: string;
+  /** Checks the sub-agent itself ran successfully; a delegation counts as verification only with these. */
+  evidence?: string[];
 }
 
 export type DelegationStatus = "running" | "complete" | "error";

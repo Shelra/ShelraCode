@@ -122,7 +122,11 @@ import { todayLine } from "./prompt-date";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
 import { extractRequirements, isRequirementDense } from "./requirements";
 import { scratchLineFor } from "./scratch";
-import { describeVerificationEvidence, maskedVerificationCommand } from "./verification-evidence";
+import {
+  describeDelegatedEvidence,
+  describeVerificationEvidence,
+  maskedVerificationCommand,
+} from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
 
 const MAX_TOOL_ROUNDS = 400;
@@ -1746,6 +1750,9 @@ export class Agent {
                   : "Planning delegated work";
     let assistantText = "";
     let lastActivity = initialDetail;
+    /** Checks the sub-agent itself ran successfully; the parent's gate counts the delegation only with these. */
+    const childEvidence: string[] = [];
+    const childChangedFiles: string[] = [];
     let childTools: ToolSet = childBaseTools;
     let closeMcp: (() => Promise<void>) | undefined;
     const childModelId = normalizeModelId(custom?.model || this.modelId);
@@ -1870,6 +1877,17 @@ export class Agent {
               parseToolArgumentsOrRaw(part.toolCall.function.arguments),
             );
             onActivity?.(lastActivity);
+          } else if (part.type === "tool-result") {
+            const childResult = toToolResult(part.output);
+            if (childResult.success && childResult.diff?.filePath) childChangedFiles.push(childResult.diff.filePath);
+            const evidence = childResult.success
+              ? describeVerificationEvidence(
+                  part.toolCall.function.name,
+                  part.toolCall.function.arguments,
+                  childChangedFiles,
+                )
+              : null;
+            if (evidence) childEvidence.push(evidence);
           } else if (part.type === "error") {
             // A rejected key fails every attempt; the parent turn handles it.
             if (isRejectedCredentialError(part.error)) throw part.error;
@@ -1976,6 +1994,7 @@ export class Agent {
           description: request.description,
           summary: firstLine(output),
           activity: lastActivity,
+          ...(childEvidence.length > 0 ? { evidence: [...childEvidence] } : {}),
         },
       };
     } catch (err: unknown) {
@@ -2677,13 +2696,15 @@ export class Agent {
                     this.turnLinkedCriteriaIds.add(id);
                   }
                 }
-                const evidence = tr.success
-                  ? describeVerificationEvidence(
-                      tc.function.name,
-                      tc.function.arguments,
-                      this.kernel?.snapshot().mutations ?? [],
-                    )
-                  : null;
+                const evidence = !tr.success
+                  ? null
+                  : tc.function.name === "task"
+                    ? describeDelegatedEvidence(tr.task?.agent ?? "task", tr.task?.evidence)
+                    : describeVerificationEvidence(
+                        tc.function.name,
+                        tc.function.arguments,
+                        this.kernel?.snapshot().mutations ?? [],
+                      );
                 if (evidence) this.turnVerificationEvidence.push(evidence);
                 else if (tr.success) {
                   const masked = maskedVerificationCommand(tc.function.name, tc.function.arguments);
