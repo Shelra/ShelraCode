@@ -35,6 +35,7 @@ import {
 import { getModelInfo, getSupportedReasoningEfforts, normalizeModelId } from "../models/catalog";
 import { BASE_URL_ENV, MAX_TOKENS_ENV } from "../product/identity";
 import { generateRecap as genRecap, generateTitle as genTitle, normalizeRecap } from "../providers/auxiliary";
+import type { CredentialFallback, CredentialFallbackSource } from "../providers/credential-fallback";
 import { normalizeModelMessages } from "../providers/messages";
 import { isProviderStreamIdleError } from "../providers/stream";
 import type { ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
@@ -178,10 +179,11 @@ const EMPTY_RESPONSE_CONTINUATION =
  * A failing model connection (silence, a cut stream, a timeout, a rate limit, a provider error, a
  * missing endpoint, no credits) interrupts a turn and never ends it on its own: completed steps
  * are kept, the step is retried after a pause, and a model that keeps failing is replaced by the
- * provider's next fallback. Only the user's cancellation and a rejected credential end a turn at
- * once. Seen live 2026-09-19: two turns on free models ended as "The operation was aborted." 99 s
- * in, with every step lost, because the AI SDK's 90 s chunk timeout aborted the generation and
- * the loop treated any non-context error as the end of the turn.
+ * provider's next fallback. Only the user's cancellation ends a turn at once; a rejected
+ * credential moves the session to a fallback the host configured, and ends the turn only when
+ * there is none. Seen live 2026-09-19: two turns on free models ended as "The operation was
+ * aborted." 99 s in, with every step lost, because the AI SDK's 90 s chunk timeout aborted the
+ * generation and the loop treated any non-context error as the end of the turn.
  */
 const FAILURES_BEFORE_MODEL_SWITCH = 2;
 /** Consecutive failures without any completed step, across models, before a turn pauses. */
@@ -189,6 +191,12 @@ const MAX_INTERRUPTIONS_WITHOUT_PROGRESS = 8;
 /** Bound on interruptions in one turn even while steps keep completing. */
 const MAX_INTERRUPTIONS_PER_TURN = 20;
 const INTERRUPTION_BACKOFF_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+/**
+ * A sub-agent recovers from a failing model connection on its own, like the main turn, within a
+ * tighter bound: the parent waits on it and can still route around a sub-agent no model serves.
+ */
+const MAX_SUBAGENT_INTERRUPTIONS_WITHOUT_PROGRESS = 4;
+const MAX_SUBAGENT_INTERRUPTIONS = 10;
 
 interface InterruptionState {
   withoutProgress: number;
@@ -780,6 +788,10 @@ export class Agent {
   private kernel: AgentKernel | null = null;
   private contextSummary: AgentContextSummary | null = null;
   private lastMemoryContext: MemoryContext | null = null;
+  /** Where a turn continues when the provider rejects its API key; see `setCredentialFallback`. */
+  private credentialFallback: CredentialFallbackSource | null = null;
+  /** The fallback serving this session after a rejected key, released on cleanup. */
+  private activeCredentialFallback: CredentialFallback | null = null;
   private readonly budget: BudgetLimits;
   private readonly modelTimeout: ProviderTimeout;
   private readonly interruptionBackoffMs: readonly number[];
@@ -957,6 +969,21 @@ export class Agent {
   setProvider(provider: ProviderAdapter, modelId?: string): void {
     this.provider = provider;
     if (modelId) this.setModel(modelId);
+    // A provider chosen afterwards replaces the fallback that was serving the session.
+    const fallback = this.activeCredentialFallback;
+    if (fallback && fallback.provider !== provider) {
+      this.activeCredentialFallback = null;
+      void fallback.dispose?.().catch(() => undefined);
+    }
+  }
+
+  /**
+   * A rejected API key fails the same way for every model and every retry, so a turn that hits one
+   * continues on a fallback the user already has (another configured key, an installed local
+   * model) instead of ending. The host knows what is configured and supplies the sources.
+   */
+  setCredentialFallback(source: CredentialFallbackSource | null): void {
+    this.credentialFallback = source;
   }
 
   setApiKey(apiKey: string, baseURL = this.baseURL ?? undefined): void {
@@ -1235,7 +1262,13 @@ export class Agent {
   }
 
   async cleanup(): Promise<void> {
-    await Promise.allSettled([this.bash.cleanup(), shutdownWorkspaceLspManager(this.bash.getCwd())]);
+    const fallback = this.activeCredentialFallback;
+    this.activeCredentialFallback = null;
+    await Promise.allSettled([
+      this.bash.cleanup(),
+      shutdownWorkspaceLspManager(this.bash.getCwd()),
+      fallback?.dispose?.(),
+    ]);
   }
 
   respondToToolApproval(approvalId: string, approved: boolean): void {
@@ -1421,6 +1454,51 @@ export class Agent {
     notifyObserver(observer?.onError, { message, timestamp: Date.now() });
     yield { type: "content", content: `\n\n[Paused — ${message}]` };
     yield { type: "done" };
+  }
+
+  /**
+   * The provider rejected the API key. Completed steps are saved first, then the session moves to
+   * the next fallback the host configured and stays there. Null when there is none: the turn then
+   * ends with the key error, as the user must fix the key.
+   */
+  private async *continueOnCredentialFallback(args: {
+    error: unknown;
+    modelId: string;
+    userModelMessage: ModelMessage;
+    completedSteps: ModelMessage[];
+    signal: AbortSignal;
+  }): AsyncGenerator<StreamChunk, CredentialFallback | null, unknown> {
+    if (!this.credentialFallback) return null;
+    const reason = describeInterruption(args.error);
+    yield {
+      type: "content",
+      content: `\n\n[The provider rejected the API key (${reason}); looking for another configured key or an installed local model.]\n\n`,
+    };
+    let fallback: CredentialFallback | null = null;
+    try {
+      fallback = await this.credentialFallback({ modelId: args.modelId, signal: args.signal });
+    } catch {
+      fallback = null;
+    }
+    if (!fallback) return null;
+    if (args.signal.aborted) {
+      await fallback.dispose?.().catch(() => undefined);
+      return null;
+    }
+    if (args.completedSteps.length > 0) {
+      this.appendCompletedTurn(args.userModelMessage, args.completedSteps);
+      this.messages.push({ role: "user", content: interruptionContinuation("the provider rejected the API key") });
+      this.messageSeqs.push(null);
+    }
+    const previous = this.activeCredentialFallback;
+    this.activeCredentialFallback = fallback;
+    this.setProvider(fallback.provider, fallback.modelId);
+    await previous?.dispose?.().catch(() => undefined);
+    const notice = `Continuing with ${fallback.label}, model ${fallback.modelId} (${describeModelCost(fallback.provider, fallback.modelId)}), for the rest of this session.`;
+    this.kernel?.recordObservation(`The provider rejected the API key. ${notice}`);
+    this.persistKernelIndex();
+    yield { type: "content", content: `[${notice}]\n\n` };
+    return fallback;
   }
 
   private discardAbortedTurn(userMessage: ModelMessage): void {
@@ -1718,62 +1796,171 @@ export class Agent {
           ? `${request.prompt}\n\nPrepared verify recipe JSON (use this as the primary execution recipe and keep .shelra/environment.json aligned with it if present):\n${JSON.stringify(verifyPreparedRecipe, null, 2)}`
           : request.prompt;
 
-      const childMessages =
+      const childMessages: ModelMessage[] =
         isVision && childRuntime.modelInfo?.supportsVision !== false
           ? await buildVisionUserMessages(request.prompt, childBash.getCwd(), signal)
           : [{ role: "user" as const, content: childPrompt }];
 
-      const childMaxOutputTokens =
-        childRuntime.modelInfo?.supportsMaxOutputTokens === false
-          ? undefined
-          : Math.min(this.effectiveMaxOutputTokens(childRuntime.modelInfo?.contextWindow), 8_192);
-      const childReasoningEffort = this.resolveReasoningEffort(childRuntime.modelId);
-      const childModelSignal = withAbortTimeout(signal, this.modelTimeout.totalMs);
-      this.ensureBudget(
-        childRuntime.modelInfo,
-        estimateConversationTokens(childSystem, childMessages),
-        childMaxOutputTokens,
-        "task",
-      );
-      const childStream = provider.stream({
-        modelId: childRuntime.modelId,
-        system: childSystem,
-        messages: childMessages,
-        tools: childRuntime.modelInfo?.supportsClientTools === false ? {} : childTools,
-        maxSteps: Math.min(this.maxToolRounds, isExplore || isPlan ? 60 : 120),
-        timeout: this.modelTimeout,
-        signal: childModelSignal,
-        temperature: isExplore || isPlan ? 0.2 : 0.5,
-        ...(childMaxOutputTokens === undefined ? {} : { maxOutputTokens: childMaxOutputTokens }),
-        ...(childReasoningEffort === undefined ? {} : { reasoningEffort: childReasoningEffort }),
-        onFinish: (usage) => {
-          this.recordUsage(usage, "task", childRuntime.modelId);
-        },
-      });
+      // A failing model connection interrupts a sub-agent and never ends it on its own, as in the
+      // main turn: completed steps are kept, the attempt is retried after a pause, and a model that
+      // keeps failing is replaced by the provider's next fallback. It used to end the sub-agent at
+      // the first timeout, losing every step it had completed.
+      let conversation = childMessages;
+      let runtime = childRuntime;
+      let earlierText = "";
+      const attempts: InterruptionState = {
+        withoutProgress: 0,
+        onModel: 0,
+        total: 0,
+        triedModels: new Set([runtime.modelId]),
+      };
+      while (true) {
+        const attemptModelId = runtime.modelId;
+        const childMaxOutputTokens =
+          runtime.modelInfo?.supportsMaxOutputTokens === false
+            ? undefined
+            : Math.min(this.effectiveMaxOutputTokens(runtime.modelInfo?.contextWindow), 8_192);
+        const childReasoningEffort = this.resolveReasoningEffort(attemptModelId);
+        this.ensureBudget(
+          runtime.modelInfo,
+          estimateConversationTokens(childSystem, conversation),
+          childMaxOutputTokens,
+          "task",
+        );
+        let completedSteps: ModelMessage[] = [];
+        let interruption: { reason: string; error: unknown } | null = null;
+        let attemptText = "";
+        const childStream = provider.stream({
+          modelId: attemptModelId,
+          system: childSystem,
+          messages: conversation,
+          tools: runtime.modelInfo?.supportsClientTools === false ? {} : childTools,
+          maxSteps: Math.min(this.maxToolRounds, isExplore || isPlan ? 60 : 120),
+          timeout: this.modelTimeout,
+          signal: withAbortTimeout(signal, this.modelTimeout.totalMs),
+          temperature: isExplore || isPlan ? 0.2 : 0.5,
+          ...(childMaxOutputTokens === undefined ? {} : { maxOutputTokens: childMaxOutputTokens }),
+          ...(childReasoningEffort === undefined ? {} : { reasoningEffort: childReasoningEffort }),
+          onStepFinish: (event) => {
+            if (event.responseMessages) {
+              completedSteps = sanitizeModelMessages(event.responseMessages as ModelMessage[]);
+            }
+          },
+          onFinish: (usage) => {
+            this.recordUsage(usage, "task", attemptModelId);
+          },
+        });
+        // An interrupted attempt never awaits its response; its rejection must not go unhandled.
+        childStream.response.catch(() => undefined);
 
-      for await (const part of childStream.events) {
+        for await (const part of childStream.events) {
+          if (signal?.aborted) break;
+          if (part.type === "text-delta") {
+            attemptText += part.text;
+          } else if (part.type === "tool-call") {
+            lastActivity = formatSubagentActivity(
+              part.toolCall.function.name,
+              parseToolArgumentsOrRaw(part.toolCall.function.arguments),
+            );
+            onActivity?.(lastActivity);
+          } else if (part.type === "error") {
+            // A rejected key fails every attempt; the parent turn handles it.
+            if (isRejectedCredentialError(part.error)) throw part.error;
+            interruption = { reason: describeInterruption(part.error), error: part.error };
+            break;
+          } else if (part.type === "abort") {
+            // Not the user: an SDK chunk, step or total timeout aborted the generation.
+            if (!signal?.aborted) interruption = { reason: "no response within the time limit", error: null };
+            break;
+          }
+        }
+
         if (signal?.aborted) {
+          return { success: false, output: "[Cancelled]" };
+        }
+        if (!interruption) {
+          try {
+            await childStream.response;
+          } catch (error) {
+            if (signal?.aborted || isRejectedCredentialError(error)) throw error;
+            interruption = { reason: describeInterruption(error), error };
+          }
+        }
+        if (!interruption) {
+          assistantText = attemptText;
           break;
         }
 
-        if (part.type === "text-delta") {
-          assistantText += part.text;
-        } else if (part.type === "tool-call") {
-          lastActivity = formatSubagentActivity(
-            part.toolCall.function.name,
-            parseToolArgumentsOrRaw(part.toolCall.function.arguments),
-          );
-          onActivity?.(lastActivity);
+        // Only a completed step is progress; text streamed before a stall is regenerated.
+        if (completedSteps.length > 0) {
+          conversation = [
+            ...conversation,
+            ...completedSteps,
+            { role: "user", content: interruptionContinuation(interruption.reason) },
+          ];
+          earlierText = [earlierText, assistantTextOf(completedSteps)].filter(Boolean).join("\n\n");
+          attempts.withoutProgress = 0;
+          attempts.onModel = 0;
+        }
+        attempts.withoutProgress += 1;
+        attempts.onModel += 1;
+        attempts.total += 1;
+
+        let stopped: string | null = null;
+        if (
+          attempts.withoutProgress > MAX_SUBAGENT_INTERRUPTIONS_WITHOUT_PROGRESS ||
+          attempts.total > MAX_SUBAGENT_INTERRUPTIONS
+        ) {
+          stopped = `no model answered after ${attempts.total} attempts (last: ${interruption.reason})`;
+        } else {
+          const unavailable = isModelUnavailableError(interruption.error);
+          if (unavailable || attempts.onModel >= FAILURES_BEFORE_MODEL_SWITCH) {
+            const fallback = nextFallbackModel(provider, attemptModelId, attempts);
+            if (fallback) {
+              attempts.onModel = 0;
+              lastActivity = `${attemptModelId} is not answering (${interruption.reason}); continuing with ${fallback}`;
+              onActivity?.(lastActivity);
+              runtime = isVision
+                ? provider.resolveModelRuntime(fallback, { preferResponses: true })
+                : provider.resolveModelRuntime(fallback);
+              continue;
+            }
+            if (unavailable) {
+              stopped = `${attemptModelId} cannot serve this request (${interruption.reason}) and no fallback model is left`;
+            }
+          }
+        }
+        if (stopped) {
+          const output = [
+            `Task interrupted: ${stopped}.`,
+            earlierText.trim()
+              ? `Completed before the interruption:\n${earlierText.trim()}`
+              : `Last action: ${lastActivity}`,
+            "Files it changed are still on disk. Continue the work yourself or delegate it again.",
+          ].join("\n\n");
+          return {
+            success: false,
+            output,
+            task: {
+              agent: request.agent,
+              description: request.description,
+              summary: `Task interrupted: ${stopped}`,
+              activity: lastActivity,
+            },
+          };
+        }
+        const delay =
+          this.interruptionBackoffMs[Math.min(attempts.onModel - 1, this.interruptionBackoffMs.length - 1)] ?? 0;
+        lastActivity = `Model connection interrupted (${interruption.reason}); retrying${delay >= 1_000 ? ` in ${Math.round(delay / 1_000)}s` : ""}`;
+        onActivity?.(lastActivity);
+        if (signal) await sleepUnlessAborted(delay, signal);
+        else await new Promise((resolve) => setTimeout(resolve, delay));
+        if (signal?.aborted) {
+          return { success: false, output: "[Cancelled]" };
         }
       }
 
-      if (signal?.aborted) {
-        return { success: false, output: "[Cancelled]" };
-      }
-
-      await childStream.response;
-
-      const output = assistantText.trim() || `Task completed. Last action: ${lastActivity}`;
+      const output = assistantText.trim() || earlierText.trim() || `Task completed. Last action: ${lastActivity}`;
       return {
         success: true,
         output,
@@ -2183,7 +2370,8 @@ export class Agent {
 
     reportStatus("notifications", "Reading background activity");
     await this.consumeBackgroundNotifications();
-    const provider = this.requireProvider();
+    // Reassigned when the provider rejects its API key and the session moves to a fallback.
+    let provider = this.requireProvider();
     // Reassigned when a failing model is replaced by a fallback for the rest of this turn.
     let runtime = provider.resolveModelRuntime(this.modelId);
     // Create the host-owned lifecycle before context compilation and research so
@@ -2905,6 +3093,24 @@ export class Agent {
             return;
           }
 
+          if (!streamOk && isRejectedCredentialError(err)) {
+            const fallback = yield* this.continueOnCredentialFallback({
+              error: err,
+              modelId: runtime.modelId,
+              userModelMessage,
+              completedSteps: completedStepMessages,
+              signal,
+            });
+            if (fallback) {
+              provider = fallback.provider;
+              interruptions.onModel = 0;
+              interruptions.triedModels.clear();
+              interruptions.triedModels.add(fallback.modelId);
+              switchModel(fallback.modelId);
+              continue;
+            }
+          }
+
           const authError = isAuthenticationError(err);
           const friendly = humanizeApiError(err);
           this.kernel?.recordObservation(friendly);
@@ -3066,6 +3272,18 @@ function isEmptyAssistantMessage(message: ModelMessage | undefined): boolean {
   return message.content.every(
     (part) => (part.type === "text" || part.type === "reasoning") && part.text.trim() === "",
   );
+}
+
+/** The text an interrupted sub-agent attempt wrote in its completed steps, reported if it later gives up. */
+function assistantTextOf(messages: readonly ModelMessage[]): string {
+  return messages
+    .flatMap((message) => {
+      if (message.role !== "assistant") return [];
+      if (typeof message.content === "string") return [message.content];
+      return message.content.flatMap((part) => (part.type === "text" ? [part.text] : []));
+    })
+    .join("\n")
+    .trim();
 }
 
 /** Drops a final assistant message whatever its content (used when that content was unparsed tool markup). */

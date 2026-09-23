@@ -1949,10 +1949,16 @@ because they only exist in the failed generation's response. The SDK reported th
   A model that keeps returning empty replies is replaced the same way.
 - A turn pauses, with progress saved and a resume hint, after eight consecutive attempts in which
   no model completed a step (or 20 interruptions in all), or at once when the failure is one retrying
-  cannot fix (no credits, an exhausted quota, a spend limit) and no fallback is left. A rejected key
-  still ends the turn at once: no retry or model fixes it. It is recognized by HTTP 401 or by
-  wording only authentication failures use; an earlier, looser pattern took request errors such as
-  "Invalid 'max_tokens'" for a rejected key and ended turns a retry would have finished.
+  cannot fix (no credits, an exhausted quota, a spend limit) and no fallback is left.
+- A rejected key is recognized by HTTP 401 or by wording only authentication failures use; an
+  earlier, looser pattern took request errors such as "Invalid 'max_tokens'" for a rejected key and
+  ended turns a retry would have finished. No retry or model on the same provider fixes one, so
+  (2026-09-22) the session moves to a fallback the user already has, with the turn's completed
+  steps kept: another OpenRouter key they configured (a stale `OPENROUTER_API_KEY` next to a newer
+  `shelra auth openrouter` key), OpenRouter Free when another OpenAI-compatible endpoint rejects its
+  key, then a local model that is already installed and answers a probe. Nothing is downloaded, a
+  key is only ever sent to the service it names, each fallback is tried once per session, and the
+  notice states its cost. The turn ends with the key error only when none is left.
 - Tools: every built-in and MCP tool is wrapped so an exception becomes a failed result with a way
   forward, and `tool-error` stream parts, which the app used to ignore (leaving the call
   spinning), become failed tool results.
@@ -1962,5 +1968,8 @@ after two failures, immediate switch on 402, 401 ends, bounded pause); tests for
 `tool-error` parts and fallback selection. Live, same model as the failure, with
 `SHELRA_MODEL_IDLE_TIMEOUT_MS=3000` to force the abort: two interruptions, the two `read_file`
 steps kept, a switch to `openrouter/free`, the correct answer, objective `complete`, exit 0.
-Sub-agents already return a failed task to the parent as a tool result, so the parent's flow goes
-on; they do not retry by themselves.
+Sub-agents return a failed task to the parent as a tool result, so the parent's flow goes on. Since
+2026-09-22 they also recover by themselves first: an interrupted attempt keeps its completed steps,
+is retried after the same pauses, and moves to the provider's next fallback model after two
+failures in a row; after four attempts without progress (or ten in all) the task returns as
+interrupted, with what it completed, instead of the first timeout ending it.

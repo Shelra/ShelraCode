@@ -12,6 +12,7 @@ import { DEFAULT_MODEL, getEffectiveReasoningEffort, normalizeModelId } from "..
 import {
   API_KEY_ENV,
   BASE_URL_ENV,
+  CLI_NAME,
   CONFIG_DIR_NAME,
   getProductUserDir,
   MODEL_ENV,
@@ -368,6 +369,27 @@ export function getApiKey(): string | undefined {
     getStoredOpenRouterApiKey() ||
     loadUserSettings().apiKey
   );
+}
+
+/**
+ * Every OpenRouter key the user configured, in the order `getApiKey` prefers them, without
+ * duplicates: when OpenRouter rejects one (a stale environment variable next to a newer saved
+ * key), the session continues with the next. Only sources that name OpenRouter are listed, so a
+ * key meant for another service is never sent to OpenRouter.
+ */
+export function listOpenRouterApiKeys(): Array<{ key: string; source: string }> {
+  const sources = [
+    { key: process.env[OPENROUTER_API_KEY_ENV], source: OPENROUTER_API_KEY_ENV },
+    { key: process.env.KEY_OPENROUTER, source: "KEY_OPENROUTER" },
+    { key: getStoredOpenRouterApiKey(), source: `\`${CLI_NAME} auth openrouter\`` },
+  ];
+  const seen = new Set<string>();
+  return sources.flatMap(({ key, source }) => {
+    const trimmed = key?.trim();
+    if (!trimmed || seen.has(trimmed)) return [];
+    seen.add(trimmed);
+    return [{ key: trimmed, source }];
+  });
 }
 
 export function getBaseURL(): string {

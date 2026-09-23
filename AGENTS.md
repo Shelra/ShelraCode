@@ -97,8 +97,8 @@ idle budget after which a silent model stream is aborted and the step retried.
 
 ## Resilience (hard rule)
 
-A missing or failing resource never ends Shelra's flow. Only the user's cancellation (Esc) and a
-provider key the provider rejects end a turn at once. Everything else is recovered:
+A missing or failing resource never ends Shelra's flow. Only the user's cancellation (Esc) ends a
+turn at once. Everything else is recovered:
 
 - A model round that fails (silence, an SDK timeout, a cut stream, a rate limit, a provider error,
   no credits, a spend limit, a missing endpoint) keeps its completed steps, is retried after a
@@ -110,6 +110,13 @@ provider key the provider rejects end a turn at once. Everything else is recover
   notice states its cost, and spend limits still apply. A strict (benchmark) model is never
   replaced. A turn in which no model answers for many attempts pauses with its progress saved and
   says how to resume.
+- A sub-agent recovers the same way on its own, within a tighter bound (four attempts without
+  progress, ten in all), and then returns a failed task the parent routes around.
+- A key the provider rejects moves the session, with its completed steps, to a fallback the user
+  already has: another configured OpenRouter key, OpenRouter Free when another endpoint rejects
+  its key, then a local model that is already installed (nothing is downloaded). The notice names
+  the fallback and its cost. Only when there is none does the turn end with the key error
+  (`setCredentialFallback`, wired in `src/index.ts`).
 - A tool that throws (a missing binary, an unreachable service, an MCP server that fails) returns
   a failed result the model routes around (`hardenToolSet` in `src/toolset/tools.ts`).
 - New code must follow the same rule: degrade and report, never throw out of the turn loop.

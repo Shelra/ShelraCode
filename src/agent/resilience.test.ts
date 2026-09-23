@@ -1,6 +1,7 @@
 import { APICallError } from "@ai-sdk/provider";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
+import { credentialFallbackChain } from "../providers/credential-fallback";
 import { ProviderStreamIdleError } from "../providers/stream";
 import type {
   ProviderAdapter,
@@ -18,8 +19,8 @@ import type {
  * turns on free OpenRouter models ended as "The operation was aborted." 99 s in, with all their
  * work lost, because the AI SDK's 90 s chunk timeout aborted the generation and the loop treated
  * every non-context error as the end of the turn. These tests pin the recovery: completed steps
- * are kept, the round is retried, a failing model is replaced by a fallback, and only the user's
- * cancellation or a rejected credential ends a turn at once.
+ * are kept, the round is retried, a failing model is replaced by a fallback, a rejected key moves
+ * the session to a configured fallback, and only the user's cancellation ends a turn at once.
  */
 
 const { upsertObjectiveIndex, executeEventHooksMock } = vi.hoisted(() => ({
@@ -192,12 +193,17 @@ function apiError(statusCode: number, message: string): APICallError {
 
 const answer = (text: string): Round => ({ events: [{ type: "text-delta", text }], text });
 
-async function run(provider: ScriptedProvider, message = "Explain the project") {
+function agentFor(provider: ScriptedProvider) {
   executeEventHooksMock.mockResolvedValue(emptyHookResult);
-  const agent = new Agent(undefined, undefined, "primary-model", undefined, {
+  return new Agent(undefined, undefined, "primary-model", undefined, {
     provider,
     interruptionBackoffMs: [0],
   });
+}
+
+async function run(provider: ScriptedProvider, message = "Explain the project", setup?: (agent: Agent) => void) {
+  const agent = agentFor(provider);
+  setup?.(agent);
   const chunks: Array<{ type: string; content?: string }> = [];
   for await (const chunk of agent.processMessage(message)) {
     chunks.push(chunk as { type: string; content?: string });
@@ -206,7 +212,35 @@ async function run(provider: ScriptedProvider, message = "Explain the project") 
     .filter((chunk) => chunk.type === "content")
     .map((chunk) => chunk.content ?? "")
     .join("");
-  return { chunks, text };
+  return { agent, chunks, text };
+}
+
+const toolStep = [
+  {
+    role: "assistant",
+    content: [{ type: "tool-call", toolCallId: "call-1", toolName: "read_file", input: { path: "a.ts" } }],
+  },
+  {
+    role: "tool",
+    content: [
+      {
+        type: "tool-result",
+        toolCallId: "call-1",
+        toolName: "read_file",
+        output: { type: "json", value: { success: true, output: "export const a = 1;" } },
+      },
+    ],
+  },
+];
+
+function sentMessages(provider: ScriptedProvider, index: number) {
+  return provider.requests[index]?.messages as Array<{ role: string; content: unknown }>;
+}
+
+function continuationIndex(messages: Array<{ role: string; content: unknown }>) {
+  return messages.findIndex(
+    (message) => message.role === "user" && String(message.content).includes("Continue the task from where it stopped"),
+  );
 }
 
 describe("a failing model connection never ends the turn", () => {
@@ -299,7 +333,7 @@ describe("a failing model connection never ends the turn", () => {
     expect(text).toContain("Free model answer.");
   });
 
-  it("ends at once on a rejected credential, since no retry or model can fix it", async () => {
+  it("ends at once on a rejected credential when no other key or installed model is configured", async () => {
     const provider = new ScriptedProvider([{ events: [], fail: apiError(401, "Invalid API key") }], ["fallback-model"]);
     const { chunks } = await run(provider);
 
@@ -360,5 +394,108 @@ describe("a failing model connection never ends the turn", () => {
     expect(text).toContain("[Paused");
     expect(text).toContain("cannot serve this request");
     expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+});
+
+describe("a rejected API key moves the session to a fallback the user already has", () => {
+  it("continues on the configured fallback with the completed steps kept", async () => {
+    const rejecting = new ScriptedProvider([
+      { events: [], completedSteps: toolStep, fail: apiError(401, "Invalid API key") },
+    ]);
+    const local = new ScriptedProvider([answer("Answered on the local model.")]);
+    const dispose = vi.fn(async () => {});
+    const { agent, chunks, text } = await run(rejecting, "Explain the project", (agent) =>
+      agent.setCredentialFallback(
+        credentialFallbackChain([
+          async () => ({ provider: local, modelId: "local-model", label: "the installed local model Test", dispose }),
+        ]),
+      ),
+    );
+
+    expect(rejecting.requests).toHaveLength(1);
+    expect(local.requests.map((request) => request.modelId)).toEqual(["local-model"]);
+    expect(text).toContain("Continuing with the installed local model Test, model local-model (free)");
+    expect(text).toContain("Answered on the local model.");
+    expect(chunks.some((chunk) => chunk.type === "error")).toBe(false);
+    const sent = sentMessages(local, 0);
+    expect(sent.findIndex((message) => message.role === "tool")).toBeGreaterThan(0);
+    expect(continuationIndex(sent)).toBeGreaterThan(sent.findIndex((message) => message.role === "tool"));
+    // The session stays on the fallback, and cleanup releases what it started.
+    expect(agent.getModel()).toBe("local-model");
+    await agent.cleanup();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("tries the next fallback when the first one's key is rejected too, then ends with the key error", async () => {
+    const rejected = () => new ScriptedProvider([{ events: [], fail: apiError(401, "Invalid API key") }]);
+    const primary = rejected();
+    const secondKey = rejected();
+    const { chunks } = await run(primary, "Explain the project", (agent) =>
+      agent.setCredentialFallback(
+        credentialFallbackChain([
+          async ({ modelId }) => ({ provider: secondKey, modelId, label: "the OpenRouter key from KEY_OPENROUTER" }),
+          async () => null,
+        ]),
+      ),
+    );
+
+    expect(primary.requests).toHaveLength(1);
+    expect(secondKey.requests.map((request) => request.modelId)).toEqual(["primary-model"]);
+    expect(chunks.some((chunk) => chunk.type === "error")).toBe(true);
+    expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+});
+
+describe("a sub-agent recovers from a failing model connection on its own", () => {
+  const explore = { agent: "explore", description: "Find the entry point", prompt: "Where does the CLI start?" };
+
+  it("retries after a timeout instead of failing the task", async () => {
+    const provider = new ScriptedProvider([
+      { events: [{ type: "abort" }], fail: abortError() },
+      answer("The CLI starts in src/index.ts."),
+    ]);
+    const activity: string[] = [];
+    const result = await agentFor(provider).runTaskRequest(explore as never, (detail) => activity.push(detail));
+
+    expect(provider.requests).toHaveLength(2);
+    expect(result.success).toBe(true);
+    expect(result.output).toBe("The CLI starts in src/index.ts.");
+    expect(activity.some((detail) => detail.includes("no response within the time limit"))).toBe(true);
+  });
+
+  it("keeps the steps it completed and continues from them", async () => {
+    const provider = new ScriptedProvider([
+      { events: [{ type: "error", error: new Error("Upstream idle timeout exceeded") }], completedSteps: toolStep },
+      answer("a.ts exports a."),
+    ]);
+    const result = await agentFor(provider).runTaskRequest(explore as never);
+
+    expect(result.success).toBe(true);
+    const retried = sentMessages(provider, 1);
+    expect(retried.findIndex((message) => message.role === "tool")).toBeGreaterThan(0);
+    expect(continuationIndex(retried)).toBeGreaterThan(retried.findIndex((message) => message.role === "tool"));
+  });
+
+  it("moves to the provider's fallback model after two failures in a row", async () => {
+    const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(180_000) }] };
+    const provider = new ScriptedProvider([stall, stall, answer("Found by the fallback.")], ["fallback-model"]);
+    const result = await agentFor(provider).runTaskRequest(explore as never);
+
+    expect(provider.requests.map((request) => request.modelId)).toEqual([
+      "primary-model",
+      "primary-model",
+      "fallback-model",
+    ]);
+    expect(result.output).toBe("Found by the fallback.");
+  });
+
+  it("gives up after a bounded number of attempts with a failed result the parent can route around", async () => {
+    const provider = new ScriptedProvider([{ events: [{ type: "abort" }], fail: abortError() }]);
+    const result = await agentFor(provider).runTaskRequest(explore as never);
+
+    expect(provider.requests).toHaveLength(5);
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("Task interrupted: no model answered after 5 attempts");
+    expect(result.output).toContain("delegate it again");
   });
 });

@@ -46,6 +46,7 @@ import {
   OPENROUTER_BASE_URL,
   PRODUCT_NAME,
 } from "./product/identity";
+import { type CredentialFallbackSource, credentialFallbackChain } from "./providers/credential-fallback";
 import { createOpenRouterProvider } from "./providers/openrouter";
 import { selectLocalRoute } from "./router/local-first";
 import { installManagedRuntime, resolveRuntimeInstallPlan } from "./runtimes/bootstrap";
@@ -53,6 +54,7 @@ import { discoverLocalRuntimes, disposeLocalRuntimes } from "./runtimes/discover
 import type { LocalModelCandidate, LocalRuntimeDiscovery } from "./runtimes/types";
 import { saveOpenRouterApiKey } from "./security/credentials";
 import { runOnboarding } from "./setup/onboarding";
+import { startInstalledLocalModel } from "./startup/local-fallback";
 import { probeLocalModel, runStartup } from "./startup/orchestrator";
 import type { StartupProgress, StartupResult } from "./startup/types";
 import {
@@ -71,6 +73,7 @@ import {
   getBaseURL,
   getCurrentSandboxMode,
   getCurrentSandboxSettings,
+  listOpenRouterApiKeys,
   loadPaymentSettings,
   mergeSandboxSettings,
   type SandboxMode,
@@ -91,6 +94,25 @@ let activeLocalRuntimes: LocalRuntimeDiscovery | undefined;
 function trackLocalRuntimes(discovery: LocalRuntimeDiscovery | undefined): void {
   activeLocalRuntimes = discovery;
 }
+
+/**
+ * The last fallback for a session whose cloud key is rejected: a local model that is already
+ * installed. Its server is tracked like any local runtime, so every exit route releases it.
+ */
+const installedLocalModelFallback: CredentialFallbackSource = async ({ signal }) => {
+  const local = await startInstalledLocalModel(signal);
+  if (!local) return null;
+  trackLocalRuntimes(local.discovery);
+  return {
+    provider: local.provider,
+    modelId: local.modelId,
+    label: `the installed local model ${local.name}`,
+    dispose: async () => {
+      if (activeLocalRuntimes === local.discovery) trackLocalRuntimes(undefined);
+      await disposeLocalRuntimes(local.discovery);
+    },
+  };
+};
 
 async function releaseTrackedLocalRuntimes(): Promise<void> {
   const discovery = activeLocalRuntimes;
@@ -119,6 +141,30 @@ async function configureRemoteProvider(
 ): Promise<RemoteModelSetup> {
   if (!isOpenRouterBaseURL(baseURL)) {
     agent.setApiKey(apiKey, baseURL);
+    // A key this endpoint rejects: continue on OpenRouter Free with a configured OpenRouter key,
+    // then on an installed local model. Free, so no spend is started without the user.
+    agent.setCredentialFallback(
+      credentialFallbackChain([
+        ...listOpenRouterApiKeys().map(
+          ({ key, source }): CredentialFallbackSource =>
+            async () => {
+              const catalog = await fetchOpenRouterCatalog({ apiKey: key, baseURL: OPENROUTER_BASE_URL });
+              return {
+                provider: createOpenRouterProvider(key, {
+                  modelId: "openrouter/free",
+                  entries: catalog.entries,
+                  baseURL: OPENROUTER_BASE_URL,
+                  requireParameters: true,
+                  policy: "free",
+                }),
+                modelId: "openrouter/free",
+                label: `OpenRouter Free with the key from ${source}`,
+              };
+            },
+        ),
+        installedLocalModelFallback,
+      ]),
+    );
     return {
       models: [],
       catalog: [],
@@ -134,6 +180,8 @@ async function configureRemoteProvider(
     throw new Error(catalog.error ?? "OpenRouter returned no usable models. Try again with network access.");
   }
   primeCatalog(catalog.entries);
+  // The key the session runs on; a rejected key's fallback replaces it, and the model picker follows.
+  let activeApiKey = apiKey;
 
   const selectModel = async (modelId: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -144,7 +192,7 @@ async function configureRemoteProvider(
         allowPaid: true,
         requiresTools: true,
       });
-      const provider = createOpenRouterProvider(apiKey, {
+      const provider = createOpenRouterProvider(activeApiKey, {
         modelId: route.modelId,
         entries: catalog.entries,
         baseURL,
@@ -189,6 +237,34 @@ async function configureRemoteProvider(
     policy,
   });
   agent.setProvider(provider, route.modelId);
+  // A key OpenRouter rejects: continue with another OpenRouter key the user configured (a stale
+  // environment variable next to a newer saved key), on the same model and policy, then on an
+  // installed local model.
+  agent.setCredentialFallback(
+    credentialFallbackChain([
+      ...listOpenRouterApiKeys()
+        .filter((entry) => entry.key !== apiKey)
+        .map(
+          ({ key, source }): CredentialFallbackSource =>
+            async ({ modelId }) => {
+              activeApiKey = key;
+              return {
+                provider: createOpenRouterProvider(key, {
+                  modelId,
+                  entries: catalog.entries,
+                  baseURL,
+                  fallbackModels: route.candidates.map((entry) => entry.id).slice(0, 3),
+                  requireParameters: true,
+                  policy,
+                }),
+                modelId,
+                label: `the OpenRouter key from ${source}`,
+              };
+            },
+        ),
+      installedLocalModelFallback,
+    ]),
+  );
   return {
     models: catalog.entries.map(catalogEntryToModelInfo),
     catalog: catalog.entries,
