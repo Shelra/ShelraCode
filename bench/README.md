@@ -104,6 +104,18 @@ are excluded from that denominator.
 (`--autonomous`). It is kept for comparison; its scores do not describe the
 product path.
 
+`--agent claude-code` and `--agent codex` are reference agents: `claude -p` and
+`codex exec` run headless on the same task workspaces and are graded by the same
+oracle, so a score says how Shelra compares with them on identical work. They use
+your own login for those CLIs (the clean room hands them your real HOME) but not
+your Claude Code settings, plugins, hooks or MCP servers; Claude Code's auto
+memory goes to the clean room and neither saves a session. `--model` is passed to
+that CLI untouched (`--model sonnet`); without it, the CLI's own default runs, and
+Codex takes its reasoning effort from your Codex configuration. Their runs spend
+your Claude or OpenAI plan, not OpenRouter credit, and they have no host that
+flags unverified work, so every failed task they end as done counts as a false
+completion.
+
 Each task records the per-step finish reasons and any upstream providers the
 OpenRouter adapter quarantined in `finalResult`, so a run that failed because a
 provider returned content-less steps is distinguishable from a model failure.

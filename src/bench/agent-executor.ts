@@ -1,21 +1,16 @@
 import { Agent, type AgentOptions, type ProcessMessageObserver } from "../agent/agent";
 import { isVerificationCommand } from "../agent/verification-evidence";
-import { evaluateAcceptance } from "../autonomy/acceptance";
-import type { AcceptanceCriterion, CheckSpec, CriterionResult, VerificationReport } from "../autonomy/types";
-import { observePage } from "../exec/browser";
-import { runCommand } from "../exec/command";
-import { probeHttp } from "../exec/http";
+import type { CheckSpec } from "../autonomy/types";
 import type { BudgetLimits } from "../models/budget";
 import type { ProviderAdapter } from "../providers/types";
 import type { ToolCall, ToolResult } from "../types/index";
+import { describeFailures, gradeWorkspace } from "./grading";
 import type { BenchmarkExecutionNotice, BenchmarkTaskExecution } from "./runner";
-import { calculateIntentScore } from "./scoring";
 import type {
   BenchmarkAcceptanceCriterion,
   BenchmarkAcceptanceResult,
   BenchmarkBehavior,
   BenchmarkFailureType,
-  BenchmarkJsonObject,
   BenchmarkTaskDefinition,
 } from "./types";
 
@@ -233,55 +228,18 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
         };
       }
 
-      const criteria = toRuntimeAcceptanceCriteria(task.acceptanceCriteria);
-      let report: VerificationReport | undefined;
-      if (criteria) {
-        context.emit({
-          type: "verification",
-          taskId: task.id,
-          message: `Grading workspace against ${criteria.length} benchmark-owned criteria`,
-          payload: { harness: "agent-chat" },
-        });
-        report = await evaluateAcceptance(
-          criteria,
-          { workspace, benchmarkRoot: options.benchmarkRoot, attempt: 1, signal: runSignal },
-          {
-            runCommand: (command, commandOptions) =>
-              runCommand({
-                command,
-                cwd: commandOptions.cwd,
-                timeoutMs: commandOptions.timeoutMs,
-                signal: commandOptions.signal,
-                env: commandOptions.env,
-              }),
-            probeHttp: (url) => probeHttp(url),
-            observePage: (url, pageOptions) => observePage(url, pageOptions),
-          },
-        );
-        context.emit({
-          type: "verification",
-          taskId: task.id,
-          message: report.passed
-            ? `Benchmark oracle passed ${report.results.length} criteria`
-            : `Benchmark oracle failed: ${report.results
-                .filter((result) => !result.passed)
-                .map((result) => result.id)
-                .join(", ")}`,
-          payload: verificationPayload(report),
-        });
-      }
-
-      const acceptance = toAcceptanceResults(task.acceptanceCriteria ?? [], report);
-      const required = acceptance.filter((criterion) => criterion.required !== false);
-      const passedRequired = required.filter((criterion) => criterion.status === "passed").length;
-      const failedRequired = required.filter((criterion) => criterion.status !== "passed");
-      const coding = required.length > 0 ? (passedRequired / required.length) * 100 : undefined;
-      const benchmarkVerified = required.length > 0 && failedRequired.length === 0;
-      const intent = calculateIntentScore(acceptance);
+      const grade = await gradeWorkspace(task, workspace, {
+        benchmarkRoot: options.benchmarkRoot,
+        signal: runSignal,
+        harness: "agent-chat",
+        emit: context.emit,
+      });
+      const { acceptance, failedRequired, coding, intent, report } = grade;
+      const benchmarkVerified = grade.verified;
       const verification = verificationScore(task.acceptanceCriteria ?? [], counters);
       const behavior = toBehavior(counters, finalText);
       behavior.falseCompletion =
-        required.length > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(finalText);
+        grade.requiredCount > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(finalText);
       const failureType = classifyFailure({ benchmarkVerified, timedOut, turnError, failedRequired, counters });
 
       return {
@@ -498,65 +456,6 @@ function classifyFailure(input: {
     : "verification_failure";
 }
 
-function describeFailures(failedRequired: readonly BenchmarkAcceptanceResult[]): string {
-  if (failedRequired.length === 0) return "No benchmark-owned acceptance criteria were supplied.";
-  return `Benchmark acceptance criteria not satisfied: ${failedRequired.map((criterion) => criterion.id).join(", ")}`;
-}
-
 function sessionEvidence(workspace: string): BenchmarkTaskExecution["evidence"] {
   return [{ kind: "other", path: workspace, label: "Graded task workspace" }];
-}
-
-function toAcceptanceResults(
-  criteria: readonly { id: string; description: string; required?: boolean }[],
-  report: VerificationReport | undefined,
-): BenchmarkAcceptanceResult[] {
-  const byId = new Map<string, CriterionResult>((report?.results ?? []).map((result) => [result.id, result]));
-  return criteria.map((criterion) => {
-    const result = byId.get(criterion.id);
-    return {
-      id: criterion.id,
-      description: criterion.description,
-      status: result ? (result.passed ? "passed" : "failed") : "not_run",
-      required: criterion.required !== false,
-      ...(result?.detail ? { detail: result.detail } : {}),
-    };
-  });
-}
-
-function toRuntimeAcceptanceCriteria(
-  criteria: BenchmarkTaskDefinition["acceptanceCriteria"],
-): AcceptanceCriterion[] | undefined {
-  if (!criteria || criteria.length === 0 || criteria.some((criterion) => !criterion.check)) return undefined;
-  return criteria.map((criterion) => ({
-    id: criterion.id,
-    description: criterion.description,
-    required: criterion.required !== false,
-    check: cloneCheckSpec(criterion.check as CheckSpec),
-  }));
-}
-
-function cloneCheckSpec(check: CheckSpec): AcceptanceCriterion["check"] {
-  if (check.kind === "files_exist" || check.kind === "no_external_urls") {
-    return { ...check, ...(check.paths ? { paths: [...check.paths] } : {}) };
-  }
-  if (check.kind === "dom") return { ...check, assertion: { ...check.assertion } };
-  return { ...check };
-}
-
-function verificationPayload(report: VerificationReport): BenchmarkJsonObject {
-  return {
-    attempt: report.attempt,
-    passed: report.passed,
-    durationMs: report.durationMs,
-    blocked: report.blocked,
-    results: report.results.map((result) => ({
-      id: result.id,
-      passed: result.passed,
-      kind: result.kind,
-      modelJudged: result.modelJudged,
-      durationMs: result.durationMs,
-      detail: result.detail.slice(0, 500),
-    })),
-  };
 }

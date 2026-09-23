@@ -16,7 +16,9 @@ import {
 } from "./autonomy/presentation";
 import { type RuntimeEvent as ObjectiveRuntimeEvent, runObjective } from "./autonomy/runtime";
 import { createAgentBenchmarkExecutor } from "./bench/agent-executor";
+import { createClaudeCodeExecutor } from "./bench/claude-code-executor";
 import { enterBenchCleanRoom } from "./bench/clean-room";
+import { createCodexExecutor } from "./bench/codex-executor";
 import { collectBenchmarkEnvironment, collectRepositorySnapshot, resolveBenchmarkPath } from "./bench/environment";
 import { loadBenchmarkManifest } from "./bench/manifest";
 import { formatRepeatSummary, type RepeatTaskOutcome, summarizeRepeats } from "./bench/repeat";
@@ -1165,6 +1167,29 @@ async function runBenchCommand(options: {
           }
         },
         createExecutor: async ({ run, signal, emit }) => {
+          if (agentName === "claude-code" || agentName === "codex") {
+            // A reference agent on the same workspaces and oracle. Its model is its own CLI's name,
+            // passed through untouched; without one, that CLI's configured default runs.
+            const model = options.model?.trim() || undefined;
+            updateBenchmarkRunMetadata(run.runId, {
+              model: `${agentName}/${model ?? "default"}`,
+              modelProvider: agentName === "claude-code" ? "Claude Code CLI" : "OpenAI Codex CLI",
+            });
+            emit({
+              type: "note",
+              message: `Reference agent ${agentName} ready${model ? ` with ${model}` : ""}`,
+              payload: { agent: agentName },
+            });
+            const realHome = cleanRoom?.realHome ?? null;
+            return agentName === "claude-code"
+              ? createClaudeCodeExecutor({
+                  ...(model ? { model } : {}),
+                  benchmarkRoot: process.cwd(),
+                  scratchDir: `${cleanRoom?.root ?? `${process.cwd()}/.shelra`}/claude-code`,
+                  realHome,
+                })
+              : createCodexExecutor({ ...(model ? { model } : {}), benchmarkRoot: process.cwd(), realHome });
+          }
           if (agentName !== "shelra" && agentName !== "shelra-autonomy") {
             throw new Error(
               `Agent adapter "${agentName}" is not registered yet. This run was retained as failed evidence.`,
@@ -1599,7 +1624,11 @@ program
   .description("Run Shelra Bench and persist an immutable historical benchmark run")
   .option("--manifest <path>", "Benchmark manifest path", ".shelra/bench/manifest.json")
   .option("--suite <suite>", "Override the suite label for this run")
-  .option("--agent <name>", "Agent adapter to evaluate: shelra (product chat path) or shelra-autonomy", "shelra")
+  .option(
+    "--agent <name>",
+    "Agent to evaluate: shelra (product chat path), shelra-autonomy, or a reference agent on the same tasks and oracle: claude-code, codex",
+    "shelra",
+  )
   .option("-m, --model <model>", "Model under test; keep this fixed when measuring harness changes")
   .option("--model-policy <policy>", "Routing policy: free, auto, economy, balanced, quality, max or custom", "free")
   .option("-k, --api-key <key>", "OpenRouter API key")
