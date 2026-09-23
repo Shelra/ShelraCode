@@ -1099,8 +1099,10 @@ and the requirement audit are the levers for it.
 - Clean benchmark root: a folder outside any git repository with a copy of `bench/`, a scratch
   `HOME`/`USERPROFILE`, and the OpenRouter key passed through the environment. The silent suite is the
   core manifest with "Run bun test before completing." removed from every prompt.
-- Every run was merged into `bench/history/benchmark-history.json` with
-  `bun run scripts/bench-history.ts import --db <db> --source <label>`.
+- Every run is in `bench/history/benchmark-history.json` (sources `audit-2026-09-23-baseline` and
+  `audit-2026-09-23-after`), merged with `bun run scripts/bench-history.ts import --db <db> --source <label>`
+  once they had finished. Paths under the isolated root read `<bench-root>`, and the harness commit, which
+  the bench could not record outside a repository, was filled from §6.1 and §6.4.
 
 **The same experiment on today's code** (§6.4, §21): the switches are now part of `shelra bench`, so no
 patch is needed. `--ablate <list>` (the list above plus `contract`), `--agent claude-code|codex`,
