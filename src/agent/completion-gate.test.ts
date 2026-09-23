@@ -155,7 +155,11 @@ class ScenarioProvider implements ProviderAdapter {
   round = 0;
   readonly requests: ProviderStreamRequest[] = [];
 
-  constructor(private readonly secondRoundEvents: ProviderEvent[] | ProviderEvent[][]) {}
+  constructor(
+    private readonly secondRoundEvents: ProviderEvent[] | ProviderEvent[][],
+    /** The files round 1 writes. */
+    private readonly firstWrites: readonly string[] = ["index.html"],
+  ) {}
 
   resolveModelRuntime(modelId: string): ProviderModelRuntime {
     return {
@@ -183,11 +187,17 @@ class ScenarioProvider implements ProviderAdapter {
         ? [
             toolCallEvent("call-plan", "generate_plan", {}),
             toolResultEvent("call-plan", "generate_plan", PLAN_TOOL_RESULT),
-            toolCallEvent("call-write", "write_file", { path: "index.html", content: "<html></html>" }),
-            toolResultEvent("call-write", "write_file", {
-              success: true,
-              output: "Created index.html",
-              diff: { filePath: "index.html", additions: 1, removals: 0, patch: "", isNew: true },
+            ...this.firstWrites.flatMap((file, index): ProviderEvent[] => {
+              const id = index === 0 ? "call-write" : `call-write-${index}`;
+              const content = file === "index.html" ? "<html></html>" : "Findings.";
+              return [
+                toolCallEvent(id, "write_file", { path: file, content }),
+                toolResultEvent(id, "write_file", {
+                  success: true,
+                  output: `Created ${file}`,
+                  diff: { filePath: file, additions: 1, removals: 0, patch: "", isNew: true },
+                }),
+              ];
             }),
             { type: "text-delta", text: "Done." },
           ]
@@ -237,6 +247,40 @@ describe("completion/verification gate", () => {
     const blockedCall = upsertObjectiveIndex.mock.calls.find(([record]) => record.phase === "blocked");
     expect(blockedCall).toBeDefined();
     expect(blockedCall?.[0].blocker).toContain("No verification action was observed");
+  });
+
+  it("asks a turn that only wrote documents once, to check its facts, then reports it unverified", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Checked." }], ["docs/AUDIT.md", "notes.txt"]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Write an audit report of this project")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    // Round 1 and one fact-check request; a code change gets three requests.
+    expect(provider.round).toBe(2);
+    const request = lastUserText(provider.requests[1]);
+    expect(request).toContain("only wrote documents");
+    expect(request).toContain("grep the code for each claim");
+    const notice = chunks.find((c) => c.type === "content" && c.content?.includes("Not verified"));
+    expect(notice?.content).toContain("2 document(s) written");
+    expect(notice?.content).toContain("AC1");
+    expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("keeps all three requests when code changed alongside a document", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }], ["index.html", "README.md"]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+
+    for await (const _chunk of agent.processMessage("Create a digital clock")) {
+      // drain
+    }
+
+    expect(provider.round).toBe(4);
+    expect(lastUserText(provider.requests[1])).not.toContain("only wrote documents");
   });
 
   it("does not block when the nudge round actually verifies (a real command is run)", async () => {

@@ -162,6 +162,8 @@ const OVERFLOW_RECOVERY_KEPT_TURNS = 2;
  * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §12.
  */
 const MAX_VERIFICATION_RETRIES = 3;
+/** Text documents: nothing runs them, so a turn that only wrote these gets one fact-check request. */
+const DOCUMENT_FILE_RE = /\.(?:md|mdx|markdown|txt|rst|adoc|org)$/i;
 /**
  * How many times one turn re-requests a model step that ended with neither text nor a tool call
  * before the turn ends visibly. The first retry re-sends the same context (provider routing is
@@ -2955,16 +2957,26 @@ export class Agent {
             const criteriaList = criteria
               .map((c) => `- ${c.id}: ${c.description} (verify: ${c.verification})`)
               .join("\n");
+            // Nothing runs a document, so asking three times for a command only buys rounds, and a
+            // model pressed that way wrote a copy of its own report as "evidence" (live 2026-09-23).
+            // A turn that only wrote documents is asked once to check its facts, then reported unverified.
+            const documentsOnly = !unverifiedSinceAudit && mutations.every((path) => DOCUMENT_FILE_RE.test(path));
+            const maxRetries = documentsOnly ? 1 : MAX_VERIFICATION_RETRIES;
 
-            if (verificationRetries < MAX_VERIFICATION_RETRIES) {
+            if (verificationRetries < maxRetries) {
               verificationRetries += 1;
               const blockedLine = unverifiedSinceAudit
                 ? "Completion blocked: you changed files after your last verification run and nothing has run since."
                 : criteria.length > 0
                   ? "Completion blocked: none of your stated acceptance criteria have been verified yet."
                   : `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`;
-              const nudge =
-                criteria.length > 0
+              const nudge = documentsOnly
+                ? [
+                    "Completion blocked: you only wrote documents, and re-reading them is not verification.",
+                    "Check what they state instead: grep the code for each claim about it, open each source you cite, and run the project's docs check if it has one (a docs build, a Markdown or link linter). Correct what is wrong, then report what you checked, and say plainly which statements you could not check.",
+                    criteriaList ? `Acceptance criteria:\n${criteriaList}` : `Written: ${mutations.join(", ")}`,
+                  ].join("\n")
+                : criteria.length > 0
                   ? [
                       blockedLine,
                       "You wrote files and re-reading them is not verification — actually perform the verification method for each criterion below (make a real request, run the real command, observe the real output), then report what you actually observed for each one:",
@@ -2978,21 +2990,25 @@ export class Agent {
               this.messages.push({ role: "user", content: nudge });
               this.messageSeqs.push(null);
               this.kernel?.recordObservation(
-                `Completion gate: no verification evidence after changing ${mutations.length} file(s); requesting real verification (attempt ${verificationRetries}/${MAX_VERIFICATION_RETRIES}).`,
+                `Completion gate: no verification evidence after changing ${mutations.length} file(s); requesting real verification (attempt ${verificationRetries}/${maxRetries}).`,
               );
               this.persistKernelIndex(`Awaiting verification for ${mutations.length} changed file(s)`);
               continue;
             }
 
-            const reason =
-              criteria.length > 0
+            const reason = documentsOnly
+              ? `${mutations.length} document(s) written, and no check can run a document.`
+              : criteria.length > 0
                 ? `No verification action was observed for ${criteria.length} acceptance criteria after ${verificationRetries} automatic request(s).`
                 : `No verification action was observed after ${mutations.length} file(s) changed and ${verificationRetries} automatic request(s).`;
+            const advice = documentsOnly
+              ? "Review them before relying on them."
+              : "Run the relevant checks yourself, or ask me to, before treating this as done.";
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
             yield {
               type: "content",
-              content: `\n\n[Not verified — ${reason} Run the relevant checks yourself, or ask me to, before treating this as done.${criteriaList ? `\n${criteriaList}` : ""}]`,
+              content: `\n\n[Not verified — ${reason} ${advice}${criteriaList ? `\n${criteriaList}` : ""}]`,
             };
             yield { type: "done" };
             return;
