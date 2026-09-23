@@ -1,3 +1,5 @@
+import { formatDecisionsForPrompt } from "../ledger/prompt";
+import { activeDecisions } from "../ledger/store";
 import { isLspToolEnabled } from "../lsp/runtime";
 import { buildMemoryContext, type MemoryContext } from "../memory/retrieval";
 import { listMemoryRecords, listUserMemoryRecords, projectMemoryScope } from "../memory/store";
@@ -179,6 +181,8 @@ ${workspaceLines}`;
 
   const memoryText = ablations.has("memory") ? "" : (memoryContext ?? memoryContextFor(cwd, "")).text;
   const memorySection = memoryText ? `\n\n${memoryText}\n` : "";
+  const decisionsText = ablations.has("ledger") ? "" : formatDecisionsForPrompt(activeDecisions(cwd));
+  const decisionsSection = decisionsText ? `\n\n${decisionsText}\n` : "";
   const skillsText = ablations.has("skills") ? null : formatSkillsForPrompt(discoverSkills(cwd));
   const skillsSection = skillsText ? `\n\n${skillsText}\n` : "";
   const subagentsSection = ablations.has("subagents")
@@ -190,7 +194,7 @@ ${workspaceLines}`;
     ? `\n\nAPPROVED PLAN:\nThe following plan has been approved by the user. Execute it now.\n${planContext}\n`
     : "";
 
-  return `${modePrompts(isLspToolEnabled(), ablations)[mode]}${sandboxSection}${customSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
+  return `${modePrompts(isLspToolEnabled(), ablations)[mode]}${sandboxSection}${customSection}${decisionsSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
 
 ${workspaceLines}`;
 }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
+import { approveDecision, proposeDecision } from "../ledger/store";
 import { clearCatalog, primeCatalog } from "../models/catalog";
 import type {
   ProviderAdapter,
@@ -70,6 +71,13 @@ beforeAll(() => {
     join(workspace, ".agents", "skills", "release-notes", "SKILL.md"),
     "---\nname: release-notes\ndescription: Write release notes\n---\n",
   );
+  const decision = proposeDecision(workspace, {
+    title: "Parsers never throw",
+    rule: "A parser returns a result object instead of throwing on bad input.",
+    scope: ["src/**"],
+    source: "user",
+  });
+  if (decision.ok) approveDecision(workspace, decision.decision.id);
 });
 
 afterAll(() => {
@@ -188,7 +196,9 @@ describe("ablations in the model request", () => {
 
   it("sends every subsystem when nothing is switched off", async () => {
     const { tools, system } = await requestWith([]);
-    expect(tools).toEqual(expect.arrayContaining(["memory_list", "generate_plan", "task", "search_web"]));
+    expect(tools).toEqual(
+      expect.arrayContaining(["memory_list", "generate_plan", "task", "search_web", "propose_decision"]),
+    );
     for (const marker of [
       "Check memory_list once",
       "MEMORY:",
@@ -198,6 +208,8 @@ describe("ablations in the model request", () => {
       "<available_skills>",
       "HOST-COMPILED REPOSITORY CONTEXT",
       "The host blocks a turn from completing",
+      "DECISIONS:",
+      "D-0001 Parsers never throw",
     ]) {
       expect(system).toContain(marker);
     }
@@ -215,6 +227,7 @@ describe("ablations in the model request", () => {
     { ablate: "skills", tools: [], markers: ["<available_skills>"] },
     { ablate: "context", tools: [], markers: ["HOST-COMPILED REPOSITORY CONTEXT"] },
     { ablate: "gate", tools: [], markers: ["The host blocks"] },
+    { ablate: "ledger", tools: ["propose_decision"], markers: ["DECISIONS:", "D-0001"] },
   ];
 
   for (const { ablate, tools: gone, markers } of cases) {

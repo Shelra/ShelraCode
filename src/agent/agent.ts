@@ -26,6 +26,8 @@ import type {
   TaskCreatedHookInput,
   UserPromptSubmitHookInput,
 } from "../hooks/types";
+import { approveDecision, type LedgerResult, proposeDecision, rejectDecision } from "../ledger/store";
+import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
 import { admitCandidates, extractUserDirectives, reflectOnTurn, type TurnCommand } from "../memory/reflection";
@@ -256,6 +258,9 @@ type InterruptionOutcome =
 /** Asks the user whether a destructive shell command may run; resolving false refuses it. */
 export type DestructiveCommandConfirm = (command: string, reason: string, signal?: AbortSignal) => Promise<boolean>;
 
+/** The user's answer to a proposed decision: record it, drop it, or leave it waiting in the ledger. */
+export type DecisionApproval = (decision: Decision, signal?: AbortSignal) => Promise<"approve" | "reject" | "later">;
+
 export interface AgentOptions {
   persistSession?: boolean;
   provider?: ProviderAdapter;
@@ -442,12 +447,14 @@ export class Agent {
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
+  /** Asks the user about a proposed decision (the terminal UI supplies it); without it proposals wait. */
+  private askDecisionApproval: DecisionApproval | null = null;
   /** Subsystems a benchmark switched off for this agent; none outside `--ablate` runs. */
   private readonly ablations: Ablations;
   /** Runs the project's checks when the host verifies a turn's final code (the task contract). */
   private readonly checkRunner: ContractCheckRunner;
-  /** Questions about destructive commands wait in line, so the user sees one at a time. */
-  private destructiveCommandQueue: Promise<unknown> = Promise.resolve();
+  /** Questions to the user (destructive commands, decisions) wait in line, so they see one at a time. */
+  private userQuestionQueue: Promise<unknown> = Promise.resolve();
   private sessionStartHookFired = false;
   private recapsEnabled = true;
   private kernel: AgentKernel | null = null;
@@ -652,15 +659,69 @@ export class Agent {
     const confirm = this.confirmDestructiveCommand;
     if (!confirm) return {};
     return {
-      confirmDestructiveCommand: (command, reason, signal) => {
-        const answer = this.destructiveCommandQueue.then(() =>
-          signal?.aborted ? false : confirm(command, reason, signal),
-        );
-        this.destructiveCommandQueue = answer.catch(() => undefined);
-        return answer;
-      },
+      confirmDestructiveCommand: (command, reason, signal) =>
+        this.queueUserQuestion(() => (signal?.aborted ? Promise.resolve(false) : confirm(command, reason, signal))),
     };
   }
+
+  private queueUserQuestion<T>(ask: () => Promise<T>): Promise<T> {
+    const answer = this.userQuestionQueue.then(ask);
+    this.userQuestionQueue = answer.catch(() => undefined);
+    return answer;
+  }
+
+  setDecisionApproval(fn: DecisionApproval | null): void {
+    this.askDecisionApproval = fn;
+  }
+
+  /**
+   * propose_decision (the decision ledger, phase 2 of the 2026-09-18 objective): the model proposes, and only
+   * the user's yes makes a commitment. Where nobody can be asked, the proposal waits in the ledger for
+   * `shelra decisions approve`.
+   */
+  private proposeDecisionFromTool = async (input: Omit<DecisionProposal, "source">): Promise<ToolResult> => {
+    const cwd = this.bash.getCwd();
+    let result: LedgerResult;
+    try {
+      result = proposeDecision(cwd, { ...input, source: "agent" });
+    } catch (error) {
+      recordSwallowedError("ledger.write", error);
+      return {
+        success: false,
+        output: `The proposal could not be saved: ${error instanceof Error ? error.message : error}`,
+      };
+    }
+    if (!result.ok) return { success: false, output: result.reason };
+    const { decision } = result;
+    const waiting = `Saved as ${decision.id}, a proposal in ${decision.file}. It counts once the user approves it (\`shelra decisions approve ${decision.id}\`); tell the user it is waiting.`;
+    const ask = this.askDecisionApproval;
+    if (!ask) return { success: true, output: waiting };
+    const signal = this.abortController?.signal;
+    const answer = await this.queueUserQuestion(() =>
+      signal?.aborted ? Promise.resolve("later" as const) : ask(decision, signal),
+    ).catch(() => "later" as const);
+    try {
+      if (answer === "approve") {
+        const approved = approveDecision(cwd, decision.id);
+        return approved.ok
+          ? {
+              success: true,
+              output: `The user approved ${decision.id}: it is an active decision now (${decision.file}).`,
+            }
+          : { success: false, output: approved.reason };
+      }
+      if (answer === "reject") {
+        rejectDecision(cwd, decision.id);
+        return {
+          success: true,
+          output: `The user declined ${decision.id}; it was not recorded. Do not propose it again unless the user asks.`,
+        };
+      }
+    } catch (error) {
+      recordSwallowedError("ledger.write", error);
+    }
+    return { success: true, output: waiting };
+  };
 
   hasApiKey(): boolean {
     return !!this.provider;
@@ -2369,6 +2430,7 @@ export class Agent {
             sessionId: this.session?.id ?? undefined,
             onCheckpoint: this.onToolCheckpoint,
             restoreFile: this.restoreFileFromJournal,
+            ...(this.ablations.has("ledger") ? {} : { proposeDecision: this.proposeDecisionFromTool }),
             planState: this.planState,
             toolGroups: loadToolGroupSettings(),
             ...this.destructiveCommandOption(),

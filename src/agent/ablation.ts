@@ -7,6 +7,7 @@ import type { ToolSet } from "ai";
  * - memory: no memory tools, retrieval, standing-rule capture or reflection
  * - gate: no completion gate (and so no task contract or requirement audit either)
  * - contract: no task contract; the gate only asks that some check ran after the last change
+ * - ledger: no decisions in the prompt, no propose_decision tool and no enforcement of decisions
  * - audit: no requirement audit
  * - plan: no plan tools or planning step in the prompt
  * - skills: no skill catalog in the prompt
@@ -19,6 +20,7 @@ export const ABLATIONS = [
   "memory",
   "gate",
   "contract",
+  "ledger",
   "audit",
   "plan",
   "skills",
@@ -70,6 +72,7 @@ export function parseAblations(value: string): { ablations: Ablation[]; unknown:
 
 const TOOLS_BY_SUBSYSTEM: Partial<Record<Exclude<Ablation, "bare">, readonly string[]>> = {
   memory: ["memory_list", "memory_read", "memory_write", "memory_delete"],
+  ledger: ["propose_decision"],
   plan: ["generate_plan", "update_plan_step"],
   subagents: ["task", "delegate", "delegation_read", "delegation_list"],
   web: ["search_web", "open_web"],

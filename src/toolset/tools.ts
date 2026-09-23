@@ -2,6 +2,7 @@ import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { RestorePoint } from "../agent/attempt-journal";
 import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks } from "../hooks/index";
+import type { DecisionProposal } from "../ledger/types";
 import { isLspToolEnabled, queryLsp } from "../lsp/runtime";
 import { LSP_TOOL_OPERATIONS } from "../lsp/types";
 import { decideMemoryWrite } from "../memory/gate";
@@ -116,6 +117,11 @@ interface CreateToolsOptions {
    * turn (audit doc 15, Phase 2.3). The agent keeps the journal; without it there is no restore_file.
    */
   restoreFile?: (path: string, to: RestorePoint) => Promise<ToolResult>;
+  /**
+   * Records a proposed decision in the project's ledger and asks the user to approve it (the agent owns the
+   * approval question); without it there is no propose_decision.
+   */
+  proposeDecision?: (proposal: Omit<DecisionProposal, "source">) => Promise<ToolResult>;
 }
 
 /**
@@ -671,6 +677,27 @@ export function createTools(
             .describe("Where to go back to; before_last_attempt by default"),
         }),
         execute: async ({ path, to }) => restoreFile(path, to ?? "before_last_attempt"),
+      });
+    }
+
+    if (options.proposeDecision) {
+      const proposeDecision = options.proposeDecision;
+      tools.propose_decision = tool({
+        description:
+          "Propose recording a decision in this project's ledger (docs/decisions): a rule the user stated, one in an ADR or AGENTS.md, or how you and the user settled something must be done. It counts only after the user approves it. State it as a rule, not a list of cases; name the files it covers; give a command that fails when the rule is broken, if one exists. Use supersedes to replace an active decision.",
+        inputSchema: z.object({
+          title: z.string().describe("One line naming the decision"),
+          rule: z.string().describe("The commitment, stated as a rule"),
+          why: z.string().optional().describe("Why it was decided"),
+          evidence: z.string().optional().describe("Where it is stated: the user's words, an ADR path, a section"),
+          scope: z
+            .array(z.string())
+            .optional()
+            .describe("Project-relative globs of the files it governs, such as src/memory/**; omit for all"),
+          check: z.string().optional().describe("A command that exits 0 while the rule holds"),
+          supersedes: z.string().optional().describe("The id of the active decision this one replaces, such as D-0003"),
+        }),
+        execute: async (input) => proposeDecision(input),
       });
     }
 
