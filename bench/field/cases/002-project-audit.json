@@ -21,6 +21,27 @@
     {
       "commit": "1916ef4",
       "what": "read_file returned whole files; a read now stops at 2,000 lines and 50,000 characters and says where to read on."
+    },
+    {
+      "commit": "ea5b955",
+      "what": "The completion gate asked three times for a check that no document can have; a turn that only wrote documents is now asked once to check its facts, then reported unverified."
+    },
+    {
+      "commit": "842a060",
+      "what": "Headless JSON output dropped the gate's closing note and the retry and model-switch notices."
+    }
+  ],
+  "reruns": [
+    {
+      "date": "2026-09-23",
+      "commit": "b77af2d",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "cost": "free",
+      "session": "0d45517f3b75",
+      "seconds": 1612,
+      "toolCalls": 102,
+      "gateLoops": 3,
+      "result": "Three drafts of the report (the last 525 lines) and six \"verification\" text files. The largest read fell from 201,000 characters to 50,000 and read_file returned 240,000 in all (672,000 before), yet input stayed near 8.9M tokens: more steps, and three gate rounds it answered by echoing \"VERIFIED\" and writing those files. Nemotron stalled twice and was overloaded once; the run ended on openrouter/free. Its line counts and module paths check out; its counts of files (166, not 331) and tests (\"332 passing\"; nothing ran), its two market sizes that disagree and \"memory unique among terminal agents\" do not."
     }
   ]
 }
