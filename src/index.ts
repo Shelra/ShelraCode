@@ -3,6 +3,7 @@ import type { KeyEvent } from "@opentui/core";
 import { InvalidArgumentError, program } from "commander";
 import * as dotenv from "dotenv";
 import packageJson from "../package.json" with { type: "json" };
+import { ABLATIONS, parseAblations } from "./agent/ablation";
 import { Agent } from "./agent/agent";
 import { completeDelegation, failDelegation, loadDelegation } from "./agent/delegations";
 import {
@@ -1018,9 +1019,21 @@ async function runBenchCommand(options: {
   json?: boolean;
   /** Commander's `--no-clean-room` sets this to false. */
   cleanRoom?: boolean;
+  /** Comma-separated harness subsystems to switch off (`--ablate`). */
+  ablate?: string;
 }): Promise<void> {
   const manifestCandidate = options.manifest || ".shelra/bench/manifest.json";
   const agentName = ((options.agent || "shelra").trim() || "shelra").toLowerCase();
+  const { ablations, unknown: unknownAblations } = parseAblations(options.ablate ?? "");
+  if (unknownAblations.length > 0 || (ablations.length > 0 && agentName !== "shelra")) {
+    console.error(
+      unknownAblations.length > 0
+        ? `Unknown ablation: ${unknownAblations.join(", ")}. Known: ${ABLATIONS.join(", ")}.`
+        : "--ablate applies to the shelra product path only.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const requestedModel = options.model ? normalizeModelId(options.model) : undefined;
   const rawPolicy = (options.modelPolicy || "free").trim().toLowerCase();
   const supportedPolicies: ModelPolicy[] = ["free", "auto", "economy", "balanced", "quality", "max", "custom"];
@@ -1053,6 +1066,7 @@ async function runBenchCommand(options: {
       requestedModel: requestedModel ?? null,
       maxCostUsd: budget.maxSessionUsd ?? null,
       maxRequestCostUsd: budget.maxRequestUsd ?? null,
+      ablation: ablations.length > 0 ? ablations.join(",") : "none",
     },
   } as const;
 
@@ -1200,6 +1214,7 @@ async function runBenchCommand(options: {
           benchmarkRoot: process.cwd(),
           budget,
           signal,
+          ...(ablations.length > 0 ? { agentOptions: { ablate: ablations } } : {}),
         });
       },
     });
@@ -1563,6 +1578,10 @@ program
   .option("--max-request-cost <usd>", "Maximum spend for one model request")
   .option("-d, --directory <dir>", "Working directory", process.cwd())
   .option("--json", "Print newline-delimited machine-readable run events")
+  .option(
+    "--ablate <list>",
+    "Switch harness subsystems off to measure what each adds (comma-separated): memory, gate, audit, plan, skills, context, subagents, web, or bare",
+  )
   .option(
     "--no-clean-room",
     "Run the tasks under .shelra/bench/runs with your own settings, memory and skills, as runs before 2026-09-23 did",

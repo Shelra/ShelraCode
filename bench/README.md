@@ -218,9 +218,18 @@ Supported run controls include:
 --max-request-cost <usd>
 --directory <dir>
 --json
+--ablate <list>
+--no-clean-room
 ~~~
 
 Keys and credentials are process inputs only and are never persisted.
+
+`--ablate` switches harness subsystems off for the product path, to measure what
+each one adds: `memory`, `gate`, `audit`, `plan`, `skills`, `context`,
+`subagents`, `web`, or `bare` (all of them, a prompt of environment facts only
+and six basic tools). Each switch removes the subsystem's tools, its guidance in
+the prompt and its host behavior; the run records it as `agentConfig.ablation`.
+A capability whose ablation changes nothing has not been shown to exist.
 
 ## What is saved
 

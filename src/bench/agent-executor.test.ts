@@ -261,6 +261,22 @@ describe("agent benchmark executor", () => {
     expect(execution.behavior).toMatchObject({ filesChanged: 0, selfVerification: false, toolCalls: 0 });
   });
 
+  it("hands a run's ablations to the agent it drives (audit doc 15, item 0.1)", async () => {
+    const provider = new ScriptedProvider([{ type: "text-delta", text: "Done." }]);
+    const executor = createAgentBenchmarkExecutor({
+      provider,
+      modelId: "bench-test-model",
+      benchmarkRoot: workspace,
+      persistSession: false,
+      agentOptions: { ablate: ["bare"] },
+    });
+
+    await executor.executeTask(task(), { emit: () => {} });
+
+    const tools = Object.keys((provider.lastRequest?.tools as Record<string, unknown> | undefined) ?? {}).sort();
+    expect(tools).toEqual(["bash", "delete_file", "edit_file", "grep", "read_file", "write_file"]);
+  });
+
   it("reports a task without benchmark-owned checks as not run rather than inventing a grade", async () => {
     const provider = new ScriptedProvider([{ type: "text-delta", text: "Done." }]);
     const executor = createAgentBenchmarkExecutor({

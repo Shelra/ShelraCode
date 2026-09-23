@@ -817,3 +817,49 @@ describe("completion/verification gate", () => {
     expect(notice?.content).toContain("1 file(s) changed");
   });
 });
+
+describe("benchmark ablations of the gate (audit doc 15, item 0.1)", () => {
+  it("lets an unverified change finish at once when the gate is switched off", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: testWorkspace,
+      ablate: ["gate"],
+    });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    // With the gate on, this turn takes four rounds and ends "Not verified" (first test above).
+    expect(provider.round).toBe(1);
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+  });
+
+  it("verifies but skips the requirement audit when the audit is switched off", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([
+      [
+        toolCallEvent("call-test", "bash", { command: "bun test" }),
+        toolResultEvent("call-test", "bash", { success: true, output: "3 pass" }, { command: "bun test" }),
+        { type: "text-delta", text: "Tests pass." },
+      ],
+      [{ type: "text-delta", text: "Audit: every behavior is exercised." }],
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: testWorkspace,
+      ablate: ["audit"],
+    });
+
+    for await (const _chunk of agent.processMessage(DENSE_REQUEST)) {
+      // drain
+    }
+
+    // Initial round and the verification nudge; with the audit on there is a third, audit round.
+    expect(provider.round).toBe(2);
+    expect(provider.requests.some((request) => lastUserText(request).includes("audit the request"))).toBe(false);
+  });
+});
