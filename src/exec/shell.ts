@@ -289,6 +289,11 @@ function decodeClixmlText(raw: string): string {
  * When stderr is a pipe, PowerShell serializes its own error records as CLIXML instead of
  * text. Native programs' stderr passes through untouched, so only these lines need work.
  * Returns `null` for lines that should be dropped entirely.
+ *
+ * Only strings tagged with a stream (`<S S="Error">`, `<S S="warning">`) are text to keep. A
+ * `Write-Host` line also arrives here as an information record, whose property strings (the
+ * message again, its colors, the script path, "PSHOST", the user and machine) were joined into
+ * noise after the message had already printed on stdout.
  */
 export function normalizeShellErrorLine(line: string): string | null {
   const trimmed = line.trimEnd();
@@ -296,7 +301,7 @@ export function normalizeShellErrorLine(line: string): string | null {
   if (!trimmed.startsWith("<Objs ")) return line;
 
   const parts: string[] = [];
-  const matcher = /<S(?:\s[^>]*)?>([\s\S]*?)<\/S>/g;
+  const matcher = /<S S="[^"]*">([\s\S]*?)<\/S>/g;
   let match = matcher.exec(trimmed);
   while (match) {
     parts.push(decodeClixmlText(match[1] ?? ""));
