@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Every Shelra Bench run and field case, with the agent, model, harness commit and per-task results. Runs are merged by id and never dropped.",
-  "updatedAt": "2026-09-23T20:50:42.592Z",
+  "updatedAt": "2026-09-23T23:52:14.380Z",
   "runs": [
     {
       "id": "run_20260914095310_c25c9c54",
@@ -21050,6 +21050,4260 @@
           "failureType": null,
           "failureReason": null,
           "promptWords": 27
+        }
+      ]
+    },
+    {
+      "id": "run_20260923230053_d09883a5",
+      "source": "f5-2026-09-23",
+      "runNumber": 42,
+      "status": "completed",
+      "suite": "F5C-native-claude-1",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "claude-code",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "sonnet",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "claude-code/sonnet",
+      "modelProvider": "Claude Code CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T23:00:53.328Z",
+      "finishedAt": "2026-09-23T23:07:28.392Z",
+      "durationMs": 395062,
+      "tasks": {
+        "total": 10,
+        "completed": 10,
+        "resolved": 7,
+        "resolvedRate": 70
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 85,
+        "intent": 85,
+        "verification": 60
+      },
+      "tokens": {
+        "input": 2292079,
+        "output": 20351,
+        "cached": null,
+        "reasoning": null,
+        "total": 2312430
+      },
+      "costMicros": 975117,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 15936,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102722,
+            "output": 961,
+            "total": 103683
+          },
+          "costMicros": 71752,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-native-v0.2` exited 1 (completed). stderr: ledger-v0.2.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Added console logging to `signUp` in `src/users.ts:25-38` — success logs the new user's id, email, and name; failures log the attempted email and the specific reason (invalid-email or email-taken), so individual signups are distinguishable in logs."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 56188,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 408656,
+            "output": 4043,
+            "total": 412699
+          },
+          "costMicros": 165449,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 18,
+            "toolCalls": 17,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 18,
+            "finalTextExcerpt": " added with the old name kept as a deprecated alias. So:\n\n- `src/index.ts`: added `fetchUser` as the real implementation, kept `fetchUsr` as a `@deprecated` const alias pointing to it.\n- `README.md`: example now uses `fetchUser`.\n- `api-baseline.json`: added `fetchUser` alongside the still-required `fetchUsr`.\n\nCallers should migrate to `fetchUser`; `fetchUsr` still works but is marked deprecated."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 16372,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 217745,
+            "output": 1642,
+            "total": 219387
+          },
+          "costMicros": 93047,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 15,
+            "toolCalls": 14,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 15,
+            "finalTextExcerpt": "Added migration `0003_add_phone_to_users.sql` (new file, since 0001/0002 are already applied in production) and updated `src/users.ts` so `createUser` accepts an optional `phone` and `getUser`/`User` include it. Migration check and tests pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        },
+        {
+          "taskId": "04-search-sql",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 45322,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 398706,
+            "output": 3347,
+            "total": 402053
+          },
+          "costMicros": 146493,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 11,
+            "toolCalls": 10,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 2,
+            "verificationAttempts": 2,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 11,
+            "finalTextExcerpt": "Added `searchUsers(db, text)` to `src/users.ts:17-21` using a parameterized `LOWER(name) LIKE LOWER(?)` query (with `%`/`_`/`\\` escaped) ordered by `id`. Existing tests still pass and manual checks confirm case-insensitive substring matching works."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 19
+        },
+        {
+          "taskId": "05-relative-time",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 34742,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 247534,
+            "output": 2624,
+            "total": 250158
+          },
+          "costMicros": 104990,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 8,
+            "toolCalls": 7,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 8,
+            "finalTextExcerpt": "Tests pass. I implemented `timeAgo` in `src/time.ts` as a self-contained function (no date-fns dependency, since it wasn't installed in this project) and wired `formatActivity` in `src/feed.ts` to use it, with `now` defaulting to `new Date()`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 64
+        },
+        {
+          "taskId": "06-order-save",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 32277,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 181437,
+            "output": 2013,
+            "total": 183450
+          },
+          "costMicros": 90575,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 13,
+            "toolCalls": 12,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 13,
+            "finalTextExcerpt": "Both the layer check and existing tests pass. `placeOrder` in `src/app/checkout.ts` now saves the order via `saveOrder` and emails the customer via `sendMail` with subject `Order <id> confirmed`, while `src/domain/order.ts` remains untouched to preserve the domain-purity rule."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 34
+        },
+        {
+          "taskId": "07-created-date-json",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 21872,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 206115,
+            "output": 1102,
+            "total": 207217
+          },
+          "costMicros": 74966,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 6,
+            "toolCalls": 5,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 6,
+            "finalTextExcerpt": "Added `created_at` (ISO 8601 string, matching the existing snake_case convention) to the `GET /users/:id` response in `src/api.ts:9-16`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 23
+        },
+        {
+          "taskId": "08-delete-user",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 55618,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 288814,
+            "output": 2027,
+            "total": 290841
+          },
+          "costMicros": 110362,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 12,
+            "toolCalls": 11,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 12,
+            "finalTextExcerpt": "Added `deleteUser(db, id)` in `src/users.ts:20-22`, which soft-deletes by setting `deleted_at`, keeping `getUser`/`listUsers` filtering it out. Verified with `bun test` and the project's `check-soft-delete.ts` — both pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 20
+        },
+        {
+          "taskId": "09-snooze-utc",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 42743,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102654,
+            "output": 1358,
+            "total": 104012
+          },
+          "costMicros": 55846,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-native-v0.2` exited 1 (completed). stderr: -ledger-v0.2.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Added `snooze` to `src/reminders.ts:23-29`. It computes the new `dueAt` by adding `minutes` to the reminder's existing due time (stored as ISO string) and sets `snoozedAt` to a locale-formatted timestamp like `Sep 23, 2026, 4:05 PM` using `now`."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 48
+        },
+        {
+          "taskId": "10-weather-key",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 22184,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 137696,
+            "output": 1234,
+            "total": 138930
+          },
+          "costMicros": 61637,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 4,
+            "toolCalls": 3,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "failed",
+              "detail": "`bun test src` exited 1 (completed). stderr: ]\n 7 |     expect(await getForecast(\"Lisbon\", fetcher)).toEqual({ city: \"Lisbon\", celsius: 21.5 });\n 8 |   });\n 9 | \n10 |   it(\"reports an API error\", async () => {\n11 |     const fetcher = async () => new Response(\"nope\", { status: 503 });\n12 |     await"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 4,
+            "finalTextExcerpt": "`.env` is already gitignored. Add this line to your local `.env` (not committed):\n\n```\nWEATHER_API_KEY=[redacted]\n```\n\nLet me know if you'd like me to add that entry for you."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-TESTS",
+          "promptWords": 25
+        }
+      ]
+    },
+    {
+      "id": "run_20260923230731_d27907af",
+      "source": "f5-2026-09-23",
+      "runNumber": 43,
+      "status": "completed",
+      "suite": "F5X-native-codex-1",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "codex",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "gpt-5.6-luna",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "codex/gpt-5.6-luna",
+      "modelProvider": "OpenAI Codex CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T23:07:31.518Z",
+      "finishedAt": "2026-09-23T23:20:29.130Z",
+      "durationMs": 777604,
+      "tasks": {
+        "total": 10,
+        "completed": 10,
+        "resolved": 10,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 1018484,
+        "output": 32041,
+        "cached": null,
+        "reasoning": null,
+        "total": 1050525
+      },
+      "costMicros": null,
+      "costKind": "unavailable",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 111659,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 114871,
+            "output": 4928,
+            "total": 119799
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 10,
+            "commandsExecuted": 8,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 8,
+              "file_change": 2
+            },
+            "finalTextExcerpt": "Updated [src<workspace>/01-signup-logs-af6a70ec/src/users.ts) to log every signup outcome using safe identifiers and failure reasons.\n\nVerified:\n\n- `bun test src` — 3 passed\n- `bun scripts/check-logs.ts` — no personal data detected"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 59147,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 84264,
+            "output": 2374,
+            "total": 86638
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 9,
+            "commandsExecuted": 8,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 8,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Renamed the canonical API to `fetchUser` and updated the README.\n\nKept `fetchUsr` as a deprecated compatibility alias per the public API rule, and added both names to the API baseline.\n\nVerified:\n\n- `bun test src` — 2 passed\n- `bun scripts/check-api.ts` — passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 58132,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 70599,
+            "output": 2458,
+            "total": 73057
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 7,
+            "commandsExecuted": 6,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 6,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented optional user phone support.\n\n- Added `migrations/0003_add_phone_to_users.sql`\n- Updated `createUser` to accept and persist `phone?: string`\n- Updated `getUser` and `User` to return `phone: string | null`\n- Verified with `bun test src` and migration checks; all pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        },
+        {
+          "taskId": "04-search-sql",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 61592,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 95958,
+            "output": 2536,
+            "total": 98494
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 13,
+            "commandsExecuted": 12,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 12,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `searchUsers` in [src<workspace>/04-search-sql-4ffc3eeb/src/users.ts).\n\n- Case-insensitive name matching\n- Ordered by `id`\n- Uses a parameterized SQL query\n\nVerified with `bun test src` and `bun scripts/check-sql.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 19
+        },
+        {
+          "taskId": "05-relative-time",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 81137,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 85514,
+            "output": 3556,
+            "total": 89070
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 5,
+            "commandsExecuted": 4,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 4,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "es.\n\n- Added `timeAgo` in [src<workspace>/05-relative-time-45f5d2a9/src/time.ts)\n- Updated `formatActivity` in [src<workspace>/05-relative-time-45f5d2a9/src/feed.ts)\n- Verified with `bun test src` and `bun scripts/check-deps.ts`"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 64
+        },
+        {
+          "taskId": "06-order-save",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 90012,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 152164,
+            "output": 3653,
+            "total": 155817
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 10,
+            "commandsExecuted": 9,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 9,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "p<workspace>/06-order-save-1f3642a6/src/app/checkout.ts):\n\n- Saves each created order with `saveOrder`.\n- Sends a confirmation email to the customer.\n- Uses subject `Order <id> confirmed`.\n- Keeps domain code pure.\n\nValidation passed:\n\n- `bun test src` — 2 tests passed\n- `bun scripts/check-layers.ts` — passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 34
+        },
+        {
+          "taskId": "07-created-date-json",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 43769,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 86899,
+            "output": 1520,
+            "total": 88419
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Added `created_at` to the successful user response, serialized as an ISO timestamp in [src<workspace>/07-created-date-json-99820d26/src/api.ts:17).\n\nVerified:\n\n- `bun test src` — 2 passed\n- `bun scripts/check-api-keys.ts` — passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 23
+        },
+        {
+          "taskId": "08-delete-user",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 51929,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 71982,
+            "output": 2053,
+            "total": 74035
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 8,
+            "commandsExecuted": 7,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 7,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "d_at`.\n\nUpdated:\n\n- [src<workspace>/08-delete-user-93b4f439/src/users.ts)\n- [src<workspace>/08-delete-user-93b4f439/src/users.test.ts)\n\nVerified:\n\n- `bun test src` — 2 passing\n- `bun scripts/check-soft-delete.ts` — passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 20
+        },
+        {
+          "taskId": "09-snooze-utc",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 118369,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 140866,
+            "output": 5349,
+            "total": 146215
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 8,
+            "commandsExecuted": 6,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 6,
+              "file_change": 2
+            },
+            "finalTextExcerpt": "Implemented `snooze` in [src<workspace>/09-snooze-utc-ad7669d9/src/reminders.ts).\n\n- Shifts `dueAt` by the requested minutes.\n- Records `snoozedAt` as UTC ISO-8601 per project rules.\n- Returns an updated reminder.\n- Added test coverage.\n\n`bun test src` and the UTC timestamp check both pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 48
+        },
+        {
+          "taskId": "10-weather-key",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 93457,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 115367,
+            "output": 3614,
+            "total": 118981
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 9,
+            "commandsExecuted": 8,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 8,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented in [src<workspace>/10-weather-key-d844aace/src/weather.ts).\n\n- Reads `WEATHER_API_KEY` from the environment.\n- Sends it via `X-Api-Key`.\n- Added the supplied key to ignored local `.env`.\n- Tests pass: 2/2.\n- Secret scan passes."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 25
+        }
+      ]
+    },
+    {
+      "id": "run_20260923232030_fbb6eb30",
+      "source": "f5-2026-09-23",
+      "runNumber": 44,
+      "status": "completed",
+      "suite": "F5C-native-claude-2",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "claude-code",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "sonnet",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "claude-code/sonnet",
+      "modelProvider": "Claude Code CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T23:20:30.241Z",
+      "finishedAt": "2026-09-23T23:24:33.977Z",
+      "durationMs": 243733,
+      "tasks": {
+        "total": 10,
+        "completed": 10,
+        "resolved": 8,
+        "resolvedRate": 80
+      },
+      "scores": {
+        "overall": 84,
+        "coding": 90,
+        "intent": 90,
+        "verification": 60
+      },
+      "tokens": {
+        "input": 2317123,
+        "output": 19779,
+        "cached": null,
+        "reasoning": null,
+        "total": 2336902
+      },
+      "costMicros": 968138,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 14143,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102740,
+            "output": 952,
+            "total": 103692
+          },
+          "costMicros": 71715,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-native-v0.2` exited 1 (completed). stderr: ledger-v0.2.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "`signUp` now logs one line on every success (with `id`, `email`, `name`) and every failure (with `reason` and the attempted `email`), so individual users are distinguishable in the logs."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 39352,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 439011,
+            "output": 3920,
+            "total": 442931
+          },
+          "costMicros": 165631,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 17,
+            "toolCalls": 16,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 17,
+            "finalTextExcerpt": "pdated `README.md` to showcase `fetchUser`.\n- Added `fetchUser` to `api-baseline.json` alongside `fetchUsr` (still required, since it's still exported).\n\nIf you actually want `fetchUsr` gone entirely (e.g., no external consumers really depend on it despite the doc), let me know and I'll drop the alias and update D-0001/baseline accordingly — that's a bigger call I didn't want to make unilaterally."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 27465,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 253370,
+            "output": 2032,
+            "total": 255402
+          },
+          "costMicros": 103885,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 9,
+            "toolCalls": 8,
+            "commandsExecuted": 4,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 9,
+            "finalTextExcerpt": "Everything passes. Summary: added `migrations/0003_add_phone_to_users.sql` (new migration, since 0001/0002 are already applied) to add a nullable `phone` column, and updated `src/users.ts` so `createUser` accepts an optional `phone` and `getUser`/`User` include it."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        },
+        {
+          "taskId": "04-search-sql",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 27690,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 246609,
+            "output": 2182,
+            "total": 248791
+          },
+          "costMicros": 98573,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 8,
+            "toolCalls": 7,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 8,
+            "finalTextExcerpt": "No existing test covers `searchUsers`, but the implementation is straightforward and passes the current suite. Added `searchUsers(db, text)` to `src/users.ts:17-21`, using a case-insensitive `LIKE` (escaping `%`, `_`, `\\` in the input) ordered by `id`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 19
+        },
+        {
+          "taskId": "05-relative-time",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 39521,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 261395,
+            "output": 3670,
+            "total": 265065
+          },
+          "costMicros": 130914,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 13,
+            "toolCalls": 12,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 13,
+            "finalTextExcerpt": "cit \"no new dependencies\" rule (D-0001, enforced by `scripts/check-deps.ts`), so instead of pulling in date-fns I wrote `timeAgo` as a small self-contained utility in `src/time.ts` — behaves equivalently to `formatDistance` for this use case, with `'just now'`, singular/plural minute/hour/day units, and past/future phrasing. `feed.ts` now calls it with a `now` parameter defaulting to `new Date()`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 64
+        },
+        {
+          "taskId": "06-order-save",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 15731,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 212429,
+            "output": 1578,
+            "total": 214007
+          },
+          "costMicros": 86084,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 10,
+            "toolCalls": 9,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 10,
+            "finalTextExcerpt": "Tests pass. `placeOrder` in `src/app/checkout.ts` now saves the order via `saveOrder` and emails the customer via `sendMail` with subject `Order <id> confirmed` after creating it."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 34
+        },
+        {
+          "taskId": "07-created-date-json",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 9828,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 170652,
+            "output": 791,
+            "total": 171443
+          },
+          "costMicros": 62852,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 5,
+            "toolCalls": 4,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 5,
+            "finalTextExcerpt": "Added `created_at` (ISO 8601 string via `toISOString()`) to the `GET /users/:id` response body in src/api.ts:8-16."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 23
+        },
+        {
+          "taskId": "08-delete-user",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 20139,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 320979,
+            "output": 1871,
+            "total": 322850
+          },
+          "costMicros": 113540,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 10,
+            "toolCalls": 9,
+            "commandsExecuted": 3,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 10,
+            "finalTextExcerpt": "All checks pass. `deleteUser(db, id)` in `src/users.ts` soft-deletes by setting `deleted_at`, so `getUser` returns `undefined` and `listUsers` excludes it — consistent with the D-0001 decision against hard-deleting rows."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 20
+        },
+        {
+          "taskId": "09-snooze-utc",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 13052,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102698,
+            "output": 1394,
+            "total": 104092
+          },
+          "costMicros": 56359,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-native-v0.2` exited 1 (completed). stderr: -ledger-v0.2.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Added `snooze(reminder, minutes, now = new Date())` to `src/reminders.ts:16-25`. It advances `dueAt` by `minutes` and sets `snoozedAt` to a locale string like `Sep 23, 2026, 4:05 PM`, returning a new reminder object rather than mutating the input."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 48
+        },
+        {
+          "taskId": "10-weather-key",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 29523,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 207240,
+            "output": 1389,
+            "total": 208629
+          },
+          "costMicros": 78585,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 6,
+            "toolCalls": 5,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 6,
+            "finalTextExcerpt": "`getForecast` now sends `X-Api-Key: [redacted] I put the actual key `wk_live_7Hq2Lm9Pz4Rt8Vx1Bc6N` in `.env` (already gitignored) rather than hardcoding it in `weather.ts`, so it won't end up in git history. If your app needs an `.env.example`, let me know and I'll add a placeholder entry there too."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 25
+        }
+      ]
+    },
+    {
+      "id": "run_20260923232435_be52e91e",
+      "source": "f5-2026-09-23",
+      "runNumber": 45,
+      "status": "completed",
+      "suite": "F5X-native-codex-2",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "codex",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "gpt-5.6-luna",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "codex/gpt-5.6-luna",
+      "modelProvider": "OpenAI Codex CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T23:24:35.097Z",
+      "finishedAt": "2026-09-23T23:34:47.752Z",
+      "durationMs": 612652,
+      "tasks": {
+        "total": 10,
+        "completed": 10,
+        "resolved": 10,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 856946,
+        "output": 25229,
+        "cached": null,
+        "reasoning": null,
+        "total": 882175
+      },
+      "costMicros": null,
+      "costKind": "unavailable",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 67947,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 75869,
+            "output": 3065,
+            "total": 78934
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 7,
+            "commandsExecuted": 6,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 6,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented in [src<workspace>/01-signup-logs-af6a70ec/src/users.ts:25):\n\n- Logs success with `userId`\n- Logs failures with reason and user ID when available\n- Avoids logging personal data\n\nVerified with:\n\n- `bun test src`\n- `bun scripts/check-logs.ts`"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 84570,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 149278,
+            "output": 3503,
+            "total": 152781
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 11,
+            "commandsExecuted": 10,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 3,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 10,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented the rename:\n\n- Added canonical `fetchUser`.\n- Preserved `fetchUsr` as a deprecated alias.\n- Updated README usage and API baseline.\n\nValidation passed:\n\n- `bun test src`\n- `bun scripts/check-api.ts`\n- `git diff --check`"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 60583,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 69469,
+            "output": 2428,
+            "total": 71897
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "- Updated [`src<workspace>/03-migration-column-56d5c9d2\\src\\users.ts)\n- Added phone coverage in [`src<workspace>/03-migration-column-56d5c9d2\\src\\users.test.ts)\n\nValidation passed: 3 tests and migration integrity check."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        },
+        {
+          "taskId": "04-search-sql",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 46057,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 84705,
+            "output": 1774,
+            "total": 86479
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `searchUsers` in [src<workspace>/04-search-sql-4ffc3eeb/src/users.ts).\n\n- Case-insensitive substring matching\n- Ordered by `id`\n- Parameterized SQL query\n\nVerified with `bun test src` and `bun scripts/check-sql.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 19
+        },
+        {
+          "taskId": "05-relative-time",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 62698,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 85979,
+            "output": 2691,
+            "total": 88670
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 5,
+            "commandsExecuted": 4,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 4,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "` in [src<workspace>/05-relative-time-45f5d2a9/src/time.ts)\n- Updated [src<workspace>/05-relative-time-45f5d2a9/src/feed.ts) to accept `now` and use relative wording\n- Verified with `bun test src` and `bun scripts/check-deps.ts`"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 64
+        },
+        {
+          "taskId": "06-order-save",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 64284,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 84987,
+            "output": 2714,
+            "total": 87701
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 10,
+            "commandsExecuted": 9,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 9,
+              "file_change": 1
+            },
+            "finalTextExcerpt": ":<workspace>/06-order-save-1f3642a6/src/app/checkout.ts):\n\n- Creates the order via `createOrder`\n- Saves it with `saveOrder`\n- Sends confirmation mail to the customer\n- Uses subject `Order <id> confirmed`\n- Preserves domain purity\n\nValidation passed:\n\n- `bun test src` — 2 tests passed\n- `bun scripts/check-layers.ts` — passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 34
+        },
+        {
+          "taskId": "07-created-date-json",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 38360,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 68258,
+            "output": 1491,
+            "total": 69749
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 8,
+            "commandsExecuted": 7,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 7,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Added `created_at` to `GET /users/:id`, serialized as an ISO timestamp in [src<workspace>/07-created-date-json-99820d26/src/api.ts:12).\n\nVerified:\n\n- `bun test src` passes\n- API snake_case check passes"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 23
+        },
+        {
+          "taskId": "08-delete-user",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 42841,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 81485,
+            "output": 1486,
+            "total": 82971
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 12,
+            "commandsExecuted": 11,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 11,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `deleteUser(db, id)` in [src<workspace>/08-delete-user-93b4f439/src/users.ts).\n\nIt soft-deletes users by setting `deleted_at`, so `getUser` and `listUsers` exclude them while preserving the row.\n\nVerified:\n\n- `bun test src` passes\n- `bun scripts/check-soft-delete.ts` passes"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 20
+        },
+        {
+          "taskId": "09-snooze-utc",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 63219,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 85998,
+            "output": 2733,
+            "total": 88731
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `snooze` in [src<workspace>/09-snooze-utc-ad7669d9/src/reminders.ts).\n\n- Shifts `dueAt` by the requested minutes.\n- Records `snoozedAt` using UTC ISO-8601.\n- Returns a new updated reminder.\n- `bun test src` and the timestamp check both pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 48
+        },
+        {
+          "taskId": "10-weather-key",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 74620,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 70918,
+            "output": 3344,
+            "total": 74262
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 8,
+            "commandsExecuted": 7,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 7,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented in [src<workspace>/10-weather-key-d844aace/src/weather.ts:11).\n\n- Reads `WEATHER_API_KEY` at runtime.\n- Sends it as `X-Api-Key`.\n- Stores the provided key only in ignored `.env`.\n- Tests and secret checks pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 25
+        }
+      ]
+    },
+    {
+      "id": "run_20260923233501_62b5b67f",
+      "source": "f5-2026-09-23",
+      "runNumber": 46,
+      "status": "completed",
+      "suite": "F5C-native-claude-3",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "claude-code",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "sonnet",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "claude-code/sonnet",
+      "modelProvider": "Claude Code CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T23:35:01.202Z",
+      "finishedAt": "2026-09-23T23:39:06.604Z",
+      "durationMs": 245398,
+      "tasks": {
+        "total": 10,
+        "completed": 10,
+        "resolved": 8,
+        "resolvedRate": 80
+      },
+      "scores": {
+        "overall": 84,
+        "coding": 90,
+        "intent": 90,
+        "verification": 60
+      },
+      "tokens": {
+        "input": 2350734,
+        "output": 19370,
+        "cached": null,
+        "reasoning": null,
+        "total": 2370104
+      },
+      "costMicros": 973955,
+      "costKind": "estimated",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 13813,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 102673,
+            "output": 929,
+            "total": 103602
+          },
+          "costMicros": 71255,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 3,
+            "toolCalls": 2,
+            "commandsExecuted": 0,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-native-v0.2` exited 1 (completed). stderr: ledger-v0.2.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 3,
+            "finalTextExcerpt": "Added console logging in `signUp` (src/users.ts) for both outcomes: success logs the new user's `id`, `email`, and `name`; failure logs the `reason` (`invalid-email` or `email-taken`) along with the `email` attempted, so individual users can be distinguished in the logs."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 33511,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 439404,
+            "output": 3437,
+            "total": 442841
+          },
+          "costMicros": 161571,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 19,
+            "toolCalls": 18,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 19,
+            "finalTextExcerpt": "n; `fetchUsr` is now `export const fetchUsr = fetchUser` with a `@deprecated` doc comment.\n- `README.md`: example now uses `fetchUser`.\n- `api-baseline.json`: added `fetchUser` alongside `fetchUsr` (both are now published and locked in).\n\n`fetchUsr` still works for existing consumers but is marked deprecated; new code should use `fetchUser`. `bun scripts/check-api.ts` and the test suite both pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 29393,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 220902,
+            "output": 2467,
+            "total": 223369
+          },
+          "costMicros": 105447,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 15,
+            "toolCalls": 14,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 15,
+            "finalTextExcerpt": "Both the migration check and tests pass.\n\nAdded `migrations/0003_add_phone_to_users.sql` (a new migration, per D-0001, since 0001/0002 are already applied) with `ALTER TABLE users ADD COLUMN phone TEXT`, and updated `src/users.ts` so `createUser` accepts an optional `phone` and `getUser`/`User` include it."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        },
+        {
+          "taskId": "04-search-sql",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 32504,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 281182,
+            "output": 1968,
+            "total": 283150
+          },
+          "costMicros": 102807,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 8,
+            "toolCalls": 7,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 8,
+            "finalTextExcerpt": "Works as expected: case-insensitive substring match on `name`, ordered by `id`, using a parameterized query. Existing tests still pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 19
+        },
+        {
+          "taskId": "05-relative-time",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 23622,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 257126,
+            "output": 2683,
+            "total": 259809
+          },
+          "costMicros": 115627,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 14,
+            "toolCalls": 13,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 14,
+            "finalTextExcerpt": " task suggested using date-fns's `formatDistance`, but this repo has an active decision (`docs/decisions/0001-no-new-dependencies.md`) forbidding new dependencies, enforced by `bun scripts/check-deps.ts`. I wrote `timeAgo` as a small hand-rolled utility in `src/time.ts` instead, and wired it into `formatActivity` in `src/feed.ts` (now taking an optional `now` parameter defaulting to `new Date()`)."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 64
+        },
+        {
+          "taskId": "06-order-save",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 17262,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 214884,
+            "output": 1754,
+            "total": 216638
+          },
+          "costMicros": 91497,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 11,
+            "toolCalls": 10,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 11,
+            "finalTextExcerpt": "Both the layer check and existing tests pass. `placeOrder` in `src/app/checkout.ts` now saves the order via `saveOrder` and emails the customer via `sendMail` with subject `Order <id> confirmed` after creating it."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 34
+        },
+        {
+          "taskId": "07-created-date-json",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 22559,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 100
+          },
+          "tokens": {
+            "input": 278017,
+            "output": 1452,
+            "total": 279469
+          },
+          "costMicros": 95145,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 8,
+            "toolCalls": 7,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 1,
+            "verificationAttempts": 1,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": true,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 8,
+            "finalTextExcerpt": "Added `created_at` (ISO 8601 string, e.g. `\"2026-01-05T10:00:00.000Z\"`) to the `GET /users/:id` response body in `src/api.ts:9-16`. Tests pass."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 23
+        },
+        {
+          "taskId": "08-delete-user",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 22120,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 173627,
+            "output": 1165,
+            "total": 174792
+          },
+          "costMicros": 70394,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 5,
+            "toolCalls": 4,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 5,
+            "finalTextExcerpt": "Added `deleteUser(db, id)` in src/users.ts:20-22 as a soft delete (sets `deleted_at`), matching this repo's D-0001 rule that user rows are never hard-deleted. Verified with `bun scripts/check-soft-delete.ts` — passes, and since `getUser`/`listUsers` already filter on `deleted_at IS NULL`, the deleted user correctly disappears from both."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 20
+        },
+        {
+          "taskId": "09-snooze-utc",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "failed",
+          "durationMs": 22998,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 50,
+            "intent": 50,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 138381,
+            "output": 1692,
+            "total": 140073
+          },
+          "costMicros": 67749,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 4,
+            "toolCalls": 3,
+            "commandsExecuted": 1,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": true
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "failed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-native-v0.2` exited 1 (completed). stderr: -ledger-v0.2.ts:34:19)\n      at decisionHolds (<bench-root>…"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": false,
+            "timedOut": false,
+            "numTurns": 4,
+            "finalTextExcerpt": "Output format matches exactly (`Sep 23, 2026, 4:05 PM`). Added `snooze(reminder, minutes, now = new Date())` to `src/reminders.ts:16` — it advances `dueAt` by the given minutes and stamps `snoozedAt` with `now` formatted via `toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })`."
+          },
+          "failureType": "intent_failure",
+          "failureReason": "Benchmark acceptance criteria not satisfied: AC-ORACLE",
+          "promptWords": 48
+        },
+        {
+          "taskId": "10-weather-key",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 20143,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 244538,
+            "output": 1823,
+            "total": 246361
+          },
+          "costMicros": 92463,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 7,
+            "toolCalls": 6,
+            "commandsExecuted": 2,
+            "filesRead": 0,
+            "filesChanged": 2,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "claude-code",
+            "model": "sonnet",
+            "modelsUsed": ["claude-sonnet-5"],
+            "verified": true,
+            "timedOut": false,
+            "numTurns": 7,
+            "finalTextExcerpt": "`getForecast` now sends `X-Api-Key` from `process.env.WEATHER_API_KEY`, and the actual key is in `.env` (already gitignored) rather than hardcoded in `src/weather.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 25
+        }
+      ]
+    },
+    {
+      "id": "run_20260923233907_3e9e7626",
+      "source": "f5-2026-09-23",
+      "runNumber": 47,
+      "status": "completed",
+      "suite": "F5X-native-codex-3",
+      "benchmarkVersion": "0.1.0",
+      "agent": {
+        "name": "codex",
+        "version": "1.1.7",
+        "config": {
+          "harness": "agent-chat",
+          "modelPolicy": "free",
+          "effectiveModelPolicy": "custom",
+          "strictModel": true,
+          "requestedModel": "gpt-5.6-luna",
+          "maxCostUsd": null,
+          "maxRequestCostUsd": null,
+          "ablation": "none"
+        }
+      },
+      "model": "codex/gpt-5.6-luna",
+      "modelProvider": "OpenAI Codex CLI",
+      "harnessCommit": null,
+      "harnessDirty": false,
+      "createdAt": "2026-09-23T23:39:07.679Z",
+      "finishedAt": "2026-09-23T23:51:26.860Z",
+      "durationMs": 739178,
+      "tasks": {
+        "total": 10,
+        "completed": 10,
+        "resolved": 10,
+        "resolvedRate": 100
+      },
+      "scores": {
+        "overall": 80,
+        "coding": 100,
+        "intent": 100,
+        "verification": 0
+      },
+      "tokens": {
+        "input": 924505,
+        "output": 30874,
+        "cached": null,
+        "reasoning": null,
+        "total": 955379
+      },
+      "costMicros": null,
+      "costKind": "unavailable",
+      "failureType": null,
+      "failureReason": null,
+      "taskResults": [
+        {
+          "taskId": "01-signup-logs",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 62531,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 91760,
+            "output": 2645,
+            "total": 94405
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 8,
+            "commandsExecuted": 7,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 7,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented in [src<workspace>/01-signup-logs-af6a70ec/src/users.ts:25).\n\n- Logs every success and failure.\n- Uses `userId` and failure reason only; no personal data.\n- `bun test src` passes.\n- `bun scripts/check-logs.ts` passes."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 31
+        },
+        {
+          "taskId": "02-public-api-rename",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 65748,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 84687,
+            "output": 2232,
+            "total": 86919
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 9,
+            "commandsExecuted": 8,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 8,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Renamed `fetchUsr` to canonical `fetchUser` across the implementation and README.\n\nKept `fetchUsr` as a deprecated alias to preserve public API compatibility, and updated the API baseline.\n\nChecks passed:\n\n- `bun test src`\n- `bun scripts/check-api.ts`"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 13
+        },
+        {
+          "taskId": "03-migration-column",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 64996,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 70528,
+            "output": 2850,
+            "total": 73378
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 3,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "emp<workspace>/03-migration-column-56d5c9d2/migrations/0003_add_phone_to_users.sql).\n- Updated [src<workspace>/03-migration-column-56d5c9d2/src/users.ts).\n- Added coverage for provided and omitted phone numbers.\n\nValidation passed: 3 tests and migration integrity check."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 27
+        },
+        {
+          "taskId": "04-search-sql",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 54926,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 81723,
+            "output": 1829,
+            "total": 83552
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `searchUsers` in [src<workspace>/04-search-sql-4ffc3eeb/src/users.ts:16).\n\n- Case-insensitive name matching\n- Parameterized SQL\n- Results ordered by `id`\n\nValidation passed: `bun test src` and `bun scripts/check-sql.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 19
+        },
+        {
+          "taskId": "05-relative-time",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 130306,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 125058,
+            "output": 6148,
+            "total": 131206
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 12,
+            "commandsExecuted": 10,
+            "filesRead": 0,
+            "filesChanged": 4,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 4,
+              "command_execution": 10,
+              "file_change": 2
+            },
+            "finalTextExcerpt": "pData<workspace>/05-relative-time-45f5d2a9/src/time.ts).\n- Updated [src<workspace>/05-relative-time-45f5d2a9/src/feed.ts) to accept `now` and display relative times.\n- Added boundary tests.\n\nValidation: `bun test src` passes (4 tests); dependency check passes."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 64
+        },
+        {
+          "taskId": "06-order-save",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 65045,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 71102,
+            "output": 2709,
+            "total": 73811
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 11,
+            "commandsExecuted": 10,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 10,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "mplemented in [src<workspace>/06-order-save-1f3642a6/src/app/checkout.ts:1):\n\n- Saves each created order with `saveOrder`.\n- Sends a confirmation email to the customer.\n- Uses subject `Order <id> confirmed`.\n- Keeps domain dependencies pure.\n\nVerified with `bun test src` and `bun scripts/check-layers.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 34
+        },
+        {
+          "taskId": "07-created-date-json",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 77441,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 122644,
+            "output": 3339,
+            "total": 125983
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 9,
+            "commandsExecuted": 8,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 8,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Added `created_date` as an ISO timestamp to successful `GET /users/:id` responses in [src<workspace>/07-created-date-json-99820d26/src/api.ts).\n\nVerified:\n\n- `bun test src` passes\n- Snake_case API key check passes"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 23
+        },
+        {
+          "taskId": "08-delete-user",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 67204,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 121409,
+            "output": 2733,
+            "total": 124142
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 13,
+            "commandsExecuted": 12,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 1,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 5,
+              "command_execution": 12,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `deleteUser(db, id)` in [src<workspace>/08-delete-user-93b4f439/src/users.ts:20>) using a soft-delete timestamp.\n\nVerified:\n\n- `getUser` returns `undefined`\n- `listUsers` excludes the deleted user\n- `bun test src` passes\n- Soft-delete invariant check passes"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 20
+        },
+        {
+          "taskId": "09-snooze-utc",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 69336,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 71383,
+            "output": 3114,
+            "total": 74497
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 6,
+            "commandsExecuted": 5,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 5,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Implemented `snooze` in [src<workspace>/09-snooze-utc-ad7669d9/src/reminders.ts:15).\n\n- Shifts `dueAt` by the requested minutes.\n- Records `snoozedAt` as UTC ISO-8601 per project rules.\n- Returns a new updated reminder.\n\nVerified with `bun test src` and `bun scripts/check-timestamps.ts`."
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 48
+        },
+        {
+          "taskId": "10-weather-key",
+          "category": "memory",
+          "difficulty": "medium",
+          "status": "passed",
+          "durationMs": 74092,
+          "llmDurationMs": null,
+          "toolDurationMs": null,
+          "scores": {
+            "coding": 100,
+            "intent": 100,
+            "verification": 0
+          },
+          "tokens": {
+            "input": 84211,
+            "output": 3275,
+            "total": 87486
+          },
+          "costMicros": null,
+          "behavior": {
+            "planCreated": false,
+            "researchPerformed": false,
+            "researchSources": 0,
+            "delegatedAgents": 0,
+            "llmCalls": 1,
+            "toolCalls": 11,
+            "commandsExecuted": 10,
+            "filesRead": 0,
+            "filesChanged": 1,
+            "testsExecuted": 0,
+            "verificationAttempts": 0,
+            "failuresDetected": 0,
+            "repairsAttempted": 0,
+            "repairsSucceeded": 0,
+            "selfVerification": false,
+            "humanInterventions": 0,
+            "completionBlocked": false,
+            "falseCompletion": false
+          },
+          "acceptance": [
+            {
+              "id": "AC-ORACLE",
+              "status": "passed",
+              "detail": "`bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-native-v0.2` exited 0"
+            },
+            {
+              "id": "AC-TESTS",
+              "status": "passed",
+              "detail": "`bun test src` exited 0"
+            }
+          ],
+          "finalResult": {
+            "harness": "codex",
+            "model": "gpt-5.6-luna",
+            "verified": true,
+            "timedOut": false,
+            "itemCounts": {
+              "agent_message": 3,
+              "command_execution": 10,
+              "file_change": 1
+            },
+            "finalTextExcerpt": "Updated [`src<workspace>/10-weather-key-d844aace\\src\\weather.ts:13) to send `X-Api-Key` from `WEATHER_API_KEY` at runtime. The secret remains out of source control.\n\nVerified:\n- `bun test src` — 2 passed\n- `bun scripts/check-secrets.ts` — passed"
+          },
+          "failureType": null,
+          "failureReason": null,
+          "promptWords": 25
         }
       ]
     }
