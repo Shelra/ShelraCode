@@ -24,17 +24,19 @@ function today(now: Date): string {
   return now.toISOString().slice(0, 10);
 }
 
+const MAX_SLUG = 48;
+
+/** The file name's words from the title, cut at a word boundary when it is long. */
 function slugify(title: string): string {
-  return (
-    title
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[̀-ͯ]/gu, "")
-      .replace(/[^a-z0-9]+/gu, "-")
-      .replace(/^-+|-+$/gu, "")
-      .slice(0, 48)
-      .replace(/-+$/u, "") || "decision"
-  );
+  const slug = title
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  if (slug.length <= MAX_SLUG) return slug || "decision";
+  const boundary = slug.slice(0, MAX_SLUG + 1).lastIndexOf("-");
+  return boundary > 0 ? slug.slice(0, boundary) : slug.slice(0, MAX_SLUG);
 }
 
 export function formatDecision(decision: Decision): string {

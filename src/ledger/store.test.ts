@@ -76,6 +76,16 @@ describe("decision ledger", () => {
     });
   });
 
+  it("names the file after the title, cut at a word boundary", () => {
+    const long = "Destructive shell commands ask first, and are refused where nobody can be asked";
+    expect(proposeDecision(workspace, { ...english, title: long }, day)).toMatchObject({
+      decision: { file: `${LEDGER_DIR}/0001-destructive-shell-commands-ask-first-and-are.md` },
+    });
+    expect(proposeDecision(workspace, { ...english, title: "x".repeat(60) }, day)).toMatchObject({
+      decision: { file: `${LEDGER_DIR}/0002-${"x".repeat(48)}.md` },
+    });
+  });
+
   it("refuses proposals that are not a clear, bounded rule inside the project", () => {
     expect(proposeDecision(workspace, { ...english, rule: " " })).toMatchObject({ ok: false });
     expect(proposeDecision(workspace, { ...english, title: "two\nlines" })).toMatchObject({ ok: false });
