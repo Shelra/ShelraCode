@@ -1,0 +1,73 @@
+{
+  "id": "001-meet-camera-busy",
+  "date": "2026-09-22",
+  "title": "Google Meet says the camera is in use by another app",
+  "setting": "Windows 11, Windows PowerShell 5.1, run from the home folder (not a project)",
+  "prompt": "en google meet lo tengo activo pero dice que la camara de mi pc esta abierta en otra aplicacion pero no tengo mas aplicaciones pues bsicar el error y ver cual aparece abierta?",
+  "shelra": {
+    "date": "2026-09-22",
+    "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+    "cost": "free",
+    "session": "1737fee18d86",
+    "seconds": 383,
+    "secondsApprox": true,
+    "toolCalls": 47,
+    "gateLoops": 3,
+    "solved": true,
+    "attemptsToSolve": 1,
+    "result": "Named Google Chrome as the app holding the camera, from the webcam consent records, and gave the command that fixed it."
+  },
+  "reference": {
+    "agent": "Claude Sonnet 5",
+    "solved": true,
+    "attemptsToSolve": 3,
+    "notes": "Offered three options in turn; the first two failed and the third was right, which Shelra's answer confirmed."
+  },
+  "fixes": [
+    {
+      "commit": "e16b716",
+      "what": "PowerShell table output was lost (15 empty results), the completion gate did not count running the changed script (3 gate loops), and the prompt had no date."
+    },
+    {
+      "commit": "a795732",
+      "what": "The prompt asks for independent checks in one step; the session probed one thing per model round."
+    },
+    {
+      "commit": "a8ef1c1",
+      "what": "Helper scripts go to a scratch folder instead of the home folder."
+    }
+  ],
+  "reruns": [
+    {
+      "date": "2026-09-22",
+      "commit": "e16b716",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "cost": "free",
+      "seconds": 420,
+      "toolCalls": 29,
+      "gateLoops": 0,
+      "result": "Named the processes with the camera capture engine loaded: the browser and a background sign-in helper."
+    },
+    {
+      "date": "2026-09-22",
+      "commit": "a795732",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "cost": "free",
+      "seconds": 316,
+      "toolCalls": 22,
+      "gateLoops": 0,
+      "result": "Generic: most likely a browser tab still holding the camera; no process named."
+    },
+    {
+      "date": "2026-09-22",
+      "commit": "50ac81b",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "cost": "free",
+      "session": "2fb9fa376a63",
+      "seconds": 184,
+      "toolCalls": 14,
+      "gateLoops": 0,
+      "result": "Named Google Chrome from the camera's privacy-consent records, with its last-use times; answered in Spanish, like the request."
+    }
+  ]
+}

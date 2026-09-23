@@ -289,6 +289,10 @@ bun run bench:dashboard
 open http://127.0.0.1:4173
 ~~~
 
+Alongside the fixed suites, [field cases](bench/field/README.md) record real problems people
+brought to Shelra, set against another agent on the same problem, and re-run them on later
+harness versions: see the [scoreboard](bench/field/SCOREBOARD.md).
+
 ### Coming soon
 
 **More Shelra Bench coverage** — dedicated memory, session-resume, research,
