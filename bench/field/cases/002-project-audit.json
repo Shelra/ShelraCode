@@ -29,6 +29,18 @@
     {
       "commit": "842a060",
       "what": "Headless JSON output dropped the gate's closing note and the retry and model-switch notices."
+    },
+    {
+      "commit": "07f96a8",
+      "what": "Every step re-sent every earlier tool result; past 160,000 characters, results older than the last three steps go out as a one-line note."
+    },
+    {
+      "commit": "a3d1aa7",
+      "what": "A check piped into head counted as passing, and a type-check counted as proof of an audit document."
+    },
+    {
+      "commit": "7a6c7ee",
+      "what": "Acceptance criteria sent as a JSON array inside a string became one criterion holding the whole array."
     }
   ],
   "reruns": [
@@ -42,6 +54,17 @@
       "toolCalls": 102,
       "gateLoops": 3,
       "result": "Three drafts of the report (the last 525 lines) and six \"verification\" text files. The largest read fell from 201,000 characters to 50,000 and read_file returned 240,000 in all (672,000 before), yet input stayed near 8.9M tokens: more steps, and three gate rounds it answered by echoing \"VERIFIED\" and writing those files. Nemotron stalled twice and was overloaded once; the run ended on openrouter/free. Its line counts and module paths check out; its counts of files (166, not 331) and tests (\"332 passing\"; nothing ran), its two market sizes that disagree and \"memory unique among terminal agents\" do not."
+    },
+    {
+      "date": "2026-09-23",
+      "commit": "a381a54",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "cost": "free",
+      "session": "482a80dc84c0",
+      "seconds": 2404,
+      "toolCalls": 81,
+      "gateLoops": 1,
+      "result": "Seven research documents. Nemotron was overloaded and the run moved to openrouter/free, then stalled six times (the owner was using the same free quota): 40 minutes. The single fact-check request did what it asks: the model grepped about twenty claims and corrected two numbers, in its answer but not in the files. But it checked quotes, not meaning: \"the model catalog is empty\" (primeCatalog fills it at startup, as the comment above says), \"128K context for every cloud model\" (a fallback) and \"zero retries\" (the harness retries rounds itself) came back confirmed. A type-check piped into head counted as a pass, so the turn ended without the [Not verified] note. Recorded input about 5.2M tokens; rounds cut short record none."
     }
   ]
 }
