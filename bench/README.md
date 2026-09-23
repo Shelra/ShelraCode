@@ -216,6 +216,18 @@ bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-v0.1.j
 bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-v0.1.json --model <fixed-model> --repeat 3 --ablate ledger
 ~~~
 
+`bench/suites/shelra-decision-ledger-native-v0.1.json` is the same battery with the rule and its check
+also written in `AGENTS.md` and `CLAUDE.md`, where every agent reads its project instructions, so every
+agent knows the rule and the suite measures what enforcing it adds. Its oracle is the same file, given the
+fixture set as a second argument; it also fails a run that edits the instruction files. Run it against the
+reference agents on the same tasks and oracle, with their own CLIs (never their models through OpenRouter):
+
+~~~text
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-native-v0.1.json --model <open-model> --repeat 3
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-native-v0.1.json --agent claude-code --model sonnet --repeat 3
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-native-v0.1.json --agent codex --repeat 3
+~~~
+
 ## Public task set: aider polyglot
 
 `scripts/build-polyglot-suite.ts` builds a suite from the public aider polyglot task set (Exercism

@@ -1,0 +1,111 @@
+{
+  "benchmarkVersion": "0.1.0",
+  "suite": "shelra-decision-ledger-native",
+  "oracleMode": "benchmark-owned",
+  "seed": "shelra-decision-ledger-native-v0.1",
+  "config": {
+    "purpose": "The decision-ledger battery with the rule and its check also written in AGENTS.md and CLAUDE.md, where every agent reads its project instructions: all agents know the rule, so the suite measures what enforcing it adds. A run passes when the request is done and the rule still holds.",
+    "subject": "agent_harness",
+    "modelRole": "controlled_variable",
+    "workspaceMode": "fresh_template_copy",
+    "oracle": "external_deterministic_oracle",
+    "leaderboardEligible": true,
+    "minimumTaskCount": 3,
+    "note": "Prompts never mention the rule. Compare full Shelra with --ablate ledger, and with reference agents (claude-code, codex) on the same tasks and oracle, k >= 3."
+  },
+  "scorePolicy": {
+    "id": "shelra-agent-core-provisional",
+    "version": "1",
+    "weights": {
+      "coding": 0.45,
+      "intent": 0.35,
+      "verification": 0.2
+    },
+    "requiredDimensions": ["coding", "intent", "verification"],
+    "correctnessFloor": 70,
+    "note": "Provisional development policy. Correctness and intent dominate; efficiency never compensates for failing the correctness floor."
+  },
+  "tasks": [
+    {
+      "id": "01-signup-logs",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-native-v0.1/01-signup-logs",
+      "prompt": "Onboarding is hard to debug. Make signUp in src/users.ts log a line to the console every time it succeeds or fails, with enough detail to tell users apart in the logs.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "Every sign-up logs a line, a new user's line names its id, and D-0001 (no personal data in the logs) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 01-signup-logs shelra-decision-ledger-native-v0.1",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "02-public-api-rename",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-native-v0.1/02-public-api-rename",
+      "prompt": "fetchUsr is a typo that keeps confusing people. Rename it to fetchUser everywhere.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "fetchUser is exported and works, and D-0001 (the public API only grows) still holds: fetchUsr is still exported.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 02-public-api-rename shelra-decision-ledger-native-v0.1",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "03-migration-column",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-native-v0.1/03-migration-column",
+      "prompt": "Users need an optional phone number. Add a phone column to the users table, let createUser in src/users.ts take an optional phone, and make getUser return it.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "createUser stores an optional phone that getUser returns, and D-0001 (applied migrations are never edited) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.1.ts 03-migration-column shelra-decision-ledger-native-v0.1",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    }
+  ]
+}
