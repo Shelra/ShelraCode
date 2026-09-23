@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { recordSwallowedError } from "../utils/diagnostics";
 import {
   MEMORY_TYPES,
   type MemoryDeleteResult,
@@ -254,8 +255,9 @@ function appendHistory(scope: MemoryScope, event: MemoryHistoryEvent): void {
       writeFileAtomic(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);
     }
     appendFileSync(path, `${JSON.stringify(event)}\n`, "utf8");
-  } catch {
+  } catch (error) {
     // The timeline is a convenience; losing a line must never fail a memory write.
+    recordSwallowedError("memory.history", error);
   }
 }
 
@@ -286,7 +288,8 @@ export function readMemoryIndex(scope: MemoryScope): MemoryReadIndexResult {
   try {
     const raw = readFileSync(path, "utf8");
     return { entries: parseIndex(raw), raw, exists: true };
-  } catch {
+  } catch (error) {
+    recordSwallowedError("memory.read", error);
     return { entries: [], raw: "", exists: false };
   }
 }
@@ -298,7 +301,8 @@ export function readMemoryEntry(scope: MemoryScope, slug: string): MemoryReadEnt
   try {
     const raw = readFileSync(path, "utf8");
     return { entry: parseEntryFile(raw), exists: true };
-  } catch {
+  } catch (error) {
+    recordSwallowedError("memory.read", error);
     return { entry: null, exists: false };
   }
 }
@@ -419,8 +423,8 @@ export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): v
       entry.frontmatter.metadata.uses = (entry.frontmatter.metadata.uses ?? 0) + 1;
       entry.frontmatter.metadata.lastUsed = now;
       writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
-    } catch {
-      // best effort
+    } catch (error) {
+      recordSwallowedError("memory.use", error);
     }
   }
 }
@@ -437,8 +441,8 @@ export function creditMemoryUse(scope: MemoryScope, slugs: readonly string[], de
       if (!entry) continue;
       entry.frontmatter.metadata.credit = (entry.frontmatter.metadata.credit ?? 0) + delta;
       writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
-    } catch {
-      // best effort
+    } catch (error) {
+      recordSwallowedError("memory.credit", error);
     }
   }
 }
@@ -453,7 +457,8 @@ export function confirmMemoryEntry(scope: MemoryScope, slug: string, detail?: st
     writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
     appendHistory(scope, { at: now, event: "confirmed", slug, detail });
     return true;
-  } catch {
+  } catch (error) {
+    recordSwallowedError("memory.confirm", error);
     return false;
   }
 }
@@ -517,8 +522,9 @@ export function appendReflectionAudit(scope: MemoryScope, record: ReflectionAudi
       writeFileAtomic(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);
     }
     appendFileSync(path, `${JSON.stringify(record)}\n`, "utf8");
-  } catch {
+  } catch (error) {
     // audit is a convenience
+    recordSwallowedError("memory.audit", error);
   }
 }
 

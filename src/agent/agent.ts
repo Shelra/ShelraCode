@@ -100,6 +100,7 @@ import type {
   VerifyRecipe,
   WorkspaceInfo,
 } from "../types/index";
+import { recordSwallowedError } from "../utils/diagnostics";
 import { loadCustomInstructions } from "../utils/instructions";
 import {
   type CustomSubagentConfig,
@@ -549,7 +550,8 @@ function memoryContextFor(cwd: string, query: string, paths: readonly string[] =
       { text: query, paths },
       cwd,
     );
-  } catch {
+  } catch (error) {
+    recordSwallowedError("memory.retrieve", error);
     return { text: "", expanded: [], listed: [] };
   }
 }
@@ -1192,7 +1194,8 @@ export class Agent {
           filePaths: step.filePaths ? [...step.filePaths] : undefined,
           satisfies: step.satisfies ? [...step.satisfies] : undefined,
         })) ?? null;
-    } catch {
+    } catch (error) {
+      recordSwallowedError("plan.restore", error);
       this.activeAcceptanceCriteria = null;
       this.activePlanSteps = null;
     }
@@ -1215,7 +1218,8 @@ export class Agent {
         reviewPassed: record.phase === "complete",
         ...(record.blocker ? { blockedReason: record.blocker } : {}),
       });
-    } catch {
+    } catch (error) {
+      recordSwallowedError("kernel.restore", error);
       return null;
     }
   }
@@ -1245,8 +1249,9 @@ export class Agent {
         blocker: blockerOverride ?? state.blockedReason ?? null,
         runDir: null,
       });
-    } catch {
+    } catch (error) {
       // Indexing must never take down a turn.
+      recordSwallowedError("kernel.index", error);
     }
   }
 
@@ -1265,8 +1270,9 @@ export class Agent {
         workspaceId: this.workspace.id,
         ...input,
       });
-    } catch {
+    } catch (error) {
       // Checkpointing must never block a mutation.
+      recordSwallowedError("checkpoint", error);
     }
   };
 
@@ -1660,8 +1666,9 @@ export class Agent {
       this.messages[index] = updated;
       const seq = this.messageSeqs[index];
       if (this.session && typeof seq === "number") replaceMessage(this.session.id, seq, updated);
-    } catch {
+    } catch (error) {
       // The verdict was already shown; failing to store it must not end the turn.
+      recordSwallowedError("verdict.store", error);
     }
   }
 
@@ -1699,8 +1706,9 @@ export class Agent {
         updatedAt: new Date(),
       });
       this.session = this.sessionStore.getRequiredSession(this.session.id);
-    } catch {
+    } catch (error) {
       // Recaps are best-effort and should never make the completed turn fail.
+      if (!signal?.aborted) recordSwallowedError("recap", error);
     }
   }
 
@@ -1800,7 +1808,8 @@ export class Agent {
         this.fireHook(notifInput).catch(() => {});
       }
       return notifications.map((notification) => notification.message);
-    } catch {
+    } catch (error) {
+      recordSwallowedError("notifications", error);
       return [];
     }
   }
@@ -2523,7 +2532,11 @@ export class Agent {
     input: Parameters<typeof executeEventHooks>[0],
     signal?: AbortSignal,
   ): Promise<Awaited<ReturnType<typeof executeEventHooks>>> {
-    return executeEventHooks(input, this.bash.getCwd(), signal);
+    // Every caller carries on without the hook's result; the failure is recorded here, once.
+    return executeEventHooks(input, this.bash.getCwd(), signal).catch((error: unknown) => {
+      if (!signal?.aborted) recordSwallowedError(`hooks.${input.hook_event_name}`, error);
+      throw error;
+    });
   }
 
   async *processMessage(
@@ -2598,8 +2611,9 @@ export class Agent {
     try {
       const directives = memoryOff ? [] : extractUserDirectives(userMessage);
       if (directives.length > 0) admitCandidates(memoryScope, directives);
-    } catch {
+    } catch (error) {
       // memory capture must never block a turn
+      recordSwallowedError("memory.capture", error);
     }
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
@@ -3703,8 +3717,9 @@ export class Agent {
       if (promotion.promoted.length > 0) {
         this.kernel?.recordObservation(`Skills: promoted ${promotion.promoted.join(", ")}`);
       }
-    } catch {
+    } catch (error) {
       // learning must never fail the turn
+      if (!signal.aborted) recordSwallowedError("memory.learn", error);
     }
   }
 
@@ -3868,8 +3883,9 @@ function notifyObserver<T>(listener: ((payload: T) => void) | undefined, payload
 
   try {
     listener(payload);
-  } catch {
+  } catch (error) {
     // Observer failures should never break generation.
+    recordSwallowedError("observer", error);
   }
 }
 

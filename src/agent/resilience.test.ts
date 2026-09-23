@@ -1,4 +1,4 @@
-import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { mkdtempSync as makeTestWorkspace, readFileSync as readTestFile } from "node:fs";
 import { tmpdir as testTmpdir } from "node:os";
 import { join as joinTestPath } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
@@ -535,5 +535,33 @@ describe("a sub-agent recovers from a failing model connection on its own", () =
     expect(result.success).toBe(false);
     expect(result.output).toContain("Task interrupted: no model answered after 5 attempts");
     expect(result.output).toContain("delegate it again");
+  });
+});
+
+describe("what the resilience rule swallows is recorded, not lost (audit doc 15, Q2)", () => {
+  it("finishes the turn when the objective index cannot be written, and logs why", async () => {
+    const log = joinTestPath(makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-swallowed-")), "swallowed.jsonl");
+    const previous = process.env.SHELRA_DIAGNOSTICS_LOG;
+    process.env.SHELRA_DIAGNOSTICS_LOG = log;
+    upsertObjectiveIndex.mockImplementation(() => {
+      throw new Error("database is locked");
+    });
+    try {
+      const { chunks, text } = await run(new ScriptedProvider([answer("Here is the summary.")]));
+
+      expect(text).toContain("Here is the summary.");
+      expect(chunks.at(-1)).toEqual({ type: "done" });
+      const entries = readTestFile(log, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { area: string; error: string });
+      expect(entries).toContainEqual(
+        expect.objectContaining({ area: "kernel.index", error: "Error: database is locked" }),
+      );
+    } finally {
+      upsertObjectiveIndex.mockReset();
+      if (previous === undefined) delete process.env.SHELRA_DIAGNOSTICS_LOG;
+      else process.env.SHELRA_DIAGNOSTICS_LOG = previous;
+    }
   });
 });

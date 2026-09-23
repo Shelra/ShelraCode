@@ -96,6 +96,9 @@ an upstream provider that returns content-less steps. `SHELRA_STREAM_IDLE_MS` (d
 idle budget after which a silent model stream is aborted and the step retried. Once a request's history passes
 160,000 characters, tool results older than the model's last three steps go out as a one-line note (the session
 keeps them whole; the plan and sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
+What the resilience rule swallows (a failing memory write, checkpoint, index update, recap or hook) is appended to
+`~/.shelra/logs/swallowed-errors.jsonl` (`src/utils/diagnostics.ts`; `SHELRA_DIAGNOSTICS_LOG` names another file
+or `off`; Vitest runs with it off).
 
 ## Repository layout notes
 
