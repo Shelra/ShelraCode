@@ -34,6 +34,11 @@ export interface FieldCase {
   setting: string;
   /** The request as the user wrote it, so it can be re-run. */
   prompt: string;
+  /**
+   * The folder a re-run needs, when an empty one will not do. `self` clones this repository at
+   * `commit` into the temporary folder: a case about Shelra's own code, as it was then.
+   */
+  workspace?: { repository: "self"; commit: string };
   shelra: FieldRun;
   /** The other agent the user tried on the same problem. */
   reference?: { agent: string; solved: boolean; attemptsToSolve?: number; notes?: string };

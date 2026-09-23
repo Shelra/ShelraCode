@@ -36,7 +36,9 @@ bun run scripts/field-case.ts rerun 001 [--model <id>]
 ```
 
 It runs the case's prompt headless in a new temporary folder (never the user's own folders) and
-prints a run record with the time, tool calls and gate loops. Judge the answer, then add the
+prints a run record with the time, tool calls and gate loops. A case about Shelra's own code sets
+`"workspace": { "repository": "self", "commit": "<sha>" }`, and the folder is then a clone of this
+repository at that commit, without a remote to push to. Judge the answer, then add the
 record under `reruns` in the case file. A re-run shows whether a harness change helped on a real
 problem; one run of a free model is one sample, so compare several before concluding.
 

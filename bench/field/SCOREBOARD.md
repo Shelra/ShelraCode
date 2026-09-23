@@ -6,6 +6,7 @@ Real problems brought to Shelra, set against another agent on the same problem. 
 | Case | Date | Shelra model | Solved | Tries | First answer | Tool calls | Gate loops | Compared with | Its tries |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | [001-meet-camera-busy](cases/001-meet-camera-busy.json) Google Meet says the camera is in use by another app | 2026-09-22 | nvidia/nemotron-3-ultra-550b-a55b:free (free) | yes | 1 | ~6.4 min | 47 | 3 | Claude Sonnet 5 | 3 |
+| [002-project-audit](cases/002-project-audit.json) A broad audit of the Shelra project: research plan, market validation and a code review | 2026-09-23 | nvidia/nemotron-3-ultra-550b-a55b:free (free) | ? |  | ~13.2 min | 71 | 2 |  |  |
 
 ## Re-runs
 

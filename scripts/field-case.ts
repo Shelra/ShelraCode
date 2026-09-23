@@ -125,6 +125,17 @@ function rerunCommand(caseId: string, model: string | undefined): void {
   const chosen = model ?? item.shelra.model;
   // Never the user's own folders: the prompt runs in a fresh temporary folder.
   const workspace = mkdtempSync(join(tmpdir(), `shelra-field-${item.id}-`));
+  if (item.workspace?.repository === "self") {
+    // A clone at the case's commit, never the working copy, and with no remote to push back to.
+    for (const args of [
+      ["clone", "--quiet", "--no-checkout", root, workspace],
+      ["-C", workspace, "checkout", "--quiet", item.workspace.commit],
+      ["-C", workspace, "remote", "remove", "origin"],
+    ]) {
+      const step = spawnSync("git", args, { encoding: "utf8" });
+      if (step.status !== 0) throw new Error(`Could not prepare the workspace: git ${args[0]}: ${step.stderr.trim()}`);
+    }
+  }
   const cli = spawnSync(
     "bun",
     ["run", join(root, "src", "index.ts"), "-d", workspace, "--model", chosen, "--format", "json", "-p", item.prompt],

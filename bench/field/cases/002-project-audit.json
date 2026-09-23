@@ -1,0 +1,26 @@
+{
+  "id": "002-project-audit",
+  "date": "2026-09-23",
+  "title": "A broad audit of the Shelra project: research plan, market validation and a code review",
+  "setting": "Windows 11, Windows PowerShell 5.1, run in the Shelra repository",
+  "prompt": "realiza una amplia auditoria al proyecto de shelra pero quiero que sean algo amplio, genera un plan de investigacion profunda, analisis validacion del mercado\ntienes que buscar en google contexto\n\ntambien debes revisar todo el codigo actual",
+  "workspace": { "repository": "self", "commit": "3497032" },
+  "shelra": {
+    "date": "2026-09-23",
+    "commit": "3497032",
+    "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+    "cost": "free",
+    "session": "84c3480c9ffd",
+    "seconds": 790,
+    "secondsApprox": true,
+    "toolCalls": 71,
+    "gateLoops": 2,
+    "result": "Wrote docs/AUDIT-2026-09-23.md (348 lines). Of about 106 claims a check found 38% true (the module inventory), 22% stale, 16% false (its OpenRouter ranking among them) and 17% misleading; see docs/verification/AUDIT-2026-09-23-review.md. It read four files of 50,000-200,000 characters whole (7.4M input tokens in one round), the stream stalled three times, and the completion gate twice refused its re-reading of the report as verification. The owner approved the live run as passing the same day, before the check."
+  },
+  "fixes": [
+    {
+      "commit": "1916ef4",
+      "what": "read_file returned whole files; a read now stops at 2,000 lines and 50,000 characters and says where to read on."
+    }
+  ]
+}
