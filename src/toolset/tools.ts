@@ -1,5 +1,6 @@
 import { type ToolSet, tool } from "ai";
 import { z } from "zod";
+import type { RestorePoint } from "../agent/attempt-journal";
 import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks } from "../hooks/index";
 import { isLspToolEnabled, queryLsp } from "../lsp/runtime";
 import { LSP_TOOL_OPERATIONS } from "../lsp/types";
@@ -110,6 +111,11 @@ interface CreateToolsOptions {
     command: string,
     signal?: AbortSignal,
   ) => Promise<{ passed: boolean; output: string } | null>;
+  /**
+   * Puts a file the file tools changed back as it was before the last checked attempt or before the
+   * turn (audit doc 15, Phase 2.3). The agent keeps the journal; without it there is no restore_file.
+   */
+  restoreFile?: (path: string, to: RestorePoint) => Promise<ToolResult>;
 }
 
 /**
@@ -651,6 +657,22 @@ export function createTools(
         return deleteFile(path, cwd());
       },
     });
+
+    if (options.restoreFile) {
+      const restoreFile = options.restoreFile;
+      tools.restore_file = tool({
+        description:
+          "Put a file you changed with write_file, edit_file or delete_file back as it was before your last checked attempt, or before this turn. Use it when Shelra reports that an attempt broke a check that passed before it.",
+        inputSchema: z.object({
+          path: z.string().describe("File path (relative to cwd or absolute)"),
+          to: z
+            .enum(["before_last_attempt", "before_turn"])
+            .optional()
+            .describe("Where to go back to; before_last_attempt by default"),
+        }),
+        execute: async ({ path, to }) => restoreFile(path, to ?? "before_last_attempt"),
+      });
+    }
 
     tools.memory_list = tool({
       description:

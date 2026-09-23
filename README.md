@@ -493,7 +493,7 @@ Configure in `~/.shelra/user-settings.json`:
 
 Hook commands receive JSON on **stdin** (event details) and can return JSON on **stdout**. Exit code `0` = success, `2` = block the action, other = non-blocking error. A hook can also block by printing `{"decision": "block", "reason": "..."}`.
 
-`PreToolUse`, `PostToolUse` and `PostToolUseFailure` run for every tool, matched on its name: `bash`, `read_file`, `write_file`, `edit_file`, `delete_file`, `grep`, and MCP tools as `mcp_<server>__<tool>`. For example, `"matcher": "write_file|edit_file"` runs a formatter after every file change. A hook that succeeds is silent; one that fails or blocks shows one line in the session.
+`PreToolUse`, `PostToolUse` and `PostToolUseFailure` run for every tool, matched on its name: `bash`, `read_file`, `write_file`, `edit_file`, `delete_file`, `restore_file`, `grep`, and MCP tools as `mcp_<server>__<tool>`. For example, `"matcher": "write_file|edit_file"` runs a formatter after every file change. A hook that succeeds is silent; one that fails or blocks shows one line in the session.
 
 **Supported events:** `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `SessionEnd`, `Stop`, `StopFailure`, `SubagentStart`, `SubagentStop`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`, `Notification`, `InstructionsLoaded`, `CwdChanged`.
 

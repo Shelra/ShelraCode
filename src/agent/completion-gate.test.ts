@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +97,10 @@ vi.mock("../storage/index", () => ({
 
 vi.mock("../hooks/index", () => ({
   executeEventHooks: executeEventHooksMock,
+  // Tools that really execute in a test (restore_file below) run the tool hooks; there are none here.
+  executePreToolHooks: vi.fn(async () => ({ blocked: false, blockingErrors: [], results: [] })),
+  executePostToolHooks: vi.fn(async () => ({})),
+  executePostToolFailureHooks: vi.fn(async () => ({})),
 }));
 
 import { Agent } from "./agent";
@@ -1376,5 +1380,91 @@ describe("memory credit from the contract (audit doc 15, M3)", () => {
       // drain
     }
     expect(creditOf(failing)).toBe(-1);
+  });
+});
+
+describe("an attempt that breaks a passing check (audit doc 15, Phase 2.3)", () => {
+  /** A model that really runs its tool calls, one scripted list per round, and records what each round was asked. */
+  function executingModel(script: Array<Array<{ tool: string; input: Record<string, unknown> }>>) {
+    let round = 0;
+    const asked: string[] = [];
+    const outputs: Array<{ tool: string; output: { success?: boolean; output?: string } }> = [];
+    const provider: ProviderAdapter = {
+      id: "executing",
+      defaultModelId: "repair-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: (request) => {
+        asked.push(lastUserText(request));
+        const calls = script[round] ?? [];
+        round += 1;
+        const tools = request.tools as Record<
+          string,
+          { execute?: (input: unknown, options: unknown) => Promise<unknown> }
+        >;
+        return {
+          events: (async function* () {
+            for (const [index, call] of calls.entries()) {
+              const id = `r${round}-${index}`;
+              yield toolCallEvent(id, call.tool, call.input);
+              const output = (await tools[call.tool]?.execute?.(call.input, { toolCallId: id, messages: [] })) as {
+                success?: boolean;
+                output?: string;
+              };
+              outputs.push({ tool: call.tool, output });
+              yield toolResultEvent(id, call.tool, output, call.input);
+            }
+            yield { type: "text-delta", text: "Done." };
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    return { provider, asked, outputs };
+  }
+
+  it("says which files the attempt changed, offers restore_file, and restores only when asked", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-restore-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test", lint: "bun lint" } }));
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src", "slug.ts"), "v0\n");
+    const { provider, asked, outputs } = executingModel([
+      [{ tool: "write_file", input: { path: "src/slug.ts", content: "v1\n" } }],
+      [
+        { tool: "write_file", input: { path: "src/slug.ts", content: "BROKEN v2\n" } },
+        { tool: "write_file", input: { path: "src/extra.ts", content: "export {};\n" } },
+      ],
+      [
+        { tool: "restore_file", input: { path: "src/slug.ts" } },
+        { tool: "restore_file", input: { path: "src/extra.ts" } },
+      ],
+    ]);
+    // The tests never pass; lint fails exactly while src/slug.ts is broken.
+    const checkRunner = vi.fn<ContractCheckRunner>(async (command) => {
+      const broken = readFileSync(join(dir, "src", "slug.ts"), "utf8").includes("BROKEN");
+      if (command === "bun run lint") return { passed: !broken, output: broken ? "lint error" : "ok", durationMs: 1 };
+      return { passed: false, output: " 0 pass\n 1 fail", durationMs: 1 };
+    });
+    const agent = new Agent(undefined, undefined, "repair-model", undefined, { provider, cwd: dir, checkRunner });
+
+    for await (const _chunk of agent.processMessage("Make slugify trim")) {
+      // drain
+    }
+
+    // The first failure broke nothing that passed before it: no restore offer.
+    expect(asked[1]).not.toContain("restore_file");
+    // The second attempt broke lint, which passed after the first one.
+    expect(asked[2]).toContain("`bun run lint` (it passed after your previous attempt: your last attempt broke it)");
+    expect(asked[2]).toContain("Your last attempt changed `src/extra.ts`, `src/slug.ts`");
+    expect(asked[2]).toContain("restore_file puts a file back as it was before it; nothing is undone unless you ask");
+    // Nothing was undone until the model asked; then each file went back to its state before that attempt.
+    expect(outputs.filter((item) => item.tool === "restore_file").map((item) => item.output.success)).toEqual([
+      true,
+      true,
+    ]);
+    expect(readFileSync(join(dir, "src", "slug.ts"), "utf8")).toBe("v1\n");
+    expect(existsSync(join(dir, "src", "extra.ts"))).toBe(false);
   });
 });

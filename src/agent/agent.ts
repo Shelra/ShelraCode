@@ -71,6 +71,7 @@ import {
   upsertObjectiveIndex,
 } from "../storage/index";
 import { BashTool, isShuruSupported, VERIFY_UNSUPPORTED_MESSAGE } from "../tools/bash";
+import { deleteFile, snapshotForCheckpoint, writeFile } from "../tools/file";
 import { type ScheduleDaemonStatus, ScheduleManager, type StoredSchedule } from "../tools/schedule";
 import { createTools, hardenToolSet } from "../toolset/tools";
 import type {
@@ -111,6 +112,7 @@ import { runSideQuestion, type SideQuestionResult } from "../utils/side-question
 import { buildVerifyDetectPrompt, normalizeVerifyRecipe, prepareVerifySandbox } from "../verify/entrypoint";
 import { runVerifyOrchestration } from "../verify/orchestrator";
 import { type Ablation, Ablations, ablateTools, NO_ABLATIONS } from "./ablation";
+import { AttemptJournal, type RestorePoint } from "./attempt-journal";
 import {
   appendActiveCriteriaBlock,
   budgetedContextTokens,
@@ -429,6 +431,8 @@ export class Agent {
    * round. See docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §15.
    */
   private planState: { published: boolean; structured: boolean } = { published: true, structured: false };
+  /** Files as they were before each attempt of this turn changed them; read by restore_file. */
+  private attemptJournal = new AttemptJournal();
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
@@ -817,6 +821,7 @@ export class Agent {
     previousExisted: boolean;
     reason: "pre-write" | "pre-edit" | "pre-delete";
   }): void => {
+    this.attemptJournal.record(input.filePath, input);
     if (!this.workspace) return;
     try {
       recordCheckpoint({
@@ -828,6 +833,45 @@ export class Agent {
     } catch (error) {
       // Checkpointing must never block a mutation.
       recordSwallowedError("checkpoint", error);
+    }
+  };
+
+  /**
+   * restore_file (audit doc 15, Phase 2.3): puts a file back as the journal saw it before the last checked
+   * attempt or before the turn. Only when the model asks; the restore is itself checkpointed, and it
+   * returns a diff, so it counts as a change and the checks run again.
+   */
+  private restoreFileFromJournal = async (path: string, to: RestorePoint): Promise<ToolResult> => {
+    const cwd = this.bash.getCwd();
+    try {
+      const current = snapshotForCheckpoint(path, cwd);
+      const entry = this.attemptJournal.before(current.relativePath, to);
+      if (!entry) {
+        return {
+          success: false,
+          output: `${current.relativePath} was not changed with write_file, edit_file or delete_file ${
+            to === "before_turn" ? "in this turn" : "since before your last checked attempt"
+          }, so there is nothing to restore.`,
+        };
+      }
+      if (entry.previousExisted === current.previousExisted && entry.previousContent === current.previousContent) {
+        return { success: true, output: `${current.relativePath} is already as it was; nothing changed.` };
+      }
+      this.onToolCheckpoint({ ...current, filePath: current.relativePath, reason: "pre-write" });
+      const result = entry.previousExisted
+        ? await writeFile(current.relativePath, entry.previousContent ?? "", cwd)
+        : await deleteFile(current.relativePath, cwd);
+      const point = to === "before_turn" ? "before this turn" : "before your last checked attempt";
+      return result.success
+        ? {
+            ...result,
+            output: `${entry.previousExisted ? "Restored" : "Removed"} ${current.relativePath}: it is as it was ${point}${
+              entry.previousExisted ? "" : ", when it did not exist"
+            }.`,
+          }
+        : result;
+    } catch (error) {
+      return { success: false, output: `Could not restore ${path}: ${error instanceof Error ? error.message : error}` };
     }
   };
 
@@ -2102,6 +2146,7 @@ export class Agent {
     const signal = this.abortController.signal;
     this.kernel = null;
     this.contextSummary = null;
+    this.attemptJournal = new AttemptJournal();
     this.emitSubagentStatus(null);
     const reportStatus = (stage: ProcessMessageStage, detail: string) => {
       notifyObserver(observer?.onStatus, { stage, detail, timestamp: Date.now() });
@@ -2250,6 +2295,8 @@ export class Agent {
      * of the same failures after more changes from progress.
      */
     let lastContractFailure: { signature: string; mutationEvents: number; state: WorkspaceState | null } | null = null;
+    /** Each contract check's result at the previous evaluation of this turn, by command. */
+    let lastContractResults: ReadonlyMap<string, boolean> | null = null;
     /** After a repair attempt that changed nothing about the failures, later rounds get the model's top effort. */
     let repairEscalated = false;
     /** The turn's contract ran and every check passed on the final code. */
@@ -2315,6 +2362,7 @@ export class Agent {
             sendTelegramFile: this.sendTelegramFile ?? undefined,
             sessionId: this.session?.id ?? undefined,
             onCheckpoint: this.onToolCheckpoint,
+            restoreFile: this.restoreFileFromJournal,
             planState: this.planState,
             toolGroups: loadToolGroupSettings(),
             ...this.destructiveCommandOption(),
@@ -2944,18 +2992,61 @@ export class Agent {
                     stateAfterChecks.kind !== "unknown" &&
                     (changedPaths(lastContractFailure.state, stateAfterChecks)?.length ?? 1) > 0));
               const repeated = changedSinceLastFailure && lastContractFailure?.signature === signature;
+              // An attempt that broke a check which passed before it (audit doc 15, Phase 2.3): say which files
+              // it changed and offer restore_file. Nothing is undone unless the model asks (owner, 2026-09-23).
+              const previousResults = lastContractResults;
+              const brokeByLastAttempt = (command: string) => previousResults?.get(command) === true;
+              const regression = failing.some(
+                (result) =>
+                  brokeByLastAttempt(result.check.command) || (previousResults === null && result.passedBefore),
+              );
+              const endedAttempt = this.attemptJournal.current;
+              const attemptStart = lastContractFailure?.state ?? turnStartState;
+              const byFileTools = this.attemptJournal.changedIn(endedAttempt);
+              const attemptChanged = [
+                ...new Set([
+                  ...byFileTools,
+                  ...((attemptStart &&
+                    stateAfterChecks.kind !== "unknown" &&
+                    changedPaths(attemptStart, stateAfterChecks)) ||
+                    []),
+                ]),
+              ].sort();
+              const otherwiseChanged = attemptChanged.filter((path) => !byFileTools.includes(path));
+              this.attemptJournal.nextAttempt();
+              lastContractResults = new Map(results.map((result) => [result.check.command, result.passed]));
               lastContractFailure = { signature, mutationEvents: turnMutationEvents, state: stateAfterChecks };
               if (repeated) repairEscalated = true;
+              const fileList = (paths: readonly string[]) =>
+                `${paths
+                  .slice(0, 10)
+                  .map((path) => `\`${path}\``)
+                  .join(", ")}${paths.length > 10 ? ` and ${paths.length - 10} more` : ""}`;
               const nudge = [
                 "Completion blocked: the project's own checks fail on your final code (Shelra ran them after your last change):",
                 ...failing.map((result) => {
-                  const note = result.passedBefore
-                    ? " (it passed before your first change: your change broke it)"
-                    : result.failedBefore
-                      ? " (it already failed before your first change)"
-                      : "";
+                  const note = brokeByLastAttempt(result.check.command)
+                    ? " (it passed after your previous attempt: your last attempt broke it)"
+                    : result.passedBefore
+                      ? " (it passed before your first change: your change broke it)"
+                      : result.failedBefore
+                        ? " (it already failed before your first change)"
+                        : "";
                   return `- \`${result.check.command}\`${note}:\n${describeFailures(result.detail)}`;
                 }),
+                ...(regression && byFileTools.length > 0
+                  ? [
+                      `Your last attempt changed ${fileList(byFileTools)}${
+                        otherwiseChanged.length > 0
+                          ? `, and ${fileList(otherwiseChanged)} outside the file tools, which restore_file cannot undo`
+                          : ""
+                      }. If that attempt went the wrong way, restore_file puts a file back as it was before it; nothing is undone unless you ask.`,
+                    ]
+                  : regression && otherwiseChanged.length > 0
+                    ? [
+                        `Your last attempt changed ${fileList(otherwiseChanged)} outside the file tools; restore_file cannot undo those.`,
+                      ]
+                    : []),
                 ...(repeated
                   ? [
                       "Your last attempt changed code, but the same checks fail in the same way: that approach did not work. Re-read the failures above and test your assumption before changing more code.",
