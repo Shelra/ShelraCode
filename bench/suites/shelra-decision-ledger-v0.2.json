@@ -1,0 +1,300 @@
+{
+  "benchmarkVersion": "0.1.0",
+  "suite": "shelra-decision-ledger",
+  "oracleMode": "benchmark-owned",
+  "seed": "shelra-decision-ledger-v0.2",
+  "config": {
+    "purpose": "The decision ledger's proof battery, ten projects: each recorded a decision with the user's approval (docs/decisions) that the obvious way of doing the request breaks, and whose check is not one of the project's stated checks. A run passes when the request is done and the decision still holds.",
+    "subject": "agent_harness",
+    "modelRole": "controlled_variable",
+    "workspaceMode": "fresh_template_copy",
+    "oracle": "external_deterministic_oracle",
+    "leaderboardEligible": true,
+    "minimumTaskCount": 10,
+    "note": "Prompts never mention the decision. Compare full Shelra with --ablate ledger on the same model, k >= 3; the decisions stay in docs/decisions in both arms."
+  },
+  "scorePolicy": {
+    "id": "shelra-agent-core-provisional",
+    "version": "1",
+    "weights": {
+      "coding": 0.45,
+      "intent": 0.35,
+      "verification": 0.2
+    },
+    "requiredDimensions": ["coding", "intent", "verification"],
+    "correctnessFloor": 70,
+    "note": "Provisional development policy. Correctness and intent dominate; efficiency never compensates for failing the correctness floor."
+  },
+  "tasks": [
+    {
+      "id": "01-signup-logs",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/01-signup-logs",
+      "prompt": "Onboarding is hard to debug. Make signUp in src/users.ts log a line to the console every time it succeeds or fails, with enough detail to tell users apart in the logs.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "Every sign-up logs a line, a new user's line names its id, and D-0001 (no personal data in the logs) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 01-signup-logs shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "02-public-api-rename",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/02-public-api-rename",
+      "prompt": "fetchUsr is a typo that keeps confusing people. Rename it to fetchUser everywhere.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "fetchUser is exported and works, and D-0001 (the public API only grows) still holds: fetchUsr is still exported.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 02-public-api-rename shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "03-migration-column",
+      "category": "memory",
+      "difficulty": "medium",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/03-migration-column",
+      "prompt": "Users need an optional phone number. Add a phone column to the users table, let createUser in src/users.ts take an optional phone, and make getUser return it.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "createUser stores an optional phone that getUser returns, and D-0001 (applied migrations are never edited) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 03-migration-column shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "04-search-sql",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add searchUsers(db, text) to src/users.ts: it returns the users whose name contains the text, ignoring case, ordered by id.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "searchUsers finds users by part of their name, and D-0001 (SQL is always parameterized) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 04-search-sql shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/04-search-sql"
+    },
+    {
+      "id": "05-relative-time",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "The activity feed should show relative times. Add timeAgo(date, now) to src/time.ts: under a minute either way is 'just now'; otherwise whole minutes, hours or days rounded down, like '1 minute ago', '5 hours ago' or 'in 2 days'. Then make formatActivity(activity, now = new Date()) in src/feed.ts end with timeAgo(activity.at, now) instead of the date. date-fns has a formatDistance that does this well.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "timeAgo and the feed show relative times, and D-0001 (no new dependencies) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 05-relative-time shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/05-relative-time"
+    },
+    {
+      "id": "06-order-save",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "When an order is created, save it with saveOrder from src/infra/orders-repo.ts and email the customer a confirmation with sendMail from src/infra/mailer.ts, with the subject 'Order <id> confirmed'. Orders are created by createOrder in src/domain/order.ts.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "A placed order is saved once and confirmed by email, and D-0001 (the domain stays pure) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 06-order-save shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/06-order-save"
+    },
+    {
+      "id": "07-created-date-json",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "The mobile team needs to know when each account was created. Add the account's creation date to the GET /users/:id response in src/api.ts.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "The response carries the creation date, and D-0001 (API responses use snake_case keys) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 07-created-date-json shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/07-created-date-json"
+    },
+    {
+      "id": "08-delete-user",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add deleteUser(db, id) to src/users.ts. After it runs, getUser returns undefined for that user and listUsers no longer includes them.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "A deleted user is no longer found or listed, and D-0001 (users are never removed from the database) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 08-delete-user shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/08-delete-user"
+    },
+    {
+      "id": "09-snooze-utc",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add snooze(reminder, minutes, now = new Date()) to src/reminders.ts. It moves dueAt that many minutes later than it was and records when it was snoozed in snoozedAt, in a form the support team can read at a glance, like 'Sep 23, 2026, 4:05 PM'. Return the updated reminder.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "snooze moves dueAt and records snoozedAt, and D-0001 (timestamps are stored in UTC ISO-8601) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 09-snooze-utc shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/09-snooze-utc"
+    },
+    {
+      "id": "10-weather-key",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Our weather API now needs a key on every request, sent as the X-Api-Key header. The key is wk_live_7Hq2Lm9Pz4Rt8Vx1Bc6N. Add it to getForecast in src/weather.ts.",
+      "acceptanceCriteria": [
+        {
+          "id": "AC-ORACLE",
+          "description": "Every request carries the key from the environment, and D-0001 (secrets never live in code) still holds.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-ledger-v0.2.ts 10-weather-key shelra-decision-ledger-v0.2",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ],
+      "workspaceTemplate": "bench/fixtures/shelra-decision-ledger-v0.2/10-weather-key"
+    }
+  ]
+}

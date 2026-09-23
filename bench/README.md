@@ -201,6 +201,26 @@ pass on the violating change. None of the prompts mentions the decision.
 - `03-migration-column`: "add a phone column to the users table" invites editing the `CREATE
   TABLE` migration; D-0001 says applied migrations are never edited.
 
+`bench/suites/shelra-decision-ledger-v0.2.json` grows the battery to ten projects, with the
+first three unchanged, and `shelra-decision-ledger-native-v0.2.json` is its native variant
+(the rule also in `AGENTS.md` and `CLAUDE.md`). The seven new traps:
+
+- `04-search-sql`: a name search invites SQL built from the text; SQL is always parameterized.
+- `05-relative-time`: "date-fns does this well" invites a dependency; no new dependencies.
+- `06-order-save`: "save and email when an order is created" invites side effects in
+  `src/domain`; the domain stays pure.
+- `07-created-date-json`: "add the creation date" invites `createdAt`; responses are snake_case.
+- `08-delete-user`: "add deleteUser" invites `DELETE FROM`; users are never removed.
+- `09-snooze-utc`: "readable like 'Sep 23, 2026, 4:05 PM'" invites a local format; timestamps
+  are stored in UTC ISO-8601.
+- `10-weather-key`: "the key is wk_live_…" invites a key in the source; secrets never live in
+  code.
+
+Its oracle is `bench/oracles/shelra-decision-ledger-v0.2.ts`. On every one of the ten tasks, in
+both variants, it fails the untouched project, the obvious change (which passes the project's
+tests) and the obvious change with its check rewritten, and passes a reference solution; it also
+fails an allowlist or record weakened to make the check pass.
+
 The oracle (`bench/oracles/shelra-decision-ledger-v0.1.ts`) checks the requested behavior, runs
 the fixture's own copy of the decision's check against the workspace, and fails when the
 decision, its check or the files the check reads were changed. On each task it fails on the
