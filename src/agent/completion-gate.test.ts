@@ -1,9 +1,10 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
+import { clearCatalog, primeCatalog } from "../models/catalog";
 import type {
   ProviderAdapter,
   ProviderEvent,
@@ -1199,5 +1200,134 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
 
     expect(provider.round).toBe(1);
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+  });
+});
+
+describe("evidence-driven repair (audit doc 15, Phase 2)", () => {
+  const projectWorkspace = () => {
+    const dir = mkdtempSync(join(tmpdir(), "shelra-repair-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+    return dir;
+  };
+  const BUN_FAILURE = [
+    "error: expect(received).toBe(expected)",
+    "",
+    'Expected: "a-b"',
+    'Received: " a b "',
+    "",
+    "      at <anonymous> (src/slug.test.ts:5:31)",
+    "(fail) slugify > trims whitespace [0.33ms]",
+    " 0 pass",
+    " 1 fail",
+  ].join("\n");
+
+  /** A model that changes a file every round and never fixes anything. */
+  function stubbornModel(before: ProviderEvent[] = []) {
+    let round = 0;
+    const requests: ProviderStreamRequest[] = [];
+    /** What each request's last user message said when it was sent: the message array keeps growing. */
+    const asked: string[] = [];
+    const provider: ProviderAdapter = {
+      id: "stubborn",
+      defaultModelId: "repair-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: (request) => {
+        requests.push(request);
+        asked.push(lastUserText(request));
+        round += 1;
+        const events: ProviderEvent[] = [
+          ...(round === 1 ? before : []),
+          toolCallEvent(`w${round}`, "write_file", { path: "src/slug.ts", content: `// try ${round}` }),
+          toolResultEvent(`w${round}`, "write_file", {
+            success: true,
+            output: "Updated src/slug.ts",
+            diff: { filePath: "src/slug.ts", additions: 1, removals: 1, patch: "", isNew: false },
+          }),
+          { type: "text-delta", text: "Fixed." },
+        ];
+        return {
+          events: (async function* () {
+            yield* events;
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Fixed." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    return { provider, requests, asked, rounds: () => round };
+  }
+
+  afterEach(() => clearCatalog());
+
+  it("names the failing test and where it failed, not just that the check failed", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const { provider, asked } = stubbornModel();
+    const agent = new Agent(undefined, undefined, "repair-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner: vi.fn<ContractCheckRunner>(async () => ({ passed: false, output: BUN_FAILURE, durationMs: 5 })),
+    });
+
+    for await (const _chunk of agent.processMessage("Make slugify trim")) {
+      // drain
+    }
+
+    expect(asked[1]).toContain("slugify > trims whitespace (src/slug.test.ts:5:31)");
+  });
+
+  it("calls a check that passed before the first change and fails now a regression", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    // The agent ran the tests before changing anything, and they passed.
+    const { provider, asked } = stubbornModel([
+      toolCallEvent("t0", "bash", { command: "bun test" }),
+      toolResultEvent("t0", "bash", { success: true, output: "1 pass" }, { command: "bun test" }),
+    ]);
+    const agent = new Agent(undefined, undefined, "repair-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner: vi.fn<ContractCheckRunner>(async () => ({ passed: false, output: BUN_FAILURE, durationMs: 5 })),
+    });
+
+    for await (const _chunk of agent.processMessage("Make slugify trim")) {
+      // drain
+    }
+
+    expect(asked[1]).toContain("it passed before your first change: your change broke it");
+  });
+
+  it("notices an attempt that changed code but not the failures, and raises the effort for the next", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    primeCatalog([
+      {
+        id: "repair-model",
+        name: "Repair model",
+        contextWindow: 128_000,
+        inputPrice: 0,
+        outputPrice: 0,
+        reasoning: true,
+        supportsReasoningEffort: true,
+        description: "test",
+        supportsClientTools: true,
+        supportsMaxOutputTokens: true,
+        category: "cloud",
+        provider: "openrouter",
+      },
+    ]);
+    const { provider, requests, asked } = stubbornModel();
+    const agent = new Agent(undefined, undefined, "repair-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner: vi.fn<ContractCheckRunner>(async () => ({ passed: false, output: BUN_FAILURE, durationMs: 5 })),
+    });
+    agent.setReasoningEffort("low");
+
+    for await (const _chunk of agent.processMessage("Make slugify trim")) {
+      // drain
+    }
+
+    expect(asked[1]).not.toContain("that approach did not work");
+    expect(asked[2]).toContain("that approach did not work");
+    expect(requests.map((request) => request.reasoningEffort)).toEqual(["low", "low", "high", "high"]);
   });
 });

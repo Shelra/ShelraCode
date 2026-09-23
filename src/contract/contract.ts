@@ -38,9 +38,12 @@ export interface ContractCheckResult {
   passed: boolean;
   /** Whose run decided: the agent's own fresh run, or the host's. */
   by: "agent" | "host";
+  /** For a failure, the check's own output (what the repair round reads); otherwise a short note. */
   detail: string;
   /** A run before the turn's first change already failed: the failure predates the turn. */
   failedBefore: boolean;
+  /** A run before the turn's first change passed: a failure now is a regression the turn caused. */
+  passedBefore: boolean;
 }
 
 /** Runs one check command in the agent's workspace, the way the agent's own shell would. */
@@ -67,17 +70,19 @@ export async function evaluateTurnContract(input: {
 }): Promise<ContractCheckResult[]> {
   const decided = new Map<ContractCheck, ContractCheckResult>();
   const forHost: ContractCheck[] = [];
+  const before = (check: ContractCheck) => {
+    const earlier = input.runs.filter((run) => isSameCheck(run.command, check) && run.beforeFirstChange);
+    return { failedBefore: earlier.some((run) => !run.passed), passedBefore: earlier.some((run) => run.passed) };
+  };
   for (const check of input.checks) {
-    const mine = input.runs.filter((run) => isSameCheck(run.command, check));
-    const failedBefore = mine.some((run) => run.beforeFirstChange && !run.passed);
-    const latest = mine.at(-1);
+    const latest = input.runs.filter((run) => isSameCheck(run.command, check)).at(-1);
     if (latest?.fresh) {
       decided.set(check, {
         check,
         passed: latest.passed,
         by: "agent",
         detail: latest.passed ? `\`${check.command}\` passed` : latest.detail,
-        failedBefore,
+        ...before(check),
       });
       continue;
     }
@@ -89,7 +94,7 @@ export async function evaluateTurnContract(input: {
         passed: false,
         by: "host",
         detail: `not run: \`${check.command}\` ${destructive}`,
-        failedBefore,
+        ...before(check),
       });
       continue;
     }
@@ -97,6 +102,8 @@ export async function evaluateTurnContract(input: {
   }
 
   if (forHost.length > 0) {
+    // The full output of each host run: a repair round reads the failures in it, not a clipped summary.
+    const outputs = new Map<string, string>();
     const criteria: AcceptanceCriterion[] = forHost.map((check, index) => ({
       id: `contract-${index}`,
       description: check.command,
@@ -112,6 +119,7 @@ export async function evaluateTurnContract(input: {
             timeoutMs: options.timeoutMs ?? input.timeoutMs,
             signal: options.signal,
           });
+          outputs.set(command, result.output);
           return outcome(command, options.cwd, result);
         },
         probeHttp: async (url): Promise<HttpProbe> => ({
@@ -125,12 +133,15 @@ export async function evaluateTurnContract(input: {
     );
     forHost.forEach((check, index) => {
       const result = report.results.find((item) => item.id === `contract-${index}`);
+      const passed = result?.passed ?? false;
       decided.set(check, {
         check,
-        passed: result?.passed ?? false,
+        passed,
         by: "host",
-        detail: result?.detail ?? `\`${check.command}\` did not run`,
-        failedBefore: input.runs.some((run) => isSameCheck(run.command, check) && run.beforeFirstChange && !run.passed),
+        detail: passed
+          ? (result?.detail ?? `\`${check.command}\` passed`)
+          : outputs.get(check.command) || result?.detail || `\`${check.command}\` did not run`,
+        ...before(check),
       });
     });
   }

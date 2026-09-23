@@ -9,6 +9,7 @@ import {
   evaluateTurnContract,
 } from "../contract/contract";
 import { discoverChecks } from "../contract/discover";
+import { describeFailures, failureSignature } from "../contract/failures";
 import { isTestFile, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
 import type {
@@ -2669,6 +2670,13 @@ export class Agent {
     let turnBlocker: string | null = null;
     /** Existing tests changed without the request asking: the turn is asked once to restore them. */
     let testEditsNudged = false;
+    /**
+     * The repair ledger (audit doc 15, Phase 2.2): the last failing contract evaluation, to tell a repeat
+     * of the same failures after more changes from progress.
+     */
+    let lastContractFailure: { signature: string; mutationEvents: number; state: WorkspaceState | null } | null = null;
+    /** After a repair attempt that changed nothing about the failures, later rounds get the model's top effort. */
+    let repairEscalated = false;
     const checkRuns: Array<{
       command: string;
       passed: boolean;
@@ -2784,7 +2792,11 @@ export class Agent {
           );
 
           reportStatus("model", `Waiting for ${runtime.modelId}`);
-          const turnReasoningEffort = this.resolveReasoningEffort(runtime.modelId);
+          // A repair that keeps failing the same way gets the model's top effort (audit doc 15, Phase 2.4). It stays
+          // within the spending policy: the model does not change, and budgets still apply.
+          const turnReasoningEffort = repairEscalated
+            ? (getSupportedReasoningEfforts(runtime.modelId).at(-1) ?? this.resolveReasoningEffort(runtime.modelId))
+            : this.resolveReasoningEffort(runtime.modelId);
           const modelSignal = withAbortTimeout(signal, this.modelTimeout.totalMs);
           const stream = provider.stream({
             modelId: runtime.modelId,
@@ -2927,7 +2939,7 @@ export class Agent {
                     checkRuns.push({
                       command: digestCommand,
                       passed: tr.success,
-                      detail: ((tr.success ? tr.output : (tr.error ?? tr.output)) ?? "").slice(-1_200),
+                      detail: ((tr.success ? tr.output : (tr.error ?? tr.output)) ?? "").slice(-6_000),
                       mutationEvents: turnMutationEvents,
                       state: captureWorkspaceState(this.bash.getCwd()),
                     });
@@ -3341,18 +3353,42 @@ export class Agent {
               }
             } else if (verificationRetries < MAX_VERIFICATION_RETRIES) {
               verificationRetries += 1;
+              // Evidence-driven repair (audit doc 15, Phase 2.1-2.4): name what failed and where, say when
+              // a failure is a regression, and notice an attempt that changed code but not the failures.
+              const signature = failing
+                .map((result) => `${result.check.command}\n${failureSignature(result.detail)}`)
+                .sort()
+                .join("\n\n");
+              const changedSinceLastFailure =
+                lastContractFailure !== null &&
+                (turnMutationEvents > lastContractFailure.mutationEvents ||
+                  (lastContractFailure.state !== null &&
+                    stateAfterChecks.kind !== "unknown" &&
+                    (changedPaths(lastContractFailure.state, stateAfterChecks)?.length ?? 1) > 0));
+              const repeated = changedSinceLastFailure && lastContractFailure?.signature === signature;
+              lastContractFailure = { signature, mutationEvents: turnMutationEvents, state: stateAfterChecks };
+              if (repeated) repairEscalated = true;
               const nudge = [
                 "Completion blocked: the project's own checks fail on your final code (Shelra ran them after your last change):",
-                ...failing.map(
-                  (result) =>
-                    `- \`${result.check.command}\`${result.failedBefore ? " (it already failed before your first change)" : ""}: ${result.detail.slice(-1_200)}`,
-                ),
+                ...failing.map((result) => {
+                  const note = result.passedBefore
+                    ? " (it passed before your first change: your change broke it)"
+                    : result.failedBefore
+                      ? " (it already failed before your first change)"
+                      : "";
+                  return `- \`${result.check.command}\`${note}:\n${describeFailures(result.detail)}`;
+                }),
+                ...(repeated
+                  ? [
+                      "Your last attempt changed code, but the same checks fail in the same way: that approach did not work. Re-read the failures above and test your assumption before changing more code.",
+                    ]
+                  : []),
                 "Fix what your change broke and run the checks again. If a failure predates this request and has nothing to do with it, say so plainly instead of changing unrelated code.",
               ].join("\n");
               this.messages.push({ role: "user", content: nudge });
               this.messageSeqs.push(null);
               this.kernel?.recordObservation(
-                `Task contract: ${failing.length} project check(s) fail on the final code (attempt ${verificationRetries}/${MAX_VERIFICATION_RETRIES}).`,
+                `Task contract: ${failing.length} project check(s) fail on the final code (attempt ${verificationRetries}/${MAX_VERIFICATION_RETRIES})${repeated ? "; same failures after a change, escalating effort" : ""}.`,
               );
               this.persistKernelIndex(`Project checks failing: ${failing.map((r) => r.check.command).join(", ")}`);
               continue;
