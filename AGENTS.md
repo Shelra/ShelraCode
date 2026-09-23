@@ -84,12 +84,13 @@ never treated as instructions.
 ## Tool surface and diagnostics
 
 Every registered tool costs schema tokens on every model request, so the
-default agent tool set is the coding core (files, grep, lsp, bash and background
+default agent tool set is the coding core (files, grep, bash and background
 processes, web research, sub-agents, memory, plan). Desktop automation,
 schedules, and payments are opt-in groups in
 `~/.shelra/user-settings.json` under `tools` (`desktop`, `schedules`,
 `payments`); the `computer` sub-agent always receives the desktop
-group. `SHELRA_DEBUG_STREAM=1` traces provider stream parts to stderr and
+group. The `lsp` tool is opt-in too (`"lsp": { "tool": true }`); LSP
+diagnostics after an edit stay on. `SHELRA_DEBUG_STREAM=1` traces provider stream parts to stderr and
 `SHELRA_DEBUG_STREAM=2` also tees raw response bodies, for diagnosing a model or
 an upstream provider that returns content-less steps. `SHELRA_STREAM_IDLE_MS` (default 180000, 0 disables) is the
 idle budget after which a silent model stream is aborted and the step retried. Once a request's history passes

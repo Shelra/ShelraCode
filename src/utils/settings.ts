@@ -46,7 +46,9 @@ const DEFAULT_PAYMENT_SETTINGS: Required<PaymentSettings> = {
 
 const DEFAULT_LSP_SETTINGS: NormalizedLspSettings = {
   enabled: true,
-  tool: true,
+  // The lsp tool costs schema tokens on every request and needs a language server, so it is opt-in
+  // (`"lsp": { "tool": true }`); diagnostics after an edit stay on.
+  tool: false,
   autoInstall: false,
   startupTimeoutMs: 30_000,
   diagnosticsDebounceMs: 200,

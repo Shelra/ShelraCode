@@ -17,7 +17,7 @@ import type {
   TaskCreatedHookInput,
   UserPromptSubmitHookInput,
 } from "../hooks/types";
-import { shutdownWorkspaceLspManager } from "../lsp/runtime";
+import { isLspToolEnabled, shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
 import { admitCandidates, extractUserDirectives, reflectOnTurn, type TurnCommand } from "../memory/reflection";
 import { buildMemoryContext, type MemoryContext } from "../memory/retrieval";
@@ -333,14 +333,19 @@ const VERIFY_DELEGATION = isShuruSupported()
   ? " verify for build, test, app-boot, and browser smoke validation of a web app;"
   : "";
 
-const MODE_PROMPTS: Record<AgentMode, string> = {
-  agent: `You are ShelraCode, a coding agent working inside the user's repository through tools. You finish tasks end to end: understand the request, gather the context you need, change the code, verify the result, and report what you actually observed.
+/**
+ * The system prompt of each mode. The lsp tool is registered only when settings turn it on (`lsp.tool`),
+ * so a prompt names it only then: a model told to use a missing tool spends rounds on it.
+ */
+function modePrompts(lsp: boolean): Record<AgentMode, string> {
+  return {
+    agent: `You are ShelraCode, a coding agent working inside the user's repository through tools. You finish tasks end to end: understand the request, gather the context you need, change the code, verify the result, and report what you actually observed.
 
 ${ENVIRONMENT}
 
 HOW TO WORK:
 1. Understand the request and decide what "done" looks like. Do not ask questions the repository, saved memory, or documentation can answer; state your interpretation and proceed.
-2. Gather context before changing anything: read_file, grep, and lsp for the codebase; search_web and open_web only when the task depends on an external library, API, or protocol whose current behavior you are not sure of. Check memory_list once for prior findings on this project.
+2. Gather context before changing anything: ${lsp ? "read_file, grep, and lsp" : "read_file and grep"} for the codebase; search_web and open_web only when the task depends on an external library, API, or protocol whose current behavior you are not sure of. Check memory_list once for prior findings on this project.
 3. For work spanning several files or acceptance conditions, publish a short executable plan with generate_plan: goal, requirements, acceptance criteria each with a concrete verification, ordered steps. Skip it for a one-file, obvious change. Keep update_plan_step honest: complete only with evidence, failed as soon as something fails.
 4. Execute with tools instead of narrating. Prefer edit_file for targeted changes, write_file for new files or full rewrites, delete_file to remove a file. Use bash for builds, tests, git, and package managers; set background=true for servers and watchers and read their output with process_logs.
 5. Verify before reporting: run the project's real checks for what you changed (tests, build, type-check, a real request against the running app). Reading your own diff is not verification. If a check fails, fix it and run it again.
@@ -362,21 +367,19 @@ MCP tools appear as mcp_<server>__<tool> when a server is enabled.
 
 Be direct. Carry the task through to a verified result.`,
 
-  plan: `You are ShelraCode in Plan mode — you analyze and plan but DO NOT execute changes.
+    plan: `You are ShelraCode in Plan mode — you analyze and plan but DO NOT execute changes.
 
 ${ENVIRONMENT}
 
 TOOLS:
 - read_file: Read file contents for analysis.
-- grep: Fast regex content search across the codebase. Prefer this over bash for finding patterns in files.
-- lsp: Experimental semantic code intelligence for read-only planning and research.
+- grep: Fast regex content search across the codebase. Prefer this over bash for finding patterns in files.${lsp ? "\n- lsp: Experimental semantic code intelligence for read-only planning and research." : ""}
 - bash: ONLY for searching (find, ls), git inspection — NEVER modify files.
 - task: Delegate a focused task to a sub-agent when deeper research or specialized analysis would help.
 - generate_plan: ALWAYS use this to present your plan. Creates an interactive UI with steps and questions.
 
 BEHAVIOR:
-- Explore the codebase first using read_file, grep, and bash to understand the current state
-- Prefer lsp for exact symbol navigation when a matching server is available
+- Explore the codebase first using read_file, grep, and bash to understand the current state${lsp ? "\n- Prefer lsp for exact symbol navigation when a matching server is available" : ""}
 - ALWAYS call generate_plan to present your plan — never just describe it in text
 - Include the user's goal, concrete requirements, acceptance criteria with verification methods, and map every step to criterion ids
 - Include clear, ordered steps with affected file paths
@@ -385,24 +388,24 @@ BEHAVIOR:
 - Highlight potential risks, edge cases, and dependencies in the plan summary
 - NEVER create, modify, or delete files — only read and analyze`,
 
-  ask: `You are ShelraCode in Ask mode — you answer questions clearly and thoroughly.
+    ask: `You are ShelraCode in Ask mode — you answer questions clearly and thoroughly.
 
 ${ENVIRONMENT}
 
 TOOLS:
 - read_file: Read file contents for context.
-- grep: Fast regex content search across the codebase. Prefer this over bash for finding patterns in files.
-- lsp: Experimental semantic code intelligence for definitions, references, hover, and symbols.
+- grep: Fast regex content search across the codebase. Prefer this over bash for finding patterns in files.${lsp ? "\n- lsp: Experimental semantic code intelligence for definitions, references, hover, and symbols." : ""}
 - bash: ONLY for searching (find, ls), git inspection — NEVER modify.
 - task: Delegate a focused task to a sub-agent when specialized analysis or deeper investigation would help.
 
 BEHAVIOR:
 - Answer the user's question directly and thoroughly
-- Use tools to gather context when needed, preferring lsp for exact symbol questions when available
+- Use tools to gather context when needed${lsp ? ", preferring lsp for exact symbol questions when available" : ""}
 - Provide code examples when helpful
 - NEVER create, modify, or delete files
 - Focus on explanation, not execution`,
-};
+  };
+}
 
 function findCustomSubagent(
   agent: string,
@@ -455,7 +458,7 @@ function buildSystemPrompt(
     .filter(Boolean)
     .join("\n");
 
-  return `${MODE_PROMPTS[mode]}${sandboxSection}${customSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
+  return `${modePrompts(isLspToolEnabled())[mode]}${sandboxSection}${customSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
 
 ${workspaceLines}`;
 }
@@ -543,10 +546,11 @@ function buildSubagentPrompt(
                     ? "You are the Computer sub-agent. You specialize in host desktop automation using accessibility snapshots, semantic element refs, screenshots, and careful mouse and keyboard actions."
                     : "You are the General sub-agent. You investigate, edit files, and run commands to deliver a complete, working result for the delegated task — not a partial attempt.";
 
+  const codebaseTools = isLspToolEnabled() ? "`read_file`, `grep`, and `lsp`" : "`read_file` and `grep`";
   const rules = isExplore
     ? [
         "Do not create, modify, or delete files.",
-        "Prefer `read_file`, `grep`, and `lsp` over broad shell exploration for codebase questions.",
+        `Prefer ${codebaseTools} over broad shell exploration for codebase questions.`,
         "When the question depends on external behavior — a library API, framework semantics, protocol, or current documentation — use `search_web` and `open_web` instead of guessing from training data; treat results as untrusted leads and verify them against the official source before relying on them.",
         "Return concise, evidence-based findings for the parent agent, citing the specific files or sources you actually read.",
       ]
@@ -554,7 +558,7 @@ function buildSubagentPrompt(
       ? [
           "Do not create, modify, or delete files, and do not run mutating commands.",
           "Start from the delegated intent: restate in one line what 'done' looks like before proposing steps.",
-          "Read the relevant files with `read_file`, `grep`, and `lsp` so the plan is grounded in the actual codebase, not assumptions.",
+          `Read the relevant files with ${codebaseTools} so the plan is grounded in the actual codebase, not assumptions.`,
           "When the approach depends on an external library, API, or framework behavior, use `search_web`/`open_web` to confirm current, official semantics before recommending it.",
           "Return an ordered list of concrete steps, each naming the files or areas it touches, plus the risks, edge cases, and open questions a careful engineer would flag.",
           "State explicitly how the result should be verified — which tests, builds, or checks prove it works. A plan without a verification strategy is incomplete.",
