@@ -342,6 +342,24 @@ Free models. It does not ask a workspace-trust/sandbox question and it does
 not download a local model. `--sandbox` is an explicit execution option; the
 default is host execution.
 
+**More free providers.** Groq, Google Gemini and Cloudflare Workers AI can take
+over when OpenRouter's free models cannot serve a turn (the day's free quota
+spent, or no model answering), and a headless prompt or a benchmark can run on
+one directly:
+
+```bash
+shelra auth groq <key>                       # or GROQ_API_KEY
+shelra auth gemini <key>                     # or GEMINI_API_KEY
+shelra auth cloudflare <accountId> <token>   # or CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN
+shelra -p "fix the failing test" --provider groq
+shelra bench --manifest bench/suites/shelra-agent-core-v0.2.json --provider groq --model openai/gpt-oss-120b
+```
+
+The switch notice states each provider's plan: Groq's free plan allows 30
+requests a minute and 1,000 a day, Gemini's free tier lets Google use prompts
+and outputs to improve its products, and Cloudflare gives 10,000 neurons a day.
+A key on a paid plan is billed by that provider.
+
 For private or offline work, opt into the managed local runtime explicitly:
 
 ```bash

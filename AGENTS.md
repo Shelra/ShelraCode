@@ -67,6 +67,13 @@ directory.
   secondary catalog.
 - `SHELRA_API_KEY` + `SHELRA_BASE_URL` remain available for another
   OpenAI-compatible provider.
+- **More free providers** (`src/providers/free-providers.ts`): Groq (`GROQ_API_KEY` or
+  `KEY_GROQ`, or `shelra auth groq <key>`), Google Gemini (`GEMINI_API_KEY`, `shelra auth gemini`)
+  and Cloudflare Workers AI (`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, `shelra auth
+  cloudflare <accountId> <token>`). A headless prompt runs on one with `--provider <id>`, a
+  benchmark with `shelra bench --provider <id>`, and a session continues on them when OpenRouter's
+  free models cannot serve a turn (see Resilience). Their plans and privacy terms are in
+  `docs/future-research/05_FREE_AND_LOW_COST_LLM_INFRASTRUCTURE.md`.
 - Optional spend controls: `SHELRA_MAX_SESSION_COST_USD` and
   `SHELRA_MAX_REQUEST_COST_USD` (CLI equivalents `--max-cost` and
   `--max-request-cost`).
@@ -132,8 +139,13 @@ turn at once. Everything else is recovered:
   under the free policy or a hand-chosen model, `openrouter/auto` (paid, within the policy's cost
   tier) then `openrouter/free` under a paid policy. A fallback is not always free: the switch
   notice states its cost, and spend limits still apply. A strict (benchmark) model is never
-  replaced. A turn in which no model answers for many attempts pauses with its progress saved and
-  says how to resume.
+  replaced. When no model of the provider can serve the turn (the day's free quota spent, none
+  answering), the session continues on another free provider the user configured (Groq, Gemini,
+  Cloudflare Workers AI, then OpenRouter Free when the turn started elsewhere), each tried once per
+  session; the notice states its plan, that a key on a paid plan is billed by that provider, and,
+  for Gemini's free tier, that Google may use the prompts (`setProviderFallback`, wired in
+  `src/index.ts`). Only then does a turn in which no model answers pause with its progress saved
+  and say how to resume.
 - A sub-agent recovers the same way on its own, within a tighter bound (four attempts without
   progress, ten in all), and then returns a failed task the parent routes around.
 - A key the provider rejects moves the session, with its completed steps, to a fallback the user

@@ -435,6 +435,71 @@ describe("a failing model connection never ends the turn", () => {
   });
 });
 
+describe("a provider that cannot serve the turn hands it to another free provider (owner, 2026-09-23)", () => {
+  const quotaSpent = () =>
+    apiError(
+      429,
+      "Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day",
+    );
+
+  it("continues on the next configured free provider with the completed steps kept, saying what it costs", async () => {
+    const openrouter = new ScriptedProvider([{ events: [], completedSteps: toolStep, fail: quotaSpent() }]);
+    const groq = new ScriptedProvider([answer("Answered on Groq.")]);
+    const { agent, chunks, text } = await run(openrouter, "Explain the project", (agent) =>
+      agent.setProviderFallback(
+        credentialFallbackChain([
+          async () => ({
+            provider: groq,
+            modelId: "openai/gpt-oss-120b",
+            label: "Groq (free plan: 30 requests a minute and 1,000 a day), with the key from GROQ_API_KEY",
+          }),
+        ]),
+      ),
+    );
+
+    expect(openrouter.requests).toHaveLength(1);
+    expect(groq.requests.map((request) => request.modelId)).toEqual(["openai/gpt-oss-120b"]);
+    expect(text).toContain("cannot serve this request");
+    expect(text).toContain("Continuing with Groq (free plan: 30 requests a minute and 1,000 a day)");
+    expect(text).toContain("Answered on Groq.");
+    expect(text).not.toContain("[Paused");
+    expect(chunks.some((chunk) => chunk.type === "error")).toBe(false);
+    const sent = sentMessages(groq, 0);
+    expect(sent.findIndex((message) => message.role === "tool")).toBeGreaterThan(0);
+    expect(agent.getModel()).toBe("openai/gpt-oss-120b");
+  });
+
+  it("moves on to the next free provider when the first one cannot serve the turn either", async () => {
+    const openrouter = new ScriptedProvider([{ events: [], fail: quotaSpent() }]);
+    const groq = new ScriptedProvider([{ events: [], fail: apiError(429, "Rate limit reached for requests per day") }]);
+    const gemini = new ScriptedProvider([answer("Answered on Gemini.")]);
+    const { text } = await run(openrouter, "Explain the project", (agent) =>
+      agent.setProviderFallback(
+        credentialFallbackChain([
+          async () => ({ provider: groq, modelId: "openai/gpt-oss-120b", label: "Groq" }),
+          async () => ({
+            provider: gemini,
+            modelId: "gemini-2.5-flash",
+            label: "Google Gemini (on the free tier Google may use prompts and outputs to improve its products)",
+          }),
+        ]),
+      ),
+    );
+
+    expect(groq.requests.length).toBeGreaterThan(0);
+    expect(text).toContain("Continuing with Google Gemini (on the free tier Google may use prompts and outputs");
+    expect(text).toContain("Answered on Gemini.");
+  });
+
+  it("pauses as before when no other provider is configured", async () => {
+    const openrouter = new ScriptedProvider([{ events: [], fail: quotaSpent() }]);
+    const { text } = await run(openrouter);
+
+    expect(openrouter.requests).toHaveLength(1);
+    expect(text).toContain("[Paused");
+  });
+});
+
 describe("a rejected API key moves the session to a fallback the user already has", () => {
   it("continues on the configured fallback with the completed steps kept", async () => {
     const rejecting = new ScriptedProvider([

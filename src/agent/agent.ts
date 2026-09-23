@@ -472,6 +472,8 @@ export class Agent {
   private lastMemoryContext: MemoryContext | null = null;
   /** Where a turn continues when the provider rejects its API key; see `setCredentialFallback`. */
   private credentialFallback: CredentialFallbackSource | null = null;
+  /** Where a turn continues when no model of this provider can serve it; see `setProviderFallback`. */
+  private providerFallback: CredentialFallbackSource | null = null;
   /** The fallback serving this session after a rejected key, released on cleanup. */
   private activeCredentialFallback: CredentialFallback | null = null;
   private readonly budget: BudgetLimits;
@@ -761,6 +763,16 @@ export class Agent {
    */
   setCredentialFallback(source: CredentialFallbackSource | null): void {
     this.credentialFallback = source;
+  }
+
+  /**
+   * A provider none of whose models can serve the turn (OpenRouter's free models with the day's quota
+   * spent, or none answering) would pause it; the turn continues instead on another provider the user
+   * configured, such as a free Groq, Gemini or Cloudflare account. Never set for a benchmark, whose
+   * model is the measured variable.
+   */
+  setProviderFallback(source: CredentialFallbackSource | null): void {
+    this.providerFallback = source;
   }
 
   setApiKey(apiKey: string, baseURL = this.baseURL ?? undefined): void {
@@ -1277,6 +1289,39 @@ export class Agent {
     notifyObserver(observer?.onError, { message, timestamp: Date.now() });
     yield { type: "content", content: `\n\n[Paused — ${message}]` };
     yield { type: "done" };
+  }
+
+  /**
+   * No model of the current provider could serve the turn, which would pause it. The completed steps
+   * were saved by the interruption handling; the session moves to the next provider the host
+   * configured and stays there. Null when there is none: the turn pauses as before.
+   */
+  private async *continueOnProviderFallback(args: {
+    cause: string;
+    modelId: string;
+    signal: AbortSignal;
+  }): AsyncGenerator<StreamChunk, CredentialFallback | null, unknown> {
+    if (!this.providerFallback || args.signal.aborted) return null;
+    let fallback: CredentialFallback | null = null;
+    try {
+      fallback = await this.providerFallback({ modelId: args.modelId, signal: args.signal });
+    } catch {
+      fallback = null;
+    }
+    if (!fallback) return null;
+    if (args.signal.aborted) {
+      await fallback.dispose?.().catch(() => undefined);
+      return null;
+    }
+    const previous = this.activeCredentialFallback;
+    this.activeCredentialFallback = fallback;
+    this.setProvider(fallback.provider, fallback.modelId);
+    await previous?.dispose?.().catch(() => undefined);
+    const notice = `${args.cause} Continuing with ${fallback.label}, model ${fallback.modelId}, for the rest of this session.`;
+    this.kernel?.recordObservation(notice);
+    this.persistKernelIndex();
+    yield { type: "content", content: `\n\n[${notice}]\n\n` };
+    return fallback;
   }
 
   /**
@@ -2355,6 +2400,16 @@ export class Agent {
       modelInfo = runtime.modelInfo;
       emptyResponseRetries = 0;
     };
+    /** The turn continues on another provider (a provider fallback), with a fresh attempt budget there. */
+    const adoptProvider = (fallback: CredentialFallback) => {
+      provider = fallback.provider;
+      interruptions.onModel = 0;
+      interruptions.withoutProgress = 0;
+      interruptions.total = 0;
+      interruptions.triedModels.clear();
+      interruptions.triedModels.add(fallback.modelId);
+      switchModel(fallback.modelId);
+    };
     // Requirement audit, one round per turn: when the request enumerates several behaviors, a
     // green run is evidence only for the behaviors the executed tests exercise. Measured on the
     // core suite 2026-09-17 (qwen3-coder-30b, run #11): all three failures were tasks whose prompt
@@ -2853,6 +2908,15 @@ export class Agent {
             });
             if (outcome.action === "switch") switchModel(outcome.modelId);
             if (outcome.action !== "pause") continue;
+            const moved = yield* this.continueOnProviderFallback({
+              cause: outcome.message,
+              modelId: runtime.modelId,
+              signal,
+            });
+            if (moved) {
+              adoptProvider(moved);
+              continue;
+            }
             yield* this.pauseAfterInterruptions(outcome.message, observer);
             return;
           }
@@ -3409,6 +3473,15 @@ export class Agent {
             });
             if (outcome.action === "switch") switchModel(outcome.modelId);
             if (outcome.action !== "pause") continue;
+            const moved = yield* this.continueOnProviderFallback({
+              cause: outcome.message,
+              modelId: runtime.modelId,
+              signal,
+            });
+            if (moved) {
+              adoptProvider(moved);
+              continue;
+            }
             yield* this.pauseAfterInterruptions(outcome.message, observer);
             return;
           }

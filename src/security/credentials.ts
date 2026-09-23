@@ -12,9 +12,17 @@ export interface StoredAccount {
   email: string | null;
 }
 
+/** A free provider's credentials (`shelra auth groq|gemini|cloudflare`); see src/providers/free-providers.ts. */
+export interface ProviderCredential {
+  apiKey: string;
+  /** Cloudflare's endpoint names the account. */
+  accountId?: string;
+}
+
 interface AuthFile {
   openrouter?: { apiKey?: string };
   account?: StoredAccount;
+  providers?: Record<string, ProviderCredential>;
 }
 
 function authPath(): string {
@@ -61,6 +69,33 @@ export function clearOpenRouterApiKey(): void {
   const auth = readAuth();
   if (!auth.openrouter) return;
   delete auth.openrouter;
+  writeAuth(auth);
+}
+
+/** A stored provider credential, without ever returning it in diagnostics or error text. */
+export function getStoredProviderCredential(providerId: string): ProviderCredential | undefined {
+  const credential = readAuth().providers?.[providerId];
+  const apiKey = typeof credential?.apiKey === "string" ? credential.apiKey.trim() : "";
+  if (!apiKey) return undefined;
+  const accountId = typeof credential?.accountId === "string" ? credential.accountId.trim() : "";
+  return { apiKey, ...(accountId ? { accountId } : {}) };
+}
+
+export function saveProviderCredential(providerId: string, credential: ProviderCredential): void {
+  const apiKey = credential.apiKey.trim();
+  if (!apiKey) throw new Error("The API key cannot be empty.");
+  const accountId = credential.accountId?.trim();
+  const auth = readAuth();
+  writeAuth({
+    ...auth,
+    providers: { ...(auth.providers ?? {}), [providerId]: { apiKey, ...(accountId ? { accountId } : {}) } },
+  });
+}
+
+export function clearProviderCredential(providerId: string): void {
+  const auth = readAuth();
+  if (!auth.providers?.[providerId]) return;
+  delete auth.providers[providerId];
   writeAuth(auth);
 }
 

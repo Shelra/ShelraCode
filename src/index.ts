@@ -54,12 +54,22 @@ import {
   PRODUCT_NAME,
 } from "./product/identity";
 import { type CredentialFallbackSource, credentialFallbackChain } from "./providers/credential-fallback";
+import {
+  configuredFreeProviders,
+  createFreeProvider,
+  FREE_PROVIDER_IDS,
+  FREE_PROVIDERS,
+  type FreeProviderId,
+  freeProviderFallbackSources,
+  isFreeProviderId,
+  resolveFreeProvider,
+} from "./providers/free-providers";
 import { createOpenRouterProvider } from "./providers/openrouter";
 import { selectLocalRoute } from "./router/local-first";
 import { installManagedRuntime, resolveRuntimeInstallPlan } from "./runtimes/bootstrap";
 import { discoverLocalRuntimes, disposeLocalRuntimes } from "./runtimes/discovery";
 import type { LocalModelCandidate, LocalRuntimeDiscovery } from "./runtimes/types";
-import { saveOpenRouterApiKey } from "./security/credentials";
+import { saveOpenRouterApiKey, saveProviderCredential } from "./security/credentials";
 import { runOnboarding } from "./setup/onboarding";
 import { startInstalledLocalModel } from "./startup/local-fallback";
 import { probeLocalModel, runStartup } from "./startup/orchestrator";
@@ -140,6 +150,45 @@ interface RemoteModelSetup {
   selectModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
+/** OpenRouter's free router on each OpenRouter key the user configured, as fallbacks. */
+function openRouterFreeFallbackSources(): CredentialFallbackSource[] {
+  return listOpenRouterApiKeys().map(
+    ({ key, source }): CredentialFallbackSource =>
+      async () => {
+        const catalog = await fetchOpenRouterCatalog({ apiKey: key, baseURL: OPENROUTER_BASE_URL });
+        return {
+          provider: createOpenRouterProvider(key, {
+            modelId: "openrouter/free",
+            entries: catalog.entries,
+            baseURL: OPENROUTER_BASE_URL,
+            requireParameters: true,
+            policy: "free",
+          }),
+          modelId: "openrouter/free",
+          label: `OpenRouter Free with the key from ${source}`,
+        };
+      },
+  );
+}
+
+/**
+ * A session on a free provider the user chose (`--provider`): its default model unless one is named.
+ * When it cannot serve a turn, the other configured free providers take over, then OpenRouter Free.
+ */
+function configureFreeProviderSession(agent: Agent, id: FreeProviderId, model: string | undefined): void {
+  const preset = FREE_PROVIDERS[id];
+  const configured = resolveFreeProvider(id);
+  if (!configured) {
+    throw new Error(`No ${preset.name} credentials: set ${preset.keyEnv[0]} or run \`shelra auth ${id}\`.`);
+  }
+  const modelId = model?.trim() || (preset.models[0] as string);
+  agent.setProvider(createFreeProvider(configured, modelId), modelId);
+  const others = configuredFreeProviders().filter((provider) => provider.preset.id !== id);
+  agent.setProviderFallback(
+    credentialFallbackChain([...freeProviderFallbackSources(others), ...openRouterFreeFallbackSources()]),
+  );
+}
+
 async function configureRemoteProvider(
   agent: Agent,
   apiKey: string,
@@ -153,26 +202,7 @@ async function configureRemoteProvider(
     // A key this endpoint rejects: continue on OpenRouter Free with a configured OpenRouter key,
     // then on an installed local model. Free, so no spend is started without the user.
     agent.setCredentialFallback(
-      credentialFallbackChain([
-        ...listOpenRouterApiKeys().map(
-          ({ key, source }): CredentialFallbackSource =>
-            async () => {
-              const catalog = await fetchOpenRouterCatalog({ apiKey: key, baseURL: OPENROUTER_BASE_URL });
-              return {
-                provider: createOpenRouterProvider(key, {
-                  modelId: "openrouter/free",
-                  entries: catalog.entries,
-                  baseURL: OPENROUTER_BASE_URL,
-                  requireParameters: true,
-                  policy: "free",
-                }),
-                modelId: "openrouter/free",
-                label: `OpenRouter Free with the key from ${source}`,
-              };
-            },
-        ),
-        installedLocalModelFallback,
-      ]),
+      credentialFallbackChain([...openRouterFreeFallbackSources(), installedLocalModelFallback]),
     );
     return {
       models: [],
@@ -274,6 +304,9 @@ async function configureRemoteProvider(
       installedLocalModelFallback,
     ]),
   );
+  // No OpenRouter model can serve the turn (the day's free quota spent, none answering): continue on
+  // another free provider the user configured (Groq, Gemini, Cloudflare), whose notice states its plan.
+  agent.setProviderFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())));
   return {
     models: catalog.entries.map(catalogEntryToModelInfo),
     catalog: catalog.entries,
@@ -830,7 +863,28 @@ async function runHeadless(
   preferLocal = false,
   modelPolicy: ModelPolicy = "free",
   budget: BudgetLimits = {},
+  freeProvider?: FreeProviderId,
 ) {
+  if (freeProvider) {
+    const agent = new Agent(undefined, undefined, model, maxToolRounds, {
+      session,
+      sandboxMode,
+      sandboxSettings,
+      budget,
+    });
+    try {
+      configureFreeProviderSession(agent, freeProvider, model);
+    } catch (error) {
+      process.stderr.write(
+        `ShelraCode could not configure ${FREE_PROVIDERS[freeProvider].name}: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      process.exitCode = 1;
+      await agent.cleanup();
+      return;
+    }
+    await runHeadlessTurn(agent, prompt, format);
+    return;
+  }
   const agent = new Agent(preferLocal ? undefined : apiKey, preferLocal ? undefined : baseURL, model, maxToolRounds, {
     session,
     sandboxMode,
@@ -861,6 +915,16 @@ async function runHeadless(
     await Promise.all([agent.cleanup(), localSetup?.dispose()]);
     return;
   }
+  await runHeadlessTurn(agent, prompt, format, () => localSetup?.dispose() ?? Promise.resolve());
+}
+
+/** The prelude and one headless turn, then the agent's cleanup and whatever the setup started. */
+async function runHeadlessTurn(
+  agent: Agent,
+  prompt: string,
+  format: HeadlessOutputFormat,
+  dispose: () => Promise<void> = async () => undefined,
+): Promise<void> {
   const prelude = renderHeadlessPrelude(format, agent.getSessionId() || undefined, agent.getModelInfo());
   if (prelude.stdout) process.stdout.write(prelude.stdout);
   if (prelude.stderr) process.stderr.write(prelude.stderr);
@@ -887,7 +951,7 @@ async function runHeadless(
       if (writes.stderr) process.stderr.write(writes.stderr);
     }
   } finally {
-    await Promise.all([agent.cleanup(), localSetup?.dispose()]);
+    await Promise.all([agent.cleanup(), dispose()]);
   }
 }
 
@@ -1033,6 +1097,8 @@ async function runBenchCommand(options: {
   history?: boolean;
   /** The root `--max-tool-rounds`: each task's tool-round bound on the shelra product path. */
   maxToolRounds?: string;
+  /** A free provider other than OpenRouter (`--provider groq|gemini|cloudflare`). */
+  provider?: string;
 }): Promise<void> {
   const manifestCandidate = options.manifest || ".shelra/bench/manifest.json";
   const agentName = ((options.agent || "shelra").trim() || "shelra").toLowerCase();
@@ -1210,6 +1276,38 @@ async function runBenchCommand(options: {
             throw new Error(
               `Agent adapter "${agentName}" is not registered yet. This run was retained as failed evidence.`,
             );
+          }
+          const providerOption = options.provider?.trim().toLowerCase();
+          if (providerOption) {
+            // Another free provider, for measuring beyond OpenRouter's daily free quota. The model is
+            // strict like any benchmark model: no fallback may replace the measured variable.
+            if (!isFreeProviderId(providerOption)) {
+              throw new Error(`Unknown provider "${providerOption}". Use one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
+            }
+            if (agentName !== "shelra") throw new Error("--provider runs the product path, `--agent shelra`.");
+            const preset = FREE_PROVIDERS[providerOption];
+            const configured = resolveFreeProvider(providerOption);
+            if (!configured) {
+              throw new Error(
+                `No ${preset.name} credentials: set ${preset.keyEnv[0]} or run \`shelra auth ${providerOption}\`.`,
+              );
+            }
+            const modelId = options.model?.trim() || (preset.models[0] as string);
+            updateBenchmarkRunMetadata(run.runId, { model: `${preset.id}/${modelId}`, modelProvider: preset.name });
+            emit({
+              type: "note",
+              message: `Shelra runtime ready with ${preset.name} ${modelId} (${preset.plan})`,
+              payload: { agent: agentName, provider: preset.id },
+            });
+            return createAgentBenchmarkExecutor({
+              provider: createFreeProvider(configured, modelId),
+              modelId,
+              benchmarkRoot: process.cwd(),
+              budget,
+              signal,
+              maxToolRounds,
+              ...(ablations.length > 0 ? { agentOptions: { ablate: ablations } } : {}),
+            });
           }
           if (!apiKey) {
             throw new Error(
@@ -1466,10 +1564,19 @@ function resolveConfig(options: CliOptions) {
     ? (rawPolicy as ModelPolicy)
     : "free";
   const budget = resolveBudget(options);
+  const providerOption = stringOption(options.provider)?.toLowerCase();
+  if (providerOption && !isFreeProviderId(providerOption)) {
+    throw new Error(`Unknown provider "${providerOption}". Use one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
+  }
+  const freeProvider = providerOption && isFreeProviderId(providerOption) ? providerOption : undefined;
 
-  if (typeof options.model === "string") saveUserSettings({ defaultModel: normalizeModelId(options.model) });
+  // A model named for another provider (`--provider`) is that provider's id, not a default for the next session.
+  if (typeof options.model === "string" && !freeProvider) {
+    saveUserSettings({ defaultModel: normalizeModelId(options.model) });
+  }
 
   return {
+    freeProvider,
     apiKey,
     baseURL,
     model,
@@ -1522,6 +1629,10 @@ program
   .option("-m, --model <model>", "Model to use")
   .option("--remote", "Use the configured cloud provider (OpenRouter by default)")
   .option("--local", "Use the managed local model instead of cloud routing")
+  .option(
+    "--provider <id>",
+    `Run a headless prompt (-p) on another free provider with its own key: ${FREE_PROVIDER_IDS.join(", ")}`,
+  )
   .option("--model-policy <policy>", "OpenRouter routing policy: free, auto, economy, balanced, quality or max", "free")
   .option("--max-cost <usd>", "Maximum cumulative session spend in USD (0 is strict free-only)")
   .option("--max-request-cost <usd>", "Maximum conservative spend for one model request in USD")
@@ -1623,6 +1734,7 @@ program
         config.preferLocal,
         config.modelPolicy,
         config.budget,
+        config.freeProvider,
       );
       return;
     }
@@ -1687,6 +1799,10 @@ program
     "Run the tasks under .shelra/bench/runs with your own settings, memory and skills, as runs before 2026-09-23 did",
   )
   .option("--no-history", "Do not add the runs to bench/history/benchmark-history.json")
+  .option(
+    "--provider <id>",
+    `Run Shelra on another free provider with its own key: ${FREE_PROVIDER_IDS.join(", ")} (the model stays fixed)`,
+  )
   .action(async (_options, command) => {
     // Commander assigns options shared with the root command (for example --model and
     // --max-cost) to the root even when they appear after `bench`. Merge both scopes so
@@ -1893,6 +2009,27 @@ authCommand
   .action((apiKey: string) => {
     saveOpenRouterApiKey(apiKey);
     console.log("OpenRouter API key saved. Key material is never printed or logged.");
+  });
+
+// Free providers: a session continues on them when OpenRouter's free models cannot serve a turn, and a
+// benchmark can run on them with `--provider`.
+for (const id of ["groq", "gemini"] as const) {
+  const preset = FREE_PROVIDERS[id];
+  authCommand
+    .command(`${id} <apiKey>`)
+    .description(`Store a ${preset.name} API key securely (${preset.plan})`)
+    .action((apiKey: string) => {
+      saveProviderCredential(id, { apiKey });
+      console.log(`${preset.name} API key saved. Key material is never printed or logged.`);
+      if (preset.privacy) console.log(`Note: ${preset.privacy}.`);
+    });
+}
+authCommand
+  .command("cloudflare <accountId> <apiToken>")
+  .description(`Store a Cloudflare Workers AI account id and API token securely (${FREE_PROVIDERS.cloudflare.plan})`)
+  .action((accountId: string, apiToken: string) => {
+    saveProviderCredential("cloudflare", { apiKey: apiToken, accountId });
+    console.log("Cloudflare Workers AI credentials saved. Key material is never printed or logged.");
   });
 
 // The ShelraCode account (backend/). Only these commands reach the account service; the agent never does.
