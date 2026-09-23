@@ -3,6 +3,7 @@ import { type RefObject, useEffect, useRef } from "react";
 import type { ModelInfo } from "../types/index";
 import type { CustomSubagentConfig } from "../utils/settings";
 import { formatSubagentName } from "../utils/subagent-display";
+import { TextArea } from "./components/text-area";
 import { scrollbarStyle, type Theme } from "./theme";
 
 const EDITOR_KEYBINDINGS = [{ name: "return", action: "submit" as const }];
@@ -218,7 +219,7 @@ export function SubagentEditorModal({
           <box paddingBottom={1}>
             <text fg={focusedField === "name" ? t.primary : t.textMuted}>{"Name (task tool agent value)"}</text>
             <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-              <textarea
+              <TextArea
                 ref={nameRef}
                 focused={focusedField === "name"}
                 placeholder="e.g. security-review"
@@ -229,7 +230,7 @@ export function SubagentEditorModal({
                 maxHeight={2}
                 wrapMode="word"
                 keyBindings={EDITOR_KEYBINDINGS}
-                onSubmit={onSubmit as unknown as () => void}
+                onSubmit={onSubmit}
               />
             </box>
           </box>
@@ -245,7 +246,7 @@ export function SubagentEditorModal({
           <box paddingBottom={1}>
             <text fg={focusedField === "instruction" ? t.primary : t.textMuted}>{"Instruction (system prompt)"}</text>
             <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-              <textarea
+              <TextArea
                 ref={instructionRef}
                 focused={focusedField === "instruction"}
                 placeholder="How this sub-agent should behave..."
@@ -256,7 +257,7 @@ export function SubagentEditorModal({
                 maxHeight={12}
                 wrapMode="word"
                 keyBindings={EDITOR_KEYBINDINGS}
-                onSubmit={onSubmit as unknown as () => void}
+                onSubmit={onSubmit}
               />
             </box>
           </box>

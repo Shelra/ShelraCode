@@ -3,6 +3,7 @@ import { type RefObject, useEffect, useRef } from "react";
 import type { McpCatalogEntry } from "../mcp/catalog";
 import { toMcpServerId } from "../mcp/validate";
 import type { McpServerConfig } from "../utils/settings";
+import { TextArea } from "./components/text-area";
 import type { McpBrowserRow, McpEditorDraft, McpEditorField } from "./mcp-modal-types";
 import { scrollbarStyle, type Theme } from "./theme";
 
@@ -314,7 +315,7 @@ export function McpEditorModal({
           <box paddingBottom={1}>
             <text fg={focusedField === "label" ? t.primary : t.textMuted}>{"Label"}</text>
             <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-              <textarea
+              <TextArea
                 ref={labelRef}
                 focused={focusedField === "label"}
                 placeholder="GitHub MCP"
@@ -325,7 +326,7 @@ export function McpEditorModal({
                 maxHeight={2}
                 wrapMode="word"
                 keyBindings={EDITOR_KEYBINDINGS}
-                onSubmit={onSubmit as unknown as () => void}
+                onSubmit={onSubmit}
               />
             </box>
           </box>
@@ -335,7 +336,7 @@ export function McpEditorModal({
               <box paddingBottom={1}>
                 <text fg={focusedField === "url" ? t.primary : t.textMuted}>{"URL"}</text>
                 <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-                  <textarea
+                  <TextArea
                     ref={urlRef}
                     focused={focusedField === "url"}
                     placeholder="https://example.com/mcp"
@@ -346,7 +347,7 @@ export function McpEditorModal({
                     maxHeight={3}
                     wrapMode="word"
                     keyBindings={EDITOR_KEYBINDINGS}
-                    onSubmit={onSubmit as unknown as () => void}
+                    onSubmit={onSubmit}
                   />
                 </box>
               </box>
@@ -355,7 +356,7 @@ export function McpEditorModal({
                   {"Headers (one Header: value per line)"}
                 </text>
                 <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-                  <textarea
+                  <TextArea
                     ref={headersRef}
                     focused={focusedField === "headers"}
                     placeholder="Authorization: Bearer ..."
@@ -366,7 +367,7 @@ export function McpEditorModal({
                     maxHeight={6}
                     wrapMode="word"
                     keyBindings={EDITOR_KEYBINDINGS}
-                    onSubmit={onSubmit as unknown as () => void}
+                    onSubmit={onSubmit}
                   />
                 </box>
               </box>
@@ -376,7 +377,7 @@ export function McpEditorModal({
               <box paddingBottom={1}>
                 <text fg={focusedField === "command" ? t.primary : t.textMuted}>{"Command"}</text>
                 <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-                  <textarea
+                  <TextArea
                     ref={commandRef}
                     focused={focusedField === "command"}
                     placeholder="npx"
@@ -387,14 +388,14 @@ export function McpEditorModal({
                     maxHeight={2}
                     wrapMode="word"
                     keyBindings={EDITOR_KEYBINDINGS}
-                    onSubmit={onSubmit as unknown as () => void}
+                    onSubmit={onSubmit}
                   />
                 </box>
               </box>
               <box paddingBottom={1}>
                 <text fg={focusedField === "args" ? t.primary : t.textMuted}>{"Arguments (one per line)"}</text>
                 <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-                  <textarea
+                  <TextArea
                     ref={argsRef}
                     focused={focusedField === "args"}
                     placeholder={"-y\n@scope/server"}
@@ -405,14 +406,14 @@ export function McpEditorModal({
                     maxHeight={6}
                     wrapMode="word"
                     keyBindings={EDITOR_KEYBINDINGS}
-                    onSubmit={onSubmit as unknown as () => void}
+                    onSubmit={onSubmit}
                   />
                 </box>
               </box>
               <box paddingBottom={1}>
                 <text fg={focusedField === "cwd" ? t.primary : t.textMuted}>{"Working Directory (optional)"}</text>
                 <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-                  <textarea
+                  <TextArea
                     ref={cwdRef}
                     focused={focusedField === "cwd"}
                     placeholder="/path/to/project"
@@ -423,7 +424,7 @@ export function McpEditorModal({
                     maxHeight={2}
                     wrapMode="word"
                     keyBindings={EDITOR_KEYBINDINGS}
-                    onSubmit={onSubmit as unknown as () => void}
+                    onSubmit={onSubmit}
                   />
                 </box>
               </box>
@@ -433,7 +434,7 @@ export function McpEditorModal({
           <box paddingBottom={1}>
             <text fg={focusedField === "env" ? t.primary : t.textMuted}>{"Extra Env (one KEY=value per line)"}</text>
             <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1}>
-              <textarea
+              <TextArea
                 ref={envRef}
                 focused={focusedField === "env"}
                 placeholder="API_KEY=..."
@@ -444,7 +445,7 @@ export function McpEditorModal({
                 maxHeight={6}
                 wrapMode="word"
                 keyBindings={EDITOR_KEYBINDINGS}
-                onSubmit={onSubmit as unknown as () => void}
+                onSubmit={onSubmit}
               />
             </box>
           </box>

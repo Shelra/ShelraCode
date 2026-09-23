@@ -81,6 +81,7 @@ import {
 } from "./agents-modal";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
+import { TextArea } from "./components/text-area";
 import { DiffView } from "./diff-view";
 import { HelpModal } from "./help-modal";
 import { type TypeaheadState, useTypeahead } from "./hooks/useTypeahead.js";
@@ -5130,7 +5131,7 @@ function PromptBox({
         >
           <PromptModeLabel t={t} modeInfo={modeInfo} isProcessing={isProcessing} />
           <box flexGrow={1}>
-            <textarea
+            <TextArea
               ref={inputRef}
               focused={inputFocused}
               placeholder={isProcessing ? "Queue a follow-up..." : placeholder || "Ask Shelra..."}
@@ -5141,7 +5142,7 @@ function PromptBox({
               maxHeight={10}
               wrapMode="word"
               keyBindings={TEXTAREA_KEYBINDINGS}
-              onSubmit={onSubmit as unknown as () => void}
+              onSubmit={onSubmit}
               onPaste={onPaste as unknown as (event: PasteEvent) => void}
             />
           </box>
@@ -5350,7 +5351,7 @@ function ApiKeyModal({
         </box>
         <box paddingLeft={2} paddingRight={2} paddingTop={1}>
           <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1} width="100%">
-            <textarea
+            <TextArea
               ref={inputRef}
               focused={true}
               placeholder={cloudMode ? "sk-or-v1-..." : "provider key..."}
@@ -5361,7 +5362,7 @@ function ApiKeyModal({
               maxHeight={3}
               wrapMode="word"
               keyBindings={TEXTAREA_KEYBINDINGS}
-              onSubmit={onSubmit as unknown as () => void}
+              onSubmit={onSubmit}
             />
           </box>
         </box>
@@ -6255,7 +6256,7 @@ function TelegramTokenModal({
         </box>
         <box paddingLeft={2} paddingRight={2} paddingTop={1}>
           <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1} width="100%">
-            <textarea
+            <TextArea
               ref={inputRef}
               focused={true}
               placeholder="123456:ABC..."
@@ -6266,7 +6267,7 @@ function TelegramTokenModal({
               maxHeight={3}
               wrapMode="word"
               keyBindings={TEXTAREA_KEYBINDINGS}
-              onSubmit={onSubmit as unknown as () => void}
+              onSubmit={onSubmit}
             />
           </box>
         </box>
@@ -6338,7 +6339,7 @@ function TelegramPairModal({
         </box>
         <box paddingLeft={2} paddingRight={2} paddingTop={1}>
           <box backgroundColor={t.backgroundElement} paddingLeft={1} paddingRight={1} width="100%">
-            <textarea
+            <TextArea
               ref={inputRef}
               focused={true}
               placeholder="ABC123"
@@ -6349,7 +6350,7 @@ function TelegramPairModal({
               maxHeight={2}
               wrapMode="word"
               keyBindings={TEXTAREA_KEYBINDINGS}
-              onSubmit={onSubmit as unknown as () => void}
+              onSubmit={onSubmit}
             />
           </box>
         </box>
