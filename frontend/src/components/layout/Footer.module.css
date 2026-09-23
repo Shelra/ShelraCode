@@ -1,0 +1,212 @@
+.footer {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 560px;
+  padding: 48px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: visible;
+  background-color: var(--base);
+  order: 1005;
+  flex: none;
+}
+
+.inner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  width: 1px;
+  flex: 1 0 0px;
+  max-width: 1128px;
+  height: min-content;
+  position: relative;
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  align-self: stretch;
+  width: 1px;
+  flex: 1 0 0px;
+  max-width: 344px;
+  height: auto;
+  position: relative;
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  width: auto;
+  position: relative;
+  text-decoration: none;
+  flex: none;
+}
+
+.tagline {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.socials {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.createdBy {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.credit {
+  flex: none;
+  width: auto;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.author {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50px;
+  object-fit: cover;
+  flex: none;
+  position: relative;
+}
+
+.right {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 64px;
+  width: 1px;
+  flex: 1 0 0px;
+  max-width: 320px;
+  height: min-content;
+  position: relative;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 1px;
+  flex: 1 0 0px;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+}
+
+.column > p {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+/* Tablet */
+.tablet {
+  padding: 40px;
+}
+
+.tablet .inner {
+  padding: 0;
+}
+
+.tablet .right {
+  gap: 32px;
+}
+
+/* Phone */
+.phone {
+  flex-direction: column;
+  gap: 48px;
+  justify-content: flex-start;
+  padding: 24px;
+}
+
+.phone .inner {
+  align-items: flex-start;
+  flex: none;
+  flex-direction: column;
+  gap: 48px;
+  justify-content: flex-start;
+  padding: 0;
+  width: 100%;
+}
+
+.phone .left {
+  align-self: unset;
+  flex: none;
+  gap: 24px;
+  height: min-content;
+  justify-content: flex-start;
+  max-width: 250px;
+  order: 1;
+  width: 100%;
+}
+
+.phone .right {
+  flex: none;
+  order: 0;
+  width: 100%;
+}

@@ -1,0 +1,24 @@
+.noise {
+  /* Fixed to the viewport: the grain stays constant while scrolling instead of being
+     re-rasterised as one page-tall layer. The tile is random, so nothing visibly moves. */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.13;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+  order: -998;
+  flex: none;
+}
+
+.tile {
+  position: absolute;
+  inset: 0;
+  background-image: url("/images/6mcf62RlDfRfU61Yg5vb2pefpi4.png");
+  background-repeat: repeat;
+  background-size: 153.6px auto;
+  background-position: center top;
+}

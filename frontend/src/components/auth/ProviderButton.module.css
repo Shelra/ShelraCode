@@ -1,0 +1,75 @@
+.button {
+  --bw: 1px;
+  --bc: var(--border);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  position: relative;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.button::after {
+  transition: border-color 0.4s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.hover {
+  --bc: var(--accent-40);
+}
+
+.primary {
+  --bc: var(--accent);
+}
+
+.primary.hover {
+  --bc: var(--hover);
+}
+
+.icon {
+  flex: none;
+}
+
+.label {
+  flex: 1 0 0px;
+  width: 1px;
+  user-select: none;
+}
+
+/* The sliding arrow of the site's buttons: two arrows in a 12px window. */
+.arrow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 12px;
+  height: min-content;
+  overflow: clip;
+  position: relative;
+  flex: none;
+}
+
+.hover .arrow {
+  justify-content: flex-start;
+}
+
+.arrow > svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.hint {
+  flex: none;
+}

@@ -1,0 +1,122 @@
+/* Shared layout of the page sections. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  align-content: flex-start;
+  justify-content: center;
+  gap: 40px;
+  padding: 96px 24px;
+  width: 100%;
+  max-width: 1128px;
+  height: min-content;
+  position: relative;
+  overflow: visible;
+  border-radius: 40px;
+  scroll-margin-top: 40px;
+  flex: none;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.badge {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+.title {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+/* 3-column card grids (features, how it works) */
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(50px, 1fr));
+  grid-template-rows: repeat(1, min-content);
+  grid-auto-rows: min-content;
+  gap: 12px 40px;
+  justify-content: center;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.grid3 > * {
+  align-self: center;
+  justify-self: center;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+@media (min-width: 810px) and (max-width: 1199.98px) {
+  .section {
+    padding: 80px 24px;
+  }
+
+  .grid3 {
+    gap: 24px 12px;
+    grid-template-columns: repeat(2, minmax(50px, 1fr));
+  }
+}
+
+@media (max-width: 809.98px) {
+  .section {
+    padding: 80px 16px;
+  }
+
+  .grid3 {
+    grid-template-columns: repeat(1, minmax(50px, 1fr));
+  }
+}
+
+/* Per-section variations of the shared layout (declared last so they take precedence). */
+.testimonials {
+  border-radius: 20px;
+  padding: 96px 24px;
+  scroll-margin-top: 0;
+}
+
+.pricing {
+  padding: 128px 24px;
+  scroll-margin-top: 0;
+}
+
+.faq {
+  flex-direction: row;
+  border-radius: 20px;
+}
+
+@media (max-width: 809.98px) {
+  .testimonials {
+    padding: 96px 16px;
+  }
+
+  .pricing {
+    padding: 128px 16px;
+  }
+
+  .faq {
+    flex-direction: column;
+    padding: 80px 16px;
+  }
+}

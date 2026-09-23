@@ -1,0 +1,25 @@
+.badge {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 2px;
+  height: min-content;
+  width: min-content;
+  padding: 0;
+  position: relative;
+  border-radius: 100px;
+  overflow: visible;
+}
+
+.bracket,
+.text {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+  user-select: none;
+  color: var(--accent);
+}

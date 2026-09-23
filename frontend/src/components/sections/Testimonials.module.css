@@ -1,0 +1,113 @@
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: 640px;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.carousel {
+  flex: none;
+  width: 100%;
+  height: 400px;
+  position: relative;
+}
+
+.card {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  height: 400px;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--base);
+}
+
+.cardTop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 40px;
+  padding: 24px;
+  width: 100%;
+  height: 1px;
+  flex: 1 0 0px;
+  position: relative;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  width: auto;
+  position: relative;
+  flex: none;
+}
+
+.cardTop > p {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.cardBottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.texts {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  width: 1px;
+  flex: 1 0 0px;
+  height: min-content;
+  position: relative;
+}
+
+.name > p {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+@media (min-width: 810px) and (max-width: 1199.98px) {
+  .text {
+    max-width: 400px;
+  }
+}

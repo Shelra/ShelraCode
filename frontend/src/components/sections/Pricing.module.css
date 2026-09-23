@@ -1,0 +1,286 @@
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.plansWrap {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 32px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.plansWrapMobile {
+  gap: 24px;
+}
+
+.toggleRow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.toggleRow > p {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+.plans {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.plansTablet {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(50px, 1fr));
+  grid-template-rows: repeat(2, min-content);
+  grid-auto-rows: min-content;
+  justify-content: center;
+  align-items: unset;
+}
+
+.plansPhone {
+  flex-direction: column;
+  align-items: center;
+}
+
+.planCard {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 24px;
+  padding: 24px;
+  width: 1px;
+  flex: 1 0 0px;
+  height: auto;
+  position: relative;
+  overflow: visible;
+  z-index: 0;
+  background-color: var(--base);
+}
+
+.planCardOuter {
+  align-self: stretch;
+}
+
+.planCardPro {
+  gap: 0;
+  height: min-content;
+  overflow: hidden;
+}
+
+.plansTablet .planCard {
+  align-self: start;
+  justify-self: start;
+  flex: none;
+  width: 100%;
+  height: 100%;
+}
+
+.plansTablet .planCardPro,
+.plansTablet .planCardOuter:last-child {
+  height: auto;
+}
+
+.plansPhone .planCard {
+  align-self: unset;
+  flex: none;
+  width: 100%;
+  height: min-content;
+}
+
+.planInner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 24px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.headWrap {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.headWrap .head {
+  width: 1px;
+  flex: 1 0 0px;
+}
+
+.nameRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.nameRow > p {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+.priceRow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 4px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.priceRow > h2 {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+.period {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 0 2px 0;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.head > p {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.divider {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.line {
+  flex: 1 0 0px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--border);
+}
+
+.included {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.includedRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  position: relative;
+}
+
+@media (min-width: 810px) and (max-width: 1199.98px) {
+  .text {
+    max-width: 400px;
+  }
+}

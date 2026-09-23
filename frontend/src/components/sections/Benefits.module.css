@@ -1,0 +1,85 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(50px, 1fr));
+  grid-template-rows: repeat(2, min-content);
+  grid-auto-rows: min-content;
+  gap: 16px;
+  justify-content: center;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.grid > * {
+  align-self: center;
+  justify-self: center;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 64px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--base);
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 48px;
+  padding: 20px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 280px;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.text > p {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+@media (min-width: 810px) and (max-width: 1199.98px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(50px, 1fr));
+  }
+}
+
+@media (max-width: 809.98px) {
+  .grid {
+    grid-template-columns: repeat(1, minmax(50px, 1fr));
+  }
+}

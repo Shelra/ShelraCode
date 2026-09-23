@@ -1,0 +1,29 @@
+.button {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 8px;
+  width: min-content;
+  height: min-content;
+  padding: 8px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  will-change: transform;
+}
+
+.mobile {
+  cursor: unset;
+}
+
+.icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  position: relative;
+}

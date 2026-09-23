@@ -1,0 +1,60 @@
+.button {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 12px;
+  width: min-content;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  text-decoration: none;
+  border: 0;
+}
+
+.button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.small {
+  height: 32px;
+  padding: 8px;
+}
+
+.label {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+  user-select: none;
+}
+
+/* The arrow slides: two arrows sit in a 12px window, hover reveals the second one. */
+.icon {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 12px;
+  height: min-content;
+  overflow: clip;
+  position: relative;
+  flex: none;
+  padding: 0;
+}
+
+.hover .icon {
+  justify-content: flex-start;
+}
+
+.icon > svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}

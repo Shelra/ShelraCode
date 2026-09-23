@@ -1,0 +1,101 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 32px;
+  width: 100%;
+}
+
+.texts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+
+.heading {
+  width: 100%;
+  text-align: left;
+}
+
+.supporting {
+  width: 100%;
+  max-width: 380px;
+}
+
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.form {
+  width: 100%;
+  margin: 0;
+}
+
+.alert {
+  --bc: var(--error-16);
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  width: 100%;
+  position: relative;
+  background-color: var(--error-16);
+}
+
+.alertGlyph {
+  font-family: var(--font-jetbrains);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.3em;
+  color: var(--error);
+  flex: none;
+}
+
+/* "──── or ────" between the providers and the email form. */
+.divider {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.rule {
+  flex: 1 0 0px;
+  height: 1px;
+  background-color: var(--border);
+}
+
+.or {
+  flex: none;
+}
+
+.credentials {
+  width: 100%;
+}
+
+.legal {
+  width: 100%;
+  max-width: 380px;
+}
+
+.switch {
+  color: var(--subtle);
+}
+
+.switchLink {
+  color: var(--accent);
+  transition: color 0.3s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.switchLink:hover {
+  color: var(--hover);
+}

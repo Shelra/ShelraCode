@@ -1,0 +1,32 @@
+.badge {
+  --bc: var(--accent-16);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 8px;
+  height: min-content;
+  width: min-content;
+  padding: 6px 10px;
+  position: relative;
+  overflow: visible;
+  text-decoration: none;
+  background-color: var(--accent-16);
+}
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  position: relative;
+}
+
+.text {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+  color: var(--accent);
+}

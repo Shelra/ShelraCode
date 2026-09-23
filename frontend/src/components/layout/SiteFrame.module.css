@@ -1,0 +1,22 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: clip;
+  background-color: var(--base);
+}
+
+.spacer {
+  background: transparent;
+  flex-grow: 1;
+  height: 0;
+  width: 0;
+  margin: 0;
+  position: relative;
+}

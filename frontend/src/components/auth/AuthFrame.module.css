@@ -1,0 +1,117 @@
+.frame {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow: clip;
+  background-color: var(--base);
+}
+
+.top {
+  width: 100%;
+  padding: 16px 24px;
+  position: relative;
+  z-index: 3;
+  flex: none;
+}
+
+.topInner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  width: auto;
+  flex: none;
+}
+
+.topForm {
+  margin: 0;
+}
+
+.topButton {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--default);
+  transition: color 0.3s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.topButton:hover {
+  color: var(--subtle);
+}
+
+.main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 96px;
+  width: 100%;
+  max-width: 1128px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+  flex: 1 0 auto;
+  position: relative;
+}
+
+.panel {
+  width: 100%;
+  max-width: 420px;
+  flex: none;
+  position: relative;
+  z-index: 2;
+}
+
+.scene {
+  flex: 1 1 0px;
+  min-width: 0;
+  align-self: stretch;
+  min-height: 560px;
+  position: relative;
+}
+
+@media (max-width: 1199.98px) {
+  .main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 64px;
+    padding: 40px 24px 80px;
+  }
+
+  .panel {
+    max-width: 480px;
+  }
+
+  .scene {
+    width: 100%;
+    align-self: auto;
+    min-height: 440px;
+  }
+}
+
+@media (max-width: 809.98px) {
+  .top {
+    padding: 16px;
+  }
+
+  .main {
+    gap: 48px;
+    padding: 32px 16px 64px;
+  }
+
+  .scene {
+    min-height: 380px;
+  }
+}

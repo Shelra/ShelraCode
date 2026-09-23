@@ -1,0 +1,127 @@
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 1px;
+  flex: 1 0 0px;
+  max-width: 640px;
+  height: min-content;
+  position: relative;
+}
+
+.headingBlock {
+  justify-content: flex-start;
+}
+
+.layout {
+  flex: 1 0 0px;
+  width: 1px;
+  height: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+}
+
+.list > * {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.item {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  user-select: none;
+  flex: none;
+}
+
+.plus {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plus svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.body {
+  width: 100%;
+  position: relative;
+  flex: none;
+}
+
+.bodyInner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 16px 16px 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+}
+
+.answer {
+  flex: none;
+  width: 100%;
+  max-width: 80%;
+  height: auto;
+  position: relative;
+  user-select: none;
+}
+
+@media (min-width: 810px) and (max-width: 1199.98px) {
+  .layout {
+    flex: 2 0 0px;
+  }
+}
+
+@media (max-width: 809.98px) {
+  .text,
+  .layout {
+    flex: none;
+    width: 100%;
+  }
+}

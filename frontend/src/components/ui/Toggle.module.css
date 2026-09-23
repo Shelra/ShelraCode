@@ -1,0 +1,18 @@
+.toggle {
+  width: 40px;
+  height: 24px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  flex: none;
+}
+
+.knob {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}

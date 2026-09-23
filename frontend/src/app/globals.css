@@ -1,0 +1,279 @@
+@import "./fonts.css";
+
+/*
+ * Design tokens. The names follow the Framer colour styles of the project
+ * (Text & Icons, Branding, Background, Border) and the values are the ones
+ * the published site resolves them to.
+ */
+:root {
+  --subtle: #888888; /* Text & Icons / Subtle */
+  --accent: #00ff88; /* Branding / Accent */
+  --default: #f0f0f0; /* Text & Icons / Default */
+  --border: #1a1a1a; /* Border / Border */
+  --surface: #111111; /* Background / Surface */
+  --on-light: #080808; /* On Light / Default */
+  --base: #080808; /* Background / Base */
+  --white-8: rgba(255, 255, 255, 0.08); /* Background / Shades / White-8 */
+  --accent-0: rgba(0, 255, 136, 0); /* Branding / Alpha / Accent-0 */
+  --base-0: rgba(8, 10, 14, 0); /* Background / Shades / Base-0 */
+  --accent-16: rgba(0, 255, 136, 0.16); /* Branding / Alpha / Accent-16 */
+  --border-0: rgba(26, 26, 26, 0); /* Border / Border-0 */
+  --accent-40: rgba(0, 255, 136, 0.4);
+  --hover: #00cf6e; /* Branding / Hover */
+  /* Not in the Framer palette: the two status colours the auth pages and the dashboard need. */
+  --error: #ff5c5c;
+  --error-16: rgba(255, 92, 92, 0.16);
+  --warn: #ffb454;
+  --warn-16: rgba(255, 180, 84, 0.16);
+
+  --font-inter: "Inter", "Inter Placeholder", sans-serif;
+  --font-inter-display: "Inter Display", "Inter Display Placeholder", sans-serif;
+  --font-geist-mono: "Geist Mono", monospace;
+  --font-jetbrains: "JetBrains Mono", "JetBrains Mono Placeholder", sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure {
+  margin: 0;
+}
+
+body,
+input,
+textarea,
+select,
+button {
+  font-family: sans-serif;
+  font-size: 12px;
+}
+
+html.lenis {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  /* biome-ignore lint/complexity/noImportantStyles: stylesheet recommended by Lenis */
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+body {
+  background: var(--base);
+  color: var(--default);
+}
+
+::selection {
+  color: var(--on-light);
+  background-color: var(--accent);
+}
+
+a {
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+img,
+svg {
+  display: block;
+}
+
+/*
+ * Framer draws borders with an inner ::after overlay, so a border never
+ * changes the box size. `.fb` reproduces that: set --bw / --bc on the element.
+ */
+.fb {
+  --bw: 1px;
+  --bc: var(--border);
+}
+
+.fb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: var(--bw) solid var(--bc);
+  border-radius: inherit;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* Text presets (Framer text styles) */
+.t-h1 {
+  font-family: var(--font-geist-mono);
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 1.1em;
+  letter-spacing: -0.04em;
+  color: var(--default);
+  text-align: center;
+}
+
+.t-h2 {
+  font-family: var(--font-geist-mono);
+  font-weight: 400;
+  font-size: 36px;
+  line-height: 1.1em;
+  letter-spacing: -0.04em;
+  color: var(--default);
+  text-align: left;
+  text-wrap: balance;
+}
+
+.t-body {
+  font-family: var(--font-inter);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.3em;
+  letter-spacing: 0;
+  color: var(--subtle);
+  font-feature-settings:
+    "blwf" on,
+    "cv09" on,
+    "cv03" on,
+    "cv04" on,
+    "cv11" on;
+}
+
+.t-body-strong {
+  font-family: var(--font-inter);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.2em;
+  letter-spacing: 0;
+  color: var(--default);
+}
+
+.t-small-strong {
+  font-family: var(--font-inter);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.3em;
+  letter-spacing: 0;
+  color: var(--default);
+}
+
+.t-small {
+  font-family: var(--font-inter-display);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.2em;
+  letter-spacing: 0;
+  color: var(--subtle);
+}
+
+.t-large {
+  font-family: var(--font-inter-display);
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 1.2em;
+  letter-spacing: 0;
+  color: var(--default);
+}
+
+.t-body-mono {
+  font-family: var(--font-jetbrains);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.2em;
+  letter-spacing: -0.04em;
+  color: var(--default);
+}
+
+.t-small-mono {
+  font-family: var(--font-jetbrains);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.3em;
+  letter-spacing: 0;
+  color: var(--subtle);
+}
+
+@media (max-width: 1199px) and (min-width: 810px) {
+  .t-h1 {
+    line-height: 1.2em;
+  }
+
+  .t-h2 {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 809px) {
+  .t-h1 {
+    line-height: 48px;
+  }
+
+  .t-h2 {
+    font-size: 32px;
+    line-height: 1.2em;
+  }
+}
+
+/* Single-line text never wraps in Framer (auto width text layers). */
+.pre {
+  white-space: pre;
+}
+
+.wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.balance {
+  text-wrap: balance;
+}
+
+.muted {
+  color: var(--subtle);
+}
+
+/* Link presets */
+.link-nav {
+  color: var(--default);
+  text-decoration: none;
+  transition: color 0.3s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.link-nav:hover {
+  color: var(--subtle);
+}
+
+.link-footer {
+  color: var(--subtle);
+  text-decoration: none;
+  transition: color 0.4s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.link-footer:hover {
+  color: var(--default);
+}

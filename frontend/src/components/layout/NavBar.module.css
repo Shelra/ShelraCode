@@ -1,0 +1,253 @@
+.fixed {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: auto;
+  z-index: 5;
+  order: -999;
+  flex: none;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 16px 24px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: visible;
+  background-color: var(--base-0);
+}
+
+.navMobile {
+  padding: 16px;
+}
+
+.inner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 1080px;
+  height: min-content;
+  position: relative;
+  z-index: 3;
+  flex: none;
+}
+
+.navMobile .inner {
+  gap: unset;
+  justify-content: space-between;
+}
+
+.links {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 32px;
+  width: 1px;
+  flex: 1 0 0px;
+  height: min-content;
+  position: relative;
+}
+
+.navMobile .links {
+  flex: none;
+  width: auto;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  width: auto;
+  position: relative;
+  flex: none;
+  text-decoration: none;
+}
+
+.menu {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.menu > p {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+.actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 1px;
+  flex: 1 0 0px;
+  height: min-content;
+  position: relative;
+}
+
+/* Account entry (desktop) */
+.authIn {
+  animation: authIn 0.4s cubic-bezier(0.12, 0.23, 0.17, 0.99);
+}
+
+@keyframes authIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.avatar {
+  --bc: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+  border-radius: 50%;
+  overflow: clip;
+  position: relative;
+  background-color: var(--accent-16);
+  flex: none;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.initials {
+  font-family: var(--font-jetbrains);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.hamburger {
+  background: none;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  cursor: pointer;
+  flex: none;
+}
+
+/* Mobile overlay */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  user-select: none;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  will-change: transform;
+  flex: none;
+}
+
+.mobileMenu {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: clip;
+  background-color: var(--surface);
+}
+
+.mobileLinks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.mobileRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 4px 0;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: clip;
+  flex: none;
+}
+
+.mobileLink {
+  cursor: pointer;
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+.close {
+  background: none;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  width: min-content;
+  height: min-content;
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: pointer;
+  z-index: 1;
+  flex: none;
+}

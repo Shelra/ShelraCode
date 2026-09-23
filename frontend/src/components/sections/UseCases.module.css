@@ -1,0 +1,281 @@
+.wrap {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.useCases {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px 24px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.top {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+/* Tab */
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  cursor: pointer;
+  flex: none;
+}
+
+.tabOutline {
+  --bc: var(--border);
+}
+
+.tabInner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px 12px 20px;
+  width: min-content;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.underline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+}
+
+.tabInnerMobile {
+  gap: 6px;
+  padding: 8px 12px 8px 8px;
+}
+
+.topMobile {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tabIcon {
+  flex: none;
+  position: relative;
+}
+
+.tabTitle {
+  flex: none;
+  width: auto;
+  height: auto;
+  position: relative;
+}
+
+/* Use case item */
+.item {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(50px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 16px 40px;
+  justify-content: center;
+  width: 100%;
+  height: min-content;
+  position: relative;
+}
+
+.itemMobile {
+  grid-template-columns: repeat(1, minmax(50px, 1fr));
+}
+
+.left {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  align-self: start;
+  justify-self: start;
+  flex: none;
+}
+
+.leftCard {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 40px;
+  padding: 48px;
+  width: 1px;
+  flex: 1 0 0px;
+  height: min-content;
+  position: relative;
+  z-index: 1;
+  background-color: var(--base);
+}
+
+.itemMobile .leftCard {
+  padding: 32px;
+}
+
+.leftTexts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.leftTexts > p {
+  flex: none;
+  width: 100%;
+  height: auto;
+  position: relative;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  flex: none;
+}
+
+.check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  height: min-content;
+  position: relative;
+  overflow: clip;
+  flex: none;
+}
+
+.checkIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  aspect-ratio: 1 / 1;
+  position: relative;
+}
+
+.leftBack {
+  position: absolute;
+  right: -16px;
+  bottom: -16px;
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+  z-index: 0;
+  background-color: var(--base);
+  flex: none;
+}
+
+.right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--base);
+  align-self: start;
+  justify-self: start;
+  flex: none;
+}
+
+.itemMobile .right {
+  height: min-content;
+}
+
+.image {
+  --bc: var(--border);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 124%;
+  height: auto;
+  overflow: visible;
+  z-index: 0;
+  border-radius: 2px;
+  flex: none;
+}
+
+.itemMobile .image {
+  position: relative;
+  top: unset;
+  left: unset;
+  width: 100%;
+}
+
+.image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: inherit;
+}

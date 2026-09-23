@@ -1,0 +1,507 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.between {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cellTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 320px;
+}
+
+/* Titles stay on one line inside tables; the row opens the full mission. */
+.cellTitle > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.legendItem {
+  color: var(--subtle);
+}
+
+/* Overview prompt */
+.prompt {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  position: relative;
+  background-color: var(--surface);
+}
+
+.promptLabel {
+  color: var(--accent);
+}
+
+.promptInput {
+  background-color: var(--base);
+  min-height: 72px;
+}
+
+.promptRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.promptRepo {
+  width: 220px;
+  max-width: 100%;
+}
+
+.promptHint {
+  flex: 1;
+  color: var(--subtle);
+}
+
+/* Live list */
+.liveList,
+.reviewList,
+.agentList {
+  display: flex;
+  flex-direction: column;
+}
+
+.liveRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  color: var(--default);
+  box-shadow: inset 0 -1px 0 var(--border);
+  transition: background-color 0.2s ease;
+}
+
+.liveRow:hover {
+  background-color: var(--surface);
+}
+
+.liveTop,
+.liveBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.liveTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.liveStep {
+  color: var(--accent);
+  flex: none;
+}
+
+.liveLog {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.reviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.reviewText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--default);
+}
+
+.agentRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: var(--default);
+  box-shadow: inset 0 -1px 0 var(--border);
+  transition: background-color 0.2s ease;
+}
+
+.agentRow:hover {
+  background-color: var(--surface);
+}
+
+/* Mission detail */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepIcon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.stepDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--border);
+}
+
+.stepActive .stepDot {
+  background-color: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.stepFailed .stepDot {
+  background-color: var(--error);
+}
+
+.stepTitle {
+  color: var(--subtle);
+}
+
+.stepDone .stepTitle,
+.stepActive .stepTitle {
+  color: var(--default);
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+}
+
+.file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.filePath {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.diff {
+  display: flex;
+  gap: 8px;
+}
+
+.add {
+  color: var(--accent);
+}
+
+.del {
+  color: var(--error);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.promptText {
+  white-space: pre-wrap;
+  color: var(--subtle);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Cards (agents, integrations, plans) */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  position: relative;
+  background-color: var(--base);
+  color: var(--default);
+}
+
+.cardSelected {
+  --bc: var(--accent);
+  background-color: var(--accent-16);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cardStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.cardStat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardStatLabel {
+  color: var(--subtle);
+  text-transform: uppercase;
+}
+
+.cardStatValue {
+  font-family: var(--font-geist-mono);
+  font-weight: 500;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+  color: var(--default);
+}
+
+.cardFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mark {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-family: var(--font-geist-mono);
+  font-weight: 500;
+  font-size: 16px;
+  color: var(--default);
+  flex: none;
+}
+
+.markOn {
+  background-color: var(--accent-16);
+  color: var(--accent);
+}
+
+/* Secret reveal */
+.secret {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background-color: var(--base);
+  box-shadow: inset 0 0 0 1px var(--accent-40);
+  word-break: break-all;
+}
+
+.secretText {
+  flex: 1;
+  min-width: 0;
+  color: var(--accent);
+}
+
+.code {
+  padding: 14px 16px;
+  background-color: var(--base);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--default);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Activity */
+.day {
+  display: flex;
+  flex-direction: column;
+}
+
+.dayLabel {
+  padding: 14px 20px 8px;
+  color: var(--accent);
+}
+
+.activityRow {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.activityText {
+  min-width: 0;
+}
+
+.activityLink {
+  color: var(--default);
+  transition: color 0.3s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.activityLink:hover {
+  color: var(--accent);
+}
+
+/* Forms */
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.radio {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  position: relative;
+  cursor: pointer;
+  background-color: var(--surface);
+}
+
+.radioOn {
+  --bc: var(--accent);
+  background-color: var(--accent-16);
+}
+
+.radio input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.shareBar {
+  flex: 1;
+  height: 4px;
+  background-color: var(--border);
+  position: relative;
+}
+
+.shareFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background-color: var(--accent);
+}
+
+.ringRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.dangerZone {
+  --bc: var(--error-16);
+}
+
+@media (max-width: 899.98px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .activityRow {
+    grid-template-columns: 1fr auto;
+  }
+
+  .activityKind {
+    display: none;
+  }
+}
