@@ -207,6 +207,8 @@ export interface ToolResult {
   computer?: ComputerToolMetadata;
   verifyRecipe?: VerifyRecipe;
   lspDiagnostics?: LspDiagnosticFile[];
+  /** A shell command the destructive-command guard did not run: the user said no, or nobody could be asked. */
+  refused?: "declined" | "blocked";
 }
 
 export interface ToolCall {

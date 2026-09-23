@@ -574,6 +574,19 @@ export function describeToolResult(
       };
     }
     case "bash": {
+      if (result.refused) {
+        return {
+          ...base,
+          group: "command",
+          tone: "warning",
+          verb: result.refused === "declined" ? "Did not run" : "Blocked",
+          object: truncateText(command, MAX_OBJECT),
+          meta: [result.refused === "declined" ? "you declined" : "needs your approval", duration]
+            .filter(Boolean)
+            .join(" · "),
+          lines: [],
+        };
+      }
       if (result.backgroundProcess) {
         return {
           ...base,

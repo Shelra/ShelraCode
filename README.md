@@ -385,6 +385,15 @@ Store an OpenRouter key with `shelra auth openrouter <key>` or use
 `OPENROUTER_API_KEY`; keys are kept in `~/.shelra/auth.json`, never in this
 JSON file or in source control.
 
+Destructive shell commands (a force-push, `git reset --hard`, `git clean -f`, a recursive delete outside
+the project, formatting a disk, shutting down, editing the registry) wait for your answer in the TUI.
+Where nobody can answer (a headless `-p` run, a benchmark, the Telegram bridge) they are refused. Set
+`shell.destructive` to `"ask"` (the default), `"block"` (refuse without asking) or `"allow"`:
+
+```json
+{ "shell": { "destructive": "ask" } }
+```
+
 Optional `**subAgents**` — custom foreground sub-agents. Each entry needs `**name**`, `**model**`, and `**instruction**`:
 
 ```json

@@ -1,9 +1,20 @@
+import { execFileSync } from "child_process";
 import { mkdtemp, rm, writeFile as writeFsFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { BashTool } from "../tools/bash";
 import { createTools, hardenToolSet } from "./tools";
+
+/**
+ * A temporary folder holding its own empty repository: git looks for `.git` in parent folders, so a
+ * destructive git command that slipped through could otherwise act on a repository around the temp folder.
+ */
+async function scratchRepo(prefix: string): Promise<string> {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), prefix));
+  execFileSync("git", ["init", "-q"], { cwd });
+  return cwd;
+}
 
 function createScheduleToolSet(overrides?: {
   getDaemonStatus?: () => Promise<{ running: boolean; pid: number | null }>;
@@ -352,6 +363,94 @@ describe("schedule daemon tools", () => {
       undefined,
     );
     expect(result).toEqual({ success: true, output: "manifest written" });
+  });
+
+  it("refuses a destructive command where nobody can be asked (audit 2026-09-23)", async () => {
+    const cwd = await scratchRepo("shelra-destructive-");
+    const tools = createTools(new BashTool(cwd), {} as never, "agent", {
+      destructiveCommandPolicy: "ask",
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const result = (await tools.bash.execute({ command: "git push --force origin main" }, {})) as {
+      success: boolean;
+      output: string;
+    };
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("Blocked: this command force-pushes");
+    expect(result).toMatchObject({ refused: "blocked" });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("asks the user before a destructive command and honors the answer", async () => {
+    const cwd = await scratchRepo("shelra-destructive-ask-");
+    const confirm = vi.fn(async () => false);
+    const tools = createTools(new BashTool(cwd), {} as never, "agent", {
+      destructiveCommandPolicy: "ask",
+      confirmDestructiveCommand: confirm,
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const turn = new AbortController();
+    const declined = (await tools.bash.execute({ command: "git reset --hard" }, { abortSignal: turn.signal })) as {
+      output: string;
+    };
+    expect(confirm).toHaveBeenCalledWith(
+      "git reset --hard",
+      expect.stringContaining("uncommitted changes"),
+      turn.signal,
+    );
+    expect(declined.output).toContain("The user declined");
+    expect(declined).toMatchObject({ refused: "declined" });
+
+    confirm.mockResolvedValueOnce(true);
+    const approved = (await tools.bash.execute({ command: "git reset --hard" }, {})) as { output: string };
+    // It ran: git itself answered (the scratch repository has no commit yet), not the guard.
+    expect(approved.output).not.toContain("declined");
+    expect(approved.output).not.toContain("Blocked");
+    expect(approved).not.toHaveProperty("refused");
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("stops waiting for the answer when the turn is cancelled", async () => {
+    const cwd = await scratchRepo("shelra-destructive-abort-");
+    const tools = createTools(new BashTool(cwd), {} as never, "agent", {
+      destructiveCommandPolicy: "ask",
+      confirmDestructiveCommand: () => new Promise<boolean>(() => {}),
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const turn = new AbortController();
+    const pending = tools.bash.execute({ command: "git clean -fdx" }, { abortSignal: turn.signal });
+    turn.abort();
+    await expect(pending).resolves.toMatchObject({ success: false, refused: "declined" });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("refuses destructive commands without asking when the settings block them", async () => {
+    const cwd = await scratchRepo("shelra-destructive-block-");
+    const confirm = vi.fn(async () => true);
+    const tools = createTools(new BashTool(cwd), {} as never, "agent", {
+      destructiveCommandPolicy: "block",
+      confirmDestructiveCommand: confirm,
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const result = await tools.bash.execute({ command: "git clean -fdx" }, {});
+    expect(confirm).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false, refused: "blocked" });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("runs destructive commands without asking when the settings allow them", async () => {
+    const cwd = await scratchRepo("shelra-destructive-allow-");
+    const confirm = vi.fn(async () => false);
+    const tools = createTools(new BashTool(cwd), {} as never, "agent", {
+      destructiveCommandPolicy: "allow",
+      confirmDestructiveCommand: confirm,
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const result = (await tools.bash.execute({ command: "git stash drop" }, {})) as { output: string };
+    expect(confirm).not.toHaveBeenCalled();
+    expect(result.output).not.toContain("Blocked");
+    await rm(cwd, { recursive: true, force: true });
   });
 
   it("does not offer the verify sub-agents where their sandbox cannot run (audit 2026-09-23)", () => {

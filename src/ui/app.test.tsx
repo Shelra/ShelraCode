@@ -3,7 +3,7 @@ import { testRender } from "@opentui/react/test-utils";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import type { ChatEntry } from "../types/index";
-import { MessageView, MotionPickerModal } from "./app";
+import { CommandApprovalPanel, ComposerFooter, MessageView, MotionPickerModal } from "./app";
 import { dark } from "./theme";
 
 async function render(node: ReactNode, width = 60, height = 8) {
@@ -46,5 +46,50 @@ describe("MotionPickerModal", () => {
     expect(row?.bg.equals(RGBA.fromHex(dark.brandSoft))).toBe(true);
     expect(frame).toContain("left/right change");
     expect(frame).not.toContain("up/down");
+  });
+});
+
+describe("CommandApprovalPanel", () => {
+  it("shows the command and why it is destructive, with Don't run chosen", async () => {
+    const { frame, spans } = await render(
+      <CommandApprovalPanel
+        t={dark}
+        approval={{ command: "git reset --hard HEAD", reason: "discards all uncommitted changes", selected: 1 }}
+      />,
+      76,
+      10,
+    );
+    expect(frame).toContain("[ COMMAND ]");
+    expect(frame).toContain("git reset --hard HEAD");
+    expect(frame).toContain("This command discards all uncommitted changes.");
+    expect(frame).toContain("> Don't run");
+    expect(frame).not.toContain("> Run it");
+    expect(find(spans, "This command")?.fg.equals(RGBA.fromHex(dark.warning))).toBe(true);
+    // Nine rows: it fits the log of an 80x24 terminal with its border whole.
+    expect(frame.split(String.fromCharCode(10)).filter((line) => line.trim()).length).toBe(9);
+  });
+});
+
+describe("ComposerFooter", () => {
+  it("offers the keys that answer a command waiting for approval, not stop and queue", async () => {
+    const { frame } = await render(
+      <ComposerFooter
+        t={dark}
+        width={80}
+        model="Qwen3 Coder"
+        isProcessing
+        showSuggestions={false}
+        queuedCount={0}
+        hasViews={false}
+        viewOpen={false}
+        approvalOpen
+      />,
+      80,
+      1,
+    );
+    expect(frame).toContain("enter confirm");
+    expect(frame).toContain("esc don't run");
+    expect(frame).not.toContain("esc stop");
+    expect(frame).not.toContain("enter queue");
   });
 });

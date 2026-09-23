@@ -28,6 +28,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { group: "While Shelra works", keys: "esc", label: "Stop the current run" },
   { group: "While Shelra works", keys: "ctrl+c", label: "Stop the current run" },
   { group: "While Shelra works", keys: "enter", label: "Queue a follow-up" },
+  { group: "While Shelra works", keys: "esc", label: "Don't run a command that asks for approval" },
   { group: "Review", keys: "alt+1…5", label: "Switch view: Log, Plan, Changes, Checks, Context" },
   { group: "Review", keys: "esc", label: "Back to the log from another view" },
   { group: "Review", keys: "ctrl+o", label: "Show or hide step details" },
@@ -51,6 +52,13 @@ export const WORKING_HINTS: readonly Hint[] = [
   { key: "esc", label: "stop" },
   { key: "enter", label: "queue" },
   { key: "ctrl+o", label: "details" },
+];
+
+/** While a command asks for approval, enter and esc answer it instead of queueing or stopping. */
+export const APPROVAL_HINTS: readonly Hint[] = [
+  { key: "enter", label: "confirm" },
+  { key: "esc", label: "don't run" },
+  { key: "up/down", label: "choose" },
 ];
 
 export const SUGGESTION_HINTS: readonly Hint[] = [

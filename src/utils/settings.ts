@@ -205,6 +205,18 @@ export interface UserSettings {
   modeModels?: Partial<Record<AgentMode, string>>;
   /** Explicit terminal equivalent of reduced motion. */
   motion?: "full" | "reduced";
+  shell?: ShellSettings;
+}
+
+/**
+ * What happens to a destructive shell command (force-push, reset --hard, deleting outside the project,
+ * formatting a disk, shutting down, changing the registry): "ask" (the default) asks in the terminal
+ * UI and refuses where nobody can be asked; "block" always refuses; "allow" runs it.
+ */
+export type DestructiveCommandPolicy = "ask" | "block" | "allow";
+
+export interface ShellSettings {
+  destructive?: DestructiveCommandPolicy;
 }
 
 export interface ProjectSettings {
@@ -730,6 +742,11 @@ export function loadMcpServers(): McpServerConfig[] {
 
 export function saveMcpServers(servers: McpServerConfig[]): void {
   saveUserSettings({ mcp: { servers } });
+}
+
+export function loadDestructiveCommandPolicy(): DestructiveCommandPolicy {
+  const value = loadUserSettings().shell?.destructive;
+  return value === "block" || value === "allow" ? value : "ask";
 }
 
 export function loadToolGroupSettings(): ToolGroupSettings {

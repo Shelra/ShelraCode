@@ -375,6 +375,17 @@ const PAYMENT: DemoTurn[] = [
   ],
 ];
 
+/** A destructive shell command waits for the user's answer in the command panel. */
+const DESTRUCTIVE: DemoTurn[] = [
+  [
+    [
+      { say: "The working tree has half-applied edits, so I'll discard them and start again from the last commit." },
+      { call: "bash", input: { command: "git reset --hard HEAD" }, ms: 300 },
+    ],
+    [{ say: "I left the working tree as it was and will fix the edits in place instead." }],
+  ],
+];
+
 export const SCENARIOS: Record<string, DemoTurn[]> = {
   "fix-auth": [FIX_AUTH_TURN_1, FIX_AUTH_TURN_2],
   errors: ERRORS,
@@ -383,4 +394,5 @@ export const SCENARIOS: Record<string, DemoTurn[]> = {
   "plan-questions": PLAN_QUESTIONS,
   subagent: SUBAGENT,
   payment: PAYMENT,
+  destructive: DESTRUCTIVE,
 };

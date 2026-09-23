@@ -133,7 +133,15 @@ import {
   MissionPanel,
   SessionInspector,
 } from "./session-inspector";
-import { fitHints, type Hint, IDLE_HINTS, SUGGESTION_HINTS, WORKING_HINTS, withViewHints } from "./shortcuts";
+import {
+  APPROVAL_HINTS,
+  fitHints,
+  type Hint,
+  IDLE_HINTS,
+  SUGGESTION_HINTS,
+  WORKING_HINTS,
+  withViewHints,
+} from "./shortcuts";
 import { filterSlashMenuItems, SLASH_MENU_ITEMS, type SlashMenuItem } from "./slash-menu";
 import {
   buildAssistantEntry,
@@ -659,6 +667,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     approvalId?: string;
     selected: number;
   } | null>(null);
+  const [pendingCommandApproval, setPendingCommandApproval] = useState<CommandApproval | null>(null);
+  const commandApprovalRef = useRef<PendingCommandAnswer | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
   const [sessionTitle, setSessionTitle] = useState<string | null>(() => agent.getSessionTitle());
   const [sessionId, setSessionId] = useState<string | null>(() => agent.getSessionId());
@@ -2424,6 +2434,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         key?.stopPropagation();
         return true;
       }
+      const approval = commandApprovalRef.current;
+      if (approval) {
+        // Esc answers "Don't run" and the turn goes on. A question shown a moment ago was queued behind
+        // the one this key answered, so the same keystroke does not answer it too.
+        if (!approval.settled && Date.now() - approval.shownAt > 150) approval.answer(false);
+        key?.preventDefault();
+        key?.stopPropagation();
+        return true;
+      }
       if (!isProcessingRef.current) return false;
       key?.preventDefault();
       key?.stopPropagation();
@@ -2684,6 +2703,38 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   useEffect(() => {
     processMessageRef.current = processMessage;
   }, [processMessage]);
+  useEffect(() => {
+    agent.setDestructiveCommandConfirm(
+      (command, reason, signal) =>
+        new Promise<boolean>((resolve) => {
+          const entry: PendingCommandAnswer = {
+            shownAt: Date.now(),
+            settled: false,
+            answer: (approved) => {
+              if (entry.settled) return;
+              entry.settled = true;
+              signal?.removeEventListener("abort", onAbort);
+              setPendingCommandApproval(null);
+              resolve(approved);
+            },
+          };
+          const onAbort = () => entry.answer(false);
+          signal?.addEventListener("abort", onAbort, { once: true });
+          commandApprovalRef.current = entry;
+          // "Don't run" starts selected, so a stray enter never runs a destructive command.
+          setPendingCommandApproval({ command, reason, selected: 1 });
+        }),
+    );
+    return () => {
+      agent.setDestructiveCommandConfirm(null);
+      commandApprovalRef.current?.answer(false);
+    };
+  }, [agent]);
+  useEffect(() => {
+    // Forgotten after the panel closes, not when answered: one Esc reaches `interruptActiveRun` from
+    // several input layers, and the later ones must not cancel the turn the answer let go on.
+    if (!pendingCommandApproval && commandApprovalRef.current?.settled) commandApprovalRef.current = null;
+  }, [pendingCommandApproval]);
   useEffect(
     () =>
       agent.onSubagentStatus((status) => {
@@ -3030,6 +3081,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     showEffortPicker ||
     showWalletPicker ||
     !!pendingPaymentApproval ||
+    !!pendingCommandApproval ||
     showScheduleModal ||
     showAgentsModal ||
     showAgentsEditor ||
@@ -3141,6 +3193,22 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           const current = inspectorTabs.indexOf(inspectorTab);
           const direction = key.name === "left" || key.shift ? -1 : 1;
           setInspectorTab(inspectorTabs[(current + direction + inspectorTabs.length) % inspectorTabs.length]);
+          return;
+        }
+        return;
+      }
+      if (pendingCommandApproval) {
+        const approval = commandApprovalRef.current;
+        if (isEscapeKey(key)) {
+          approval?.answer(false);
+          return;
+        }
+        if (key.name === "up" || key.name === "down") {
+          setPendingCommandApproval((p) => (p ? { ...p, selected: p.selected === 0 ? 1 : 0 } : p));
+          return;
+        }
+        if (key.name === "return") {
+          approval?.answer(pendingCommandApproval.selected === 0);
           return;
         }
         return;
@@ -4114,6 +4182,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       showSandboxPicker,
       showMotionPicker,
       pendingPaymentApproval,
+      pendingCommandApproval,
       processMessage,
       showWalletPicker,
       walletSettings,
@@ -4295,12 +4364,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   // The single answer to "what is Shelra doing right now?": built only from real events, in
   // priority order (a running tool beats a stage; a stage beats waiting on the model).
   const livePhrase = useMemo<ActivityPhrase>(() => {
+    if (pendingCommandApproval) return { verb: "Waiting for your answer on", object: pendingCommandApproval.command };
     if (activePresentationTool) return describeToolCall(activePresentationTool);
     if (liveStatus && livePhase.kind === "waiting") return describeStatusStage(liveStatus.stage, liveStatus.detail);
     if (livePhase.kind === "thinking") return { verb: "Thinking", object: "" };
     if (livePhase.kind === "writing") return { verb: "Writing response", object: "" };
     return { verb: "Waiting for", object: model };
-  }, [activePresentationTool, liveStatus, livePhase.kind, model]);
+  }, [pendingCommandApproval, activePresentationTool, liveStatus, livePhase.kind, model]);
   const liveElapsedMs = useMemo(() => {
     if (activePresentationTool) {
       const startedAt = toolStartedAtRef.current.get(activePresentationTool.id);
@@ -4494,6 +4564,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 {/* Plan questions panel, inline */}
                 {showPlanPanel && <PlanQuestionsPanel t={t} questions={planQuestions} state={pqs} />}
                 {pendingPaymentApproval && <PaymentApprovalPanel t={t} payment={pendingPaymentApproval} />}
+                {pendingCommandApproval && <CommandApprovalPanel t={t} approval={pendingCommandApproval} />}
               </scrollbox>
               {missionTab !== "log" ? (
                 <MissionPanel
@@ -4561,6 +4632,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   viewOpen={missionTab !== "log"}
                   width={chatWidth - 4}
                   notice={notice}
+                  approvalOpen={!!pendingCommandApproval}
                 />
                 <ActiveAgentsStrip
                   t={t}
@@ -4971,6 +5043,7 @@ function PromptBox({
   viewOpen,
   width,
   notice,
+  approvalOpen,
 }: {
   t: Theme;
   inputRef: React.RefObject<TextareaRenderable | null>;
@@ -5000,6 +5073,8 @@ function PromptBox({
   /** Outer width in cells; decides how many hints fit. */
   width?: number;
   notice?: string | null;
+  /** A command waits for approval above the composer, so enter and esc answer it. */
+  approvalOpen?: boolean;
 }) {
   const hasQueue = (queuedMessages?.length ?? 0) > 0;
   const showSuggestions = typeahead?.visible ?? false;
@@ -5093,6 +5168,7 @@ function PromptBox({
         hasViews={hasViews ?? false}
         viewOpen={viewOpen ?? false}
         notice={notice}
+        approvalOpen={approvalOpen ?? false}
       />
     </box>
   );
@@ -5116,7 +5192,7 @@ function HintText({ t, hints }: { t: Theme; hints: readonly Hint[] }) {
  * Model and context on the left, the keys that matter right now on the right. Hints are chosen
  * by width (never clipped) and by state: working, picking a suggestion, or idle.
  */
-function ComposerFooter({
+export function ComposerFooter({
   t,
   width,
   model,
@@ -5127,6 +5203,7 @@ function ComposerFooter({
   hasViews,
   viewOpen,
   notice,
+  approvalOpen,
 }: {
   t: Theme;
   width: number;
@@ -5138,15 +5215,26 @@ function ComposerFooter({
   hasViews: boolean;
   viewOpen: boolean;
   notice?: string | null;
+  approvalOpen: boolean;
 }) {
   const inner = Math.max(20, width - 6);
   const modelLabel = model.length > 26 ? `${model.slice(0, 25)}…` : model;
   const meter = contextStats ? contextMeterText(contextStats, inner >= 64) : "";
   const leftWidth = modelLabel.length + (meter ? meter.length + 2 : 0);
   const room = Math.max(0, inner - leftWidth - 3);
-  const base = isProcessing ? WORKING_HINTS : showSuggestions ? SUGGESTION_HINTS : IDLE_HINTS;
-  const current = isProcessing && queuedCount > 0 ? [{ key: "esc", label: "clear queue" }, ...base.slice(1)] : base;
-  const hints = fitHints(showSuggestions ? current : withViewHints(current, { hasViews, viewOpen }), room);
+  const base = approvalOpen
+    ? APPROVAL_HINTS
+    : isProcessing
+      ? WORKING_HINTS
+      : showSuggestions
+        ? SUGGESTION_HINTS
+        : IDLE_HINTS;
+  const current =
+    !approvalOpen && isProcessing && queuedCount > 0 ? [{ key: "esc", label: "clear queue" }, ...base.slice(1)] : base;
+  const hints = fitHints(
+    showSuggestions || approvalOpen ? current : withViewHints(current, { hasViews, viewOpen }),
+    room,
+  );
 
   return (
     <box
@@ -6744,6 +6832,55 @@ function EffortPickerModal({
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
           <text fg={t.textMuted}>{"left/right toggle  enter cycle  esc close"}</text>
         </box>
+      </box>
+    </box>
+  );
+}
+
+/** A destructive shell command waiting for the user's answer (the agent's `setDestructiveCommandConfirm`). */
+interface CommandApproval {
+  command: string;
+  reason: string;
+  selected: number;
+}
+
+interface PendingCommandAnswer {
+  shownAt: number;
+  settled: boolean;
+  answer: (approved: boolean) => void;
+}
+
+export function CommandApprovalPanel({ t, approval }: { t: Theme; approval: CommandApproval }) {
+  const options = ["Run it", "Don't run"];
+  return (
+    <box
+      flexDirection="column"
+      border={["top", "left", "right", "bottom"]}
+      borderStyle="single"
+      borderColor={t.warning}
+      marginTop={1}
+      paddingLeft={2}
+      paddingRight={2}
+    >
+      <SectionBadge t={t} label="Command" detail="needs your approval" />
+      <box marginTop={1} flexDirection="column">
+        <text>
+          <span style={{ fg: t.text }}>{approval.command}</span>
+        </text>
+        <text>
+          <span style={{ fg: t.warning }}>{`This command ${approval.reason}.`}</span>
+        </text>
+      </box>
+      <box marginTop={1} flexDirection="column">
+        {options.map((label, i) => {
+          const isSel = i === approval.selected;
+          return (
+            <text key={label}>
+              <span style={{ fg: isSel ? t.success : t.textMuted }}>{isSel ? "> " : "  "}</span>
+              <span style={{ fg: isSel ? t.text : t.textMuted }}>{isSel ? <b>{label}</b> : label}</span>
+            </text>
+          );
+        })}
       </box>
     </box>
   );

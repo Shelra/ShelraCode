@@ -201,6 +201,21 @@ describe("describeToolResult", () => {
     expect(row?.lines[0]).toContain("not found");
   });
 
+  it("says a refused destructive command did not run, instead of calling it a failed run", () => {
+    const declined = describeToolResult(
+      call("bash", { command: "git reset --hard" }),
+      { success: false, output: "The user declined to run this command", refused: "declined" },
+      { durationMs: 4000 },
+    );
+    expect(declined).toMatchObject({ verb: "Did not run", object: "git reset --hard", tone: "warning", lines: [] });
+    expect(declined?.meta).toBe("you declined · 4.0s");
+    const blocked = describeToolResult(call("bash", { command: "git reset --hard" }), {
+      success: false,
+      refused: "blocked",
+    });
+    expect(blocked).toMatchObject({ verb: "Blocked", tone: "warning" });
+  });
+
   it("ignores plan bookkeeping", () => {
     expect(describeToolResult(call("update_plan_step", { index: 1, status: "working" }), { success: true })).toBeNull();
   });

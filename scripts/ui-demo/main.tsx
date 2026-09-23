@@ -9,7 +9,7 @@
  */
 import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { createElement } from "react";
@@ -33,6 +33,9 @@ const dir = process.env.SHELRA_DEMO_DIR ?? join(tmpdir(), "shelra-ui-demo");
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
 createFixture(dir);
+// Scenarios run real git commands, and a destructive one can be approved: git must never climb out of
+// the throw-away fixture into a repository around it.
+process.env.GIT_CEILING_DIRECTORIES = dirname(dir);
 process.chdir(dir);
 if (process.env.SHELRA_DEMO_SEED !== "0") seedKnowledge(dir);
 

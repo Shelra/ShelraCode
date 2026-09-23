@@ -219,6 +219,9 @@ type InterruptionOutcome =
   | { action: "switch"; modelId: string }
   | { action: "pause"; message: string };
 
+/** Asks the user whether a destructive shell command may run; resolving false refuses it. */
+export type DestructiveCommandConfirm = (command: string, reason: string, signal?: AbortSignal) => Promise<boolean>;
+
 export interface AgentOptions {
   persistSession?: boolean;
   provider?: ProviderAdapter;
@@ -801,6 +804,9 @@ export class Agent {
   private planState: { published: boolean; structured: boolean } = { published: true, structured: false };
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
+  private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
+  /** Questions about destructive commands wait in line, so the user sees one at a time. */
+  private destructiveCommandQueue: Promise<unknown> = Promise.resolve();
   private sessionStartHookFired = false;
   private recapsEnabled = true;
   private kernel: AgentKernel | null = null;
@@ -977,6 +983,29 @@ export class Agent {
 
   setSendTelegramFile(fn: ((filePath: string) => Promise<ToolResult>) | null): void {
     this.sendTelegramFile = fn;
+  }
+
+  /**
+   * The terminal UI asks the user before a destructive shell command runs. Hosts that cannot ask
+   * (headless runs, benchmarks, the Telegram bridge) leave this unset, and such commands are refused.
+   */
+  setDestructiveCommandConfirm(fn: DestructiveCommandConfirm | null): void {
+    this.confirmDestructiveCommand = fn;
+  }
+
+  /** The tool-set option that asks the user, one question at a time; absent when nobody can be asked. */
+  private destructiveCommandOption(): { confirmDestructiveCommand?: DestructiveCommandConfirm } {
+    const confirm = this.confirmDestructiveCommand;
+    if (!confirm) return {};
+    return {
+      confirmDestructiveCommand: (command, reason, signal) => {
+        const answer = this.destructiveCommandQueue.then(() =>
+          signal?.aborted ? false : confirm(command, reason, signal),
+        );
+        this.destructiveCommandQueue = answer.catch(() => undefined);
+        return answer;
+      },
+    };
   }
 
   hasApiKey(): boolean {
@@ -1775,6 +1804,7 @@ export class Agent {
     const childToolGroups = loadToolGroupSettings();
     const childBaseTools = createTools(childBash, provider.getToolContext(), childMode, {
       toolGroups: { ...childToolGroups, desktop: childToolGroups.desktop || isComputer },
+      ...this.destructiveCommandOption(),
     });
     const initialDetail = isExplore
       ? "Scanning the codebase"
@@ -2600,6 +2630,7 @@ export class Agent {
             onCheckpoint: this.onToolCheckpoint,
             planState: this.planState,
             toolGroups: loadToolGroupSettings(),
+            ...this.destructiveCommandOption(),
           });
           let tools: ToolSet = runtime.modelInfo?.supportsClientTools === false ? {} : baseTools;
           if (this.mode === "agent" && runtime.modelInfo?.supportsClientTools !== false) {
@@ -3523,6 +3554,7 @@ function toToolResult(output: unknown): ToolResult {
       media?: ToolResult["media"];
       computer?: ToolResult["computer"];
       lspDiagnostics?: ToolResult["lspDiagnostics"];
+      refused?: ToolResult["refused"];
     };
     return {
       success: r.success,
@@ -3537,6 +3569,7 @@ function toToolResult(output: unknown): ToolResult {
       media: r.media,
       computer: r.computer,
       lspDiagnostics: r.lspDiagnostics,
+      ...(r.refused ? { refused: r.refused } : {}),
     };
   }
   return { success: true, output: String(output) };

@@ -16,6 +16,7 @@ import {
 import { MEMORY_TYPES, type MemoryType } from "../memory/types";
 import type { ProviderToolContext } from "../providers/types";
 import { openWebPage, searchWeb } from "../research/web";
+import { destructiveCommandReason } from "../security/destructive";
 import { type BashTool, isShuruSupported } from "../tools/bash";
 import {
   computerClick,
@@ -45,6 +46,8 @@ import type { ScheduleDaemonStatus, ScheduleManager, StoredSchedule } from "../t
 import type { AgentMode, TaskRequest, ToolResult } from "../types/index";
 import {
   type CustomSubagentConfig,
+  type DestructiveCommandPolicy,
+  loadDestructiveCommandPolicy,
   loadPaymentSettings,
   loadValidSubAgents,
   type ToolGroupSettings,
@@ -92,6 +95,57 @@ interface CreateToolsOptions {
   toolGroups?: ToolGroupSettings;
   /** Whether the Shuru-based verify sub-agents can run here; defaults to what the host supports. */
   verifyAvailable?: boolean;
+  /**
+   * Asks the user whether a destructive shell command may run (the terminal UI supplies it). Without
+   * it nobody can be asked, so such a command is refused under the default "ask" policy.
+   */
+  confirmDestructiveCommand?: (command: string, reason: string, signal?: AbortSignal) => Promise<boolean>;
+  /** Overrides the `shell.destructive` setting (tests, embedded hosts). */
+  destructiveCommandPolicy?: DestructiveCommandPolicy;
+}
+
+/**
+ * Why a destructive shell command does not run, or null when it may: the policy allows it, or the user
+ * approved it when asked.
+ */
+async function refuseDestructiveCommand(
+  command: string,
+  cwd: string,
+  options: CreateToolsOptions,
+  abortSignal?: AbortSignal,
+): Promise<{ refused: "declined" | "blocked"; output: string } | null> {
+  const reason = destructiveCommandReason(command, cwd);
+  if (!reason) return null;
+  const policy = options.destructiveCommandPolicy ?? loadDestructiveCommandPolicy();
+  if (policy === "allow") return null;
+  const confirm = options.confirmDestructiveCommand;
+  if (policy === "ask" && confirm) {
+    // A cancelled turn stops waiting for the answer; an unanswered question never runs the command.
+    const approved = await new Promise<boolean>((resolve) => {
+      if (abortSignal?.aborted) return resolve(false);
+      const onAbort = () => resolve(false);
+      abortSignal?.addEventListener("abort", onAbort, { once: true });
+      confirm(command, reason, abortSignal).then(
+        (answer) => {
+          abortSignal?.removeEventListener("abort", onAbort);
+          resolve(answer);
+        },
+        () => {
+          abortSignal?.removeEventListener("abort", onAbort);
+          resolve(false);
+        },
+      );
+    });
+    if (approved) return null;
+    return {
+      refused: "declined",
+      output: `The user declined to run this command: it ${reason}. Do not try to reach the same effect another way; continue without it or ask the user.`,
+    };
+  }
+  return {
+    refused: "blocked",
+    output: `Blocked: this command ${reason}, and nobody can approve it here (a headless run, a benchmark or a remote chat). Do not work around the block. Ask the user to run it themselves, or to allow such commands in ~/.shelra/user-settings.json ("shell": { "destructive": "allow" }).`,
+  };
 }
 
 export function createTools(
@@ -160,6 +214,8 @@ export function createTools(
           ),
       }),
       execute: async ({ command, timeout, background }, { abortSignal }) => {
+        const refusal = await refuseDestructiveCommand(command, bash.getCwd(), options, abortSignal);
+        if (refusal) return { success: false, ...refusal };
         if (background) {
           return bash.startBackground(command);
         }

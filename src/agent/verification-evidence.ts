@@ -143,6 +143,11 @@ function decidingChain(command: string): string {
   return command.slice(start);
 }
 
+/** A command line's simple commands as token lists: split on top-level `&&`, `||`, `|`, `;` and line breaks. */
+export function splitShellCommands(command: string): string[][] {
+  return simpleCommands(command);
+}
+
 /** The simple commands of a chain: split on top-level `&&`, `||`, `|`, `;` and line breaks. */
 function simpleCommands(chain: string): string[][] {
   const commands: string[][] = [];
