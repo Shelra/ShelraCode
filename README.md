@@ -86,6 +86,12 @@ Other modern terminals may work, but these are the terminal apps we currently re
 shelra -d /path/to/your/repo
 ```
 
+Outside a project (your home folder, a drive root, or a folder with no repository or project
+manifest), Shelra writes the helper scripts a task needs to its own scratch folder,
+`%TEMP%\shelra-scratch\<date>-<pid>` on Windows (`$TMPDIR/shelra-scratch/...` elsewhere), instead
+of your folders, runs them from there, and gives you the full path of any you should keep. Scratch
+folders older than a week are removed.
+
 **Headless** — one prompt, then exit (scripts, CI, automation):
 
 ```bash

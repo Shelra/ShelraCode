@@ -121,6 +121,7 @@ import { AgentKernel, type KernelPhase, type KernelState } from "./kernel";
 import { todayLine } from "./prompt-date";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
 import { extractRequirements, isRequirementDense } from "./requirements";
+import { scratchLineFor } from "./scratch";
 import { describeVerificationEvidence } from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
 
@@ -433,10 +434,14 @@ function buildSystemPrompt(
     ? `\n\nAPPROVED PLAN:\nThe following plan has been approved by the user. Execute it now.\n${planContext}\n`
     : "";
 
+  // Outside a project, the scratch folder for helper files is named right after the directory.
+  const workspaceLines = [`Current working directory: ${cwd}`, scratchLineFor(cwd), todayLine()]
+    .filter(Boolean)
+    .join("\n");
+
   return `${MODE_PROMPTS[mode]}${sandboxSection}${customSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
 
-Current working directory: ${cwd}
-${todayLine()}`;
+${workspaceLines}`;
 }
 
 /**

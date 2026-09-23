@@ -1,5 +1,13 @@
 import { existsSync, realpathSync } from "fs";
+import { tmpdir } from "os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
+
+/**
+ * Shelra's own scratch area. When the working directory is not a project (the home folder, a
+ * Downloads folder), helper scripts go here instead of the user's folders, so the file tools may
+ * write here from any workspace. Nothing else outside the workspace is reachable.
+ */
+export const SCRATCH_ROOT = join(tmpdir(), "shelra-scratch");
 
 export interface WorkspacePathResult {
   path: string;
@@ -35,11 +43,13 @@ function resolveThroughExistingAncestor(candidate: string): string {
 export function resolveWorkspacePath(filePath: string, workspaceRoot: string): WorkspacePathResult {
   const root = resolve(workspaceRoot);
   const candidate = isAbsolute(filePath) ? resolve(filePath) : resolve(root, filePath);
-  if (!isInside(root, candidate)) {
+  const inWorkspace = isInside(root, candidate);
+  if (!inWorkspace && !isInside(SCRATCH_ROOT, candidate)) {
     throw new Error(`Path is outside the workspace: ${filePath}`);
   }
 
-  const realRoot = realpathSync.native(root);
+  // The scratch area may not exist yet; it is created on the first write.
+  const realRoot = inWorkspace ? realpathSync.native(root) : resolveThroughExistingAncestor(SCRATCH_ROOT);
   const realTarget = resolveThroughExistingAncestor(candidate);
   if (!isInside(realRoot, realTarget)) {
     throw new Error(`Path resolves outside the workspace: ${filePath}`);
@@ -47,6 +57,8 @@ export function resolveWorkspacePath(filePath: string, workspaceRoot: string): W
 
   return {
     path: candidate,
-    relativePath: relative(root, candidate).replaceAll("\\", "/") || ".",
+    relativePath: inWorkspace
+      ? relative(root, candidate).replaceAll("\\", "/") || "."
+      : candidate.replaceAll("\\", "/"),
   };
 }
