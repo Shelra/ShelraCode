@@ -112,6 +112,11 @@ export interface BenchmarkBehavior {
   selfVerification?: boolean;
   humanInterventions?: number;
   completionBlocked?: boolean;
+  /**
+   * The agent ended its turn as done (no timeout, no error, and no host note such as "[Not verified]")
+   * while the benchmark oracle failed: the false-completion metric (audit doc 15, §15.3 rule 7).
+   */
+  falseCompletion?: boolean;
 }
 
 export interface BenchmarkTaskDefinition {

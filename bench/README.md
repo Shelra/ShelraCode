@@ -218,6 +218,7 @@ Supported run controls include:
 --max-request-cost <usd>
 --directory <dir>
 --json
+--repeat <k>
 --ablate <list>
 --no-clean-room
 ~~~
@@ -230,6 +231,14 @@ each one adds: `memory`, `gate`, `audit`, `plan`, `skills`, `context`,
 and six basic tools). Each switch removes the subsystem's tools, its guidance in
 the prompt and its host behavior; the run records it as `agentConfig.ablation`.
 A capability whose ablation changes nothing has not been shown to exist.
+
+One free-model run is one sample. `--repeat <k>` runs the suite k times as
+ordinary runs that share `benchmarkConfig.repeat.group`, then reports pass@1
+over every attempt with a 95% Wilson interval, pass^k (tasks that passed in every
+repeat) and the false completions. A false completion is a task whose oracle
+failed while the agent ended its turn as done: no timeout, no error, and no host
+note such as `[Not verified]`. Each task records it as
+`behavior.falseCompletion`.
 
 ## What is saved
 

@@ -53,6 +53,9 @@ export interface AgentBenchmarkExecutorOptions {
 
 export const DEFAULT_TASK_TIMEOUT_MS = 20 * 60_000;
 
+/** A note the host ends a turn with when the work is not done; a turn that carries one claims nothing. */
+const HOST_END_NOTE_RE = /\[(?:Not verified|Not marked complete|Paused|No response|Cancelled)\b/u;
+
 const MUTATION_TOOLS = new Set(["write_file", "edit_file", "delete_file"]);
 const RESEARCH_TOOLS = new Set(["search_web", "open_web", "search_x"]);
 const DELEGATION_TOOLS = new Set(["task", "delegate"]);
@@ -277,6 +280,8 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
       const intent = calculateIntentScore(acceptance);
       const verification = verificationScore(task.acceptanceCriteria ?? [], counters);
       const behavior = toBehavior(counters, finalText);
+      behavior.falseCompletion =
+        required.length > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(finalText);
       const failureType = classifyFailure({ benchmarkVerified, timedOut, turnError, failedRequired, counters });
 
       return {

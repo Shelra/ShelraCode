@@ -231,6 +231,7 @@ describe("agent benchmark executor", () => {
       testsExecuted: 1,
       selfVerification: true,
       completionBlocked: false,
+      falseCompletion: false,
       llmCalls: 1,
     });
     expect(execution.tokens).toEqual({ inputTokens: 120, outputTokens: 30, totalTokens: 150 });
@@ -258,7 +259,36 @@ describe("agent benchmark executor", () => {
     expect(execution.acceptance?.find((criterion) => criterion.id === "AC-FILE")?.status).toBe("failed");
     expect(execution.failureType).toBe("implementation_failure");
     expect(execution.failureReason).toContain("AC-FILE");
-    expect(execution.behavior).toMatchObject({ filesChanged: 0, selfVerification: false, toolCalls: 0 });
+    expect(execution.behavior).toMatchObject({
+      filesChanged: 0,
+      selfVerification: false,
+      toolCalls: 0,
+      // It ended its turn as done while the oracle failed.
+      falseCompletion: true,
+    });
+  });
+
+  it("does not count a turn the host reported unverified as a false completion", async () => {
+    const provider = new ScriptedProvider([
+      toolCallEvent("c1", "write_file", { path: "src/slug.ts", content: "..." }),
+      toolResultEvent("c1", "write_file", {
+        success: true,
+        output: "Updated src/slug.ts",
+        diff: { filePath: "src/slug.ts", additions: 1, removals: 0, patch: "", isNew: true },
+      }),
+      { type: "text-delta", text: "Done." },
+    ]);
+    const executor = createAgentBenchmarkExecutor({
+      provider,
+      modelId: "bench-test-model",
+      benchmarkRoot: workspace,
+      persistSession: false,
+    });
+
+    const execution = await executor.executeTask(task(), { emit: () => {} });
+
+    expect(execution.status).toBe("failed");
+    expect(execution.behavior).toMatchObject({ completionBlocked: true, falseCompletion: false });
   });
 
   it("hands a run's ablations to the agent it drives (audit doc 15, item 0.1)", async () => {
