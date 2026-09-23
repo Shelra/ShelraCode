@@ -1,5 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { translateForWindowsPowerShell } from "./shell";
+import { buildShellInvocation, translateForWindowsPowerShell } from "./shell";
 
 describe("translateForWindowsPowerShell", () => {
   it("rewrites a top-level && chain into a $?-guarded sequence", () => {
@@ -22,5 +23,30 @@ describe("translateForWindowsPowerShell", () => {
     expect(translateForWindowsPowerShell("a || b && c")).toBe("a || b && c");
     expect(translateForWindowsPowerShell("a && ")).toBe("a && ");
     expect(translateForWindowsPowerShell('echo "unterminated && b')).toBe('echo "unterminated && b');
+  });
+});
+
+function run(command: string): { code: number | null; stdout: string } {
+  const invocation = buildShellInvocation(command, "powershell");
+  const result = spawnSync(invocation.file, invocation.args, { encoding: "utf8" });
+  return { code: result.status, stdout: (result.stdout ?? "").replace(/\r/g, "") };
+}
+
+// Each case starts a real PowerShell, which takes a second or more under a busy test run.
+describe.skipIf(process.platform !== "win32")("Windows PowerShell invocation", { timeout: 60_000 }, () => {
+  it("prints objects PowerShell formats as a table", () => {
+    // Table output is held back while column widths are computed; ending the script with
+    // `exit` used to drop it, so `Get-Process` "succeeded" with nothing printed.
+    const { code, stdout } = run("Get-Process -Id $PID | Select-Object ProcessName, Id");
+    expect(code).toBe(0);
+    expect(stdout).toContain("ProcessName");
+    expect(stdout).toMatch(/powershell|pwsh/i);
+  });
+
+  it("still exits with the command's own code", () => {
+    expect(run('node -e "process.exit(7)"').code).toBe(7);
+    expect(run("cmd /c exit 3").code).toBe(3);
+    expect(run("Get-Item C:/shelra/definitely/not/here").code).toBe(1);
+    expect(run("'ok'").code).toBe(0);
   });
 });

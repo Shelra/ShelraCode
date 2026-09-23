@@ -117,6 +117,7 @@ import {
 } from "./compaction";
 import { DelegationManager } from "./delegations";
 import { AgentKernel, type KernelPhase, type KernelState } from "./kernel";
+import { todayLine } from "./prompt-date";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
 import { extractRequirements, isRequirementDense } from "./requirements";
 import { describeVerificationEvidence } from "./verification-evidence";
@@ -425,7 +426,8 @@ function buildSystemPrompt(
 
   return `${MODE_PROMPTS[mode]}${sandboxSection}${customSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
 
-Current working directory: ${cwd}`;
+Current working directory: ${cwd}
+${todayLine()}`;
 }
 
 /**
@@ -464,7 +466,8 @@ Do not call tools or modify files for this conversational turn. Keep the answer
 focused and concise. If the user asks to inspect or change the repository, say
 what evidence or action is needed and wait for that explicit request.
 
-Current working directory: ${cwd}`;
+Current working directory: ${cwd}
+${todayLine()}`;
 }
 
 function maxOutputTokensForTurn(runtime: ProviderModelRuntime, configured: number): number {
@@ -2465,7 +2468,11 @@ export class Agent {
                   }
                 }
                 const evidence = tr.success
-                  ? describeVerificationEvidence(tc.function.name, tc.function.arguments)
+                  ? describeVerificationEvidence(
+                      tc.function.name,
+                      tc.function.arguments,
+                      this.kernel?.snapshot().mutations ?? [],
+                    )
                   : null;
                 if (evidence) this.turnVerificationEvidence.push(evidence);
                 const digestCommand = pendingCommands.get(tc.id);

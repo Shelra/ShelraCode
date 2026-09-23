@@ -33,6 +33,13 @@ const isWindows = process.platform === "win32";
  * - The epilogue exists because `powershell.exe -Command` does NOT propagate a native
  *   program's exit code; without it `node -e "process.exit(7)"` reports 1. `$?` must be
  *   captured before anything else, because the assignment itself resets it.
+ * - It hands the code to `$host.SetShouldExit` instead of calling `exit`. Objects PowerShell
+ *   formats as a table (`Get-Process | Select-Object Name, Id`, `Get-Service`) are held back
+ *   about 300 ms while the column widths are worked out, and `exit` ends the process before
+ *   they print: the command "succeeded" with no output. Seen live 2026-09-22, when a free model
+ *   diagnosing a busy webcam got empty results from `Get-Process`, `Get-Service` and
+ *   `Get-ChildItem` and spent most of the session looking for other ways to ask. Letting the
+ *   script end normally flushes the table; the host still exits with the code.
  */
 const POWERSHELL_PRELUDE = ["$ProgressPreference = 'SilentlyContinue'", "$ErrorActionPreference = 'Continue'", ""].join(
   "\n",
@@ -43,7 +50,7 @@ const POWERSHELL_EPILOGUE = [
   "$__shelraOk = $?",
   "$__shelraCode = $LASTEXITCODE",
   "if ($null -eq $__shelraCode) { if ($__shelraOk) { $__shelraCode = 0 } else { $__shelraCode = 1 } }",
-  "exit $__shelraCode",
+  "$host.SetShouldExit($__shelraCode)",
   "",
 ].join("\n");
 
