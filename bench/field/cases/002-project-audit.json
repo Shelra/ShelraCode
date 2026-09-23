@@ -41,6 +41,18 @@
     {
       "commit": "7a6c7ee",
       "what": "Acceptance criteria sent as a JSON array inside a string became one criterion holding the whole array."
+    },
+    {
+      "commit": "e645b9c",
+      "what": "A round cut short by a stall was saved with 0 tokens, so spend limits missed it."
+    },
+    {
+      "commit": "d82d454",
+      "what": "AGENTS.md sent agents to docs/architecture/, most of it history about an older codebase; its file names ended up in the audits."
+    },
+    {
+      "commit": "1ae6e7c",
+      "what": "The re-run's clone had no dependencies installed, so every check the model ran failed."
     }
   ],
   "reruns": [
@@ -65,6 +77,17 @@
       "toolCalls": 81,
       "gateLoops": 1,
       "result": "Seven research documents. Nemotron was overloaded and the run moved to openrouter/free, then stalled six times (the owner was using the same free quota): 40 minutes. The single fact-check request did what it asks: the model grepped about twenty claims and corrected two numbers, in its answer but not in the files. But it checked quotes, not meaning: \"the model catalog is empty\" (primeCatalog fills it at startup, as the comment above says), \"128K context for every cloud model\" (a fallback) and \"zero retries\" (the harness retries rounds itself) came back confirmed. A type-check piped into head counted as a pass, so the turn ended without the [Not verified] note. Recorded input about 5.2M tokens; rounds cut short record none."
+    },
+    {
+      "date": "2026-09-23",
+      "commit": "1386ea7",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "cost": "free",
+      "session": "117a46cca39f",
+      "seconds": 928,
+      "toolCalls": 61,
+      "gateLoops": 1,
+      "result": "One report, 110 lines, from only 8 files read (23-30 in the other runs). Its first draft named four files that do not exist (loop.ts, control-plane.ts, ollama.ts, http.ts), taken from docs about the older ShelraCode/ codebase; the fact-check request found them and the model rewrote the file. Still wrong: \"local-first, no cloud by default\", \"the CLI entry is src/cli/installation.ts\". Its piped checks no longer counted and the turn ended \"[Not verified — 1 document(s) written ...]\", yet the answer said the type-check \"passes with 3 warnings\" over TS7006 errors (the clone had no dependencies). 32K recorded input tokens a step (92-120K before); replaying its steps without clearing gives about 3.7M in all, against 1.76M recorded (two cut rounds uncounted)."
     }
   ]
 }
