@@ -39,6 +39,23 @@ describe("hook issues", () => {
     expect(seen).toEqual([{ event: "Stop", outcome: "non_blocking_error", message: "notify.sh" }]);
   });
 
+  it("reports a block made with a JSON decision on stdout", () => {
+    const seen: HookIssue[] = [];
+    setHookIssueListener((issue) => seen.push(issue));
+    reportHookIssues(
+      "PreToolUse",
+      result([
+        {
+          outcome: "success",
+          exitCode: 0,
+          command: "policy.sh",
+          output: { decision: "block", reason: "outside the sandbox" },
+        },
+      ]),
+    );
+    expect(seen).toEqual([{ event: "PreToolUse", outcome: "blocking", message: "outside the sandbox" }]);
+  });
+
   it("ignores cancelled hooks and never lets a broken listener escape", () => {
     setHookIssueListener(() => {
       throw new Error("boom");

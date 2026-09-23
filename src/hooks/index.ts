@@ -46,11 +46,17 @@ export function setHookIssueListener(listener: ((issue: HookIssue) => void) | nu
 export function reportHookIssues(event: string, result: AggregatedHookResult): void {
   if (!hookIssueListener) return;
   for (const hook of result.results) {
-    if (hook.outcome !== "blocking" && hook.outcome !== "non_blocking_error") continue;
+    // A hook blocks with exit code 2 or with {"decision": "block"} on stdout; both are reported.
+    const blocking = hook.outcome === "blocking" || hook.output?.decision === "block";
+    if (!blocking && hook.outcome !== "non_blocking_error") continue;
     const reason =
       (hook.stderr ?? "").split(/\r?\n/).find((line) => line.trim()) ?? hook.output?.reason ?? hook.output?.stopReason;
     try {
-      hookIssueListener({ event, outcome: hook.outcome, message: (reason ?? hook.command).trim() });
+      hookIssueListener({
+        event,
+        outcome: blocking ? "blocking" : "non_blocking_error",
+        message: (reason ?? hook.command).trim(),
+      });
     } catch {
       // A broken listener must never break the agent.
     }

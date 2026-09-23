@@ -150,39 +150,17 @@ export function createTools(
           ),
       }),
       execute: async ({ command, timeout, background }, { abortSignal }) => {
-        const toolInput = { command, timeout, background };
-        const preResult = await executePreToolHooks("bash", toolInput, cwd(), options.sessionId, abortSignal);
-        if (preResult.blocked) {
-          const reason = preResult.blockingErrors.map((e) => e.stderr).join("; ") || "Blocked by hook";
-          return { success: false, output: `[Hook blocked] ${reason}` };
-        }
-
         if (background) {
           return bash.startBackground(command);
         }
 
         const result = await bash.execute(command, timeout, abortSignal);
-        const output = {
+        return {
           success: result.success,
           output: result.success
             ? result.output || "Command executed successfully (no output)"
             : result.error || "Command failed",
         };
-
-        if (result.success) {
-          executePostToolHooks("bash", toolInput, output, cwd(), options.sessionId, abortSignal).catch(() => {});
-        } else {
-          executePostToolFailureHooks(
-            "bash",
-            toolInput,
-            result.error || "Command failed",
-            cwd(),
-            options.sessionId,
-            abortSignal,
-          ).catch(() => {});
-        }
-
-        return output;
       },
     }),
 
@@ -1278,17 +1256,63 @@ export function createTools(
     },
   });
 
-  return hardenToolSet(tools);
+  return hardenToolSet(tools, { cwd, sessionId: options.sessionId });
 }
 
 type ToolExecute = (input: unknown, options: { abortSignal?: AbortSignal }) => unknown;
+
+/** Where tool hooks run and which session they report. */
+export interface ToolHookContext {
+  cwd: () => string;
+  sessionId?: string;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : { value };
+}
+
+function hookBlockReason(result: Awaited<ReturnType<typeof executePreToolHooks>>): string {
+  const stderr = result.blockingErrors.map((error) => error.stderr).filter(Boolean);
+  const reasons = result.results.map((hook) => hook.output?.reason).filter((reason): reason is string => !!reason);
+  return [...stderr, ...reasons].join("; ") || "Blocked by hook";
+}
+
+/** PostToolUse or PostToolUseFailure for a finished call. Never awaited: a slow hook must not stall the turn. */
+function afterToolHooks(
+  name: string,
+  input: Record<string, unknown>,
+  result: unknown,
+  hooks: ToolHookContext,
+  signal?: AbortSignal,
+) {
+  const record = asRecord(result);
+  const failed = record.success === false || record.isError === true;
+  const run = failed
+    ? executePostToolFailureHooks(
+        name,
+        input,
+        String(record.error ?? record.output ?? "failed"),
+        hooks.cwd(),
+        hooks.sessionId,
+        signal,
+      )
+    : executePostToolHooks(name, input, record, hooks.cwd(), hooks.sessionId, signal);
+  run.catch(() => {});
+}
 
 /**
  * No tool may end a turn by throwing. A missing binary, an unreachable service or a bug in one
  * tool becomes a failed result the model reads and routes around; only the user's own
  * cancellation propagates. Applied to the built-in tools here and to MCP tools by the agent.
+ *
+ * With `hooks`, every tool also runs the user's PreToolUse hooks first (a blocking hook stops the
+ * call) and PostToolUse or PostToolUseFailure after, matched on the tool's own name (`edit_file`,
+ * `write_file`, `bash`, `mcp_<server>__<tool>`). Only `bash` used to run them, so a formatter hook
+ * on file edits never fired.
  */
-export function hardenToolSet(tools: ToolSet): ToolSet {
+export function hardenToolSet(tools: ToolSet, hooks?: ToolHookContext): ToolSet {
   const hardened: ToolSet = {};
   for (const [name, definition] of Object.entries(tools)) {
     const execute = (definition as { execute?: ToolExecute }).execute;
@@ -1299,12 +1323,20 @@ export function hardenToolSet(tools: ToolSet): ToolSet {
     hardened[name] = {
       ...definition,
       execute: async (input: unknown, options: { abortSignal?: AbortSignal }) => {
+        const toolInput = asRecord(input);
+        if (hooks) {
+          const pre = await executePreToolHooks(name, toolInput, hooks.cwd(), hooks.sessionId, options?.abortSignal);
+          if (pre.blocked) return { success: false, output: `[Hook blocked] ${hookBlockReason(pre)}` };
+        }
+        let result: unknown;
         try {
-          return await execute(input, options);
+          result = await execute(input, options);
         } catch (error) {
           if (options?.abortSignal?.aborted) throw error;
-          return { success: false, output: describeToolFailure(name, error) };
+          result = { success: false, output: describeToolFailure(name, error) };
         }
+        if (hooks) afterToolHooks(name, toolInput, result, hooks, options?.abortSignal);
+        return result;
       },
     } as ToolSet[string];
   }

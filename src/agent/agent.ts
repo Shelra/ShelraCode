@@ -1699,7 +1699,13 @@ export class Agent {
           timeoutMs: this.mcpTimeoutMs,
         });
         closeMcp = mcpBundle.close;
-        childTools = { ...childBaseTools, ...hardenToolSet(mcpBundle.tools) };
+        childTools = {
+          ...childBaseTools,
+          ...hardenToolSet(mcpBundle.tools, {
+            cwd: () => childBash.getCwd(),
+            sessionId: this.session?.id ?? undefined,
+          }),
+        };
         if (mcpBundle.errors.length > 0) {
           lastActivity = `MCP unavailable: ${mcpBundle.errors.join(" | ")}`;
           onActivity?.(lastActivity);
@@ -2338,7 +2344,13 @@ export class Agent {
               timeoutMs: this.mcpTimeoutMs,
             });
             closeMcp = mcpBundle.close;
-            tools = { ...baseTools, ...hardenToolSet(mcpBundle.tools) };
+            tools = {
+              ...baseTools,
+              ...hardenToolSet(mcpBundle.tools, {
+                cwd: () => this.bash.getCwd(),
+                sessionId: this.session?.id ?? undefined,
+              }),
+            };
             if (mcpBundle.errors.length > 0) {
               yield { type: "content", content: `MCP unavailable: ${mcpBundle.errors.join(" | ")}\n\n` };
             }
