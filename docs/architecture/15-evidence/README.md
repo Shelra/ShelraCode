@@ -10,6 +10,7 @@ Everything needed to check or repeat the measurements in
 | `probes/reach.ts` | Import-graph reachability from `src/index.ts`: runtime, type-only, dead (§3) |
 | `probes/sessions-by-cwd.ts` | Tool usage and gate activity from the local session database (§7-§10) |
 | `probes/reflections.ts` | Composition of `.shelra/memory/reflections.jsonl` (§7) |
+| `probes/step-analysis.ts` | Where a benchmark run's steps went, per task: tool calls, test runs, gate nudges, requirement audits, provider interruptions, tokens (§6.4). `bun run <it> <run HOME>/.shelra/shelra.db <suite label>` |
 | `audit-worktree.patch` | Ablation switches, the Claude Code and Codex reference adapters, and the probe tests, against `7b433b0` |
 | `frontier-practices.md` | The research stream's notes and sources (§14) |
 | `results.md` | The experiment tables of §6, generated from the run logs |

@@ -75,7 +75,9 @@ git state and the files the request names; the benchmark can see the harness (cl
 prompts, ablations, repeats, false completions, reference agents). What is **not yet shown** is that
 this raises the resolve rate or lowers false completions across free tiers: that needs the §15.3
 protocol (k ≥ 3). The first post-implementation run of the silent suite resolved 7/8 with no false
-completion, against 6/8 with one before, on the same model: one sample each (§6.4).
+completion, against 6/8 with one before, on the same model, but the contract never had to intervene in
+either run: on these fixtures the free model tests its own work, and the difference is noise from the
+provider and the model, not evidence for the changes (§6.4).
 
 ## 2. The original objective, reconstructed
 
@@ -285,14 +287,19 @@ tool and memory re-confirmation. Runs with `--no-clean-room` so the task layout 
 | A0 | smoke (1 task) | full | 1/1 | 0 | 0 | 368 | — |
 | A3 | silent | full | 7/8 | 0 | 0 | 338 | S3: 6/8, 1 infra, 1 false |
 
-On the silent suite the post-audit code resolved one task more and ended none as falsely done. The
-task that was a false completion before (06, bounded queue) did not end as done this time: the agent
-kept repairing, with 24 test runs, until the benchmark's 1200-second limit stopped it, an honest failure
-instead of a claimed success. Task 08, lost to the provider in S3, passed, although the provider failed
-again near its end. The cost rose: 2.50 million tokens against 1.10 million, and a median of 24 model
-steps per task against 18, a part of it the 75 steps of task 06 before its time limit. One sample per
-side: this is consistent with the contract's purpose, not yet evidence that it works; the §15.3
-protocol (k ≥ 3, the contract ablation A4) decides that, and whether the extra cost buys it.
+On the silent suite the post-audit code resolved one task more and ended none as falsely done, but
+**the difference cannot be credited to the changes.** The session records of both runs
+(`15-evidence/probes/step-analysis.ts`) show that the
+host never had to block completion in either (0 gate or contract nudges; the model ran the projects'
+tests itself, two to six times per task), and that the provider interrupted A3 36 times against S3's 20.
+The task that was a false completion before (06, bounded queue) did not end as done: the agent was still
+changing code and running tests (24 runs) when the benchmark's 1200-second limit stopped it, after 14
+provider interruptions (one in S3). Task 08, lost to the provider in S3, passed. The cost rose, 2.50
+million tokens against 1.10 million and a median of 24 model steps against 18, largely because every
+interrupted round re-sends the whole context and because of task 06's loop. What the run does show:
+the post-audit code resolves as well on a bad provider day, and on these fixtures the free model already
+tests its own work, so they cannot exercise the contract; harder tasks (§15.3 categories 3, 11 and 18)
+and the contract ablation A4 at k ≥ 3 are needed for that.
 
 Scheduled after the next quota reset: A1 (core, compare S1), A5 (memory, compare S5), A4 (silent with
 the contract switched off, the contract's own ablation) and A6 (a second silent sample).
