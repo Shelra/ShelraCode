@@ -26,16 +26,19 @@ export function revealStep(backlog: number, tickMs = TICK_MS): number {
 }
 
 /**
- * A streamed answer moves into the log while it is still being revealed. The streaming view leaves
- * its progress here and the log's newest answer picks it up, instead of jumping to the end.
+ * A streamed answer moves into the log while it is still being revealed. The streaming view keeps its
+ * progress here on every tick, because the log's newest answer reads it while it first renders: in the
+ * same update that removes the streaming view, before that view's cleanup could run.
  */
 let handOff: { text: string; shown: number } | null = null;
 
 function startingLength(target: string, resume: boolean): number {
-  if (!resume || !handOff) return target.length;
-  const { text, shown } = handOff;
+  const previous = handOff;
+  if (!resume || !previous) return target.length;
   handOff = null;
-  return target.startsWith(text.slice(0, shown)) ? Math.min(shown, target.length) : target.length;
+  // The progress of another answer (a stream cut short, an earlier session) is not this one's.
+  const continues = target.startsWith(previous.text) || previous.text.startsWith(target);
+  return continues ? Math.min(previous.shown, target.length) : target.length;
 }
 
 /**
@@ -47,34 +50,33 @@ export function usePacedText(
   options: { reduced: boolean; resume?: boolean; live?: boolean; onProgress?: () => void },
 ): string {
   const { reduced, resume = false, live = false, onProgress } = options;
-  const [shown, setShown] = useState(() => (live ? 0 : startingLength(target, resume)));
+  const [shown, setShown] = useState(() => {
+    if (!live) return startingLength(target, resume);
+    // A new stream starts from nothing, so no earlier stream's progress is left to pick up.
+    handOff = { text: target, shown: 0 };
+    return 0;
+  });
   const shownRef = useRef(shown);
   const targetRef = useRef(target);
   const progressRef = useRef(onProgress);
   targetRef.current = target;
   progressRef.current = onProgress;
 
+  // One timer while there is text left to reveal. It must not restart on every delta: a model that
+  // streams faster than a tick would reset it before it ever fired, and nothing would show.
+  const behind = !reduced && shown < target.length;
   useEffect(() => {
-    if (reduced || shownRef.current >= target.length) return;
+    if (!behind) return;
     const timer = setInterval(() => {
       const goal = targetRef.current.length;
-      if (shownRef.current >= goal) {
-        clearInterval(timer);
-        return;
-      }
+      if (shownRef.current >= goal) return;
       shownRef.current += revealStep(goal - shownRef.current);
+      if (live) handOff = { text: targetRef.current, shown: shownRef.current };
       setShown(shownRef.current);
       progressRef.current?.();
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [target, reduced]);
-
-  useEffect(
-    () => () => {
-      if (live) handOff = { text: targetRef.current, shown: shownRef.current };
-    },
-    [live],
-  );
+  }, [behind, live]);
 
   return reduced ? target : target.slice(0, Math.min(shown, target.length));
 }
