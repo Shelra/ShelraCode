@@ -26,8 +26,9 @@ it alone. Checked against the app on 2026-09-22. -->
   `bench/field/SCOREBOARD.md`, `docs/design`); keep it that way — no invented customers, numbers or
   testimonials. Product images are captures of the real TUI (`public/images/tui-*.png`) made with the
   `scripts/ui-demo` harness; re-capture rather than mock when the TUI changes.
-- `public/install.ps1` is the Windows installer behind the hero's `irm https://shelra.dev/install.ps1 | iex`
-  (`src/components/ui/InstallCommand.tsx`); `next.config.ts` serves it as `text/plain`. Keep it pure ASCII and
+- `public/install.ps1` is the Windows installer behind the hero's `irm https://www.shelra.dev/install.ps1 | iex`
+  (`src/components/ui/InstallCommand.tsx`); `next.config.ts` serves it as `text/plain`. The command names the
+  www host: the apex answers with a 308 redirect that Windows PowerShell 5.1 does not follow. Keep it pure ASCII and
   Windows PowerShell 5.1 compatible, never `exit` outside the file-mode guard (piped into `iex` it would close
   the user's shell), and test it in a scratch `USERPROFILE` with `SHELRA_NO_MODIFY_PATH=1`.
 - The "Benchmark" section (`src/components/sections/Benchmark.tsx`) renders `src/lib/bench-summary.json`,

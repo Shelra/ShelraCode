@@ -99,10 +99,11 @@ export const hero = {
   },
 };
 
-// The Windows one-line installer (public/install.ps1, served at https://shelra.dev/install.ps1).
+// The Windows one-line installer (public/install.ps1). The www host answers directly: the apex
+// redirects with a 308, which Windows PowerShell 5.1's Invoke-RestMethod refuses to follow.
 export const install = {
   label: "Windows · PowerShell",
-  command: "irm https://shelra.dev/install.ps1 | iex",
+  command: "irm https://www.shelra.dev/install.ps1 | iex",
   copy: "Copy the install command",
   copied: "Copied. Paste it in PowerShell.",
 };

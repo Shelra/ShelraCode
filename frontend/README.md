@@ -28,7 +28,8 @@ config from the repo root: `bunx biome check frontend/src`.
 
 ## Windows installer
 
-The hero shows the one-line Windows install command, `irm https://shelra.dev/install.ps1 | iex`
+The hero shows the one-line Windows install command, `irm https://www.shelra.dev/install.ps1 | iex`
+(the www host on purpose: the apex answers with a 308 redirect, which Windows PowerShell 5.1 refuses)
 (`src/components/ui/InstallCommand.tsx`: click to copy; copy in `src/lib/content.ts`). The script it
 runs is `public/install.ps1`, served as `text/plain` by a header in `next.config.ts` so PowerShell
 pipes it as text: it installs the latest GitHub release into `%USERPROFILE%\.shelra\bin` with a

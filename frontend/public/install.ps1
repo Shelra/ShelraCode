@@ -1,7 +1,10 @@
 #!/usr/bin/env pwsh
 # ShelraCode installer for Windows (Windows PowerShell 5.1 or PowerShell 7).
 #
-#   irm https://shelra.dev/install.ps1 | iex
+#   irm https://www.shelra.dev/install.ps1 | iex
+#
+# (The www host, not the apex: shelra.dev answers with a 308 redirect, which Windows PowerShell 5.1
+# does not follow.)
 #
 # Installs the latest GitHub release of the shelra CLI into %USERPROFILE%\.shelra\bin, checks its
 # SHA-256 against the release's checksums.txt, records the install so that `shelra update` and

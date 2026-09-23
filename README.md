@@ -19,7 +19,7 @@ Local inference remains available as an explicit private/offline mode with
 **Windows** (PowerShell 5.1 or later), one line:
 
 ```powershell
-irm https://shelra.dev/install.ps1 | iex
+irm https://www.shelra.dev/install.ps1 | iex
 ```
 
 It downloads the latest [GitHub release](https://github.com/yosoyjavieruiz/ShelraCode/releases) into

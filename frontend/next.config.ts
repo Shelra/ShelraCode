@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // The Windows installer (`irm https://shelra.dev/install.ps1 | iex`): served as text so PowerShell
+        // The Windows installer (`irm https://www.shelra.dev/install.ps1 | iex`): served as text so PowerShell
         // pipes it as a string, and cached briefly so a new version reaches everyone within minutes.
         source: "/install.ps1",
         headers: [
