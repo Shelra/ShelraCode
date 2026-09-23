@@ -5,11 +5,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   BashTool,
   getSandboxMutationBlockReason,
+  isShuruSupported,
   parseStandaloneCd,
   shouldRunOnHostInSandboxMode,
   wrapCommandForShuru,
   wrapHostBrowserCommand,
 } from "./bash";
+
+describe("isShuruSupported", () => {
+  it("is true only on macOS with Apple Silicon", () => {
+    expect(isShuruSupported("darwin", "arm64")).toBe(true);
+    expect(isShuruSupported("darwin", "x64")).toBe(false);
+    expect(isShuruSupported("win32", "x64")).toBe(false);
+    expect(isShuruSupported("linux", "arm64")).toBe(false);
+  });
+});
 
 const tempDirs: string[] = [];
 

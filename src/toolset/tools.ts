@@ -16,7 +16,7 @@ import {
 import { MEMORY_TYPES, type MemoryType } from "../memory/types";
 import type { ProviderToolContext } from "../providers/types";
 import { openWebPage, searchWeb } from "../research/web";
-import type { BashTool } from "../tools/bash";
+import { type BashTool, isShuruSupported } from "../tools/bash";
 import {
   computerClick,
   computerFocusWindow,
@@ -90,6 +90,8 @@ interface CreateToolsOptions {
    * enabled in settings or when a sub-agent specifically needs them.
    */
   toolGroups?: ToolGroupSettings;
+  /** Whether the Shuru-based verify sub-agents can run here; defaults to what the host supports. */
+  verifyAvailable?: boolean;
 }
 
 export function createTools(
@@ -342,32 +344,37 @@ export function createTools(
 
   if (options.runTask) {
     const customNames = (options.subagents ?? loadValidSubAgents()).map((agent) => agent.name);
-    const taskAgentEnum = [
+    // The verify sub-agents run in the Shuru sandbox; where it does not exist every one of their
+    // commands fails, so they are not offered at all (audit of 2026-09-23).
+    const verifyAvailable = options.verifyAvailable ?? isShuruSupported();
+    const builtIns = [
       "general",
       "explore",
       "plan",
       "vision",
-      "verify",
+      ...(verifyAvailable ? ["verify"] : []),
       "ui-verify",
-      "verify-detect",
-      "verify-manifest",
+      ...(verifyAvailable ? ["verify-detect", "verify-manifest"] : []),
       "computer",
-      ...customNames,
-    ] as [string, ...string[]];
+    ];
+    const taskAgentEnum = [...builtIns, ...customNames] as [string, ...string[]];
     const customHint =
       customNames.length > 0
         ? ` You may also use these user-defined sub-agents by exact name: ${customNames.join(", ")}.`
         : "";
+    const verifyHint = verifyAvailable
+      ? ` \`verify\` for sandbox-aware build, test, and smoke validation, \`verify-detect\` for read-only verification recipe detection, \`verify-manifest\` to create or update a verification manifest,`
+      : "";
 
     tools.task = tool({
-      description: `Delegate a focused foreground task to a sub-agent. Prefer this proactively for review, research, investigation, planning, code quality work, verification, and computer-use flows instead of waiting for the user to request a sub-agent. Use \`general\` for multi-step execution (investigate context, plan, act, then verify before reporting done), \`explore\` for fast read-only investigation, \`plan\` for read-only architecture and implementation planning before non-trivial or uncertain work, \`vision\` for image validation, \`verify\` for sandbox-aware build, test, and smoke validation, \`ui-verify\` for three-pass visual hierarchy and interaction QA, \`verify-detect\` for read-only verification recipe detection, \`verify-manifest\` to create or update a verification manifest, and \`computer\` for host desktop screenshot/input workflows.${customHint} Provide a short description plus a detailed prompt for the child agent.`,
+      description: `Delegate a focused foreground task to a sub-agent. Prefer this proactively for review, research, investigation, planning, code quality work, verification, and computer-use flows instead of waiting for the user to request a sub-agent. Use \`general\` for multi-step execution (investigate context, plan, act, then verify before reporting done), \`explore\` for fast read-only investigation, \`plan\` for read-only architecture and implementation planning before non-trivial or uncertain work, \`vision\` for image validation,${verifyHint} \`ui-verify\` for three-pass visual hierarchy and interaction QA, and \`computer\` for host desktop screenshot/input workflows.${customHint} Provide a short description plus a detailed prompt for the child agent.`,
       inputSchema: z.object({
         agent: z
           .enum(taskAgentEnum)
           .default("general")
           .describe(
             customNames.length > 0
-              ? "Built-in general, explore, plan, vision, verify, ui-verify, verify-detect, verify-manifest, or computer, or a configured custom sub-agent name from user settings"
+              ? `Built-in ${builtIns.join(", ")}, or a configured custom sub-agent name from user settings`
               : "Which sub-agent to use",
           ),
         description: z.string().describe("A short label for the delegated task, such as 'Deep code quality analysis'"),

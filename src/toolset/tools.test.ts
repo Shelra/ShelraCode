@@ -266,6 +266,7 @@ describe("schedule daemon tools", () => {
     const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
       runTask,
       subagents: [],
+      verifyAvailable: true,
     }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown>; description?: string }>;
 
     const taskTool = tools.task;
@@ -296,6 +297,7 @@ describe("schedule daemon tools", () => {
     const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
       runTask,
       subagents: [],
+      verifyAvailable: true,
     }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown>; description?: string }>;
 
     const taskTool = tools.task;
@@ -326,6 +328,7 @@ describe("schedule daemon tools", () => {
     const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
       runTask,
       subagents: [],
+      verifyAvailable: true,
     }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown>; description?: string }>;
 
     const taskTool = tools.task;
@@ -349,6 +352,23 @@ describe("schedule daemon tools", () => {
       undefined,
     );
     expect(result).toEqual({ success: true, output: "manifest written" });
+  });
+
+  it("does not offer the verify sub-agents where their sandbox cannot run (audit 2026-09-23)", () => {
+    const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
+      runTask: vi.fn(),
+      subagents: [],
+      verifyAvailable: false,
+    }) as Record<
+      string,
+      { description?: string; inputSchema: { safeParse: (input: unknown) => { success: boolean } } }
+    >;
+
+    const taskTool = tools.task;
+    expect(taskTool.description).not.toContain("`verify`");
+    expect(taskTool.description).not.toContain("`verify-manifest`");
+    expect(taskTool.inputSchema.safeParse({ agent: "verify", description: "d", prompt: "p" }).success).toBe(false);
+    expect(taskTool.inputSchema.safeParse({ agent: "general", description: "d", prompt: "p" }).success).toBe(true);
   });
 
   it("exposes computer tools and routes computer task requests", async () => {

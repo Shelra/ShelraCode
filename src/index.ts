@@ -64,6 +64,7 @@ import {
   updateBenchmarkRunMetadata,
 } from "./storage/benchmarks";
 import { runTelegramHeadlessBridge } from "./telegram/headless-bridge";
+import { isShuruSupported } from "./tools/bash";
 import { startScheduleDaemon } from "./tools/schedule";
 import type { ModelInfo } from "./types/index";
 import { processAtMentions } from "./utils/at-mentions.js";
@@ -1463,7 +1464,11 @@ program
     }
 
     if (options.verify) {
-      const verifyError = getVerifyCliError({ hasPrompt: Boolean(options.prompt), hasMessageArgs: message.length > 0 });
+      const verifyError = getVerifyCliError({
+        hasPrompt: Boolean(options.prompt),
+        hasMessageArgs: message.length > 0,
+        sandboxSupported: isShuruSupported(),
+      });
       if (verifyError) {
         console.error(verifyError);
         process.exit(1);

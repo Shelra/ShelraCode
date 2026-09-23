@@ -1,3 +1,4 @@
+import { VERIFY_UNSUPPORTED_MESSAGE } from "../tools/bash";
 import type { TaskRequest, VerifyRecipe } from "../types/index";
 import type { SandboxSettings } from "../utils/settings";
 import { ensureVerifyCheckpoint, type PreparedVerifyCheckpoint } from "./checkpoint";
@@ -418,7 +419,16 @@ export function buildVerifyPrompt(cwd: string): string {
 
 export const VERIFY_PROMPT = "__DYNAMIC__";
 
-export function getVerifyCliError(options: { hasPrompt?: boolean; hasMessageArgs?: boolean }): string | null {
+export function getVerifyCliError(options: {
+  hasPrompt?: boolean;
+  hasMessageArgs?: boolean;
+  /** Whether the Shuru sandbox the verify flow runs in exists on this host. */
+  sandboxSupported?: boolean;
+}): string | null {
+  if (options.sandboxSupported === false) {
+    return VERIFY_UNSUPPORTED_MESSAGE;
+  }
+
   if (options.hasPrompt) {
     return "Cannot combine --verify with --prompt.";
   }

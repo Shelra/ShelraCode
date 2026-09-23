@@ -547,8 +547,17 @@ function buildShellInitScript(settings: SandboxSettings): string {
   return (settings.shellInit ?? []).filter(Boolean).join(" && ");
 }
 
+/** Whether the Shuru sandbox (and so the `verify` sub-agent and `/verify`) can run on this host. */
+export function isShuruSupported(platform: string = process.platform, arch: string = process.arch): boolean {
+  return platform === "darwin" && arch === "arm64";
+}
+
+/** Said wherever the verify flow is refused, so every refusal gives the same reason and way forward. */
+export const VERIFY_UNSUPPORTED_MESSAGE =
+  "The verify flow runs in the Shuru sandbox, which needs macOS on Apple Silicon, so it is not available on this machine. Run the project's own checks directly instead (its tests, type-check, build, or a request against the running app).";
+
 function getSandboxUnsupportedReason(): string | null {
-  if (process.platform !== "darwin" || process.arch !== "arm64") {
+  if (!isShuruSupported()) {
     return "Shuru sandbox mode currently requires macOS on Apple Silicon.";
   }
   return null;

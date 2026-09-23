@@ -290,4 +290,11 @@ describe("verify entrypoint helpers", () => {
     expect(getVerifyCliError({ hasPrompt: true })).toBe("Cannot combine --verify with --prompt.");
     expect(getVerifyCliError({ hasMessageArgs: true })).toBe("Cannot combine --verify with an opening message.");
   });
+
+  it("refuses the verify flow where its sandbox cannot run, with a way forward", () => {
+    const refusal = getVerifyCliError({ sandboxSupported: false });
+    expect(refusal).toContain("macOS on Apple Silicon");
+    expect(refusal).toContain("Run the project's own checks directly");
+    expect(getVerifyCliError({ sandboxSupported: true })).toBeNull();
+  });
 });
