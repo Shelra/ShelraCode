@@ -124,7 +124,9 @@ shelra --prompt "summarize the repo state" --format json
 
 `--format json` emits a newline-delimited JSON event stream instead of the
 default human-readable text output. Events are semantic, step-level records such
-as `step_start`, `text`, `tool_use`, `step_finish`, and `error`.
+as `step_start`, `text`, `tool_use`, `step_finish`, and `error`. What the harness
+writes between steps or after the last one (a retry, a model switch, the
+`[Not verified …]` note that ends an unverified turn) arrives as a `text` event too.
 
 **Autonomous objective with a visible executable plan:**
 

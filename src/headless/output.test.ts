@@ -217,6 +217,45 @@ describe("headless output helpers", () => {
     }
   });
 
+  it("keeps the note the completion gate writes after the last step", () => {
+    const { observer, consumeChunk, flush } = createHeadlessJsonlEmitter("gate-session");
+    let combined = "";
+    observer.onStepStart?.({ stepNumber: 3, timestamp: 1 });
+    combined += consumeChunk({ type: "content", content: "All criteria verified." }).stdout ?? "";
+    observer.onStepFinish?.({ stepNumber: 3, timestamp: 2, finishReason: "stop", usage: {} });
+    const note = "\n\n[Not verified — 2 document(s) written, and no check can run a document.]";
+    combined += consumeChunk({ type: "content", content: note }).stdout ?? "";
+    combined += consumeChunk({ type: "done" }).stdout ?? "";
+    combined += flush().stdout ?? "";
+    const texts = combined
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.type === "text");
+    expect(texts.map((e) => e.text)).toEqual(["All criteria verified.", note]);
+    expect(texts[1]).toMatchObject({ stepNumber: 3, sessionID: "gate-session" });
+  });
+
+  it("keeps a notice written between two steps", () => {
+    const { observer, consumeChunk, flush } = createHeadlessJsonlEmitter();
+    let combined = "";
+    observer.onStepStart?.({ stepNumber: 1, timestamp: 1 });
+    combined += consumeChunk({ type: "content", content: "first" }).stdout ?? "";
+    observer.onStepFinish?.({ stepNumber: 1, timestamp: 2, finishReason: "stop", usage: {} });
+    const notice = "\n\n[model-a kept returning empty replies; continuing with model-b (free).]\n\n";
+    combined += consumeChunk({ type: "content", content: notice }).stdout ?? "";
+    observer.onStepStart?.({ stepNumber: 2, timestamp: 3 });
+    combined += consumeChunk({ type: "content", content: "second" }).stdout ?? "";
+    observer.onStepFinish?.({ stepNumber: 2, timestamp: 4, finishReason: "stop", usage: {} });
+    combined += flush().stdout ?? "";
+    const texts = combined
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.type === "text");
+    expect(texts.map((e) => e.text)).toEqual(["first", notice, "second"]);
+  });
+
   it("emits error events from stream chunks", () => {
     const sessionId = "err-session";
     const { consumeChunk } = createHeadlessJsonlEmitter(sessionId);

@@ -229,10 +229,26 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
     return sessionId ? { ...event, sessionID: sessionId } : event;
   }
 
+  /** The buffered assistant text as one `text` line, or "" when there is none; empties the buffer. */
+  function takeText(stepNumber: number): string {
+    if (textBuffer.length === 0) return "";
+    const line = jsonLine(
+      withSession({
+        type: "text",
+        stepNumber,
+        text: textBuffer,
+        timestamp: Date.now(),
+      }) as HeadlessJsonEvent,
+    );
+    textBuffer = "";
+    return line;
+  }
+
   const observer: ProcessMessageObserver = {
     onStepStart(info: ProcessMessageStepStart) {
+      // Text written between two steps is the harness's own notice (a retry, a model switch).
+      pending += takeText(currentStep);
       currentStep = info.stepNumber;
-      textBuffer = "";
       pending += jsonLine(
         withSession({
           type: "step_start",
@@ -253,17 +269,7 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
       );
     },
     onStepFinish(info: ProcessMessageStepFinish) {
-      if (textBuffer.length > 0) {
-        pending += jsonLine(
-          withSession({
-            type: "text",
-            stepNumber: info.stepNumber,
-            text: textBuffer,
-            timestamp: Date.now(),
-          }) as HeadlessJsonEvent,
-        );
-        textBuffer = "";
-      }
+      pending += takeText(info.stepNumber);
       pending += jsonLine(
         withSession({
           type: "step_finish",
@@ -291,7 +297,8 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
   }
 
   function flush(): HeadlessWrites {
-    const stdout = drainPending();
+    // Text after the last step is how a turn ends: the completion gate's note, a pause, a cancel.
+    const stdout = drainPending() + takeText(currentStep);
     return stdout ? { stdout } : {};
   }
 
@@ -303,20 +310,9 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
         textBuffer += chunk.content ?? "";
         break;
 
-      case "tool_calls": {
-        if (textBuffer.length > 0) {
-          stdout += jsonLine(
-            withSession({
-              type: "text",
-              stepNumber: currentStep,
-              text: textBuffer,
-              timestamp: Date.now(),
-            }) as HeadlessJsonEvent,
-          );
-          textBuffer = "";
-        }
+      case "tool_calls":
+        stdout += takeText(currentStep);
         break;
-      }
 
       case "tool_result": {
         if (chunk.toolCall && chunk.toolResult) {
