@@ -15,6 +15,7 @@ import {
 } from "./reflection";
 import { promoteProceduresToSkills, skillPathFor } from "./skills";
 import {
+  creditMemoryUse,
   listMemoryRecords,
   projectMemoryScope,
   readMemoryEntry,
@@ -196,7 +197,7 @@ describe("automatic memory capture", () => {
     expect(provider.requests).toHaveLength(0);
   });
 
-  it("promotes a procedure to a project skill once it has been used twice", () => {
+  it("promotes a procedure to a project skill once it was part of two passing turns, not for being retrieved", () => {
     const scope = projectMemoryScope(workspace);
     admitCandidates(scope, [
       {
@@ -212,8 +213,12 @@ describe("automatic memory capture", () => {
     ]);
     const before = promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope));
     expect(before.promoted).toEqual([]);
+    // Retrieved twice, helped nobody yet (audit doc 15, M3): no skill.
     recordMemoryUse(scope, ["regenerate-api-client"]);
     recordMemoryUse(scope, ["regenerate-api-client"]);
+    expect(promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope)).promoted).toEqual([]);
+    creditMemoryUse(scope, ["regenerate-api-client"], 1);
+    creditMemoryUse(scope, ["regenerate-api-client"], 1);
     const after = promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope));
     expect(after.promoted).toEqual(["regenerate-api-client"]);
     const skill = readFileSync(skillPathFor(workspace, "regenerate-api-client"), "utf8");

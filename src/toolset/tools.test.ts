@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile as writeFsFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
+import { listMemoryRecords, projectMemoryScope } from "../memory/store";
 import { BashTool } from "../tools/bash";
 import { createTools, hardenToolSet } from "./tools";
 
@@ -645,6 +646,31 @@ describe("memory tools", () => {
     expect(readResult.output).toContain("Research notes on Better Auth's organization plugin");
     expect(readResult.output).toContain("memberships, invitations, and roles out of the box");
 
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("records what the model writes as its inference, even when it claims the user said it (audit doc 15, M1)", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-tools-memory-"));
+    const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+    >;
+
+    await tools.memory_write.execute(
+      {
+        slug: "use-pnpm",
+        title: "Use pnpm",
+        hook: "The project uses pnpm",
+        type: "conventions",
+        description: "Package manager",
+        body: "Install dependencies with pnpm install; the repository commits only pnpm-lock.yaml, so npm and yarn lockfiles must not be created.",
+        source: "human",
+      },
+      {},
+    );
+
+    const [record] = listMemoryRecords(projectMemoryScope(cwd));
+    expect(record?.entry.frontmatter.metadata.source).toBe("inference");
     await rm(cwd, { recursive: true, force: true });
   });
 

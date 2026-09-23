@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
+import { listMemoryRecords, projectMemoryScope, writeMemoryEntry } from "../memory/store";
 import { clearCatalog, primeCatalog } from "../models/catalog";
 import type {
   ProviderAdapter,
@@ -1329,5 +1330,51 @@ describe("evidence-driven repair (audit doc 15, Phase 2)", () => {
     expect(asked[1]).not.toContain("that approach did not work");
     expect(asked[2]).toContain("that approach did not work");
     expect(requests.map((request) => request.reasoningEffort)).toEqual(["low", "low", "high", "high"]);
+  });
+});
+
+describe("memory credit from the contract (audit doc 15, M3)", () => {
+  /** A project that states its tests and remembers one fact relevant to a clock. */
+  function projectWithMemory(): string {
+    const dir = mkdtempSync(join(tmpdir(), "shelra-memory-credit-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+    writeMemoryEntry(projectMemoryScope(dir), {
+      slug: "digital-clock-ticks",
+      title: "Digital clock ticks with setInterval",
+      hook: "The digital clock redraws every second from one setInterval",
+      type: "important-codepaths",
+      description: "How the digital clock ticks",
+      body: "The digital clock keeps one setInterval of 1000 ms and redraws the time on every tick; a second interval makes it tick twice.",
+    });
+    return dir;
+  }
+  const creditOf = (dir: string) =>
+    listMemoryRecords(projectMemoryScope(dir)).find((record) => record.slug === "digital-clock-ticks")?.entry
+      .frontmatter.metadata.credit;
+
+  it("credits a memory that was there when the project's checks passed, and debits one that was not enough", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const passing = projectWithMemory();
+    const passingAgent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider: new ScenarioProvider([{ type: "text-delta", text: "Done." }]),
+      cwd: passing,
+      checkRunner: vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 })),
+    });
+    for await (const _chunk of passingAgent.processMessage("Create a digital clock that ticks")) {
+      // drain
+    }
+    expect(passingAgent.getLastMemoryContext()?.expanded).toContain("digital-clock-ticks");
+    expect(creditOf(passing)).toBe(1);
+
+    const failing = projectWithMemory();
+    const failingAgent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider: new ScenarioProvider([{ type: "text-delta", text: "Done." }]),
+      cwd: failing,
+      checkRunner: vi.fn<ContractCheckRunner>(async () => ({ passed: false, output: "1 fail", durationMs: 5 })),
+    });
+    for await (const _chunk of failingAgent.processMessage("Create a digital clock that ticks")) {
+      // drain
+    }
+    expect(creditOf(failing)).toBe(-1);
   });
 });

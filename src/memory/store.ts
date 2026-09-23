@@ -167,6 +167,7 @@ function serializeEntry(frontmatter: MemoryFrontmatter, body: string): string {
   if (tags) lines.push(`  tags: ${tags}`);
   if (meta.uses !== undefined) lines.push(`  uses: ${meta.uses}`);
   if (meta.lastUsed) lines.push(`  lastUsed: ${meta.lastUsed}`);
+  if (meta.credit !== undefined) lines.push(`  credit: ${meta.credit}`);
   if (meta.supersedes) lines.push(`  supersedes: ${meta.supersedes}`);
   if (meta.revision !== undefined) lines.push(`  revision: ${meta.revision}`);
   lines.push("---", "", body.trimEnd(), "");
@@ -199,9 +200,11 @@ function parseEntryFile(raw: string): MemoryEntry | null {
   const source = readScalar(frontmatterBlock, "source");
   const confidenceRaw = readScalar(frontmatterBlock, "confidence");
   const usesRaw = readScalar(frontmatterBlock, "uses");
+  const creditRaw = readScalar(frontmatterBlock, "credit");
   const revisionRaw = readScalar(frontmatterBlock, "revision");
   const confidence = confidenceRaw === undefined ? undefined : Number(confidenceRaw);
   const uses = usesRaw === undefined ? undefined : Number(usesRaw);
+  const credit = creditRaw === undefined ? undefined : Number(creditRaw);
   const revision = revisionRaw === undefined ? undefined : Number(revisionRaw);
 
   return {
@@ -219,6 +222,7 @@ function parseEntryFile(raw: string): MemoryEntry | null {
         tags: parseYamlList(readScalar(frontmatterBlock, "tags")),
         uses: uses !== undefined && Number.isFinite(uses) ? uses : undefined,
         lastUsed: readScalar(frontmatterBlock, "lastUsed"),
+        credit: credit !== undefined && Number.isFinite(credit) ? credit : undefined,
         supersedes: readScalar(frontmatterBlock, "supersedes"),
         revision: revision !== undefined && Number.isFinite(revision) ? revision : undefined,
       },
@@ -370,6 +374,7 @@ export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): M
       tags: normalizeTags(input.tags ?? previous?.frontmatter.metadata.tags),
       uses: previous?.frontmatter.metadata.uses ?? 0,
       lastUsed: previous?.frontmatter.metadata.lastUsed,
+      credit: previous?.frontmatter.metadata.credit,
       supersedes: input.supersedes ?? previous?.frontmatter.metadata.supersedes,
       revision,
     },
@@ -413,6 +418,24 @@ export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): v
       if (!entry) continue;
       entry.frontmatter.metadata.uses = (entry.frontmatter.metadata.uses ?? 0) + 1;
       entry.frontmatter.metadata.lastUsed = now;
+      writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
+    } catch {
+      // best effort
+    }
+  }
+}
+
+/**
+ * Credits the entries injected into a turn by what the turn's checks showed (audit doc 15, M3): +1 when the
+ * project's checks passed on its final code, −1 when they still failed. Ranking and skill promotion trust
+ * this, not how often an entry was retrieved.
+ */
+export function creditMemoryUse(scope: MemoryScope, slugs: readonly string[], delta: 1 | -1): void {
+  for (const slug of slugs) {
+    try {
+      const { entry } = readMemoryEntry(scope, slug);
+      if (!entry) continue;
+      entry.frontmatter.metadata.credit = (entry.frontmatter.metadata.credit ?? 0) + delta;
       writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
     } catch {
       // best effort

@@ -36,11 +36,18 @@ export interface MemoryContextOptions {
   maxEntries?: number;
   /** Below this relevance an entry is listed in the index only, never expanded. */
   minRelevance?: number;
+  /** Maximum number of other entries listed by title; the rest are counted, and memory_list shows them. */
+  maxListed?: number;
 }
 
 const DEFAULT_BODY_BUDGET = 3_000;
 const DEFAULT_MAX_ENTRIES = 4;
 const DEFAULT_MIN_RELEVANCE = 0.08;
+/**
+ * Every entry listed in every request made memory growth a per-request token cost (audit doc 15, M6); the
+ * most relevant are listed and the rest counted.
+ */
+const DEFAULT_MAX_LISTED = 12;
 const DAY_MS = 24 * 60 * 60_000;
 
 function pathTokens(paths: readonly string[] | undefined): Set<string> {
@@ -125,7 +132,11 @@ export function rankMemories(
     const recency = Number.isFinite(ageDays) ? Math.exp(-ageDays / 90) : 0.5;
     const trust = MEMORY_SOURCE_WEIGHT[meta.source ?? "inference"] * (meta.confidence ?? 0.7);
     const staleness = detectStaleness(workspace, record, now);
-    const score = (relevance + pathBoost) * (0.6 + 0.4 * trust) * (0.7 + 0.3 * recency) * (staleness.stale ? 0.7 : 1);
+    // Entries that were there when checks passed rank a little higher, ones that were there when they
+    // failed a little lower (audit doc 15, M3); bounded so relevance still decides.
+    const usefulness = 1 + 0.08 * Math.max(-3, Math.min(5, meta.credit ?? 0));
+    const score =
+      (relevance + pathBoost) * (0.6 + 0.4 * trust) * (0.7 + 0.3 * recency) * (staleness.stale ? 0.7 : 1) * usefulness;
     ranked.push({
       record,
       score,
@@ -173,7 +184,9 @@ export function buildMemoryContext(
     used += cost;
   }
   const expandedSlugs = new Set(expanded.map((item) => item.record.slug));
-  const listed = ranked.filter((item) => !expandedSlugs.has(item.record.slug));
+  const others = ranked.filter((item) => !expandedSlugs.has(item.record.slug));
+  const listed = others.slice(0, options.maxListed ?? DEFAULT_MAX_LISTED);
+  const unlisted = others.length - listed.length;
 
   const lines: string[] = [
     "PROJECT MEMORY:",
@@ -196,6 +209,7 @@ export function buildMemoryContext(
         `- ${item.record.index.title} (${item.record.index.file}) — ${item.record.index.hook}${item.record.origin === "user" ? " [user-wide]" : ""}${item.stale ? " [may be stale]" : ""}`,
       );
     }
+    if (unlisted > 0) lines.push(`- … and ${unlisted} more; memory_list shows them all.`);
   }
   return {
     text: lines.join("\n"),

@@ -78,6 +78,11 @@ export interface MemoryFrontmatter {
     /** How many turns retrieval injected this entry. */
     uses?: number;
     lastUsed?: string;
+    /**
+     * Usefulness, not retrieval: +1 for each turn this entry was injected into whose project checks then
+     * passed on the final code, −1 for each that still failed them (audit doc 15, M3).
+     */
+    credit?: number;
     /** Slug of the entry this one replaced. */
     supersedes?: string;
     /** Number of times this slug has been rewritten. */

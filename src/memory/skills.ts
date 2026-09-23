@@ -5,15 +5,17 @@ import { recordMemoryPromotion } from "./store";
 import type { MemoryRecord, MemoryScope } from "./types";
 
 /**
- * Knowledge → skill. A `procedure` memory that retrieval has injected into at least two turns and
- * that came from a trustworthy source is reusable capability, not just a fact; it is promoted to a
+ * Knowledge → skill. A `procedure` memory that was injected into at least two turns whose project checks
+ * then passed (its credit, audit doc 15 M3: being retrieved is not the same as helping) and that came from
+ * a trustworthy source is reusable capability, not just a fact; it is promoted to a
  * project skill under `.agents/skills/<slug>/SKILL.md`, where the existing skill loader surfaces it
  * with progressive disclosure (name + description always, body on demand). Promotion is
  * deterministic and idempotent: the skill file is rewritten only when the memory changed after it.
  */
 
 export interface PromotionOptions {
-  minUses?: number;
+  /** Passing turns the entry must have been part of. */
+  minCredit?: number;
   minConfidence?: number;
   now?: number;
 }
@@ -23,7 +25,7 @@ export interface PromotionResult {
   skipped: Array<{ slug: string; reason: string }>;
 }
 
-const DEFAULT_MIN_USES = 2;
+const DEFAULT_MIN_CREDIT = 2;
 const DEFAULT_MIN_CONFIDENCE = 0.6;
 
 export function skillPathFor(workspace: string, slug: string): string {
@@ -45,7 +47,7 @@ function renderSkill(record: MemoryRecord): string {
     "",
     "## Provenance",
     "",
-    `Promoted automatically from project memory \`${record.slug}\` (source: ${meta.source ?? "inference"}, confidence ${Math.round((meta.confidence ?? 0.6) * 100)}%, used in ${meta.uses ?? 0} turns${meta.lastConfirmed ? `, last confirmed ${meta.lastConfirmed.slice(0, 10)}` : ""}).`,
+    `Promoted automatically from project memory \`${record.slug}\` (source: ${meta.source ?? "inference"}, confidence ${Math.round((meta.confidence ?? 0.6) * 100)}%, credited in ${meta.credit ?? 0} passing turns${meta.lastConfirmed ? `, last confirmed ${meta.lastConfirmed.slice(0, 10)}` : ""}).`,
     "If this procedure stops working, correct the memory entry with memory_write and the skill will be regenerated.",
     "",
   ].join("\n");
@@ -57,14 +59,17 @@ export function promoteProceduresToSkills(
   records: readonly MemoryRecord[],
   options: PromotionOptions = {},
 ): PromotionResult {
-  const minUses = options.minUses ?? DEFAULT_MIN_USES;
+  const minCredit = options.minCredit ?? DEFAULT_MIN_CREDIT;
   const minConfidence = options.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
   const result: PromotionResult = { promoted: [], skipped: [] };
   for (const record of records) {
     const meta = record.entry.frontmatter.metadata;
     if (meta.type !== "procedure") continue;
-    if ((meta.uses ?? 0) < minUses) {
-      result.skipped.push({ slug: record.slug, reason: `used ${meta.uses ?? 0} times, needs ${minUses}` });
+    if ((meta.credit ?? 0) < minCredit) {
+      result.skipped.push({
+        slug: record.slug,
+        reason: `credited in ${meta.credit ?? 0} passing turns, needs ${minCredit}`,
+      });
       continue;
     }
     const trusted = meta.source === "human" || meta.source === "observed" || (meta.confidence ?? 0) >= minConfidence;

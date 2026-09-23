@@ -31,7 +31,13 @@ import { buildMcpToolSet } from "../mcp/runtime";
 import { admitCandidates, extractUserDirectives, reflectOnTurn, type TurnCommand } from "../memory/reflection";
 import { buildMemoryContext, type MemoryContext } from "../memory/retrieval";
 import { promoteProceduresToSkills } from "../memory/skills";
-import { listMemoryRecords, listUserMemoryRecords, projectMemoryScope, recordMemoryUse } from "../memory/store";
+import {
+  creditMemoryUse,
+  listMemoryRecords,
+  listUserMemoryRecords,
+  projectMemoryScope,
+  recordMemoryUse,
+} from "../memory/store";
 import {
   type BudgetLimits,
   type BudgetScope,
@@ -2677,6 +2683,8 @@ export class Agent {
     let lastContractFailure: { signature: string; mutationEvents: number; state: WorkspaceState | null } | null = null;
     /** After a repair attempt that changed nothing about the failures, later rounds get the model's top effort. */
     let repairEscalated = false;
+    /** The turn's contract ran and every check passed on the final code. */
+    let contractPassed = false;
     const checkRuns: Array<{
       command: string;
       passed: boolean;
@@ -3338,6 +3346,7 @@ export class Agent {
               });
             }
             const failing = results.filter((result) => !result.passed);
+            contractPassed = failing.length === 0;
             if (failing.length === 0) {
               for (const result of results) {
                 this.turnVerificationEvidence.push(
@@ -3399,6 +3408,8 @@ export class Agent {
               } on the final code${olderThanTurn ? ", as before this turn" : ""}, after ${verificationRetries} automatic request(s).`;
               this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
               this.persistKernelIndex(reason);
+              // The memories this turn was given did not lead to passing checks (audit doc 15, M3).
+              if (!this.ablations.has("memory")) creditMemoryUse(memoryScope, memoryContext.expanded, -1);
               const verdict = `[Not verified — ${reason}]`;
               this.recordVerdict(verdict);
               yield { type: "content", content: `\n\n${verdict}` };
@@ -3528,6 +3539,8 @@ export class Agent {
           }
 
           this.persistKernelIndex();
+          // The memories this turn was given were there when the project's checks passed (audit doc 15, M3).
+          if (contractPassed && !this.ablations.has("memory")) creditMemoryUse(memoryScope, memoryContext.expanded, 1);
           // Learning after acting: a verified change, a failure that was worked through, or a
           // substantial investigation becomes durable project memory through the write gate.
           reportStatus("recap", "Updating project memory");

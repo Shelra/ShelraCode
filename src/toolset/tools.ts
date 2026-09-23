@@ -721,12 +721,6 @@ export function createTools(
             "Workspace-relative files this fact depends on; a later change to one marks the entry as possibly stale",
           ),
         confidence: z.number().min(0).max(1).optional().describe("How sure you are, 0-1 (default 0.7)"),
-        source: z
-          .enum(["human", "observed"])
-          .optional()
-          .describe(
-            "'human' only when the user stated it; 'observed' when a command or test showed it; omit for your own inference",
-          ),
         scope: z
           .enum(["project", "user"])
           .optional()
@@ -734,18 +728,7 @@ export function createTools(
             "'user' for a preference or standing rule the user wants in every project (language, tone, style, tooling habits); 'project' (default) for everything tied to this codebase",
           ),
       }),
-      execute: async ({
-        slug,
-        title,
-        hook,
-        type,
-        description,
-        body,
-        related_files,
-        confidence,
-        source,
-        scope: scopeName,
-      }) => {
+      execute: async ({ slug, title, hook, type, description, body, related_files, confidence, scope: scopeName }) => {
         try {
           const scope = scopeName === "user" ? userMemoryScope() : projectMemoryScope(cwd());
           const candidate = {
@@ -757,7 +740,9 @@ export function createTools(
             body,
             relatedFiles: related_files,
             confidence: confidence ?? 0.7,
-            source: source ?? ("inference" as const),
+            // Provenance is the host's to assign (audit doc 15, M1): what the model writes is its inference.
+            // "human" comes only from the user's own words, "observed" only from what the host saw run.
+            source: "inference" as const,
           };
           // Model-initiated writes pass the same gate as automatic ones: no secrets, no
           // instruction-shaped text, no duplicate of an existing entry, no overwrite of a human statement.

@@ -93,6 +93,25 @@ describe("memory retrieval", () => {
     expect(context.text).toContain("MAY BE STALE");
   });
 
+  it("lists only the most relevant other entries and counts the rest (audit doc 15, M6)", () => {
+    const scope = projectMemoryScope(workspace);
+    for (let index = 0; index < 20; index += 1) {
+      writeMemoryEntry(scope, {
+        slug: `note-${index}`,
+        title: `Note ${index}`,
+        hook: `A saved note number ${index} about an unrelated part of the project`,
+        type: "decisions",
+        description: "Unrelated note",
+        body: `Decision ${index}: this module keeps its own cache and never shares it with other modules.`,
+      });
+    }
+    const context = buildMemoryContext(listMemoryRecords(scope), { text: "fix the parser", paths: [] }, workspace, {
+      maxListed: 5,
+    });
+    expect(context.listed).toHaveLength(5);
+    expect(context.text).toContain(`… and ${20 - context.expanded.length - 5} more; memory_list shows them all.`);
+  });
+
   it("returns nothing for an empty store", () => {
     expect(buildMemoryContext([], { text: "anything" }, workspace)).toEqual({ text: "", expanded: [], listed: [] });
   });
