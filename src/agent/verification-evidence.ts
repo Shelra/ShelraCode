@@ -253,7 +253,7 @@ function checkOf(rawTokens: readonly string[]): boolean {
   const flags = CHECK_FLAGS[program];
   if (flags && args.some((arg) => flags.includes(arg))) return true;
   const subcommands = CHECK_SUBCOMMANDS[program];
-  if (subcommands && subcommands.includes(args[0] ?? "")) return true;
+  if (subcommands?.includes(args[0] ?? "")) return true;
   if (SCRIPT_RUNNERS.has(program)) {
     const script = args[0] === "run" || args[0] === "run-script" ? args[1] : args[0];
     if (script === "t") return true;

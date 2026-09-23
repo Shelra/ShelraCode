@@ -128,6 +128,7 @@ import {
   maskedVerificationCommand,
 } from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
+import { captureWorkspaceState, changedPaths, mergeChangedFiles, type WorkspaceState } from "./workspace-state";
 
 const MAX_TOOL_ROUNDS = 400;
 
@@ -2496,6 +2497,11 @@ export class Agent {
     const requirementChecklist = isRequirementDense(userMessage) ? extractRequirements(userMessage) : [];
     let requirementAudit: { mutations: number; evidence: number } | null = null;
     let turnMutationEvents = 0;
+    // What the workspace looked like when the turn started and when the last check passed: the gate
+    // compares them with the final state, so a change made through the shell counts, and a check that
+    // passed before later changes does not vouch for the final code.
+    const turnStartState = this.mode === "agent" ? captureWorkspaceState(this.bash.getCwd()) : null;
+    let lastPassingCheck: { state: WorkspaceState; mutationEvents: number; evidence: string } | null = null;
 
     try {
       while (true) {
@@ -2705,8 +2711,16 @@ export class Agent {
                         tc.function.arguments,
                         this.kernel?.snapshot().mutations ?? [],
                       );
-                if (evidence) this.turnVerificationEvidence.push(evidence);
-                else if (tr.success) {
+                if (evidence) {
+                  this.turnVerificationEvidence.push(evidence);
+                  if (turnStartState) {
+                    lastPassingCheck = {
+                      state: captureWorkspaceState(this.bash.getCwd()),
+                      mutationEvents: turnMutationEvents,
+                      evidence,
+                    };
+                  }
+                } else if (tr.success) {
                   const masked = maskedVerificationCommand(tc.function.name, tc.function.arguments);
                   if (masked) maskedChecks.add(masked);
                 }
@@ -2971,14 +2985,36 @@ export class Agent {
             return;
           }
 
-          const mutations = this.kernel?.snapshot().mutations ?? [];
+          // Every file the turn changed, by the file tools or any other way (a shell command, a code
+          // generator): the workspace is read again and compared with its state at the turn's start.
+          const cwd = this.bash.getCwd();
+          const endState = turnStartState ? captureWorkspaceState(cwd) : null;
+          const mutations = mergeChangedFiles(
+            cwd,
+            this.kernel?.snapshot().mutations ?? [],
+            (turnStartState && endState && changedPaths(turnStartState, endState)) ?? [],
+          );
           const mutatedThisTurn = mutations.length > 0;
+          // A passing check vouches only for the code it ran against: anything changed after it,
+          // through a file tool or the shell, needs the checks to run again.
+          const changedAfterCheck = lastPassingCheck
+            ? mergeChangedFiles(
+                cwd,
+                turnMutationEvents > lastPassingCheck.mutationEvents ? (this.kernel?.snapshot().mutations ?? []) : [],
+                (endState && changedPaths(lastPassingCheck.state, endState)) ?? [],
+              )
+            : [];
+          const staleEvidence =
+            mutatedThisTurn &&
+            lastPassingCheck !== null &&
+            (turnMutationEvents > lastPassingCheck.mutationEvents || changedAfterCheck.length > 0);
           // A fix made in answer to the requirement audit is as unverified as the first write
           // until something runs again.
           const unverifiedSinceAudit =
-            requirementAudit !== null &&
-            turnMutationEvents > requirementAudit.mutations &&
-            this.turnVerificationEvidence.length === requirementAudit.evidence;
+            staleEvidence ||
+            (requirementAudit !== null &&
+              turnMutationEvents > requirementAudit.mutations &&
+              this.turnVerificationEvidence.length === requirementAudit.evidence);
           // Nothing runs a document, and a code check says nothing about what one states. A turn
           // that only wrote documents is asked once to check its facts, then reported unverified
           // whatever else ran (live 2026-09-23: pressed three times for a command, a model wrote a
@@ -2998,11 +3034,15 @@ export class Agent {
             if (verificationRetries < maxRetries) {
               verificationRetries += 1;
               const blockedLine = [
-                unverifiedSinceAudit
-                  ? "Completion blocked: you changed files after your last verification run and nothing has run since."
-                  : criteria.length > 0
-                    ? "Completion blocked: none of your stated acceptance criteria have been verified yet."
-                    : `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`,
+                staleEvidence && lastPassingCheck
+                  ? `Completion blocked: you changed ${
+                      changedAfterCheck.length > 0 ? changedAfterCheck.slice(0, 10).join(", ") : "files"
+                    } after your last passing check (${lastPassingCheck.evidence}), so that check says nothing about the final code. Run the checks again now.`
+                  : unverifiedSinceAudit
+                    ? "Completion blocked: you changed files after your last verification run and nothing has run since."
+                    : criteria.length > 0
+                      ? "Completion blocked: none of your stated acceptance criteria have been verified yet."
+                      : `Completion blocked: you changed ${mutations.length} file(s) but ran no verification.`,
                 ...(maskedChecks.size > 0
                   ? [
                       `Not counted: ${[...maskedChecks].map((check) => `\`${check}\``).join(", ")}. After a pipe, \`;\`, \`||\` or a line break the exit code is the next command's, not the check's. Run the check on its own; long output is shortened for you.`,

@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -682,7 +682,8 @@ describe("completion/verification gate", () => {
     }
 
     expect(provider.round).toBe(4);
-    expect(lastUserText(provider.requests[3])).toContain("after your last verification run");
+    expect(lastUserText(provider.requests[3])).toContain("after your last passing check");
+    expect(lastUserText(provider.requests[3])).toContain("src/slug.ts");
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
     expect(chunks.at(-1)).toEqual({ type: "done" });
   });
@@ -701,5 +702,99 @@ describe("completion/verification gate", () => {
     }
 
     expect(provider.round).toBe(2);
+  });
+
+  it("asks again when files change after the last passing check (audit 2026-09-23)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const lexer = { path: "src/lexer.ts", content: "x" };
+    const provider = new ScenarioProvider([
+      [
+        toolCallEvent("call-test", "bash", { command: "bun test" }),
+        toolResultEvent("call-test", "bash", { success: true, output: "3 pass" }, { command: "bun test" }),
+        toolCallEvent("call-lexer", "write_file", lexer),
+        toolResultEvent(
+          "call-lexer",
+          "write_file",
+          {
+            success: true,
+            output: "Created src/lexer.ts",
+            diff: { filePath: "src/lexer.ts", additions: 1, removals: 0, patch: "", isNew: true },
+          },
+          lexer,
+        ),
+        { type: "text-delta", text: "Done: tests pass." },
+      ],
+      [
+        toolCallEvent("call-retest", "bash", { command: "bun test" }),
+        toolResultEvent("call-retest", "bash", { success: true, output: "4 pass" }, { command: "bun test" }),
+        { type: "text-delta", text: "Ran the tests again on the final code." },
+      ],
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    // Round 1 wrote without checking, round 2 checked and then edited again, round 3 re-ran the check.
+    expect(provider.round).toBe(3);
+    expect(lastUserText(provider.requests[2])).toContain("after your last passing check");
+    expect(lastUserText(provider.requests[2])).toContain("src/lexer.ts");
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+  });
+
+  it("counts a change made through the shell (audit 2026-09-23)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    // The scripted model changes code with a shell command; nothing goes through write_file.
+    const workspace = mkdtempSync(join(tmpdir(), "shelra-gate-shell-"));
+    const command = "node -e \"require('fs').writeFileSync('parse.ts', 'export {}')\"";
+    let round = 0;
+    const provider: ProviderAdapter = {
+      id: "shell-writer",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({
+        modelId,
+        modelInfo: {
+          id: modelId,
+          name: "Gate test model",
+          contextWindow: 32_768,
+          inputPrice: 0,
+          outputPrice: 0,
+          reasoning: false,
+          description: "Test-only provider",
+          supportsClientTools: true,
+          supportsMaxOutputTokens: true,
+          runtimeKind: "managed-llama",
+        },
+      }),
+      stream: () => {
+        round += 1;
+        const first = round === 1;
+        return {
+          events: (async function* () {
+            if (first) {
+              yield toolCallEvent("call-shell", "bash", { command });
+              writeFileSync(join(workspace, "parse.ts"), "export {};\n");
+              yield toolResultEvent("call-shell", "bash", { success: true, output: "" }, { command });
+            }
+            yield { type: "text-delta", text: "Done." } as ProviderEvent;
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: workspace });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Fix the parser")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(round).toBe(4);
+    const notice = chunks.find((c) => c.content?.includes("Not verified"));
+    expect(notice?.content).toContain("1 file(s) changed");
   });
 });
