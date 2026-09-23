@@ -35,8 +35,11 @@ sample. Principles, audience and brand: `PRODUCT.md`.
   criterion whose command failed before the change joins them. Without stated checks, a real check program must
   have run after the last change, shell writes included. Tests that existed before the request are protected
   unless it asks to change them (audit and roadmap: `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md`).
-- **No backend service exists.** The CLI is the runtime (Bun, local SQLite, no server framework). `frontend/` is a
-  separate Next.js app (landing page, sign-in) whose server side is route handlers and server actions: `frontend/CLAUDE.md`.
+- **The CLI is the runtime** (Bun, local SQLite, no server framework) and never depends on a server. `backend/` is
+  Phase 1 of the account service (Bun API + Supabase Postgres/Auth, not deployed): accounts and device tokens for
+  `shelra login`/`whoami`/`logout`, which the agent never calls; boundaries and backlog in
+  `docs/architecture/16-BACKEND.md`, rules in `backend/CLAUDE.md`. `frontend/` is a separate Next.js app (landing
+  page, sign-in, demo dashboard) whose server side is route handlers and server actions: `frontend/CLAUDE.md`.
 - **Retiring, do not extend:** `src/autonomy/` (`AutonomyKernel`), reached only by `--autonomous` and the
   `shelra-autonomy` bench adapter. Decided in docs/architecture/14 §25.8, not started: rebuild `--autonomous` on
   `Agent.processMessage`, keeping `acceptance.ts`, `journal.ts` and `CheckSpec`.
@@ -58,7 +61,8 @@ sample. Principles, audience and brand: `PRODUCT.md`.
 4. Current docs: `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md` (the measured state of every stage of a
    turn, the P0 blockers and the dependency-ordered roadmap, 2026-09-23), README.md, PRODUCT.md,
    `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` (a chronological log; §23–§26 are current),
-   `docs/architecture/OPENROUTER-RUNTIME.md`, `docs/design/`, `bench/README.md` (history: `bench/history/`).
+   `docs/architecture/16-BACKEND.md` (the account service), `docs/architecture/OPENROUTER-RUNTIME.md`,
+   `docs/design/`, `bench/README.md` (history: `bench/history/`).
 5. Your auto memory: dated notes. Confirm that a file, flag or commit it names still exists before relying on it.
 6. History, not guidance: `docs/architecture/00`–`13` (the migration off the original fork), `docs/audits/`,
    `docs/future-research/` (strategy research; start at `00`), `.cursor/rules/` (stale in places).
@@ -105,6 +109,7 @@ command and its result. Anything you could not check is reported as not verified
 | Agent or harness behavior | a test that fails before the change and passes after (see `src/agent/resilience.test.ts`; fake model: `src/providers/fake.ts`) |
 | System prompt or tool text | a bench suite or field-case re-run: prompt text is behavior |
 | TUI / web app | `src/ui/CLAUDE.md` / `frontend/CLAUDE.md` |
+| Account service (`backend/`) | `backend/CLAUDE.md` |
 
 - CI runs format, lint, typecheck and build, not tests (green again since `28ee818`, see line endings in
   AGENTS.md): run the tests yourself.

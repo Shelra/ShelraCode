@@ -32,3 +32,31 @@ jobs:
 
     - name: Build standalone binary
       run: bun run build:binary
+
+  # The account service (backend/): its own package and Bun version. Its tests need no network or secrets:
+  # Postgres runs in-process (PGlite).
+  backend:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.4.1
+
+    - name: Install Dependencies
+      working-directory: backend
+      run: bun install --frozen-lockfile
+
+    - name: Format and Lint
+      run: bunx @biomejs/biome@2.4.8 check backend
+
+    - name: Type Check
+      working-directory: backend
+      run: bun run typecheck
+
+    - name: Test
+      working-directory: backend
+      run: bun test

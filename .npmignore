@@ -8,6 +8,9 @@ biome.json
 # Nested migration reference checkout — never publish this
 ShelraCode/
 
+# The account service is deployed on its own, never shipped inside the CLI package
+backend/
+
 # Repo-only tooling / config
 .gitattributes
 .husky/

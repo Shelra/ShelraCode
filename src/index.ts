@@ -1895,6 +1895,37 @@ authCommand
     console.log("OpenRouter API key saved. Key material is never printed or logged.");
   });
 
+// The ShelraCode account (backend/). Only these commands reach the account service; the agent never does.
+program
+  .command("login")
+  .description("Connect this machine to your ShelraCode account with a code sent by email")
+  .requiredOption(
+    "--api-url <url>",
+    "Account service URL (no public service is deployed yet; a local backend/ listens on http://localhost:3001)",
+  )
+  .option("--email <email>", "Account email (asked when omitted)")
+  .option("--name <name>", "Name for this machine's token (default: shelra on <hostname>)")
+  .action(async (options: { apiUrl: string; email?: string; name?: string }) => {
+    const { runLogin } = await import("./account/commands");
+    process.exitCode = await runLogin(options);
+  });
+
+program
+  .command("whoami")
+  .description("Show the ShelraCode account this machine is connected to")
+  .action(async () => {
+    const { runWhoami } = await import("./account/commands");
+    process.exitCode = await runWhoami();
+  });
+
+program
+  .command("logout")
+  .description("Revoke this machine's account token and remove it")
+  .action(async () => {
+    const { runLogout } = await import("./account/commands");
+    process.exitCode = await runLogout();
+  });
+
 program
   .command("update")
   .description(`Update ${CLI_NAME} to the latest release`)

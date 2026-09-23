@@ -114,6 +114,10 @@ or `off`; Vitest runs with it off).
   pages use Auth.js (GitHub, Google, and email and password with users in libSQL;
   JWT sessions); credentials go in `frontend/.env.local` (see `frontend/.env.example`),
   never in the repo.
+- `backend/` is the account service (Bun API over Supabase Postgres and Auth), a separate
+  package with its own lockfile and `bun test` suites; root scripts, root Vitest and the
+  npm package exclude it. Its values go in `backend/.env` (see `backend/.env.example`).
+  See `backend/README.md` and `docs/architecture/16-BACKEND.md`.
 
 ## Resilience (hard rule)
 
