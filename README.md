@@ -581,6 +581,14 @@ shelra --remote --api-key your_key_here --base-url https://provider.example/v1
 
 Cloud mode requires an OpenRouter key; local mode does not.
 
+**The provider rejected the API key during a session**
+
+The turn does not stop. Shelra keeps the finished steps and continues on a fallback you already
+have: another OpenRouter key you configured (for example a stale `OPENROUTER_API_KEY` next to a
+newer `shelra auth openrouter` key), OpenRouter Free when a `--remote` endpoint rejects its key,
+then a local model that is already installed. The notice names the fallback and its cost, and
+nothing is downloaded. Replace the rejected key with `shelra auth openrouter <key>`.
+
 ### Terminal UI issues
 
 **UI doesn't render correctly**
