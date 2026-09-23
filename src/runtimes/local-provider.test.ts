@@ -82,6 +82,70 @@ describe("OpenAI-compatible tool protocol", () => {
     expect(events.some((event) => event.type === "text-delta" && event.text === "done")).toBe(true);
   });
 
+  it("clears old tool results from the later requests of a long generation", async () => {
+    const requests: Array<Record<string, unknown>> = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      const n = requests.length;
+      if (n <= 8) {
+        return streamResponse([
+          {
+            id: `response-${n}`,
+            model: "test-model",
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  role: "assistant",
+                  tool_calls: [
+                    { index: 0, id: `call-${n}`, function: { name: "read_file", arguments: `{"path":"f${n}.ts"}` } },
+                  ],
+                },
+                finish_reason: "tool_calls",
+              },
+            ],
+          },
+        ]);
+      }
+      return streamResponse([
+        {
+          id: "response-final",
+          model: "test-model",
+          choices: [{ index: 0, delta: { role: "assistant", content: "done" }, finish_reason: "stop" }],
+        },
+      ]);
+    };
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: fetchImpl,
+    });
+    const response = provider.stream({
+      modelId: "test-model",
+      system: "Read files when needed.",
+      messages: [{ role: "user", content: "read eight files" }],
+      tools: {
+        read_file: tool({
+          inputSchema: z.object({ path: z.string() }),
+          execute: async ({ path }: { path: string }) => `${path}: ${"x".repeat(30_000)}`,
+        }),
+      },
+      maxSteps: 10,
+    });
+    for await (const _event of response.events) {
+      // drain
+    }
+    const final = await response.response;
+
+    expect(requests).toHaveLength(9);
+    const sent = (requests[8]?.messages as Array<Record<string, unknown>>)
+      .filter((message) => message.role === "tool")
+      .map((message) => String(message.content));
+    expect(sent).toHaveLength(8);
+    for (const content of sent.slice(0, 3)) expect(content).toContain("Cleared from this request");
+    for (const content of sent.slice(5)) expect(content).toContain("x".repeat(30_000));
+    // What the session keeps is whole.
+    expect(JSON.stringify(final.messages)).not.toContain("Cleared from this request");
+  });
+
   it("sends OpenRouter's nested reasoning.effort body field, not a flat reasoning_effort string", async () => {
     const requests: Array<Record<string, unknown>> = [];
     const fetchImpl: typeof fetch = async (_input, init) => {

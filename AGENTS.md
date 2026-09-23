@@ -87,7 +87,9 @@ schedules, and payments are opt-in groups in
 group. `SHELRA_DEBUG_STREAM=1` traces provider stream parts to stderr and
 `SHELRA_DEBUG_STREAM=2` also tees raw response bodies, for diagnosing a model or
 an upstream provider that returns content-less steps. `SHELRA_STREAM_IDLE_MS` (default 180000, 0 disables) is the
-idle budget after which a silent model stream is aborted and the step retried.
+idle budget after which a silent model stream is aborted and the step retried. Once a request's history passes
+160,000 characters, tool results older than the model's last three steps go out as a one-line note (the session
+keeps them whole; the plan and sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
 
 ## Repository layout notes
 

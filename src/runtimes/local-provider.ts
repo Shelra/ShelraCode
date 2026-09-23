@@ -2,6 +2,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { generateText, jsonSchema, type ModelMessage, Output, stepCountIs, streamText, type ToolSet } from "ai";
 import { coerceObjectsForStringParameters, normalizeModelMessages, repairToolInput } from "../providers/messages";
+import { clearStaleToolResults, type ToolResultClearing } from "../providers/stale-tool-results";
 import {
   isRepeatingToolLoop,
   type LoopStepView,
@@ -159,6 +160,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
     const watchdog = new AbortController();
     if (request.signal?.aborted) watchdog.abort(request.signal.reason);
     else request.signal?.addEventListener("abort", () => watchdog.abort(request.signal?.reason), { once: true });
+    const clearing: ToolResultClearing = { boundary: 0 };
     const result = streamText({
       model: this.provider(request.modelId),
       system: request.system,
@@ -185,7 +187,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
         ? { providerOptions: { [this.id]: { reasoning: { effort: request.reasoningEffort } } } }
         : {}),
       prepareStep: ({ messages }) => ({
-        messages: normalizeModelMessages(messages),
+        messages: clearStaleToolResults(normalizeModelMessages(messages), clearing),
       }),
       experimental_repairToolCall: async ({ toolCall, inputSchema }) => {
         let repairedInput = repairToolInput(toolCall.toolName, toolCall.input);
