@@ -16,7 +16,8 @@ ShelraCode (CLI `shelra`) is a terminal coding agent that must **solve real task
 and get better at a project the longer it works on it instead of starting from zero each session. The model proposes;
 only host-observed evidence marks work as verified, whichever model answered. Measure changes on real problems: field
 cases (`bench/field/`, re-run with `scripts/field-case.ts`) and the suites in `bench/suites/`; one free-model run is one
-sample. Principles, audience and brand: `PRODUCT.md`.
+sample. Principles, audience and brand: `PRODUCT.md`. **The approved execution plan, with its phases, exit
+criteria and working rules (free models only), is `docs/EXECUTION-PLAN.md`: work toward the objective follows it.**
 
 ## What exists, what is retiring, what is only planned
 
