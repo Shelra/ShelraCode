@@ -1,3 +1,6 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { clearCatalog, primeCatalog } from "../models/catalog";
@@ -95,6 +98,9 @@ vi.mock("../utils/settings", async (importOriginal) => {
 
 import { Agent } from "./agent";
 
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
+
 const emptyHookResult: AggregatedHookResult = {
   blocked: false,
   blockingErrors: [],
@@ -176,6 +182,7 @@ describe("reasoning effort", () => {
 
   it("defaults to high in agent mode when the model supports reasoning effort", () => {
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     expect(agent.resolveReasoningEffort()).toBe("high");
@@ -183,6 +190,7 @@ describe("reasoning effort", () => {
 
   it("sends no explicit effort for a model that doesn't support it", () => {
     const agent = new Agent(undefined, undefined, "plain-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("plain-model"),
     });
     expect(agent.resolveReasoningEffort()).toBeUndefined();
@@ -190,6 +198,7 @@ describe("reasoning effort", () => {
 
   it("leaves reasoning effort to the provider's own default outside agent mode", () => {
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     agent.setMode("plan");
@@ -198,6 +207,7 @@ describe("reasoning effort", () => {
 
   it("honors an explicit /effort override over the agent-mode default", () => {
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     agent.setReasoningEffort("low");
@@ -207,6 +217,7 @@ describe("reasoning effort", () => {
 
   it("ignores an override the current model does not actually support", () => {
     const agent = new Agent(undefined, undefined, "plain-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("plain-model"),
     });
     agent.setReasoningEffort("high");
@@ -215,6 +226,7 @@ describe("reasoning effort", () => {
 
   it("restores the automatic default when the override is cleared", () => {
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     agent.setReasoningEffort("low");
@@ -226,6 +238,7 @@ describe("reasoning effort", () => {
   it("honors the /models picker's per-model setting when there is no session-wide /effort override (§14 Phase 2 item 2)", () => {
     loadUserSettingsMock.mockReturnValue({ reasoningEffortByModel: { "reasoning-model": "low" } });
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     expect(agent.resolveReasoningEffort()).toBe("low");
@@ -234,6 +247,7 @@ describe("reasoning effort", () => {
   it("prefers an explicit /effort override over the /models per-model setting", () => {
     loadUserSettingsMock.mockReturnValue({ reasoningEffortByModel: { "reasoning-model": "low" } });
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     agent.setReasoningEffort("medium");
@@ -243,6 +257,7 @@ describe("reasoning effort", () => {
   it("ignores a /models per-model setting for a different model", () => {
     loadUserSettingsMock.mockReturnValue({ reasoningEffortByModel: { "some-other-model": "low" } });
     const agent = new Agent(undefined, undefined, "reasoning-model", undefined, {
+      cwd: testWorkspace,
       provider: new CapturingProvider("reasoning-model"),
     });
     expect(agent.resolveReasoningEffort()).toBe("high");
@@ -250,7 +265,7 @@ describe("reasoning effort", () => {
 
   it("actually reaches the provider's stream request for a real turn — not just the resolver", async () => {
     const provider = new CapturingProvider("reasoning-model");
-    const agent = new Agent(undefined, undefined, "reasoning-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "reasoning-model", undefined, { cwd: testWorkspace, provider });
 
     for await (const _chunk of agent.processMessage("hello")) {
       // drain
@@ -261,7 +276,7 @@ describe("reasoning effort", () => {
 
   it("sends nothing for a model the catalog says does not support reasoning effort", async () => {
     const provider = new CapturingProvider("plain-model");
-    const agent = new Agent(undefined, undefined, "plain-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "plain-model", undefined, { cwd: testWorkspace, provider });
 
     for await (const _chunk of agent.processMessage("hello")) {
       // drain

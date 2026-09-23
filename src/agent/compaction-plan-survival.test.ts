@@ -1,3 +1,6 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import type {
@@ -88,6 +91,9 @@ vi.mock("../hooks/index", () => ({
 }));
 
 import { Agent } from "./agent";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
 
 const emptyHookResult: AggregatedHookResult = {
   blocked: false,
@@ -202,7 +208,7 @@ describe("compaction preserves the active plan's acceptance criteria", () => {
       // window's ~1000-token trigger) forces real compaction before this turn's own response.
       [{ type: "text-delta", text: "Sounds good." }],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { cwd: testWorkspace, provider });
 
     for await (const _chunk of agent.processMessage("Create a digital clock")) {
       // drain turn 1

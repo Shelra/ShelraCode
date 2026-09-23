@@ -1,3 +1,6 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
@@ -92,6 +95,9 @@ vi.mock("../hooks/index", () => ({
 }));
 
 import { Agent } from "./agent";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
 
 const emptyHookResult: AggregatedHookResult = {
   blocked: false,
@@ -196,6 +202,7 @@ const answer = (text: string): Round => ({ events: [{ type: "text-delta", text }
 function agentFor(provider: ScriptedProvider) {
   executeEventHooksMock.mockResolvedValue(emptyHookResult);
   return new Agent(undefined, undefined, "primary-model", undefined, {
+    cwd: testWorkspace,
     provider,
     interruptionBackoffMs: [0],
   });

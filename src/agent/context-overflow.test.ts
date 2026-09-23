@@ -1,3 +1,6 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type {
   ProviderAdapter,
@@ -24,6 +27,9 @@ vi.mock("../storage/index", () => ({
 }));
 
 import { Agent } from "./agent";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
 
 class ContextFailureProvider implements ProviderAdapter {
   readonly id = "context-test";
@@ -77,6 +83,7 @@ describe("agent context overflow recovery", () => {
   it("recovers from the llama context-size error without exposing it", async () => {
     const provider = new ContextFailureProvider();
     const agent = new Agent(undefined, undefined, "context-test-model", undefined, {
+      cwd: testWorkspace,
       persistSession: false,
       provider,
     });

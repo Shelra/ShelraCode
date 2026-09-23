@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import type {
@@ -10,6 +13,9 @@ import type {
   ProviderTextResult,
   ProviderToolContext,
 } from "../providers/types";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = mkdtempSync(join(tmpdir(), "shelra-agent-test-"));
 
 /**
  * Behavioral proof for the completion/verification gate
@@ -227,7 +233,7 @@ describe("completion/verification gate", () => {
   it("blocks completion when no acceptance criterion was ever verified, after all automatic nudges", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done, trust me." }]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -252,7 +258,7 @@ describe("completion/verification gate", () => {
   it("asks a turn that only wrote documents once, to check its facts, then reports it unverified", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([{ type: "text-delta", text: "Checked." }], ["docs/AUDIT.md", "notes.txt"]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Write an audit report of this project")) {
@@ -287,7 +293,7 @@ describe("completion/verification gate", () => {
       ],
       ["docs/AUDIT.md"],
     );
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Write an audit report of this project")) {
@@ -320,7 +326,7 @@ describe("completion/verification gate", () => {
         { type: "text-delta", text: "Type-check passes." },
       ],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -338,7 +344,7 @@ describe("completion/verification gate", () => {
   it("keeps all three requests when code changed alongside a document", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }], ["index.html", "README.md"]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     for await (const _chunk of agent.processMessage("Create a digital clock")) {
       // drain
@@ -360,7 +366,7 @@ describe("completion/verification gate", () => {
       ),
       { type: "text-delta", text: "Verified: the page serves correctly." },
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -409,7 +415,7 @@ describe("completion/verification gate", () => {
         { type: "text-delta", text: "Verified: the app serves correctly." },
       ],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -450,7 +456,7 @@ describe("completion/verification gate", () => {
       ),
       { type: "text-delta", text: "Verified via the verify sub-agent's real browser check." },
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -483,7 +489,7 @@ describe("completion/verification gate", () => {
       ),
       { type: "text-delta", text: "Verified." },
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -505,7 +511,7 @@ describe("completion/verification gate", () => {
       ),
       { type: "text-delta", text: "Still done, trust me." },
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -541,7 +547,7 @@ describe("completion/verification gate", () => {
       ),
       { type: "text-delta", text: "Verified: the page serves correctly." },
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -580,7 +586,7 @@ describe("completion/verification gate", () => {
         { type: "text-delta", text: "Done, I checked it." },
       ],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a digital clock")) {
@@ -604,7 +610,7 @@ describe("completion/verification gate", () => {
       })(),
       response: Promise.resolve({ messages: [{ role: "assistant", content: "Hi there!" }] }),
     });
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("hello")) {
@@ -626,7 +632,7 @@ describe("completion/verification gate", () => {
       // Audit round: the model accounts for every stated behavior without further changes.
       [{ type: "text-delta", text: "Audit: every behavior is exercised by src/slug.test.ts." }],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage(DENSE_REQUEST)) {
@@ -668,7 +674,7 @@ describe("completion/verification gate", () => {
         { type: "text-delta", text: "Tests pass after the fix." },
       ],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage(DENSE_REQUEST)) {
@@ -688,7 +694,7 @@ describe("completion/verification gate", () => {
       toolResultEvent("call-test", "bash", { success: true, output: "1 pass" }, { command: "bun test" }),
       { type: "text-delta", text: "Tests pass." },
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
 
     for await (const _chunk of agent.processMessage("The clock must tick every second.")) {
       // drain

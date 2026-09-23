@@ -1,3 +1,6 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import type {
@@ -85,6 +88,9 @@ vi.mock("../hooks/index", () => ({
 }));
 
 import { Agent } from "./agent";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
 
 const emptyResult: AggregatedHookResult = {
   blocked: false,
@@ -198,6 +204,7 @@ describe("Stop hook completion gate", () => {
     });
 
     const agent = new Agent(undefined, undefined, "stop-hook-test-model", undefined, {
+      cwd: testWorkspace,
       provider: new ScriptedProvider(),
     });
 
@@ -221,6 +228,7 @@ describe("Stop hook completion gate", () => {
     executeEventHooksMock.mockResolvedValue(emptyResult);
 
     const agent = new Agent(undefined, undefined, "stop-hook-test-model", undefined, {
+      cwd: testWorkspace,
       provider: new ScriptedProvider(),
     });
 
@@ -246,6 +254,7 @@ describe("provider failure persistence", () => {
     // Since 2026-09-19 a rate limit is retried (hard rule: a failing resource never ends a turn
     // at once); a provider that keeps failing pauses the turn, and that pause must persist too.
     const agent = new Agent(undefined, undefined, "failing-test-model", undefined, {
+      cwd: testWorkspace,
       provider: new FailingProvider(),
       interruptionBackoffMs: [0],
     });

@@ -1,3 +1,6 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import type {
@@ -92,6 +95,9 @@ vi.mock("../hooks/index", () => ({
 }));
 
 import { Agent } from "./agent";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
 
 const emptyHookResult: AggregatedHookResult = {
   blocked: false,
@@ -193,6 +199,7 @@ describe("cross-turn acceptance-criteria tracking", () => {
     loadPersistedPlanStateMock.mockReturnValue(planResult([ac1]).plan);
 
     const resumed = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      cwd: testWorkspace,
       provider: new FullyScriptedProvider([]),
       session: "latest",
     });
@@ -205,6 +212,7 @@ describe("cross-turn acceptance-criteria tracking", () => {
     const ac1 = { id: "AC1", description: "Only belongs to session one", verification: "inspect session" };
     loadPersistedPlanStateMock.mockReturnValue(planResult([ac1]).plan);
     const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      cwd: testWorkspace,
       provider: new FullyScriptedProvider([]),
     });
     expect(agent.getVerificationStatus().criteria).toEqual([ac1]);
@@ -244,7 +252,7 @@ describe("cross-turn acceptance-criteria tracking", () => {
       // nothing to verify, and no plan republished. Must not be gated using turn 1's AC1.
       [{ type: "text-delta", text: "Everything already looks correct; no changes needed." }],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { cwd: testWorkspace, provider });
 
     for await (const _chunk of agent.processMessage("Create a digital clock")) {
       // drain turn 1
@@ -303,7 +311,7 @@ describe("cross-turn acceptance-criteria tracking", () => {
       [{ type: "text-delta", text: "Still done, trust me." }],
       [{ type: "text-delta", text: "Still done, trust me." }],
     ]);
-    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { cwd: testWorkspace, provider });
 
     for await (const _chunk of agent.processMessage("Create a digital clock")) {
       // drain turn 1

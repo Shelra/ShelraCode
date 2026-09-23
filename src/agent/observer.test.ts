@@ -1,7 +1,13 @@
+import { mkdtempSync as makeTestWorkspace } from "node:fs";
+import { tmpdir as testTmpdir } from "node:os";
+import { join as joinTestPath } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { FakeProvider } from "../providers/fake";
 import type { ProviderEvent, ProviderStream, ProviderStreamRequest } from "../providers/types";
 import { Agent, type ProcessMessageObserver } from "./agent";
+
+/** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
+const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
 
 vi.mock("../storage/index", () => ({
   appendCompaction: vi.fn(),
@@ -119,6 +125,7 @@ describe("Agent process observer", () => {
       onStatus: (event) => observed.push(`status:${event.stage}`),
     };
     const agent = new Agent(undefined, undefined, "observer-test-model", 2, {
+      cwd: testWorkspace,
       provider: new ObserverProvider("Here is what I found."),
       persistSession: false,
     });
@@ -152,7 +159,11 @@ describe("Agent process observer", () => {
       toolResultEvent("b1", "bash", { success: true, output: "1 pass" }, { command: "bun test" }),
       { type: "text-delta", text: "Implemented and verified." },
     ]);
-    const agent = new Agent(undefined, undefined, "observer-test-model", 2, { provider, persistSession: false });
+    const agent = new Agent(undefined, undefined, "observer-test-model", 2, {
+      cwd: testWorkspace,
+      provider,
+      persistSession: false,
+    });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Create a small page in this repository")) {
@@ -166,7 +177,11 @@ describe("Agent process observer", () => {
 
   it("gives a conversational-looking coding request the full tool set", async () => {
     const provider = new ObserverProvider("Looking.");
-    const agent = new Agent(undefined, undefined, "observer-test-model", 2, { provider, persistSession: false });
+    const agent = new Agent(undefined, undefined, "observer-test-model", 2, {
+      cwd: testWorkspace,
+      provider,
+      persistSession: false,
+    });
 
     for await (const _chunk of agent.processMessage("Make the tests pass")) {
       // consume
@@ -182,7 +197,11 @@ describe("Agent process observer", () => {
 
   it("retries a model step that produced neither text nor a tool call instead of ending the turn", async () => {
     const provider = new ScriptedRoundsProvider(["empty", [{ type: "text-delta", text: "Done after retry." }]]);
-    const agent = new Agent(undefined, undefined, "observer-test-model", 2, { provider, persistSession: false });
+    const agent = new Agent(undefined, undefined, "observer-test-model", 2, {
+      cwd: testWorkspace,
+      provider,
+      persistSession: false,
+    });
 
     const content: string[] = [];
     for await (const chunk of agent.processMessage("Summarize the repository layout")) {
@@ -204,7 +223,11 @@ describe("Agent process observer", () => {
       ],
       [{ type: "text-delta", text: "Recovered after the retry." }],
     ]);
-    const agent = new Agent(undefined, undefined, "observer-test-model", 2, { provider, persistSession: false });
+    const agent = new Agent(undefined, undefined, "observer-test-model", 2, {
+      cwd: testWorkspace,
+      provider,
+      persistSession: false,
+    });
 
     const content: string[] = [];
     for await (const chunk of agent.processMessage("Summarize the repository layout")) {
@@ -218,7 +241,11 @@ describe("Agent process observer", () => {
 
   it("ends visibly, not silently, when the model stays empty after every retry", async () => {
     const provider = new ScriptedRoundsProvider(["empty", "empty", "empty"]);
-    const agent = new Agent(undefined, undefined, "observer-test-model", 2, { provider, persistSession: false });
+    const agent = new Agent(undefined, undefined, "observer-test-model", 2, {
+      cwd: testWorkspace,
+      provider,
+      persistSession: false,
+    });
 
     const chunks: Array<{ type: string; content?: string }> = [];
     for await (const chunk of agent.processMessage("Summarize the repository layout")) {
@@ -235,6 +262,7 @@ describe("Agent process observer", () => {
     // A timeout interrupts the turn; it does not end it (hard rule, 2026-09-19). A model that
     // never answers is retried until the bound, then the turn pauses, visibly and not complete.
     const agent = new Agent(undefined, undefined, "timeout-test-model", undefined, {
+      cwd: testWorkspace,
       provider: new TimeoutProvider(),
       persistSession: false,
       interruptionBackoffMs: [0],
