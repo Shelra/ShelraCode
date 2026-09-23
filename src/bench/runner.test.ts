@@ -1,11 +1,14 @@
 // Excluded from the default Vitest run because the runner exercises the native bun:sqlite
 // persistence boundary. Run with `bun test src/bench/runner.test.ts`.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getBenchmarkRunDetails, listBenchmarkRuns } from "../storage/benchmarks";
 import { closeDatabase } from "../storage/db";
+import { loadCustomInstructions } from "../utils/instructions";
+import { discoverSkills } from "../utils/skills";
 import { type BenchmarkTaskExecutor, runBenchmark } from "./runner";
 import type { BenchmarkManifest } from "./types";
 
@@ -166,6 +169,73 @@ describe("benchmark runner", () => {
 
     expect(result.status).toBe("completed");
     expect(executionWorkspace).toContain(`${join(homeDir, ".shelra", "bench", "runs")}`);
+  });
+});
+
+describe("clean-room workspaces", () => {
+  it("runs a task as its own repository, where the benchmark root's instructions and skills never reach it", async () => {
+    // The benchmark root is a repository with instructions and a skill, as this one is.
+    execFileSync("git", ["init", "-q"], { cwd: homeDir });
+    writeFileSync(join(homeDir, "AGENTS.md"), "Always answer in French.\n");
+    mkdirSync(join(homeDir, ".agents", "skills", "repo-skill"), { recursive: true });
+    writeFileSync(
+      join(homeDir, ".agents", "skills", "repo-skill", "SKILL.md"),
+      "---\nname: repo-skill\ndescription: d\n---\n",
+    );
+    mkdirSync(join(homeDir, "template"), { recursive: true });
+    writeFileSync(join(homeDir, "template", "fixture.txt"), "from-template", "utf8");
+    const cleanManifest: BenchmarkManifest = {
+      benchmarkVersion: "runner-test-0.3",
+      suite: "clean",
+      tasks: [{ id: "clean", category: "coding", difficulty: "easy", prompt: "p", workspaceTemplate: "template" }],
+    };
+    const observe = (workspace: string) => ({
+      instructions: loadCustomInstructions(workspace),
+      repoSkill: discoverSkills(workspace).some((skill) => skill.name === "repo-skill"),
+      ownRepository:
+        realpathSync(
+          execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: workspace, encoding: "utf8" }).trim(),
+        ) === realpathSync(workspace),
+      status: execFileSync("git", ["status", "--porcelain"], { cwd: workspace, encoding: "utf8" }),
+      fixture: readFileSync(join(workspace, "fixture.txt"), "utf8"),
+    });
+    const run = async (taskRoot?: string) => {
+      const result: { seen: ReturnType<typeof observe> | null; workspace: string } = { seen: null, workspace: "" };
+      await runBenchmark({
+        workspace: homeDir,
+        manifest: cleanManifest,
+        runInput: { agentName: "shelra" },
+        ...(taskRoot ? { taskRoot } : {}),
+        createExecutor: () => ({
+          async executeTask(task) {
+            result.workspace = task.workspace as string;
+            result.seen = observe(result.workspace);
+            return { status: "passed", scores: { coding: 100 } };
+          },
+        }),
+      });
+      return result;
+    };
+
+    // Control: under the benchmark root, the task inherits what the root teaches.
+    const inRepo = await run();
+    expect(inRepo.seen?.instructions).toContain("Always answer in French.");
+    expect(inRepo.seen?.repoSkill).toBe(true);
+
+    const taskRoot = mkdtempSync(join(tmpdir(), "shelra-bench-clean-"));
+    try {
+      const clean = await run(taskRoot);
+      expect(relative(homeDir, clean.workspace).startsWith("..")).toBe(true);
+      expect(clean.seen).toEqual({
+        instructions: null,
+        repoSkill: false,
+        ownRepository: true,
+        status: "",
+        fixture: "from-template",
+      });
+    } finally {
+      rmSync(taskRoot, { recursive: true, force: true });
+    }
   });
 });
 

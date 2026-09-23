@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -81,6 +82,12 @@ export interface BenchmarkRunnerOptions {
     signal?: AbortSignal;
     emit: (notice: BenchmarkExecutionNotice) => void;
   }) => Promise<BenchmarkTaskExecutor> | BenchmarkTaskExecutor;
+  /**
+   * A clean room for the task workspaces: each task is copied to `<taskRoot>/<runId>/…` and made its
+   * own git repository, so nothing around the benchmark root (its AGENTS.md, skills or git state)
+   * reaches the agent. Without it, tasks run under `<workspace>/.shelra/bench/runs`.
+   */
+  taskRoot?: string;
   signal?: AbortSignal;
   onRunCreated?: (run: BenchmarkRunSummary) => void;
   onEvent?: (event: BenchmarkEvent) => void;
@@ -186,7 +193,13 @@ export async function runBenchmark(options: BenchmarkRunnerOptions): Promise<Ben
       const startedAt = new Date();
       let executionTask: BenchmarkTaskDefinition;
       try {
-        executionTask = prepareBenchmarkTaskWorkspace(options.workspace, run.runId, task, completedWorkspaces);
+        executionTask = prepareBenchmarkTaskWorkspace(
+          options.workspace,
+          run.runId,
+          task,
+          completedWorkspaces,
+          options.taskRoot,
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const result = recordBenchmarkTaskResult({
@@ -337,6 +350,7 @@ function prepareBenchmarkTaskWorkspace(
   runId: string,
   task: BenchmarkTaskDefinition,
   completedWorkspaces: ReadonlyMap<string, string> = new Map(),
+  taskRoot?: string,
 ): BenchmarkTaskDefinition {
   const root = resolve(benchmarkRoot);
   let template: string;
@@ -366,7 +380,9 @@ function prepareBenchmarkTaskWorkspace(
 
   const taskSlug = task.id.replace(/[^a-zA-Z0-9._-]/gu, "_").slice(0, 64) || "task";
   const taskHash = createHash("sha256").update(task.id).digest("hex").slice(0, 8);
-  const destination = resolve(root, ".shelra", "bench", "runs", runId, "tasks", `${taskSlug}-${taskHash}`);
+  const destination = taskRoot
+    ? resolve(taskRoot, runId, `${taskSlug}-${taskHash}`)
+    : resolve(root, ".shelra", "bench", "runs", runId, "tasks", `${taskSlug}-${taskHash}`);
   if (existsSync(destination)) throw new Error(`Benchmark task workspace already exists: ${destination}`);
   mkdirSync(dirname(destination), { recursive: true });
   cpSync(template, destination, {
@@ -391,6 +407,7 @@ function prepareBenchmarkTaskWorkspace(
       return parts[0] !== ".shelra";
     },
   });
+  if (taskRoot) initTaskRepository(destination);
   return {
     ...task,
     workspace: destination,
@@ -401,6 +418,33 @@ function prepareBenchmarkTaskWorkspace(
       workspacePrepared: true,
     },
   };
+}
+
+/**
+ * Makes a task workspace its own git repository holding the fixture as one commit, so git status,
+ * diffs and the completion gate see only what the agent changed. The identity is fixed and local to
+ * this scratch copy; the user's hooks, templates and commit signing belong to their own repositories,
+ * so they are left out (a signing prompt or a hook would stall or fail the preparation).
+ */
+function initTaskRepository(workspace: string): void {
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-c", "init.defaultBranch=main", ...args], { cwd: workspace, stdio: "ignore" });
+  git("init", "-q", "--template=");
+  git("add", "-A");
+  git(
+    "-c",
+    "user.name=Shelra Bench",
+    "-c",
+    "user.email=bench@shelra.invalid",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "-q",
+    "--no-verify",
+    "--allow-empty",
+    "-m",
+    "Benchmark fixture",
+  );
 }
 
 function withDerivedTaskScores(

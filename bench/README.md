@@ -37,11 +37,20 @@ Every task has:
 - a deterministic external oracle in bench/oracles/;
 - a fresh workspace copy for every run and task.
 
-The runner copies a template to:
+`shelra bench` runs in a clean room by default. It copies each template to a
+scratch folder outside every repository and makes the copy its own git
+repository with the fixture as one commit:
 
 ~~~text
-.shelra/bench/runs/<runId>/tasks/<taskSlug>-<taskHash>/
+<system temp>/shelra-bench-<random>/tasks/<runId>/<taskSlug>-<taskHash>/
 ~~~
+
+For the length of the run HOME points at `<system temp>/shelra-bench-<random>/home`,
+so your settings, memory, skills, instructions, hooks and MCP servers never reach a
+task, and the repository's own AGENTS.md and skills cannot either. The API key and
+the history database are resolved before HOME moves. `--no-clean-room` restores
+the older layout, `.shelra/bench/runs/<runId>/tasks/<taskSlug>-<taskHash>/` with
+your own settings, which is how runs before 2026-09-23 were measured.
 
 The oracle receives that copied workspace as its working directory. Oracle code
 stays outside the workspace the agent can edit. Visible tests are useful

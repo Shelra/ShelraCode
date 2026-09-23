@@ -15,6 +15,7 @@ import {
 } from "./autonomy/presentation";
 import { type RuntimeEvent as ObjectiveRuntimeEvent, runObjective } from "./autonomy/runtime";
 import { createAgentBenchmarkExecutor } from "./bench/agent-executor";
+import { enterBenchCleanRoom } from "./bench/clean-room";
 import { collectBenchmarkEnvironment, collectRepositorySnapshot, resolveBenchmarkPath } from "./bench/environment";
 import { loadBenchmarkManifest } from "./bench/manifest";
 import { runBenchmark } from "./bench/runner";
@@ -1015,6 +1016,8 @@ async function runBenchCommand(options: {
   maxRequestCost?: string;
   directory?: string;
   json?: boolean;
+  /** Commander's `--no-clean-room` sets this to false. */
+  cleanRoom?: boolean;
 }): Promise<void> {
   const manifestCandidate = options.manifest || ".shelra/bench/manifest.json";
   const agentName = ((options.agent || "shelra").trim() || "shelra").toLowerCase();
@@ -1087,113 +1090,122 @@ async function runBenchCommand(options: {
     manifest = { ...manifest, suite: options.suite.trim() };
   }
 
-  const summary = await runBenchmark({
-    workspace: process.cwd(),
-    manifest,
-    runInput: {
-      ...commonInput,
-      benchmarkConfig: { manifestPath: resolvedManifestPath },
-    },
-    onRunCreated: (run) => {
-      if (options.json) {
-        printBenchJson({ type: "run_created", run });
-      } else {
-        console.log(`Benchmark run #${run.runNumber} created (${run.runId})`);
-        console.log(`  Shelra agent · ${manifest.suite} · ${manifest.benchmarkVersion}`);
-      }
-    },
-    onEvent: (event) => {
-      if (options.json) {
-        printBenchJson({ type: "event", event });
-      } else if (event.type !== "run_created") {
-        console.log(`  ${event.message}`);
-      }
-    },
-    onTask: (task) => {
-      if (options.json) {
-        printBenchJson({ type: "task_finished", task });
-      } else {
-        console.log(
-          `  ${task.taskId}: ${task.status}${task.durationMs === null ? "" : ` · ${formatDuration(task.durationMs)}`}`,
-        );
-      }
-    },
-    createExecutor: async ({ run, signal, emit }) => {
-      if (agentName !== "shelra" && agentName !== "shelra-autonomy") {
-        throw new Error(
-          `Agent adapter "${agentName}" is not registered yet. This run was retained as failed evidence.`,
-        );
-      }
-      if (!apiKey) {
-        throw new Error(
-          "OpenRouter API key is required for a Shelra Bench run. Configure OPENROUTER_API_KEY or use `shelra auth openrouter <key>`.",
-        );
-      }
-      if (!isOpenRouterBaseURL(baseURL)) {
-        throw new Error(
-          "Shelra Bench currently requires the OpenRouter model runtime; the configured base URL is not OpenRouter.",
-        );
-      }
+  // The key is resolved and the database is open (recoverInterruptedBenchmarkRuns), so HOME can move.
+  const cleanRoom = options.cleanRoom !== false ? enterBenchCleanRoom() : null;
+  if (cleanRoom && !options.json) console.log(`Clean room: ${cleanRoom.root}`);
+  let summary: Awaited<ReturnType<typeof runBenchmark>>;
+  try {
+    summary = await runBenchmark({
+      workspace: process.cwd(),
+      ...(cleanRoom ? { taskRoot: cleanRoom.taskRoot } : {}),
+      manifest,
+      runInput: {
+        ...commonInput,
+        benchmarkConfig: { manifestPath: resolvedManifestPath, cleanRoom: cleanRoom !== null },
+      },
+      onRunCreated: (run) => {
+        if (options.json) {
+          printBenchJson({ type: "run_created", run });
+        } else {
+          console.log(`Benchmark run #${run.runNumber} created (${run.runId})`);
+          console.log(`  Shelra agent · ${manifest.suite} · ${manifest.benchmarkVersion}`);
+        }
+      },
+      onEvent: (event) => {
+        if (options.json) {
+          printBenchJson({ type: "event", event });
+        } else if (event.type !== "run_created") {
+          console.log(`  ${event.message}`);
+        }
+      },
+      onTask: (task) => {
+        if (options.json) {
+          printBenchJson({ type: "task_finished", task });
+        } else {
+          console.log(
+            `  ${task.taskId}: ${task.status}${task.durationMs === null ? "" : ` · ${formatDuration(task.durationMs)}`}`,
+          );
+        }
+      },
+      createExecutor: async ({ run, signal, emit }) => {
+        if (agentName !== "shelra" && agentName !== "shelra-autonomy") {
+          throw new Error(
+            `Agent adapter "${agentName}" is not registered yet. This run was retained as failed evidence.`,
+          );
+        }
+        if (!apiKey) {
+          throw new Error(
+            "OpenRouter API key is required for a Shelra Bench run. Configure OPENROUTER_API_KEY or use `shelra auth openrouter <key>`.",
+          );
+        }
+        if (!isOpenRouterBaseURL(baseURL)) {
+          throw new Error(
+            "Shelra Bench currently requires the OpenRouter model runtime; the configured base URL is not OpenRouter.",
+          );
+        }
 
-      const catalog = await fetchOpenRouterCatalog({ apiKey, baseURL });
-      primeCatalog(catalog.entries);
-      const route = routeCatalogModel(catalog.entries, {
-        requestedModel: requestedModel ?? (catalog.entries.length === 0 ? "openrouter/free" : undefined),
-        policy: effectiveModelPolicy,
-        allowPaid: Boolean(requestedModel),
-        requiresTools: true,
-      });
-      updateBenchmarkRunMetadata(run.runId, {
-        model: route.modelId,
-        modelProvider: "OpenRouter",
-      });
-      emit({
-        type: "note",
-        message: `Shelra runtime ready with ${route.modelId}`,
-        payload: { agent: agentName, modelPolicy: effectiveModelPolicy },
-      });
-      if (agentName === "shelra-autonomy") {
-        const intelligence = createOpenRouterIntelligenceProvider({
-          apiKey,
-          baseURL,
-          entries: catalog.entries,
+        const catalog = await fetchOpenRouterCatalog({ apiKey, baseURL });
+        primeCatalog(catalog.entries);
+        const route = routeCatalogModel(catalog.entries, {
+          requestedModel: requestedModel ?? (catalog.entries.length === 0 ? "openrouter/free" : undefined),
           policy: effectiveModelPolicy,
-          modelId: route.modelId,
-          strictModel: Boolean(requestedModel),
-          maxCostUsd: budget.maxSessionUsd,
+          allowPaid: Boolean(requestedModel),
+          requiresTools: true,
         });
-        return createShelraBenchmarkExecutor({
-          intelligence,
+        updateBenchmarkRunMetadata(run.runId, {
+          model: route.modelId,
+          modelProvider: "OpenRouter",
+        });
+        emit({
+          type: "note",
+          message: `Shelra runtime ready with ${route.modelId}`,
+          payload: { agent: agentName, modelPolicy: effectiveModelPolicy },
+        });
+        if (agentName === "shelra-autonomy") {
+          const intelligence = createOpenRouterIntelligenceProvider({
+            apiKey,
+            baseURL,
+            entries: catalog.entries,
+            policy: effectiveModelPolicy,
+            modelId: route.modelId,
+            strictModel: Boolean(requestedModel),
+            maxCostUsd: budget.maxSessionUsd,
+          });
+          return createShelraBenchmarkExecutor({
+            intelligence,
+            benchmarkRoot: process.cwd(),
+            maxCostUsd: budget.maxSessionUsd,
+            maxRequestCostUsd: budget.maxRequestUsd,
+            signal,
+          });
+        }
+        // The product path: the same `Agent.processMessage()` loop interactive and `--prompt`
+        // sessions run. An explicit `--model` is strict — no server-side fallback may silently
+        // substitute another model into a measurement.
+        const provider = createOpenRouterProvider(apiKey, {
+          modelId: route.modelId,
+          entries: catalog.entries,
+          baseURL,
+          fallbackModels: requestedModel ? [] : route.candidates.map((entry) => entry.id).slice(0, 3),
+          requireParameters: true,
+          policy: effectiveModelPolicy,
+          strictModel: Boolean(requestedModel),
+          // Free variants are rate-limited upstream (429 "temporarily rate-limited, retry shortly");
+          // the SDK's exponential backoff needs more attempts than the paid default to ride it out.
+          ...(route.modelId.endsWith(":free") ? { maxRetries: 6 } : {}),
+        });
+        return createAgentBenchmarkExecutor({
+          provider,
+          modelId: route.modelId,
           benchmarkRoot: process.cwd(),
-          maxCostUsd: budget.maxSessionUsd,
-          maxRequestCostUsd: budget.maxRequestUsd,
+          budget,
           signal,
         });
-      }
-      // The product path: the same `Agent.processMessage()` loop interactive and `--prompt`
-      // sessions run. An explicit `--model` is strict — no server-side fallback may silently
-      // substitute another model into a measurement.
-      const provider = createOpenRouterProvider(apiKey, {
-        modelId: route.modelId,
-        entries: catalog.entries,
-        baseURL,
-        fallbackModels: requestedModel ? [] : route.candidates.map((entry) => entry.id).slice(0, 3),
-        requireParameters: true,
-        policy: effectiveModelPolicy,
-        strictModel: Boolean(requestedModel),
-        // Free variants are rate-limited upstream (429 "temporarily rate-limited, retry shortly");
-        // the SDK's exponential backoff needs more attempts than the paid default to ride it out.
-        ...(route.modelId.endsWith(":free") ? { maxRetries: 6 } : {}),
-      });
-      return createAgentBenchmarkExecutor({
-        provider,
-        modelId: route.modelId,
-        benchmarkRoot: process.cwd(),
-        budget,
-        signal,
-      });
-    },
-  });
+      },
+    });
+  } finally {
+    cleanRoom?.leave();
+  }
 
   printBenchJsonOrText(options.json === true, {
     run: summary,
@@ -1551,6 +1563,10 @@ program
   .option("--max-request-cost <usd>", "Maximum spend for one model request")
   .option("-d, --directory <dir>", "Working directory", process.cwd())
   .option("--json", "Print newline-delimited machine-readable run events")
+  .option(
+    "--no-clean-room",
+    "Run the tasks under .shelra/bench/runs with your own settings, memory and skills, as runs before 2026-09-23 did",
+  )
   .action(async (_options, command) => {
     // Commander assigns options shared with the root command (for example --model and
     // --max-cost) to the root even when they appear after `bench`. Merge both scopes so

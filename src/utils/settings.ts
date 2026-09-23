@@ -228,8 +228,13 @@ export interface ProjectSettings {
   lsp?: LspSettings;
 }
 
-const USER_DIR = getProductUserDir();
-const USER_SETTINGS_PATH = path.join(USER_DIR, "user-settings.json");
+/**
+ * Resolved on every call, not at import: `shelra bench` moves HOME to a scratch folder once it has its
+ * key and database, so the settings of the person running it never reach a benchmark task.
+ */
+function userSettingsPath(): string {
+  return path.join(getProductUserDir(), "user-settings.json");
+}
 
 function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) {
@@ -252,7 +257,7 @@ function writeJson(filePath: string, data: unknown): void {
 }
 
 export function loadUserSettings(): UserSettings {
-  return readJson<UserSettings>(USER_SETTINGS_PATH) || {};
+  return readJson<UserSettings>(userSettingsPath()) || {};
 }
 
 export function normalizeMotionPreference(value: unknown): "full" | "reduced" {
@@ -337,7 +342,7 @@ export function saveUserSettings(partial: Partial<UserSettings>): void {
       : {}),
   };
 
-  writeJson(USER_SETTINGS_PATH, next);
+  writeJson(userSettingsPath(), next);
 }
 
 export function loadProjectSettings(): ProjectSettings {
