@@ -1,0 +1,1343 @@
+diff --git a/src/agent/agent.ts b/src/agent/agent.ts
+index 36a27d7..65a534b 100644
+--- a/src/agent/agent.ts
++++ b/src/agent/agent.ts
+@@ -127,6 +127,37 @@ import { buildVisionUserMessages } from "./vision-input";
+ 
+ const MAX_TOOL_ROUNDS = 400;
+ 
++/**
++ * AUDIT ABLATION SWITCHES (worktree only, 2026-09-23; never merge). SHELRA_ABLATE is a comma list:
++ * memory, gate, audit, plan, skills, context, subagents, web, bare. `bare` implies all of them and
++ * also replaces the system prompt with environment facts only and keeps six basic tools.
++ */
++const ABLATE = new Set(
++  (process.env.SHELRA_ABLATE ?? "")
++    .split(",")
++    .map((item) => item.trim().toLowerCase())
++    .filter(Boolean),
++);
++function ablated(name: string): boolean {
++  return ABLATE.has(name) || ABLATE.has("bare");
++}
++const BARE_TOOLS = new Set(["bash", "read_file", "write_file", "edit_file", "delete_file", "grep"]);
++function applyToolAblation(tools: ToolSet): ToolSet {
++  if (ABLATE.size === 0) return tools;
++  const drop = new Set<string>();
++  if (ablated("memory")) for (const name of ["memory_list", "memory_read", "memory_write", "memory_delete"]) drop.add(name);
++  if (ablated("plan")) for (const name of ["generate_plan", "update_plan_step"]) drop.add(name);
++  if (ablated("subagents")) for (const name of ["task", "delegate", "delegation_read", "delegation_list"]) drop.add(name);
++  if (ablated("web")) for (const name of ["search_web", "open_web", "search_x"]) drop.add(name);
++  const kept: ToolSet = {};
++  for (const [name, definition] of Object.entries(tools)) {
++    if (drop.has(name)) continue;
++    if (ABLATE.has("bare") && !BARE_TOOLS.has(name)) continue;
++    kept[name] = definition;
++  }
++  return kept;
++}
++
+ /**
+  * A coding turn may legitimately run for several minutes, but a silent model
+  * connection should never hold the UI hostage for that long. AI SDK applies
+@@ -441,7 +472,35 @@ function buildSystemPrompt(
+     .filter(Boolean)
+     .join("\n");
+ 
+-  return `${MODE_PROMPTS[mode]}${sandboxSection}${customSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
++  // AUDIT (worktree only): the bare baseline gets environment facts and nothing that teaches a way of working.
++  if (mode === "agent" && ABLATE.has("bare")) {
++    return `You are a coding agent working in the user's repository through tools. Complete the user's task. When you are done, reply with a short summary.
++
++ENVIRONMENT:
++${SHELL_GUIDANCE}${customSection}
++
++${workspaceLines}`;
++  }
++  let modePrompt = MODE_PROMPTS[mode];
++  if (mode === "agent") {
++    if (ablated("memory")) {
++      modePrompt = modePrompt
++        .replace(" Check memory_list once for prior findings on this project.", "")
++        .replace(/\n\nMEMORY: [^\n]*/u, "");
++    }
++    if (ablated("plan")) modePrompt = modePrompt.replace(/\n3\. For work spanning[^\n]*/u, "");
++    if (ablated("subagents")) modePrompt = modePrompt.replace(/\n\nDELEGATION \(task tool\)[^\n]*/u, "");
++    if (ablated("web"))
++      modePrompt = modePrompt.replace(
++        "; search_web and open_web only when the task depends on an external library, API, or protocol whose current behavior you are not sure of",
++        "",
++      );
++  }
++  const ablatedMemorySection = ablated("memory") ? "" : memorySection;
++  const ablatedSkillsSection = ablated("skills") ? "" : skillsSection;
++  const ablatedSubagentsSection = ablated("subagents") ? "" : subagentsSection;
++
++  return `${modePrompt}${sandboxSection}${customSection}${ablatedMemorySection}${ablatedSkillsSection}${ablatedSubagentsSection}${planSection}
+ 
+ ${workspaceLines}`;
+ }
+@@ -2410,12 +2469,14 @@ export class Agent {
+     // call is needed to recognize "always ..." / "never ...". The gate still validates them.
+     const memoryScope = projectMemoryScope(this.bash.getCwd());
+     try {
+-      const directives = extractUserDirectives(userMessage);
++      const directives = ablated("memory") ? [] : extractUserDirectives(userMessage);
+       if (directives.length > 0) admitCandidates(memoryScope, directives);
+     } catch {
+       // memory capture must never block a turn
+     }
+-    const memoryContext = memoryContextFor(this.bash.getCwd(), userMessage, contextPacket.files);
++    const memoryContext: MemoryContext = ablated("memory")
++      ? { text: "", expanded: [], listed: [] }
++      : memoryContextFor(this.bash.getCwd(), userMessage, contextPacket.files);
+     this.lastMemoryContext = memoryContext;
+     if (memoryContext.expanded.length > 0) recordMemoryUse(memoryScope, memoryContext.expanded);
+     const turnCommands: TurnCommand[] = [];
+@@ -2447,7 +2508,7 @@ export class Agent {
+           this.bash.getSandboxSettings(),
+           memoryContext,
+         ),
+-        contextPacket.promptAppendix,
++        ablated("context") ? "" : contextPacket.promptAppendix,
+       ]
+         .filter(Boolean)
+         .join("\n\n"),
+@@ -2553,6 +2614,7 @@ export class Agent {
+               yield { type: "content", content: `MCP unavailable: ${mcpBundle.errors.join(" | ")}\n\n` };
+             }
+           }
++          tools = applyToolAblation(tools);
+           if (overflowRecoveryLevel > 0) tools = {};
+ 
+           const maxOutputTokens =
+@@ -2965,6 +3027,7 @@ export class Agent {
+           const documentsOnly =
+             mutatedThisTurn && !unverifiedSinceAudit && mutations.every((path) => DOCUMENT_FILE_RE.test(path));
+           if (
++            !ablated("gate") &&
+             mutatedThisTurn &&
+             (documentsOnly || this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)
+           ) {
+@@ -3032,7 +3095,13 @@ export class Agent {
+             return;
+           }
+ 
+-          if (mutatedThisTurn && requirementChecklist.length > 0 && requirementAudit === null) {
++          if (
++            !ablated("gate") &&
++            !ablated("audit") &&
++            mutatedThisTurn &&
++            requirementChecklist.length > 0 &&
++            requirementAudit === null
++          ) {
+             requirementAudit = { mutations: turnMutationEvents, evidence: this.turnVerificationEvidence.length };
+             const audit = [
+               "Before you finish, audit the request requirement by requirement. It states:",
+@@ -3207,7 +3276,7 @@ export class Agent {
+     signal: AbortSignal,
+     observer?: ProcessMessageObserver,
+   ): Promise<void> {
+-    if (!this.provider || this.mode !== "agent") return;
++    if (!this.provider || this.mode !== "agent" || ablated("memory")) return;
+     const scope = projectMemoryScope(this.bash.getCwd());
+     try {
+       const report = await reflectOnTurn({
+diff --git a/src/agent/audit-ablation.test.ts b/src/agent/audit-ablation.test.ts
+new file mode 100644
+index 0000000..b8383d0
+--- /dev/null
++++ b/src/agent/audit-ablation.test.ts
+@@ -0,0 +1,116 @@
++import { describe, expect, it, vi } from "vitest";
++import type { AggregatedHookResult, HookInput } from "../hooks/types";
++import type {
++  ProviderAdapter,
++  ProviderEvent,
++  ProviderModelRuntime,
++  ProviderStream,
++  ProviderStreamRequest,
++  ProviderTextRequest,
++  ProviderTextResult,
++  ProviderToolContext,
++} from "../providers/types";
++
++/** AUDIT (worktree only): proves SHELRA_ABLATE=bare reaches the outgoing request. */
++
++const { executeEventHooksMock } = vi.hoisted(() => {
++  process.env.SHELRA_ABLATE = "bare";
++  return { executeEventHooksMock: vi.fn<(input: HookInput) => Promise<AggregatedHookResult>>() };
++});
++
++vi.mock("../storage/index", () => ({
++  appendCompaction: vi.fn(),
++  appendMessages: vi.fn(() => []),
++  appendSystemMessage: vi.fn(() => 0),
++  buildChatEntries: vi.fn(() => []),
++  getLatestObjectiveForSession: vi.fn(() => null),
++  getNextMessageSequence: vi.fn(() => 0),
++  getSessionTotalCostMicros: vi.fn(() => 0),
++  getSessionTotalTokens: vi.fn(() => 0),
++  getUsageCostSinceMicros: vi.fn(() => 0),
++  listSessionUsage: vi.fn(() => []),
++  loadTranscript: vi.fn(() => []),
++  loadTranscriptState: vi.fn(() => ({ messages: [], seqs: [] })),
++  recordCheckpoint: vi.fn(),
++  recordUsageEvent: vi.fn(),
++  upsertObjectiveIndex: vi.fn(),
++  SessionStore: class {},
++}));
++vi.mock("../hooks/index", () => ({ executeEventHooks: executeEventHooksMock }));
++vi.mock("../memory/reflection", async (original) => ({
++  ...(await original<typeof import("../memory/reflection")>()),
++  reflectOnTurn: vi.fn(async () => ({ qualified: false, reason: "probe", candidates: [], decisions: [], written: [] })),
++}));
++
++import { Agent } from "./agent";
++
++class Recorder implements ProviderAdapter {
++  readonly id = "rec";
++  readonly defaultModelId = "rec-model";
++  readonly requests: ProviderStreamRequest[] = [];
++  resolveModelRuntime(modelId: string): ProviderModelRuntime {
++    return {
++      modelId,
++      modelInfo: {
++        id: modelId,
++        name: "rec",
++        contextWindow: 32_768,
++        inputPrice: 0,
++        outputPrice: 0,
++        reasoning: false,
++        description: "rec",
++        supportsClientTools: true,
++        supportsMaxOutputTokens: true,
++      },
++    };
++  }
++  stream(request: ProviderStreamRequest): ProviderStream {
++    this.requests.push(request);
++    const write: ProviderEvent[] = [
++      { type: "tool-call", toolCall: { id: "w", type: "function", function: { name: "write_file", arguments: "{}" } } },
++      {
++        type: "tool-result",
++        toolCall: { id: "w", type: "function", function: { name: "write_file", arguments: "{}" } },
++        output: { success: true, output: "ok", diff: { filePath: "a.ts", additions: 1, removals: 0, patch: "", isNew: true } },
++      },
++      { type: "text-delta", text: "Done." },
++    ];
++    return {
++      events: (async function* () {
++        yield* write;
++      })(),
++      response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
++    };
++  }
++  async generateText(request: ProviderTextRequest): Promise<ProviderTextResult> {
++    return { text: "x", modelId: request.modelId };
++  }
++  getToolContext(): ProviderToolContext {
++    return {};
++  }
++}
++
++describe("AUDIT: bare ablation", () => {
++  it("sends a minimal prompt, six tools, and no gate round", async () => {
++    executeEventHooksMock.mockResolvedValue({
++      blocked: false,
++      blockingErrors: [],
++      preventContinuation: false,
++      additionalContexts: [],
++      results: [],
++    });
++    const provider = new Recorder();
++    const agent = new Agent(undefined, undefined, "rec-model", undefined, { provider, persistSession: false });
++    for await (const _ of agent.processMessage("Implement slugify in src/slug.ts and run bun test")) {
++      // drain
++    }
++    expect(provider.requests.length).toBe(1);
++    const system = String(provider.requests[0]?.system ?? "");
++    expect(system).toContain("You are a coding agent");
++    expect(system).not.toContain("HOW TO WORK");
++    expect(system).not.toContain("HOST-COMPILED REPOSITORY CONTEXT");
++    expect(Object.keys(provider.requests[0]?.tools ?? {}).sort()).toEqual(
++      ["bash", "delete_file", "edit_file", "grep", "read_file", "write_file"].sort(),
++    );
++  });
++});
+diff --git a/src/agent/audit-probes.test.ts b/src/agent/audit-probes.test.ts
+new file mode 100644
+index 0000000..6ab4ae4
+--- /dev/null
++++ b/src/agent/audit-probes.test.ts
+@@ -0,0 +1,227 @@
++import { describe, expect, it, vi } from "vitest";
++import type { AggregatedHookResult, HookInput } from "../hooks/types";
++import type {
++  ProviderAdapter,
++  ProviderEvent,
++  ProviderModelRuntime,
++  ProviderStream,
++  ProviderStreamRequest,
++  ProviderTextRequest,
++  ProviderTextResult,
++  ProviderToolContext,
++} from "../providers/types";
++
++/**
++ * AUDIT PROBES (temporary, worktree only, 2026-09-23). Each probe scripts a model that behaves the
++ * way a weak or gaming model can, and records what the completion gate does. A sound gate would
++ * ask for verification in every "LOOPHOLE" case; the assertions pin the CURRENT behavior so the
++ * audit can cite it.
++ */
++
++const { executeEventHooksMock } = vi.hoisted(() => ({
++  executeEventHooksMock: vi.fn<(input: HookInput) => Promise<AggregatedHookResult>>(),
++}));
++
++vi.mock("../storage/index", () => ({
++  appendCompaction: vi.fn(),
++  appendMessages: vi.fn(() => []),
++  appendSystemMessage: vi.fn(() => 0),
++  buildChatEntries: vi.fn(() => []),
++  getLatestObjectiveForSession: vi.fn(() => null),
++  getNextMessageSequence: vi.fn(() => 0),
++  getSessionTotalCostMicros: vi.fn(() => 0),
++  getSessionTotalTokens: vi.fn(() => 0),
++  getUsageCostSinceMicros: vi.fn(() => 0),
++  listSessionUsage: vi.fn(() => []),
++  loadTranscript: vi.fn(() => []),
++  loadTranscriptState: vi.fn(() => ({ messages: [], seqs: [] })),
++  recordCheckpoint: vi.fn(),
++  recordUsageEvent: vi.fn(),
++  upsertObjectiveIndex: vi.fn(),
++  SessionStore: class {
++    getWorkspace() {
++      return { id: "ws", scopeKey: "/tmp/ws", canonicalPath: "/tmp/ws", gitRoot: null, displayName: "ws", lastSeenAt: new Date() };
++    }
++    private s() {
++      return {
++        id: "s",
++        workspaceId: "ws",
++        title: null,
++        recap: null,
++        model: "probe-model",
++        mode: "agent" as const,
++        cwdAtStart: "/tmp/ws",
++        cwdLast: "/tmp/ws",
++        status: "active" as const,
++        createdAt: new Date(),
++        updatedAt: new Date(),
++      };
++    }
++    openSession() {
++      return this.s();
++    }
++    createSession() {
++      return this.s();
++    }
++    getRequiredSession() {
++      return this.s();
++    }
++    setModel() {}
++    setMode() {}
++    setTitle() {}
++    setRecap() {}
++    touchSession() {}
++  },
++}));
++
++vi.mock("../hooks/index", () => ({ executeEventHooks: executeEventHooksMock }));
++// Keep the probes hermetic: no reflection writes into the real workspace's memory.
++vi.mock("../memory/reflection", async (original) => ({
++  ...(await original<typeof import("../memory/reflection")>()),
++  reflectOnTurn: vi.fn(async () => ({ qualified: false, reason: "probe", candidates: [], decisions: [], written: [] })),
++}));
++
++import { Agent } from "./agent";
++
++const hooksOk: AggregatedHookResult = {
++  blocked: false,
++  blockingErrors: [],
++  preventContinuation: false,
++  additionalContexts: [],
++  results: [],
++};
++
++function call(id: string, name: string, input: Record<string, unknown>): ProviderEvent {
++  return { type: "tool-call", toolCall: { id, type: "function", function: { name, arguments: JSON.stringify(input) } } };
++}
++function result(id: string, name: string, output: unknown, input: Record<string, unknown> = {}): ProviderEvent {
++  return { type: "tool-result", toolCall: { id, type: "function", function: { name, arguments: JSON.stringify(input) } }, output };
++}
++function write(id: string, file: string): ProviderEvent[] {
++  return [
++    call(id, "write_file", { path: file, content: "x" }),
++    result(id, "write_file", { success: true, output: `Wrote ${file}`, diff: { filePath: file, additions: 1, removals: 0, patch: "", isNew: true } }),
++  ];
++}
++function bash(id: string, command: string, success: boolean, output = ""): ProviderEvent[] {
++  return [call(id, "bash", { command }), result(id, "bash", { success, output }, { command })];
++}
++
++class Scripted implements ProviderAdapter {
++  readonly id = "probe";
++  readonly defaultModelId = "probe-model";
++  rounds = 0;
++  readonly requests: ProviderStreamRequest[] = [];
++  constructor(private readonly script: ProviderEvent[][]) {}
++  resolveModelRuntime(modelId: string): ProviderModelRuntime {
++    return {
++      modelId,
++      modelInfo: {
++        id: modelId,
++        name: "probe",
++        contextWindow: 32_768,
++        inputPrice: 0,
++        outputPrice: 0,
++        reasoning: false,
++        description: "probe",
++        supportsClientTools: true,
++        supportsMaxOutputTokens: true,
++        runtimeKind: "managed-llama",
++      },
++    };
++  }
++  stream(request: ProviderStreamRequest): ProviderStream {
++    this.requests.push(request);
++    const events = this.script[Math.min(this.rounds, this.script.length - 1)] ?? [];
++    this.rounds += 1;
++    return {
++      events: (async function* () {
++        yield* events;
++      })(),
++      response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
++    };
++  }
++  async generateText(request: ProviderTextRequest): Promise<ProviderTextResult> {
++    return { text: "Summary.", modelId: request.modelId };
++  }
++  getToolContext(): ProviderToolContext {
++    return {};
++  }
++}
++
++async function run(script: ProviderEvent[][], prompt = "Fix the parser in src/parse.ts") {
++  executeEventHooksMock.mockResolvedValue(hooksOk);
++  const provider = new Scripted(script);
++  const agent = new Agent(undefined, undefined, "probe-model", undefined, { provider, persistSession: false });
++  const out: string[] = [];
++  for await (const chunk of agent.processMessage(prompt)) {
++    if ((chunk as { type: string }).type === "content") out.push(String((chunk as { content?: string }).content ?? ""));
++  }
++  const text = out.join("");
++  return { rounds: provider.rounds, notVerified: text.includes("Not verified"), text, requests: provider.requests };
++}
++
++const done: ProviderEvent = { type: "text-delta", text: "Done: fixed and verified." };
++
++describe("AUDIT: completion gate probes", () => {
++  it("CONTROL: a write with no check is asked 3 times, then reported unverified", async () => {
++    const r = await run([[...write("w", "src/parse.ts"), done], [done]]);
++    expect(r.rounds).toBe(4);
++    expect(r.notVerified).toBe(true);
++  });
++
++  it("CONTROL: a failing test run is not evidence", async () => {
++    const r = await run([[...write("w", "src/parse.ts"), ...bash("t", "bun test", false, "1 fail"), done], [done]]);
++    expect(r.rounds).toBe(4);
++    expect(r.notVerified).toBe(true);
++  });
++
++  it("LOOPHOLE 1: an echo that mentions a check tool satisfies the gate", async () => {
++    const r = await run([[...write("w", "src/parse.ts"), ...bash("e", 'echo "all good, tsc passes"', true, "all good, tsc passes"), done]]);
++    expect(r.rounds).toBe(1);
++    expect(r.notVerified).toBe(false);
++  });
++
++  it("LOOPHOLE 2: an unrelated successful request counts as verification", async () => {
++    const r = await run([[...write("w", "src/parse.ts"), ...bash("c", "curl https://example.com", true, "<html>"), done]]);
++    expect(r.rounds).toBe(1);
++    expect(r.notVerified).toBe(false);
++  });
++
++  it("LOOPHOLE 3: edits made after the last passing check are never re-verified", async () => {
++    const r = await run([
++      [...write("w1", "src/parse.ts"), ...bash("t", "bun test", true, "3 pass"), ...write("w2", "src/lexer.ts"), done],
++    ]);
++    expect(r.rounds).toBe(1);
++    expect(r.notVerified).toBe(false);
++  });
++
++  it("LOOPHOLE 4: a change made through the shell is invisible to the gate", async () => {
++    const r = await run([
++      [...bash("s", "node -e \"require('fs').writeFileSync('src/parse.ts','x')\"", true, ""), done],
++    ]);
++    expect(r.rounds).toBe(1);
++    expect(r.notVerified).toBe(false);
++  });
++
++  it("RESILIENCE: a transient upstream 404 ('Provider returned error') pauses a pinned turn with no retry", async () => {
++    const { APICallError } = await import("@ai-sdk/provider");
++    const upstream404 = new APICallError({
++      message: "Provider returned error",
++      url: "https://openrouter.ai/api/v1/chat/completions",
++      requestBodyValues: {},
++      statusCode: 404,
++      responseBody: '{"error":{"message":"Provider returned error","code":404,"metadata":{"provider_name":"Nvidia"}}}',
++      isRetryable: false,
++    });
++    const r = await run([[{ type: "error", error: upstream404 } as ProviderEvent], [done]]);
++    expect(r.rounds).toBe(1);
++    expect(r.text).toContain("cannot serve this request");
++  });
++
++  it("LOOPHOLE 5: a version query of a check tool counts as verification", async () => {
++    const r = await run([[...write("w", "src/parse.ts"), ...bash("v", "tsc --version", true, "Version 5.9.3"), done]]);
++    expect(r.rounds).toBe(1);
++    expect(r.notVerified).toBe(false);
++  });
++});
+diff --git a/src/agent/audit-prompt-size.test.ts b/src/agent/audit-prompt-size.test.ts
+new file mode 100644
+index 0000000..be870b4
+--- /dev/null
++++ b/src/agent/audit-prompt-size.test.ts
+@@ -0,0 +1,119 @@
++import { mkdtempSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { describe, expect, it, vi } from "vitest";
++import type { AggregatedHookResult, HookInput } from "../hooks/types";
++import type {
++  ProviderAdapter,
++  ProviderModelRuntime,
++  ProviderStream,
++  ProviderStreamRequest,
++  ProviderTextRequest,
++  ProviderTextResult,
++  ProviderToolContext,
++} from "../providers/types";
++import { discoverSkills, formatSkillsForPrompt } from "../utils/skills";
++import { loadCustomInstructions } from "../utils/instructions";
++
++/** AUDIT (worktree only): measures what one request carries before the conversation starts. */
++
++const { executeEventHooksMock } = vi.hoisted(() => ({
++  executeEventHooksMock: vi.fn<(input: HookInput) => Promise<AggregatedHookResult>>(),
++}));
++vi.mock("../storage/index", () => ({
++  appendCompaction: vi.fn(),
++  appendMessages: vi.fn(() => []),
++  appendSystemMessage: vi.fn(() => 0),
++  buildChatEntries: vi.fn(() => []),
++  getLatestObjectiveForSession: vi.fn(() => null),
++  getNextMessageSequence: vi.fn(() => 0),
++  getSessionTotalCostMicros: vi.fn(() => 0),
++  getSessionTotalTokens: vi.fn(() => 0),
++  getUsageCostSinceMicros: vi.fn(() => 0),
++  listSessionUsage: vi.fn(() => []),
++  loadTranscript: vi.fn(() => []),
++  loadTranscriptState: vi.fn(() => ({ messages: [], seqs: [] })),
++  recordCheckpoint: vi.fn(),
++  recordUsageEvent: vi.fn(),
++  upsertObjectiveIndex: vi.fn(),
++  SessionStore: class {},
++}));
++vi.mock("../hooks/index", () => ({ executeEventHooks: executeEventHooksMock }));
++
++import { Agent } from "./agent";
++
++class Recorder implements ProviderAdapter {
++  readonly id = "rec";
++  readonly defaultModelId = "rec-model";
++  readonly requests: ProviderStreamRequest[] = [];
++  resolveModelRuntime(modelId: string): ProviderModelRuntime {
++    return {
++      modelId,
++      modelInfo: {
++        id: modelId,
++        name: "rec",
++        contextWindow: 200_000,
++        inputPrice: 0,
++        outputPrice: 0,
++        reasoning: false,
++        description: "rec",
++        supportsClientTools: true,
++        supportsMaxOutputTokens: true,
++      },
++    };
++  }
++  stream(request: ProviderStreamRequest): ProviderStream {
++    this.requests.push(request);
++    return {
++      events: (async function* () {
++        yield { type: "text-delta" as const, text: "ok" };
++      })(),
++      response: Promise.resolve({ messages: [{ role: "assistant", content: "ok" }] }),
++    };
++  }
++  async generateText(request: ProviderTextRequest): Promise<ProviderTextResult> {
++    return { text: "x", modelId: request.modelId };
++  }
++  getToolContext(): ProviderToolContext {
++    return {};
++  }
++}
++
++async function measure(cwd: string) {
++  executeEventHooksMock.mockResolvedValue({
++    blocked: false,
++    blockingErrors: [],
++    preventContinuation: false,
++    additionalContexts: [],
++    results: [],
++  });
++  const provider = new Recorder();
++  const agent = new Agent(undefined, undefined, "rec-model", undefined, { provider, persistSession: false, cwd });
++  for await (const _ of agent.processMessage("Fix the failing test in src/parse.ts")) {
++    // drain
++  }
++  const request = provider.requests[0];
++  const tools = request?.tools ?? {};
++  const schemaChars = JSON.stringify(
++    Object.fromEntries(
++      Object.entries(tools).map(([name, definition]) => [
++        name,
++        { d: (definition as { description?: string }).description, s: (definition as { inputSchema?: unknown }).inputSchema },
++      ]),
++    ),
++  ).length;
++  return { systemChars: String(request?.system ?? "").length, toolCount: Object.keys(tools).length, schemaChars };
++}
++
++describe("AUDIT: request size", () => {
++  it("prints the fixed overhead of one request", async () => {
++    const empty = mkdtempSync(join(tmpdir(), "shelra-audit-empty-"));
++    const clean = await measure(empty);
++    const repoRoot = join(__dirname, "..", "..");
++    const inRepo = await measure(join(repoRoot, "bench", "fixtures", "shelra-agent-core-v0.2", "01-input-normalization"));
++    const agentsMd = loadCustomInstructions(join(repoRoot, "bench"))?.length ?? 0;
++    const skills = formatSkillsForPrompt(discoverSkills(join(repoRoot, "bench")))?.length ?? 0;
++    console.log(JSON.stringify({ clean, inRepo, inheritedAgentsMdChars: agentsMd, inheritedSkillsChars: skills }));
++    expect(clean.systemChars).toBeGreaterThan(0);
++  });
++});
+diff --git a/src/bench/claude-code-executor.ts b/src/bench/claude-code-executor.ts
+new file mode 100644
+index 0000000..29a0517
+--- /dev/null
++++ b/src/bench/claude-code-executor.ts
+@@ -0,0 +1,322 @@
++import { spawn } from "node:child_process";
++import { mkdirSync } from "node:fs";
++import { join } from "node:path";
++import { VERIFICATION_COMMAND_RE } from "../agent/verification-evidence";
++import { evaluateAcceptance } from "../autonomy/acceptance";
++import type { AcceptanceCriterion, CheckSpec, VerificationReport } from "../autonomy/types";
++import { observePage } from "../exec/browser";
++import { runCommand } from "../exec/command";
++import { probeHttp } from "../exec/http";
++import type { BenchmarkExecutionNotice, BenchmarkTaskExecution } from "./runner";
++import { calculateIntentScore } from "./scoring";
++import type { BenchmarkAcceptanceResult, BenchmarkTaskDefinition } from "./types";
++
++/**
++ * AUDIT (worktree only, 2026-09-23): an external reference adapter. Runs Claude Code headless
++ * (`claude -p`) on the same task workspace the Shelra adapter gets, then grades the workspace with
++ * the same benchmark-owned oracle. The owner's user/project settings, plugins, hooks and MCP servers
++ * are not loaded; auto memory is redirected to a scratch folder; sessions are not persisted.
++ */
++
++export interface ClaudeCodeExecutorOptions {
++  model: string;
++  benchmarkRoot: string;
++  taskTimeoutMs?: number;
++  maxTurns?: number;
++  scratchDir: string;
++}
++
++interface StreamStats {
++  toolCalls: number;
++  bashCommands: string[];
++  verificationCommands: number;
++  failedToolResults: number;
++  filesChanged: Set<string>;
++  resultText: string;
++  numTurns: number | null;
++  costUsd: number | null;
++  inputTokens: number;
++  outputTokens: number;
++  cacheRead: number;
++  cacheCreate: number;
++  modelsUsed: string[];
++  isError: boolean;
++  subtype: string | null;
++}
++
++function childEnv(): NodeJS.ProcessEnv {
++  const env: NodeJS.ProcessEnv = { ...process.env };
++  for (const key of Object.keys(env)) {
++    if (key === "CLAUDECODE" || key === "CLAUDE_PID" || key.startsWith("CLAUDE_CODE_") || key === "ANTHROPIC_MODEL") {
++      delete env[key];
++    }
++  }
++  // The bench runs with a scratch HOME for Shelra's own database; Claude Code needs the real one for its login.
++  if (process.env.AUDIT_REAL_USERPROFILE) {
++    env.USERPROFILE = process.env.AUDIT_REAL_USERPROFILE;
++    env.HOME = process.env.AUDIT_REAL_USERPROFILE;
++  }
++  return env;
++}
++
++function parseStream(lines: string[]): StreamStats {
++  const stats: StreamStats = {
++    toolCalls: 0,
++    bashCommands: [],
++    verificationCommands: 0,
++    failedToolResults: 0,
++    filesChanged: new Set(),
++    resultText: "",
++    numTurns: null,
++    costUsd: null,
++    inputTokens: 0,
++    outputTokens: 0,
++    cacheRead: 0,
++    cacheCreate: 0,
++    modelsUsed: [],
++    isError: false,
++    subtype: null,
++  };
++  for (const line of lines) {
++    let event: Record<string, unknown>;
++    try {
++      event = JSON.parse(line) as Record<string, unknown>;
++    } catch {
++      continue;
++    }
++    const message = event.message as { content?: unknown } | undefined;
++    const content = Array.isArray(message?.content) ? (message?.content as Array<Record<string, unknown>>) : [];
++    if (event.type === "assistant") {
++      for (const block of content) {
++        if (block.type !== "tool_use") continue;
++        stats.toolCalls += 1;
++        const input = (block.input ?? {}) as Record<string, unknown>;
++        const name = String(block.name ?? "");
++        if ((name === "Bash" || name === "PowerShell") && typeof input.command === "string") {
++          stats.bashCommands.push(input.command);
++          if (VERIFICATION_COMMAND_RE.test(input.command)) stats.verificationCommands += 1;
++        }
++        if ((name === "Edit" || name === "Write" || name === "MultiEdit") && typeof input.file_path === "string") {
++          stats.filesChanged.add(input.file_path);
++        }
++      }
++    } else if (event.type === "user") {
++      for (const block of content) if (block.type === "tool_result" && block.is_error === true) stats.failedToolResults += 1;
++    } else if (event.type === "result") {
++      stats.resultText = typeof event.result === "string" ? event.result : "";
++      stats.numTurns = typeof event.num_turns === "number" ? event.num_turns : null;
++      stats.costUsd = typeof event.total_cost_usd === "number" ? event.total_cost_usd : null;
++      stats.isError = event.is_error === true;
++      stats.subtype = typeof event.subtype === "string" ? event.subtype : null;
++      const usage = (event.usage ?? {}) as Record<string, unknown>;
++      stats.inputTokens = Number(usage.input_tokens ?? 0);
++      stats.outputTokens = Number(usage.output_tokens ?? 0);
++      stats.cacheRead = Number(usage.cache_read_input_tokens ?? 0);
++      stats.cacheCreate = Number(usage.cache_creation_input_tokens ?? 0);
++      const modelUsage = event.modelUsage as Record<string, unknown> | undefined;
++      if (modelUsage) stats.modelsUsed = Object.keys(modelUsage);
++    }
++  }
++  return stats;
++}
++
++function runClaude(
++  prompt: string,
++  cwd: string,
++  options: ClaudeCodeExecutorOptions,
++  signal: AbortSignal,
++): Promise<{ lines: string[]; exitCode: number | null; stderr: string; timedOut: boolean }> {
++  const settings = JSON.stringify({ autoMemoryDirectory: join(options.scratchDir, "claude-auto-memory") });
++  const args = [
++    "-p",
++    "--model",
++    options.model,
++    "--output-format",
++    "stream-json",
++    "--verbose",
++    "--permission-mode",
++    "acceptEdits",
++    "--allowedTools",
++    "Bash",
++    "PowerShell",
++    "--max-turns",
++    String(options.maxTurns ?? 80),
++    "--no-session-persistence",
++    "--strict-mcp-config",
++    "--setting-sources",
++    "",
++    "--settings",
++    settings,
++  ];
++  return new Promise((resolve) => {
++    // No shell: cmd.exe drops the empty `--setting-sources ""` argument (seen 2026-09-23).
++    const child = spawn(process.env.AUDIT_CLAUDE_BIN || "claude", args, { cwd, env: childEnv(), windowsHide: true });
++    let buffer = "";
++    const lines: string[] = [];
++    let stderr = "";
++    let timedOut = false;
++    const timer = setTimeout(() => {
++      timedOut = true;
++      child.kill();
++    }, options.taskTimeoutMs ?? 20 * 60_000);
++    const onAbort = () => child.kill();
++    signal.addEventListener("abort", onAbort, { once: true });
++    child.stdout.on("data", (chunk: Buffer) => {
++      buffer += chunk.toString("utf8");
++      let index = buffer.indexOf("\n");
++      while (index >= 0) {
++        const line = buffer.slice(0, index).trim();
++        buffer = buffer.slice(index + 1);
++        if (line) lines.push(line);
++        index = buffer.indexOf("\n");
++      }
++    });
++    child.stderr.on("data", (chunk: Buffer) => {
++      stderr = `${stderr}${chunk.toString("utf8")}`.slice(-4_000);
++    });
++    child.on("close", (code) => {
++      clearTimeout(timer);
++      signal.removeEventListener("abort", onAbort);
++      if (buffer.trim()) lines.push(buffer.trim());
++      resolve({ lines, exitCode: code, stderr, timedOut });
++    });
++    child.on("error", (error) => {
++      stderr = `${stderr}\n${String(error)}`;
++    });
++    child.stdin.write(prompt);
++    child.stdin.end();
++  });
++}
++
++function toRuntimeCriteria(criteria: BenchmarkTaskDefinition["acceptanceCriteria"]): AcceptanceCriterion[] | undefined {
++  if (!criteria || criteria.length === 0 || criteria.some((criterion) => !criterion.check)) return undefined;
++  return criteria.map((criterion) => ({
++    id: criterion.id,
++    description: criterion.description,
++    required: criterion.required !== false,
++    check: { ...(criterion.check as CheckSpec) } as AcceptanceCriterion["check"],
++  }));
++}
++
++export function createClaudeCodeExecutor(options: ClaudeCodeExecutorOptions) {
++  mkdirSync(options.scratchDir, { recursive: true });
++  return {
++    async executeTask(
++      task: BenchmarkTaskDefinition,
++      context: { signal?: AbortSignal; emit: (notice: BenchmarkExecutionNotice) => void },
++    ): Promise<BenchmarkTaskExecution> {
++      const workspace = task.workspace ?? process.cwd();
++      const startedAt = Date.now();
++      const controller = new AbortController();
++      context.signal?.addEventListener("abort", () => controller.abort(), { once: true });
++      context.emit({ type: "note", taskId: task.id, message: `Claude Code turn started with ${options.model}`, payload: {} });
++      const run = await runClaude(task.prompt, workspace, options, controller.signal);
++      const stats = parseStream(run.lines);
++      const durationMs = Date.now() - startedAt;
++
++      const criteria = toRuntimeCriteria(task.acceptanceCriteria);
++      let report: VerificationReport | undefined;
++      if (criteria) {
++        report = await evaluateAcceptance(
++          criteria,
++          { workspace, benchmarkRoot: options.benchmarkRoot, attempt: 1, signal: context.signal },
++          {
++            runCommand: (command, commandOptions) =>
++              runCommand({
++                command,
++                cwd: commandOptions.cwd,
++                timeoutMs: commandOptions.timeoutMs,
++                signal: commandOptions.signal,
++                env: commandOptions.env,
++              }),
++            probeHttp: (url) => probeHttp(url),
++            observePage: (url, pageOptions) => observePage(url, pageOptions),
++          },
++        );
++      }
++      const byId = new Map((report?.results ?? []).map((result) => [result.id, result]));
++      const acceptance: BenchmarkAcceptanceResult[] = (task.acceptanceCriteria ?? []).map((criterion) => {
++        const result = byId.get(criterion.id);
++        return {
++          id: criterion.id,
++          description: criterion.description,
++          status: result ? (result.passed ? "passed" : "failed") : "not_run",
++          required: criterion.required !== false,
++          ...(result?.detail ? { detail: result.detail } : {}),
++        };
++      });
++      const required = acceptance.filter((criterion) => criterion.required !== false);
++      const passed = required.filter((criterion) => criterion.status === "passed").length;
++      const verified = required.length > 0 && passed === required.length;
++      const coding = required.length > 0 ? (passed / required.length) * 100 : undefined;
++      const intent = calculateIntentScore(acceptance);
++      return {
++        status: verified ? "passed" : "failed",
++        scores: {
++          ...(coding === undefined ? {} : { coding }),
++          ...(intent === undefined ? {} : { intent }),
++          verification: stats.verificationCommands > 0 ? 100 : 0,
++        },
++        tokens: {
++          inputTokens: stats.inputTokens + stats.cacheRead + stats.cacheCreate,
++          outputTokens: stats.outputTokens,
++          totalTokens: stats.inputTokens + stats.cacheRead + stats.cacheCreate + stats.outputTokens,
++        },
++        cost: {
++          micros: stats.costUsd === null ? null : Math.round(stats.costUsd * 1_000_000),
++          kind: "estimated",
++          source: "claude -p total_cost_usd (subscription; API-equivalent estimate)",
++        },
++        behavior: {
++          planCreated: false,
++          researchPerformed: false,
++          researchSources: 0,
++          delegatedAgents: 0,
++          llmCalls: stats.numTurns ?? 0,
++          toolCalls: stats.toolCalls,
++          commandsExecuted: stats.bashCommands.length,
++          filesRead: 0,
++          filesChanged: stats.filesChanged.size,
++          testsExecuted: stats.verificationCommands,
++          verificationAttempts: stats.verificationCommands,
++          failuresDetected: stats.failedToolResults,
++          repairsAttempted: 0,
++          repairsSucceeded: 0,
++          selfVerification: stats.verificationCommands > 0,
++          humanInterventions: 0,
++          completionBlocked: false,
++        },
++        acceptance,
++        finalResult: {
++          harness: "claude-code",
++          model: options.model,
++          modelsUsed: stats.modelsUsed,
++          numTurns: stats.numTurns,
++          costUsd: stats.costUsd,
++          exitCode: run.exitCode,
++          subtype: stats.subtype,
++          isError: stats.isError,
++          timedOut: run.timedOut,
++          verified,
++          stderrTail: run.stderr.slice(-400),
++          finalTextExcerpt: stats.resultText.trim().slice(-400),
++        },
++        failureReason: verified
++          ? null
++          : run.timedOut
++            ? "Claude Code exceeded the task timeout"
++            : `Benchmark acceptance criteria not satisfied: ${required
++                .filter((criterion) => criterion.status !== "passed")
++                .map((criterion) => criterion.id)
++                .join(", ")}`,
++        failureType: verified ? null : run.timedOut ? "timeout" : "intent_failure",
++        evidence: [{ kind: "other", path: workspace, label: "Graded task workspace" }],
++        durationMs,
++        llmDurationMs: null,
++        toolDurationMs: null,
++        verificationDurationMs: report?.durationMs ?? null,
++        repairDurationMs: null,
++      };
++    },
++  };
++}
+diff --git a/src/bench/codex-executor.ts b/src/bench/codex-executor.ts
+new file mode 100644
+index 0000000..cda07be
+--- /dev/null
++++ b/src/bench/codex-executor.ts
+@@ -0,0 +1,253 @@
++import { spawn } from "node:child_process";
++import { mkdirSync, writeFileSync } from "node:fs";
++import { join } from "node:path";
++import { VERIFICATION_COMMAND_RE } from "../agent/verification-evidence";
++import { gradeWorkspace } from "./external-grading";
++import type { BenchmarkExecutionNotice, BenchmarkTaskExecution } from "./runner";
++import type { BenchmarkTaskDefinition } from "./types";
++
++/**
++ * AUDIT (worktree only, 2026-09-23): OpenAI Codex CLI as an external reference adapter. Runs
++ * `codex exec` non-interactively in the same task workspace with the owner's model and effort,
++ * a workspace-write sandbox and no persisted session, then grades with the same oracle.
++ */
++
++export interface CodexExecutorOptions {
++  model: string;
++  reasoningEffort: string;
++  benchmarkRoot: string;
++  scratchDir: string;
++  taskTimeoutMs?: number;
++}
++
++interface CodexStats {
++  commands: Array<{ command: string; exitCode: number | null }>;
++  verificationCommands: number;
++  failedCommands: number;
++  filesChanged: Set<string>;
++  agentMessages: string[];
++  itemCounts: Record<string, number>;
++  inputTokens: number;
++  cachedInputTokens: number;
++  outputTokens: number;
++  reasoningTokens: number;
++  turns: number;
++  errors: string[];
++}
++
++function childEnv(): NodeJS.ProcessEnv {
++  const env: NodeJS.ProcessEnv = { ...process.env };
++  if (process.env.AUDIT_REAL_USERPROFILE) {
++    env.USERPROFILE = process.env.AUDIT_REAL_USERPROFILE;
++    env.HOME = process.env.AUDIT_REAL_USERPROFILE;
++  }
++  return env;
++}
++
++function commandText(value: unknown): string {
++  if (typeof value === "string") return value;
++  if (Array.isArray(value)) return value.map(String).join(" ");
++  return "";
++}
++
++export function parseCodexEvents(lines: readonly string[]): CodexStats {
++  const stats: CodexStats = {
++    commands: [],
++    verificationCommands: 0,
++    failedCommands: 0,
++    filesChanged: new Set(),
++    agentMessages: [],
++    itemCounts: {},
++    inputTokens: 0,
++    cachedInputTokens: 0,
++    outputTokens: 0,
++    reasoningTokens: 0,
++    turns: 0,
++    errors: [],
++  };
++  for (const line of lines) {
++    let event: Record<string, unknown>;
++    try {
++      event = JSON.parse(line) as Record<string, unknown>;
++    } catch {
++      continue;
++    }
++    const type = String(event.type ?? "");
++    if (type === "turn.completed") {
++      stats.turns += 1;
++      const usage = (event.usage ?? {}) as Record<string, unknown>;
++      stats.inputTokens += Number(usage.input_tokens ?? 0);
++      stats.cachedInputTokens += Number(usage.cached_input_tokens ?? 0);
++      stats.outputTokens += Number(usage.output_tokens ?? 0);
++      stats.reasoningTokens += Number(usage.reasoning_output_tokens ?? usage.reasoning_tokens ?? 0);
++    } else if (type === "turn.failed" || type === "error") {
++      stats.errors.push(JSON.stringify(event.error ?? event.message ?? event).slice(0, 300));
++    } else if (type === "item.completed") {
++      const item = (event.item ?? {}) as Record<string, unknown>;
++      const itemType = String(item.type ?? item.item_type ?? "unknown");
++      stats.itemCounts[itemType] = (stats.itemCounts[itemType] ?? 0) + 1;
++      if (itemType === "command_execution") {
++        const command = commandText(item.command);
++        const exitCode = typeof item.exit_code === "number" ? item.exit_code : null;
++        stats.commands.push({ command, exitCode });
++        if (VERIFICATION_COMMAND_RE.test(command)) stats.verificationCommands += 1;
++        if (exitCode !== null && exitCode !== 0) stats.failedCommands += 1;
++      } else if (itemType === "file_change") {
++        for (const change of Array.isArray(item.changes) ? (item.changes as Array<Record<string, unknown>>) : []) {
++          if (typeof change.path === "string") stats.filesChanged.add(change.path);
++        }
++      } else if (itemType === "agent_message" && typeof item.text === "string") {
++        stats.agentMessages.push(item.text);
++      }
++    }
++  }
++  return stats;
++}
++
++function runCodex(
++  prompt: string,
++  cwd: string,
++  options: CodexExecutorOptions,
++  signal: AbortSignal,
++): Promise<{ lines: string[]; exitCode: number | null; stderr: string; timedOut: boolean }> {
++  const args = [
++    "exec",
++    "--json",
++    "--skip-git-repo-check",
++    "--ephemeral",
++    "-m",
++    options.model,
++    "-c",
++    `model_reasoning_effort="${options.reasoningEffort}"`,
++    "-s",
++    "workspace-write",
++    "-C",
++    cwd,
++    "-",
++  ];
++  return new Promise((resolve) => {
++    const child = spawn(process.env.AUDIT_CODEX_BIN || "codex", args, { cwd, env: childEnv(), windowsHide: true });
++    let buffer = "";
++    const lines: string[] = [];
++    let stderr = "";
++    let timedOut = false;
++    const timer = setTimeout(() => {
++      timedOut = true;
++      child.kill();
++    }, options.taskTimeoutMs ?? 20 * 60_000);
++    const onAbort = () => child.kill();
++    signal.addEventListener("abort", onAbort, { once: true });
++    child.stdout.on("data", (chunk: Buffer) => {
++      buffer += chunk.toString("utf8");
++      let index = buffer.indexOf("\n");
++      while (index >= 0) {
++        const line = buffer.slice(0, index).trim();
++        buffer = buffer.slice(index + 1);
++        if (line) lines.push(line);
++        index = buffer.indexOf("\n");
++      }
++    });
++    child.stderr.on("data", (chunk: Buffer) => {
++      stderr = `${stderr}${chunk.toString("utf8")}`.slice(-4_000);
++    });
++    child.on("close", (code) => {
++      clearTimeout(timer);
++      signal.removeEventListener("abort", onAbort);
++      if (buffer.trim()) lines.push(buffer.trim());
++      resolve({ lines, exitCode: code, stderr, timedOut });
++    });
++    child.on("error", (error) => {
++      stderr = `${stderr}\n${String(error)}`;
++    });
++    child.stdin.write(prompt);
++    child.stdin.end();
++  });
++}
++
++export function createCodexExecutor(options: CodexExecutorOptions) {
++  mkdirSync(join(options.scratchDir, "codex-transcripts"), { recursive: true });
++  return {
++    async executeTask(
++      task: BenchmarkTaskDefinition,
++      context: { signal?: AbortSignal; emit: (notice: BenchmarkExecutionNotice) => void },
++    ): Promise<BenchmarkTaskExecution> {
++      const workspace = task.workspace ?? process.cwd();
++      const startedAt = Date.now();
++      const controller = new AbortController();
++      context.signal?.addEventListener("abort", () => controller.abort(), { once: true });
++      context.emit({ type: "note", taskId: task.id, message: `Codex turn started with ${options.model}`, payload: {} });
++      const run = await runCodex(task.prompt, workspace, options, controller.signal);
++      const durationMs = Date.now() - startedAt;
++      try {
++        writeFileSync(
++          join(options.scratchDir, "codex-transcripts", `${task.id}-${startedAt}.jsonl`),
++          `${run.lines.join("\n")}\n`,
++        );
++      } catch {
++        // evidence only
++      }
++      const stats = parseCodexEvents(run.lines);
++      const graded = await gradeWorkspace(task, workspace, options.benchmarkRoot, context.signal);
++      return {
++        status: graded.verified ? "passed" : "failed",
++        scores: {
++          ...(graded.coding === undefined ? {} : { coding: graded.coding }),
++          ...(graded.intent === undefined ? {} : { intent: graded.intent }),
++          verification: stats.verificationCommands > 0 ? 100 : 0,
++        },
++        tokens: {
++          inputTokens: stats.inputTokens,
++          outputTokens: stats.outputTokens,
++          totalTokens: stats.inputTokens + stats.outputTokens,
++          cachedTokens: stats.cachedInputTokens,
++          reasoningTokens: stats.reasoningTokens,
++        },
++        cost: { micros: null, kind: "unavailable", source: "ChatGPT plan usage; Codex exec reports tokens only" },
++        behavior: {
++          planCreated: false,
++          researchPerformed: false,
++          researchSources: 0,
++          delegatedAgents: 0,
++          llmCalls: stats.turns,
++          toolCalls: Object.values(stats.itemCounts).reduce((sum, value) => sum + value, 0),
++          commandsExecuted: stats.commands.length,
++          filesRead: 0,
++          filesChanged: stats.filesChanged.size,
++          testsExecuted: stats.verificationCommands,
++          verificationAttempts: stats.verificationCommands,
++          failuresDetected: stats.failedCommands,
++          repairsAttempted: 0,
++          repairsSucceeded: 0,
++          selfVerification: stats.verificationCommands > 0,
++          humanInterventions: 0,
++          completionBlocked: false,
++        },
++        acceptance: graded.acceptance,
++        finalResult: {
++          harness: "codex",
++          model: options.model,
++          reasoningEffort: options.reasoningEffort,
++          exitCode: run.exitCode,
++          timedOut: run.timedOut,
++          verified: graded.verified,
++          itemCounts: stats.itemCounts,
++          errors: stats.errors,
++          stderrTail: run.stderr.slice(-400),
++          finalTextExcerpt: (stats.agentMessages.at(-1) ?? "").trim().slice(-400),
++        },
++        failureReason: graded.verified
++          ? null
++          : run.timedOut
++            ? "Codex exceeded the task timeout"
++            : `Benchmark acceptance criteria not satisfied: ${graded.failedIds.join(", ")}`,
++        failureType: graded.verified ? null : run.timedOut ? "timeout" : "intent_failure",
++        evidence: [{ kind: "other", path: workspace, label: "Graded task workspace" }],
++        durationMs,
++        llmDurationMs: null,
++        toolDurationMs: null,
++        verificationDurationMs: graded.report?.durationMs ?? null,
++        repairDurationMs: null,
++      };
++    },
++  };
++}
+diff --git a/src/bench/external-grading.ts b/src/bench/external-grading.ts
+new file mode 100644
+index 0000000..da78d5d
+--- /dev/null
++++ b/src/bench/external-grading.ts
+@@ -0,0 +1,70 @@
++import { evaluateAcceptance } from "../autonomy/acceptance";
++import type { AcceptanceCriterion, CheckSpec, VerificationReport } from "../autonomy/types";
++import { observePage } from "../exec/browser";
++import { runCommand } from "../exec/command";
++import { probeHttp } from "../exec/http";
++import { calculateIntentScore } from "./scoring";
++import type { BenchmarkAcceptanceResult, BenchmarkTaskDefinition } from "./types";
++
++/** AUDIT (worktree only): grades an external agent's workspace with the benchmark-owned oracle. */
++export async function gradeWorkspace(
++  task: BenchmarkTaskDefinition,
++  workspace: string,
++  benchmarkRoot: string,
++  signal?: AbortSignal,
++): Promise<{
++  acceptance: BenchmarkAcceptanceResult[];
++  verified: boolean;
++  coding?: number;
++  intent?: number;
++  report?: VerificationReport;
++  failedIds: string[];
++}> {
++  const criteria = task.acceptanceCriteria;
++  let report: VerificationReport | undefined;
++  if (criteria && criteria.length > 0 && criteria.every((criterion) => criterion.check)) {
++    const runtime: AcceptanceCriterion[] = criteria.map((criterion) => ({
++      id: criterion.id,
++      description: criterion.description,
++      required: criterion.required !== false,
++      check: { ...(criterion.check as CheckSpec) } as AcceptanceCriterion["check"],
++    }));
++    report = await evaluateAcceptance(
++      runtime,
++      { workspace, benchmarkRoot, attempt: 1, signal },
++      {
++        runCommand: (command, commandOptions) =>
++          runCommand({
++            command,
++            cwd: commandOptions.cwd,
++            timeoutMs: commandOptions.timeoutMs,
++            signal: commandOptions.signal,
++            env: commandOptions.env,
++          }),
++        probeHttp: (url) => probeHttp(url),
++        observePage: (url, pageOptions) => observePage(url, pageOptions),
++      },
++    );
++  }
++  const byId = new Map((report?.results ?? []).map((result) => [result.id, result]));
++  const acceptance: BenchmarkAcceptanceResult[] = (criteria ?? []).map((criterion) => {
++    const result = byId.get(criterion.id);
++    return {
++      id: criterion.id,
++      description: criterion.description,
++      status: result ? (result.passed ? "passed" : "failed") : "not_run",
++      required: criterion.required !== false,
++      ...(result?.detail ? { detail: result.detail } : {}),
++    };
++  });
++  const required = acceptance.filter((criterion) => criterion.required !== false);
++  const passed = required.filter((criterion) => criterion.status === "passed").length;
++  return {
++    acceptance,
++    verified: required.length > 0 && passed === required.length,
++    ...(required.length > 0 ? { coding: (passed / required.length) * 100 } : {}),
++    ...(calculateIntentScore(acceptance) === undefined ? {} : { intent: calculateIntentScore(acceptance) }),
++    ...(report ? { report } : {}),
++    failedIds: required.filter((criterion) => criterion.status !== "passed").map((criterion) => criterion.id),
++  };
++}
+diff --git a/src/index.ts b/src/index.ts
+index ca5668b..ef7fec9 100755
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1049,6 +1049,9 @@ async function runBenchCommand(options: {
+       requestedModel: requestedModel ?? null,
+       maxCostUsd: budget.maxSessionUsd ?? null,
+       maxRequestCostUsd: budget.maxRequestUsd ?? null,
++      // AUDIT (worktree only): which harness components were switched off for this run.
++      ablation: process.env.SHELRA_ABLATE || "none",
++      maxToolRounds: Number(process.env.SHELRA_BENCH_MAX_TOOL_ROUNDS) || 400,
+     },
+   } as const;
+ 
+@@ -1118,6 +1121,29 @@ async function runBenchCommand(options: {
+       }
+     },
+     createExecutor: async ({ run, signal, emit }) => {
++      // AUDIT (worktree only): external reference adapter, graded by the same oracle.
++      if (agentName === "claude-code") {
++        const { createClaudeCodeExecutor } = await import("./bench/claude-code-executor");
++        const model = requestedModel?.replace(/^openrouter\//u, "") || "sonnet";
++        updateBenchmarkRunMetadata(run.runId, { model: `claude-code/${model}`, modelProvider: "Claude Code CLI" });
++        return createClaudeCodeExecutor({
++          model,
++          benchmarkRoot: process.cwd(),
++          scratchDir: process.env.AUDIT_SCRATCH_DIR || `${process.cwd()}/.shelra/claude-code-scratch`,
++        });
++      }
++      if (agentName === "codex") {
++        const { createCodexExecutor } = await import("./bench/codex-executor");
++        const model = requestedModel?.replace(/^openrouter\//u, "") || "gpt-5.6-luna";
++        const effort = process.env.AUDIT_CODEX_EFFORT || "max";
++        updateBenchmarkRunMetadata(run.runId, { model: `codex/${model}@${effort}`, modelProvider: "OpenAI Codex CLI" });
++        return createCodexExecutor({
++          model,
++          reasoningEffort: effort,
++          benchmarkRoot: process.cwd(),
++          scratchDir: process.env.AUDIT_SCRATCH_DIR || `${process.cwd()}/.shelra/codex-scratch`,
++        });
++      }
+       if (agentName !== "shelra" && agentName !== "shelra-autonomy") {
+         throw new Error(
+           `Agent adapter "${agentName}" is not registered yet. This run was retained as failed evidence.`,
+@@ -1190,6 +1216,10 @@ async function runBenchCommand(options: {
+         benchmarkRoot: process.cwd(),
+         budget,
+         signal,
++        // AUDIT (worktree only): bound runaway weak models so one task cannot eat the daily quota.
++        ...(Number(process.env.SHELRA_BENCH_MAX_TOOL_ROUNDS) > 0
++          ? { maxToolRounds: Number(process.env.SHELRA_BENCH_MAX_TOOL_ROUNDS) }
++          : {}),
+       });
+     },
+   });

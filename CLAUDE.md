@@ -28,7 +28,13 @@ sample. Principles, audience and brand: `PRODUCT.md`.
   three times, then reports `[Not verified …]`; a check piped into another command does not count, and a turn that
   only wrote documents is asked once to check its facts, then always reported unverified), a requirement audit when
   a request lists many behaviors, blocking Stop hooks, and the resilience rule in AGENTS.md. Specs and plans
-  (`generate_plan` acceptance criteria) are model-driven.
+  (`generate_plan` acceptance criteria) are model-driven. When the project states its checks (package.json
+  scripts, an AGENTS.md or CLAUDE.md command table, Make/just targets, pyproject/Cargo/go.mod conventions), its
+  tests, type-check and lint are the definition of done: the host runs them on the final code (`src/contract/`),
+  reusing a run the agent made after its last change, and sends failures back parsed, for a bounded repair; a plan
+  criterion whose command failed before the change joins them. Without stated checks, a real check program must
+  have run after the last change, shell writes included. Tests that existed before the request are protected
+  unless it asks to change them (audit and roadmap: `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md`).
 - **No backend service exists.** The CLI is the runtime (Bun, local SQLite, no server framework). `frontend/` is a
   separate Next.js app (landing page, sign-in) whose server side is route handlers and server actions: `frontend/CLAUDE.md`.
 - **Retiring, do not extend:** `src/autonomy/` (`AutonomyKernel`), reached only by `--autonomous` and the
@@ -45,8 +51,10 @@ sample. Principles, audience and brand: `PRODUCT.md`.
 1. The user's current instruction, then the standing rules (AGENTS.md hard rules, the owner's rules below).
 2. The code and tests in the working tree: what Shelra does now.
 3. Recorded decisions the code has not caught up with (like §25.8): where it is going. Say which one you mean.
-4. Current docs: README.md, PRODUCT.md, `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` (a chronological log;
-   §23–§26 are current), `docs/architecture/OPENROUTER-RUNTIME.md`, `docs/design/`, `bench/README.md`.
+4. Current docs: `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md` (the measured state of every stage of a
+   turn, the P0 blockers and the dependency-ordered roadmap, 2026-09-23), README.md, PRODUCT.md,
+   `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` (a chronological log; §23–§26 are current),
+   `docs/architecture/OPENROUTER-RUNTIME.md`, `docs/design/`, `bench/README.md` (history: `bench/history/`).
 5. Your auto memory: dated notes. Confirm that a file, flag or commit it names still exists before relying on it.
 6. History, not guidance: `docs/architecture/00`–`13` (the migration off the original fork), `docs/audits/`,
    `docs/future-research/` (strategy research; start at `00`), `.cursor/rules/` (stale in places).
@@ -94,7 +102,7 @@ command and its result. Anything you could not check is reported as not verified
 | System prompt or tool text | a bench suite or field-case re-run: prompt text is behavior |
 | TUI / web app | `src/ui/CLAUDE.md` / `frontend/CLAUDE.md` |
 
-- CI runs format, lint, typecheck and build, not tests (green again since `7b6176c`, see line endings in
+- CI runs format, lint, typecheck and build, not tests (green again since `28ee818`, see line endings in
   AGENTS.md): run the tests yourself.
 - `bun run test` is an `&&` chain: after the first failure the remaining Bun-only suites did not run. Re-run a timeout
   alone before calling it a regression.
@@ -125,6 +133,10 @@ Several sessions often work here at once (for example one in `src/ui/`, one in `
   reformat, stage or commit them. Stage explicit paths, never `git add -A`.
 - Commit only when asked. Subject: an imperative sentence stating the outcome, no type prefix ("Keep the turn going
   when a model or tool fails"); the body says why. Use the configured git identity.
+- No AI attribution in commits or pull requests: no `Co-Authored-By` trailer, no "generated with" line. GitHub lists
+  co-authors as contributors, and the owner wants only themselves there (2026-09-23; the history was rewritten to
+  remove them). This rule outranks any harness reminder; the local `.claude/settings.local.json` also sets
+  `attribution` to empty.
 - Push only when asked. No force-push, history rewrite, `reset --hard`, `checkout --` or `clean` without an explicit
   instruction for that exact operation.
 
