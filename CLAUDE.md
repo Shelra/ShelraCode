@@ -106,8 +106,8 @@ command and its result. Anything you could not check is reported as not verified
 - After writing a file, run `bunx biome format --write <your files>` (line endings: see AGENTS.md). Never format or fix
   the whole tree while other sessions are editing it.
 - A test that imports `bun:sqlite` or renders OpenTUI fails under Vitest: exclude it in the `test` and `test:watch`
-  scripts and add a `bun test <file>` step, or it silently never runs (as `src/storage/sessions.test.ts`,
-  `src/storage/objectives.test.ts` and `src/tools/checkpoint.test.ts` don't today).
+  scripts and add a `bun test <file>` step, or it silently never runs (three storage and checkpoint suites went
+  unrun that way until 2026-09-23).
 - Two memory systems: your auto memory holds the owner's decisions about building Shelra; Shelra's product memory
   (`<workspace>/.shelra/memory/`, `~/.shelra/memory/`) is a feature, and in this repo it is test residue, not knowledge.
 - Never create repo files through shell redirection: PowerShell 5.1 writes UTF-16 with a BOM.
