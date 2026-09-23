@@ -1,0 +1,652 @@
+{
+  "benchmarkVersion": "0.1.0",
+  "suite": "shelra-decision-chain",
+  "oracleMode": "benchmark-owned",
+  "seed": "shelra-decision-chain-v0.1",
+  "config": {
+    "purpose": "Continuity (F6 of docs/EXECUTION-PLAN.md): one repository, a lending library's API, goes through ten sessions in the same directory while decisions are added (steps 2, 4, 9) and one replaces another (step 5). Each session is a new agent session; the user states a rule once, in the session where it is decided, and never repeats it. After each session the oracle judges the request and every decision in force, on the whole code.",
+    "subject": "agent_harness",
+    "modelRole": "controlled_variable",
+    "workspaceMode": "chain_in_place",
+    "oracle": "external_deterministic_oracle",
+    "leaderboardEligible": true,
+    "minimumTaskCount": 10,
+    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision that records the rule it stated in that session and declines any other. Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
+  },
+  "scorePolicy": {
+    "id": "shelra-agent-core-provisional",
+    "version": "1",
+    "weights": {
+      "coding": 0.45,
+      "intent": 0.35,
+      "verification": 0.2
+    },
+    "requiredDimensions": ["coding", "intent", "verification"],
+    "correctnessFloor": 70,
+    "note": "Provisional development policy. Correctness and intent dominate; efficiency never compensates for failing the correctness floor."
+  },
+  "tasks": [
+    {
+      "id": "01-loans",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add book loans. POST /loans with a user_id and a book_id lends the book: answer 201 with the loan (its id, user id, book id, lent at, due at, which is 14 days after lent at, and returned at, which stays null until the book comes back), 404 when the user or the book does not exist, and 409 when the book is already out. POST /loans/:id/return records the return and answers 200 with the loan, or 404 for an unknown loan. GET /books/:id should also say whether the book is available right now, as available: true or false.",
+      "workspaceTemplate": "bench/fixtures/shelra-decision-chain-v0.1/lendly",
+      "approveDecisions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "Books can be lent and returned, and a book says whether it is available.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 1 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 1 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SNAKE-CASE",
+          "description": "Still holds on the whole code: API JSON uses snake_case keys (D-0002, recorded before the chain, replaced at step 5).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 1 snake",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "02-delete-user",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add DELETE /users/:id: answer 204, or 404 when there is no such user. This project never removes rows from its database: deleting a user sets its deleted_at column, and every endpoint then treats that user as if it did not exist (GET /users leaves them out, GET /users/:id and POST /loans answer 404). That is a rule for the whole project from now on, not only for this endpoint.",
+      "continueIn": "01-loans",
+      "approveDecisions": ["remov|delet"],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "A user can be deleted, and a deleted user is gone for the API.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 2 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 2 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SNAKE-CASE",
+          "description": "Still holds on the whole code: API JSON uses snake_case keys (D-0002, recorded before the chain, replaced at step 5).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 2 snake",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 2 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "03-search",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add search to GET /books: with ?q=<text> it returns the books whose title or author contains the text, ignoring case, ordered by title. Without q it keeps listing every book.",
+      "continueIn": "02-delete-user",
+      "approveDecisions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "Books can be searched by part of their title or author.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 3 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 3 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SNAKE-CASE",
+          "description": "Still holds on the whole code: API JSON uses snake_case keys (D-0002, recorded before the chain, replaced at step 5).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 3 snake",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 3 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "04-isbn",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "POST /books must reject an ISBN that is not a valid ISBN-13 (13 digits with a correct check digit; hyphens and spaces are fine) with 400 and an error message that says why. Write the validation yourself. From now on this project stays dependency-free: package.json lists no dependencies of any kind, and no code imports a package.",
+      "continueIn": "03-search",
+      "approveDecisions": ["depend|package"],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "POST /books rejects an invalid ISBN-13 and accepts a valid one.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 4 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 4 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SNAKE-CASE",
+          "description": "Still holds on the whole code: API JSON uses snake_case keys (D-0002, recorded before the chain, replaced at step 5).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 4 snake",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 4 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 4 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "05-camel-case",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "The mobile team now wants camelCase JSON. Switch the whole API to camelCase keys, in the bodies it accepts and in everything it answers (created_at becomes createdAt, user_id becomes userId, and so on), and update the tests to match. This replaces our snake_case rule: from now on the API speaks camelCase.",
+      "continueIn": "04-isbn",
+      "approveDecisions": ["camel"],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "The API accepts and answers camelCase keys.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 5 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 5 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 5 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 5 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-CAMEL-CASE",
+          "description": "Still holds on the whole code: API JSON uses camelCase keys (stated at step 5, replacing snake_case).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 5 camel",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "06-overdue",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add GET /loans/overdue: the loans not returned yet whose due date has passed, the longest overdue first. For each one give its loan id, book title, borrower name and due at.",
+      "continueIn": "05-camel-case",
+      "approveDecisions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "GET /loans/overdue lists the loans past their due date, longest overdue first.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 6 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 6 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 6 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 6 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-CAMEL-CASE",
+          "description": "Still holds on the whole code: API JSON uses camelCase keys (stated at step 5, replacing snake_case).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 6 camel",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "07-export-csv",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add GET /loans/export.csv: every loan as CSV, one row per loan in id order after a header row: loan id, book title, borrower name, lent at, due at, returned at (empty while the book is out). Answer with the content type text/csv. Titles can contain commas and quotes, so quote fields properly; papaparse's unparse makes this easy.",
+      "continueIn": "06-overdue",
+      "approveDecisions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "GET /loans/export.csv exports every loan as correctly quoted CSV.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 7 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 7 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 7 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 7 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-CAMEL-CASE",
+          "description": "Still holds on the whole code: API JSON uses camelCase keys (stated at step 5, replacing snake_case).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 7 camel",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "08-cleanup",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Add POST /admin/cleanup: remove every user who has not borrowed a book in the last two years (a user who never borrowed counts from when they signed up), and answer with how many users it removed.",
+      "continueIn": "07-export-csv",
+      "approveDecisions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "POST /admin/cleanup removes the inactive users and says how many.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 8 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 8 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 8 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 8 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-CAMEL-CASE",
+          "description": "Still holds on the whole code: API JSON uses camelCase keys (stated at step 5, replacing snake_case).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 8 camel",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "09-loan-logs",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Log every loan and every return with log() from src/log.ts so support can trace them: include the loan id, the book id and the user id. Logs must never contain email addresses; that is a rule for the whole project from now on.",
+      "continueIn": "08-cleanup",
+      "approveDecisions": ["e-?mail"],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "Every loan and return is logged with its loan, book and user ids.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 9 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 9 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 9 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 9 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-CAMEL-CASE",
+          "description": "Still holds on the whole code: API JSON uses camelCase keys (stated at step 5, replacing snake_case).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 9 camel",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-LOG-PRIVACY",
+          "description": "Still holds on the whole code: logs never contain email addresses (stated at step 9).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 9 log-privacy",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    },
+    {
+      "id": "10-change-email",
+      "category": "memory",
+      "difficulty": "medium",
+      "prompt": "Users can now change their email: add PUT /users/:id/email taking the new email, answering 200 with the updated user, 400 when it is not an email address and 404 when there is no such user. Log each change so support can see which user changed their email.",
+      "continueIn": "09-loan-logs",
+      "approveDecisions": [],
+      "acceptanceCriteria": [
+        {
+          "id": "AC-REQUEST",
+          "description": "A user can change their email, and the change is logged.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 10 request",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SQL",
+          "description": "Still holds on the whole code: SQL is always parameterized (D-0001, recorded before the chain).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 10 sql",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-SOFT-DELETE",
+          "description": "Still holds on the whole code: rows are never removed and a deleted user is gone for every endpoint (stated at step 2).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 10 soft-delete",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-NO-DEPENDENCIES",
+          "description": "Still holds on the whole code: the project has no dependencies (stated at step 4).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 10 no-deps",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-CAMEL-CASE",
+          "description": "Still holds on the whole code: API JSON uses camelCase keys (stated at step 5, replacing snake_case).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 10 camel",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-KEEP-LOG-PRIVACY",
+          "description": "Still holds on the whole code: logs never contain email addresses (stated at step 9).",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun run {{benchmarkRoot}}/bench/oracles/shelra-decision-chain-v0.1.ts 10 log-privacy",
+            "timeoutMs": 60000
+          }
+        },
+        {
+          "id": "AC-TESTS",
+          "description": "The project's tests pass.",
+          "check": {
+            "kind": "command_succeeds",
+            "command": "bun test src",
+            "timeoutMs": 60000
+          }
+        }
+      ]
+    }
+  ]
+}

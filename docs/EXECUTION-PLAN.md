@@ -34,9 +34,9 @@ Why people would choose it:
 | Phase | Goal | Exit criterion | Status |
 | --- | --- | --- | --- |
 | 0-3 | Trustworthy measurement; the problem confirmed; decisions recorded with the user's approval (`src/ledger/`); decisions enforced through the task contract | done and verified | done |
-| F4. Secure the base | Resolve the possible regression seen on 2026-09-23: on the core suite the current code scored 6/8 against 8/8 for the baseline and used 79% more tokens (one paid sample each) | current code ≥ baseline on the core suite at k = 3 on a free model, and tokens per task within +20% of the baseline | next |
-| F5. Prove the decision difference | The ledger on vs off with the rule only in `docs/decisions`, on two free models (Nemotron 3 Ultra, Qwen 27B); the battery grown from 3 to 10 traps; head-to-head against Claude Code and Codex | Shelra with the ledger ≥ 90% of tasks passed with the rule kept, ≥ 30 points above Shelra without it, and above Claude Code and Codex | pending |
-| F6. Prove continuity | A chain benchmark: one repository evolving through 10 tasks while decisions are added and superseded | ≥ 90% of the active decisions kept across the chain | pending |
+| F4. Secure the base | Resolve the possible regression seen on 2026-09-23: on the core suite the current code scored 6/8 against 8/8 for the baseline and used 79% more tokens (one paid sample each) | current code ≥ baseline on the core suite at k = 3 on a free model, and tokens per task within +20% of the baseline | measuring: 3 + 3 free runs queued for the 2026-09-24 quota |
+| F5. Prove the decision difference | The ledger on vs off with the rule only in `docs/decisions`, on two free models (Nemotron 3 Ultra, Qwen 27B); the battery grown from 3 to 10 traps; head-to-head against Claude Code and Codex | Shelra with the ledger ≥ 90% of tasks passed with the rule kept, ≥ 30 points above Shelra without it, and above Claude Code and Codex | battery built and validated (`shelra-decision-ledger-v0.2`, native variant); measured after F4 |
+| F6. Prove continuity | A chain benchmark: one repository evolving through 10 tasks while decisions are added and superseded | ≥ 90% of the active decisions kept across the chain (`AC-KEEP-*` passed over those judged at steps whose request was done) | suite built and validated (`shelra-decision-chain-v0.1`); measured after F5 |
 | F7. Expert harness for free models | Harder tasks where free models fail today; better repair and verification until they succeed | false completions ≤ 2%, and the gap to Claude Code and Codex measured and narrowed | pending |
 | F8. Usable | `shelra decisions import` (rules from `CLAUDE.md`, `AGENTS.md` and ADRs become decisions with checks), `shelra decisions check` as a hook or CI step for any agent, speed, first-run setup | a new user has their rules enforced in under 5 minutes | pending |
 | F9. Real use | Shelra and one of the owner's projects work with the ledger on | one week of use with the violations caught recorded | needs the owner's project |
@@ -51,3 +51,13 @@ day), which is why more free providers are part of F4's groundwork.
 
 - 2026-09-23: plan approved; add more free providers; ask whenever a doubt remains.
 - Open: the project for F9; the five people for F10.
+
+## Findings to act on
+
+- 2026-09-23, for F7: test protection blocks legitimate test updates. A request that changes behavior an
+  existing test asserts (a new field in an exactly compared body, a new validation that rejects a test's
+  placeholder data) needs that test updated, but unless the request mentions tests the gate sends the
+  change back and then reports it unverified (`src/agent/agent.ts`, the test-protection block;
+  `src/contract/test-protection.ts` decides by keywords). In a chain of sessions it also protects the
+  tests the agent itself wrote earlier. The chain fixture's tests tolerate added fields so that F6
+  measures decisions; F7 has to measure and fix this on its own.

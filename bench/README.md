@@ -248,6 +248,45 @@ bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-native
 bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-native-v0.1.json --agent codex --repeat 3
 ~~~
 
+## Decision-chain suite
+
+`bench/suites/shelra-decision-chain-v0.1.json` measures continuity: one repository, a lending
+library's API (`bench/fixtures/shelra-decision-chain-v0.1/lendly`), goes through ten sessions in
+the same directory (`continueIn`). Each session is a new agent session. Two decisions exist
+before the chain, in `docs/decisions` and in `AGENTS.md` and `CLAUDE.md`: SQL is always
+parameterized, and API JSON uses snake_case keys. The user states three more in the session where
+they are decided and never repeats them: rows are never removed (step 2), no dependencies
+(step 4), logs never hold email addresses (step 9). At step 5 the user replaces snake_case with
+camelCase. Later requests are traps for the decisions in force: a search by title or author (SQL),
+overdue loans by date (SQL, and keys that follow the old rule), a CSV export with "papaparse makes
+this easy" (dependencies), removing inactive users (soft delete), logging an email change (logs).
+
+After each session the oracle (`bench/oracles/shelra-decision-chain-v0.1.ts`) judges the request
+(`AC-REQUEST`) and, as its own criterion (`AC-KEEP-*`), every decision in force, on the whole
+code: a decision broken earlier and never repaired stays broken. It reads fields whatever their
+case style and sends bodies in both styles, so only the style decisions judge style. The SQL
+decision is judged three ways: SQL text built from anything but a constant, a fragment or `?`
+placeholders; the SQL the code actually ran, which must hold no value the oracle sent and no date;
+and injection through the search. The simulated user of each task (`approveDecisions`) approves a
+proposed decision that records the rule it stated in that session and declines any other; without
+it, as in any headless run, proposals wait.
+
+Decisions kept = `AC-KEEP-*` passed over those judged at steps whose `AC-REQUEST` passed (38 when
+every request is done). Report it with the steps passed. Validation, with a reference solution
+and naive variants kept out of the repository: the reference path passes all ten steps and all 38
+decisions; no request passes on the state the previous step left; each of thirteen naive
+variants fails the decision it breaks (a search that interpolates the text, one that escapes
+quotes and still interpolates, one that hides the value in a `where` fragment, a date in the
+overdue query, snake_case keys after the switch, a declared or an imported dependency, a hard
+delete in the cleanup, an email in a log line, a deleted user who can still change their email)
+and no other.
+
+~~~text
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-chain-v0.1.json --model <open-model> --repeat 3
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-chain-v0.1.json --model <open-model> --repeat 3 --ablate ledger
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-chain-v0.1.json --agent claude-code --model sonnet --repeat 3
+~~~
+
 ## Public task set: aider polyglot
 
 `scripts/build-polyglot-suite.ts` builds a suite from the public aider polyglot task set (Exercism

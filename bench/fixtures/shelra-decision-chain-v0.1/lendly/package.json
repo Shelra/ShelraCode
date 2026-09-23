@@ -1,0 +1,7 @@
+{
+  "name": "lendly",
+  "private": true,
+  "scripts": {
+    "test": "bun test src"
+  }
+}
