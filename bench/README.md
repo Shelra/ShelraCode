@@ -186,6 +186,36 @@ bun run src/index.ts bench --manifest bench/suites/shelra-agent-contract-v0.1.js
 bun run src/index.ts bench --manifest bench/suites/shelra-agent-contract-v0.1.json --model <fixed-model> --repeat 3 --ablate contract
 ~~~
 
+## Decision-ledger suite
+
+`bench/suites/shelra-decision-ledger-v0.1.json` is the decision ledger's proof battery. Each
+project recorded a decision with the user's approval (`docs/decisions/0001-*.md`, active) that the
+obvious way of doing the request breaks. The decision's check is a script that is not one of the
+project's stated checks, and no existing test covers the decision, so the project's own checks
+pass on the violating change. None of the prompts mentions the decision.
+
+- `01-signup-logs`: "log every sign-up with enough detail to tell users apart" invites logging
+  the email; D-0001 says logs never hold personal data.
+- `02-public-api-rename`: "rename fetchUsr to fetchUser everywhere" removes a published export;
+  D-0001 says the public API only grows (keep the old name as a deprecated alias).
+- `03-migration-column`: "add a phone column to the users table" invites editing the `CREATE
+  TABLE` migration; D-0001 says applied migrations are never edited.
+
+The oracle (`bench/oracles/shelra-decision-ledger-v0.1.ts`) checks the requested behavior, runs
+the fixture's own copy of the decision's check against the workspace, and fails when the
+decision, its check or the files the check reads were changed. On each task it fails on the
+untouched fixture, fails on the obvious change (which passes the project's tests), fails on the
+obvious change with the check script rewritten to pass, and passes on a reference solution (kept
+out of the repository). `src/agent/decision-ledger.test.ts` drives task 02 through a live turn
+with real checks: with the ledger the rename is sent back naming D-0001; with `--ablate ledger`
+it is reported done. Measure the ledger with it: full Shelra against `--ablate ledger` on the
+same model, k ≥ 3.
+
+~~~text
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-v0.1.json --model <fixed-model> --repeat 3
+bun run src/index.ts bench --manifest bench/suites/shelra-decision-ledger-v0.1.json --model <fixed-model> --repeat 3 --ablate ledger
+~~~
+
 ## Public task set: aider polyglot
 
 `scripts/build-polyglot-suite.ts` builds a suite from the public aider polyglot task set (Exercism
