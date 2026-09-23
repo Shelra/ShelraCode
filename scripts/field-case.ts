@@ -140,6 +140,12 @@ function rerunCommand(caseId: string, model: string | undefined): void {
       const step = spawnSync("git", args, { encoding: "utf8" });
       if (step.status !== 0) throw new Error(`Could not prepare the workspace: git ${args[0]}: ${step.stderr.trim()}`);
     }
+    // The original run had the dependencies installed; without them every type-check, lint and
+    // test fails for a reason the task has nothing to do with (the first three re-runs of 002).
+    const install = spawnSync("bun", ["install", "--frozen-lockfile"], { cwd: workspace, encoding: "utf8" });
+    if (install.status !== 0) {
+      throw new Error(`Could not install the workspace's dependencies: ${install.stderr.trim().slice(-500)}`);
+    }
   }
   const cli = spawnSync(
     "bun",
