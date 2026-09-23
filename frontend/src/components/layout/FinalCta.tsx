@@ -54,7 +54,15 @@ export function FinalCta() {
         animate={inView ? { opacity: 1, y: 0 } : undefined}
         transition={{ type: "tween", delay: 0.3, duration: 1, ease }}
       >
-        <img src="/images/tui-home.png" alt="" width={1944} height={1400} draggable={false} />
+        <img
+          src={finalCta.image.src}
+          alt={finalCta.image.alt}
+          width={finalCta.image.width}
+          height={finalCta.image.height}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+        />
       </motion.div>
     </header>
   );

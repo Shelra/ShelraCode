@@ -174,7 +174,7 @@ export function Benchmark() {
                 <p className="t-small-mono pre muted">{c.date}</p>
               </div>
               <div className={styles.panelBody}>
-                <p className="t-body-strong wrap">{c.title}</p>
+                <h3 className="t-body-strong wrap">{c.title}</h3>
                 <div className={styles.versus}>
                   <div className={styles.side1}>
                     <p className="t-small-mono pre muted">

@@ -16,7 +16,8 @@ it alone. Checked against the app on 2026-09-22. -->
 - Styling is CSS Modules plus the CSS variables in `globals.css`; there is no CSS framework. Borders are inner
   `::after` overlays (`.fb`) that never change layout. Breakpoints: desktop ≥1200, tablet 810–1199.98, phone
   ≤809.98 (`src/lib/useBreakpoint.ts`). Animation: `motion/react`; smooth scroll: Lenis
-  (`src/components/layout/SmoothScroll.tsx`). Copy and links: `src/lib/content.ts`.
+  (`src/components/layout/SmoothScroll.tsx`). Copy and links: `src/lib/content.ts`; the guide pages'
+  copy (`/memory`, `/local`, `/free-models`): `src/lib/guides.ts`, rendered by `src/components/doc/`.
 - Sign-in is Auth.js v5 beta (`src/auth.ts`, `src/lib/auth-*.ts`) with JWT sessions: GitHub and Google OAuth,
   plus email and password stored in libSQL (`src/lib/users.ts`: `.data/auth.db` in development,
   `AUTH_DATABASE_URL`/`AUTH_DATABASE_TOKEN` in production). Secrets go only in `.env.local` (template:
@@ -39,5 +40,9 @@ it alone. Checked against the app on 2026-09-22. -->
 - Deploying: Vercel with Root Directory `frontend` (Bun is detected from `bun.lock`); env `AUTH_SECRET`, the OAuth
   ids/secrets and `AUTH_DATABASE_URL`/`AUTH_DATABASE_TOKEN` (Turso) for email sign-in. Without `AUTH_SECRET` the
   site still serves; `/api/auth/session` answers `null` and the other auth routes 503 with a message.
-- Done means `bunx tsc --noEmit`, `bun run build` and Biome pass, and the page was checked in a real browser
-  (Playwright or Chrome) at 1440, 1000 and 390 px wide.
+- Search: `src/lib/site.ts` is the canonical origin and the list of indexable pages (the sitemap and the check read
+  it); every indexable page exports static `metadata = pageMetadata({...})` from `src/lib/metadata.ts` (never a partial
+  `openGraph`, never async `generateMetadata`); structured data comes from `src/lib/structured-data.ts`. Rules, strategy
+  and the audit: `docs/seo/`. Pages serve the WebP copies of images (`bun run images` after a re-capture).
+- Done means `bunx tsc --noEmit`, `bun run build`, `bun run seo:check` (0 errors) and Biome pass, and the page was
+  checked in a real browser (Playwright or Chrome) at 1440, 1000 and 390 px wide.

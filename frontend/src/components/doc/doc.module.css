@@ -1,0 +1,341 @@
+/* A guide page: one readable column in the site's language (tokens and text presets from globals.css). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 72px;
+  width: 100%;
+  padding: 160px 24px 96px;
+}
+
+.header,
+.section,
+.related {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.header {
+  gap: 24px;
+}
+
+.section {
+  scroll-margin-top: 96px;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--subtle);
+}
+
+.crumb + .crumb::before {
+  content: "/";
+  margin-right: 8px;
+}
+
+.crumb[aria-current="page"] {
+  color: var(--default);
+}
+
+/* Heading block */
+.title {
+  text-align: left;
+}
+
+.lede {
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  width: 100%;
+}
+
+.updated {
+  margin-left: auto;
+}
+
+/* On this page */
+.toc {
+  --bc: var(--border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 20px 24px;
+}
+
+.toc ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tocLabel {
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+/* Prose */
+.h2 {
+  width: 100%;
+}
+
+.p {
+  line-height: 1.6;
+}
+
+.strong {
+  color: var(--default);
+  font-weight: 500;
+}
+
+.code {
+  font-family: var(--font-jetbrains);
+  font-size: 0.875em;
+  color: var(--default);
+  background-color: var(--white-8);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-40);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.2s ease;
+}
+
+.link:hover {
+  text-decoration-color: var(--accent);
+}
+
+.ul,
+.ol {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ul li,
+.ol li {
+  position: relative;
+  line-height: 1.6;
+}
+
+.ul li {
+  padding-left: 22px;
+}
+
+.ul li::before {
+  content: "▪";
+  position: absolute;
+  left: 2px;
+  color: var(--accent);
+}
+
+/* Numbered steps, drawn like the plan steps in the terminal UI. */
+.ol {
+  counter-reset: step;
+}
+
+.ol li {
+  counter-increment: step;
+  padding-left: 44px;
+}
+
+.ol li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  padding: 0 6px;
+  font-family: var(--font-jetbrains);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--on-light);
+  background-color: var(--accent);
+}
+
+/* Terminal block */
+.pre {
+  --bc: var(--border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 16px 20px;
+  overflow-x: auto;
+  background-color: var(--surface);
+}
+
+.pre:focus-visible,
+.tableWrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.line {
+  font-family: var(--font-jetbrains);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--default);
+  white-space: pre;
+}
+
+.prompt {
+  color: var(--accent);
+  user-select: none;
+}
+
+.note {
+  width: 100%;
+  padding: 14px 18px;
+  line-height: 1.6;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* Tables, framed like the benchmark panels. */
+.tableWrap {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-inter);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--default);
+}
+
+.caption {
+  padding: 12px 16px 0;
+  text-align: left;
+  color: var(--subtle);
+}
+
+.table th,
+.table td {
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: top;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.table thead th {
+  font-family: var(--font-jetbrains);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--subtle);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table tbody th {
+  font-weight: 500;
+}
+
+.table tfoot th,
+.table tfoot td {
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.mono {
+  font-family: var(--font-jetbrains);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.model {
+  font-family: var(--font-jetbrains);
+  font-size: 13px;
+  min-width: 180px;
+  overflow-wrap: anywhere;
+}
+
+.pass {
+  color: var(--accent);
+}
+
+/* Related guides */
+.relatedTitle {
+  width: 100%;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  --bc: var(--border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 20px;
+  background-color: var(--base);
+  transition: background-color 0.3s ease;
+}
+
+.card:hover {
+  background-color: var(--surface);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (max-width: 809.98px) {
+  .page {
+    gap: 56px;
+    padding: 128px 16px 64px;
+  }
+
+  .toc ol,
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .updated {
+    margin-left: 0;
+    width: 100%;
+  }
+}

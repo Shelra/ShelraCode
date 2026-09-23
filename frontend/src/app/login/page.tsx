@@ -10,7 +10,7 @@ import { getAuthProviders, providerLabel } from "@/lib/auth-providers";
 import { authCopy } from "@/lib/content";
 
 export const metadata: Metadata = {
-  title: "Sign in – ShelraCode",
+  title: "Sign in",
   robots: { index: false, follow: false },
 };
 

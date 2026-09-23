@@ -241,13 +241,15 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string) {
   return shader;
 }
 
+/** Still images per breakpoint, shown until the shader renders and as the only content without WebGL2. */
+export type ShaderFallbacks = { desktop: string; tablet: string; phone: string };
+
 type Props = {
-  /** Still image shown until the shader renders, and as the only content without WebGL2. */
-  fallback: string;
+  fallbacks: ShaderFallbacks;
   className?: string;
 };
 
-export function BandsShader({ fallback, className }: Props) {
+export function BandsShader({ fallbacks, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -410,7 +412,12 @@ export function BandsShader({ fallback, className }: Props) {
         className={styles.layer}
         style={{ opacity: ready && !failed ? 0 : 1, transition: "opacity 200ms ease-in-out" }}
       >
-        <img src={fallback} alt="" draggable={false} decoding="async" className={styles.fallback} />
+        {/* The browser picks the breakpoint's image from the HTML: no second download after hydration. */}
+        <picture className={styles.picture}>
+          <source media="(max-width: 809.98px)" srcSet={fallbacks.phone} />
+          <source media="(max-width: 1199.98px)" srcSet={fallbacks.tablet} />
+          <img src={fallbacks.desktop} alt="" draggable={false} decoding="async" className={styles.fallback} />
+        </picture>
       </div>
     </div>
   );

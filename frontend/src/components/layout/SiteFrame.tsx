@@ -21,7 +21,7 @@ export function SiteFrame({ children, showFinalCta = true, switchButtonAt }: Pro
       <SmoothScroll />
       <NavBar switchAt={switchButtonAt} />
       <Noise />
-      {children}
+      <main className={styles.main}>{children}</main>
       <div className={styles.spacer} />
       {showFinalCta && <FinalCta />}
       <Footer />

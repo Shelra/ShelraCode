@@ -32,6 +32,8 @@ interface HistoryRun {
   durationMs: number | null;
   tasks: { total: number; completed: number; resolved: number; resolvedRate: number | null };
   costMicros: number | null;
+  /** How the cost was obtained: "exact" (billed), "estimated" (catalog prices) or "unavailable". */
+  costKind?: string | null;
   taskResults: { taskId?: string; status?: string; failureReason?: string | null }[];
 }
 
@@ -76,6 +78,7 @@ export interface BenchRow {
   /** Tasks that ended on a provider failure rather than on the task itself. */
   infra: number;
   costUsd: number | null;
+  costKind: string | null;
   minutes: number | null;
   runNumber: number;
   date: string;
@@ -99,12 +102,40 @@ export interface BenchSummary {
     model: string | null;
     solved: boolean | null;
     tries: number | null;
+    toolCalls: number | null;
     reference: { agent: string; tries: number | null } | null;
     reruns: { commit: string; minutes: number; toolCalls: number; gateLoops: number }[];
   }[];
+  /** Every core-suite run of ShelraCode on a free model, whatever its status: the honest free-tier record. */
+  freeRuns: {
+    runNumber: number;
+    date: string;
+    model: string;
+    status: string;
+    resolved: number;
+    total: number;
+    infra: number;
+    commit: string | null;
+  }[];
+  /** The memory proof suite: per run, whether each arm passed (true), failed (false) or never ran (null). */
+  memory: {
+    suite: string;
+    model: string;
+    runs: {
+      runNumber: number;
+      date: string;
+      commit: string | null;
+      learn: boolean | null;
+      withMemory: boolean | null;
+      withoutMemory: boolean | null;
+    }[];
+    /** Runs of the suite the table leaves out: other models, or runs that did not complete. */
+    otherRuns: { runNumber: number; date: string; model: string; status: string }[];
+  };
 }
 
 const SUITE = "shelra-agent-core";
+const MEMORY_SUITE = "shelra-memory";
 const INFRA =
   /402|credit|429|rate limit|overloaded|provider returned|404|timed out|timeout|stalled|no model answered|unavailable/i;
 
@@ -135,6 +166,7 @@ function toRow(run: HistoryRun): BenchRow {
     total: run.tasks.total,
     infra: infraCount(run),
     costUsd: run.costMicros === null ? null : Math.round(run.costMicros / 10_000) / 100,
+    costKind: run.costKind ?? null,
     minutes: run.durationMs === null ? null : Math.round(run.durationMs / 60_000),
     runNumber: run.runNumber,
     date: run.createdAt.slice(0, 10),
@@ -189,6 +221,22 @@ for (const run of shelraRuns) {
 }
 const [progressModel, progressRuns] = [...byModel.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? ["", []];
 
+// The memory proof suite: completed runs on the model it was measured on most often, arm by arm.
+const memoryRuns = history.runs.filter((r) => r.suite === MEMORY_SUITE && r.status === "completed");
+const memoryByModel = new Map<string, HistoryRun[]>();
+for (const run of memoryRuns) {
+  const key = shortModel(run.model);
+  memoryByModel.set(key, [...(memoryByModel.get(key) ?? []), run]);
+}
+const [memoryModel, memoryModelRuns] = [...memoryByModel.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? [
+  "",
+  [],
+];
+const arm = (run: HistoryRun, taskId: string): boolean | null => {
+  const task = run.taskResults.find((t) => t.taskId === taskId);
+  return task ? task.status === "passed" : null;
+};
+
 const summary: BenchSummary = {
   updatedAt: history.updatedAt.slice(0, 10),
   suite: { name: SUITE, version, tasks: total },
@@ -214,6 +262,7 @@ const summary: BenchSummary = {
     model: c.shelra?.model ? shortModel(c.shelra.model) : null,
     solved: c.shelra?.solved ?? null,
     tries: c.shelra?.attemptsToSolve ?? null,
+    toolCalls: c.shelra?.toolCalls ?? null,
     reference: c.reference?.agent ? { agent: c.reference.agent, tries: c.reference.attemptsToSolve ?? null } : null,
     reruns: (c.reruns ?? []).map((r) => ({
       commit: r.commit,
@@ -222,11 +271,47 @@ const summary: BenchSummary = {
       gateLoops: r.gateLoops,
     })),
   })),
+  freeRuns: history.runs
+    .filter((r) => r.suite === SUITE && r.agent.name === "shelra" && /:free$/.test(r.model ?? ""))
+    .sort((a, b) => a.runNumber - b.runNumber)
+    .map((r) => ({
+      runNumber: r.runNumber,
+      date: r.createdAt.slice(0, 10),
+      model: shortModel(r.model),
+      status: r.status,
+      resolved: r.tasks.resolved,
+      total: r.tasks.total,
+      infra: infraCount(r),
+      commit: r.harnessCommit ? r.harnessCommit.slice(0, 7) : null,
+    })),
+  memory: {
+    suite: MEMORY_SUITE,
+    model: memoryModel,
+    runs: memoryModelRuns
+      .sort((a, b) => a.runNumber - b.runNumber)
+      .map((r) => ({
+        runNumber: r.runNumber,
+        date: r.createdAt.slice(0, 10),
+        commit: r.harnessCommit ? r.harnessCommit.slice(0, 7) : null,
+        learn: arm(r, "a-learn"),
+        withMemory: arm(r, "b-recall-with-memory"),
+        withoutMemory: arm(r, "b-recall-without-memory"),
+      })),
+    otherRuns: history.runs
+      .filter((r) => r.suite === MEMORY_SUITE && !memoryModelRuns.includes(r))
+      .sort((a, b) => a.runNumber - b.runNumber)
+      .map((r) => ({
+        runNumber: r.runNumber,
+        date: r.createdAt.slice(0, 10),
+        model: shortModel(r.model),
+        status: r.status,
+      })),
+  },
 };
 
 writeFileSync(outPath, `${JSON.stringify(summary, null, 2)}\n`);
 console.log(
-  `bench-summary: ${rows.length} rows, ${summary.progress.runs.length} progress runs (${progressModel}), ${summary.fieldCases.length} field cases → ${outPath}`,
+  `bench-summary: ${rows.length} rows, ${summary.progress.runs.length} progress runs (${progressModel}), ${summary.fieldCases.length} field cases, ${summary.memory.runs.length} memory runs (${memoryModel}) → ${outPath}`,
 );
 for (const row of rows)
   console.log(

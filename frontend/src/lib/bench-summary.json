@@ -17,6 +17,7 @@
       "total": 8,
       "infra": 0,
       "costUsd": 0.03,
+      "costKind": "estimated",
       "minutes": 15,
       "runNumber": 22,
       "date": "2026-09-17",
@@ -33,6 +34,7 @@
       "total": 8,
       "infra": 0,
       "costUsd": 1.32,
+      "costKind": "estimated",
       "minutes": 27,
       "runNumber": 11,
       "date": "2026-09-17",
@@ -77,25 +79,26 @@
       "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "solved": true,
       "tries": 1,
+      "toolCalls": 47,
       "reference": {
         "agent": "Claude Sonnet 5",
         "tries": 3
       },
       "reruns": [
         {
-          "commit": "e16b716",
+          "commit": "a9c053c",
           "minutes": 7,
           "toolCalls": 29,
           "gateLoops": 0
         },
         {
-          "commit": "a795732",
+          "commit": "8721685",
           "minutes": 5.3,
           "toolCalls": 22,
           "gateLoops": 0
         },
         {
-          "commit": "50ac81b",
+          "commit": "aa36908",
           "minutes": 3.1,
           "toolCalls": 14,
           "gateLoops": 0
@@ -109,27 +112,172 @@
       "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "solved": null,
       "tries": null,
+      "toolCalls": 71,
       "reference": null,
       "reruns": [
         {
-          "commit": "b77af2d",
+          "commit": "14b709d",
           "minutes": 26.9,
           "toolCalls": 102,
           "gateLoops": 3
         },
         {
-          "commit": "a381a54",
+          "commit": "b11606d",
           "minutes": 40.1,
           "toolCalls": 81,
           "gateLoops": 1
         },
         {
-          "commit": "1386ea7",
+          "commit": "3e402ab",
           "minutes": 15.5,
           "toolCalls": 61,
           "gateLoops": 1
         }
       ]
     }
-  ]
+  ],
+  "freeRuns": [
+    {
+      "runNumber": 3,
+      "date": "2026-09-14",
+      "model": "thinkingmachines/inkling-small:free",
+      "status": "completed",
+      "resolved": 3,
+      "total": 8,
+      "infra": 0,
+      "commit": "af7e7bd"
+    },
+    {
+      "runNumber": 4,
+      "date": "2026-09-14",
+      "model": "thinkingmachines/inkling-small:free",
+      "status": "interrupted",
+      "resolved": 1,
+      "total": 8,
+      "infra": 0,
+      "commit": "af7e7bd"
+    },
+    {
+      "runNumber": 28,
+      "date": "2026-09-18",
+      "model": "deepseek/deepseek-v4-flash-0731:free",
+      "status": "failed",
+      "resolved": 0,
+      "total": 8,
+      "infra": 0,
+      "commit": "572c0e0"
+    },
+    {
+      "runNumber": 31,
+      "date": "2026-09-18",
+      "model": "deepseek/deepseek-v4-flash-0731:free",
+      "status": "interrupted",
+      "resolved": 0,
+      "total": 8,
+      "infra": 0,
+      "commit": "572c0e0"
+    },
+    {
+      "runNumber": 32,
+      "date": "2026-09-18",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "running",
+      "resolved": 0,
+      "total": 8,
+      "infra": 0,
+      "commit": "572c0e0"
+    }
+  ],
+  "memory": {
+    "suite": "shelra-memory",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "runs": [
+      {
+        "runNumber": 12,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": false,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 13,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": false,
+        "withoutMemory": true
+      },
+      {
+        "runNumber": 14,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": true,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 15,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": false,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 16,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": false,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 17,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": true,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 18,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": false,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 19,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": true,
+        "withoutMemory": false
+      },
+      {
+        "runNumber": 20,
+        "date": "2026-09-17",
+        "commit": "af7e7bd",
+        "learn": true,
+        "withMemory": true,
+        "withoutMemory": false
+      }
+    ],
+    "otherRuns": [
+      {
+        "runNumber": 27,
+        "date": "2026-09-18",
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "status": "interrupted"
+      },
+      {
+        "runNumber": 29,
+        "date": "2026-09-18",
+        "model": "deepseek/deepseek-v4-flash-0731:free",
+        "status": "failed"
+      }
+    ]
+  }
 }

@@ -86,7 +86,13 @@ reseeds the workspace. Replacing the demo with a real API means swapping `store.
 - `src/app/globals.css` — design tokens, resets and the Framer text presets (`.t-h1`, `.t-body`, …).
 - `src/app/fonts.css` — the same `@font-face` rules the Framer site serves (Inter, Inter Display,
   Geist Mono, JetBrains Mono), pointing at the self-hosted files in `public/fonts/`.
-- `src/lib/content.ts` — all copy and links of the site.
+- `src/lib/content.ts` — all copy and links of the site; `src/lib/guides.ts` — the guide pages' copy.
+- `src/app/memory/`, `src/app/local/`, `src/app/free-models/` — the guide pages, rendered by `src/components/doc/`
+  (layout, inline markup, and the tables read from `src/lib/bench-summary.json`).
+- `src/lib/site.ts`, `src/lib/metadata.ts`, `src/lib/structured-data.ts`, `src/app/robots.ts`, `src/app/sitemap.ts` —
+  search: the canonical origin and indexable pages, page metadata, JSON-LD, robots and sitemap (`docs/seo/`).
+- `scripts/seo-check.ts` (`bun run seo:check`) — the search regression check; `scripts/optimize-images.ts`
+  (`bun run images`) — the WebP copies of the PNG images.
 - `src/components/layout/` — the page frame: Lenis smooth scroll, fixed navbar with the mobile
   overlay menu, noise overlay, final call to action and footer.
 - `src/components/hero/` — hero section and the WebGL2 "Bands" shader background (same GLSL and

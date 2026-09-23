@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { DashboardShell } from "@/components/dashboard/Shell";
 
 export const metadata: Metadata = {
-  title: "Dashboard – ShelraCode",
+  title: "Dashboard",
   robots: { index: false, follow: false },
 };
 

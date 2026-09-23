@@ -4,7 +4,7 @@ import { animate, useMotionValue } from "motion/react";
 import { useEffect, useState } from "react";
 
 const font: React.CSSProperties = {
-  fontFamily: '"Geist Mono", monospace',
+  fontFamily: "var(--font-geist-mono)",
   fontFeatureSettings: "'zero' on, 'tnum' on",
   fontSize: "36px",
   fontStyle: "normal",

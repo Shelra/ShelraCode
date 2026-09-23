@@ -9,7 +9,7 @@ import { providerLabel } from "@/lib/auth-providers";
 import { authCopy, type CardLine } from "@/lib/content";
 
 export const metadata: Metadata = {
-  title: "Account – ShelraCode",
+  title: "Account",
   robots: { index: false, follow: false },
 };
 

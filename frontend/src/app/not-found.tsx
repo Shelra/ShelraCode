@@ -1,67 +1,12 @@
-"use client";
+import type { Metadata } from "next";
+import { NotFoundView } from "@/components/layout/NotFoundView";
 
-import { motion } from "motion/react";
-import { BandsShader } from "@/components/hero/BandsShader";
-import { SiteFrame } from "@/components/layout/SiteFrame";
-import { TextAppear } from "@/components/motion/TextAppear";
-import { Button } from "@/components/ui/Button";
-import { notFound } from "@/lib/content";
-import { useBreakpoint } from "@/lib/useBreakpoint";
-import styles from "./not-found.module.css";
-
-const ease = [0.12, 0.23, 0.17, 0.99] as const;
-
-const fallbacks = {
-  desktop: "/images/OZ4jz97tUV7UJHFWkbKSGOsPvY.png",
-  tablet: "/images/vjz6teZ5zSZIeEh17RieNlG3FI.png",
-  phone: "/images/Mb91SokFGCGKHx4NNEVLqF08A.png",
+// Next adds noindex to every 404; the title says what the page is instead of repeating the home page's.
+export const metadata: Metadata = {
+  title: "Page not found",
+  description: "This page does not exist on the ShelraCode website.",
 };
 
 export default function NotFound() {
-  const bp = useBreakpoint();
-  return (
-    <SiteFrame showFinalCta={false}>
-      <div className={styles.page}>
-        <div className={styles.container}>
-          <div className={styles.content} id="navbar-bg">
-            <div className={styles.texts}>
-              <TextAppear
-                as="h1"
-                text={notFound.heading}
-                tokenization="word"
-                blur={4}
-                y={12}
-                startDelay={0}
-                duration={0.8}
-                className={`t-h2 wrap ${styles.heading}`}
-                style={{ textAlign: "center" }}
-              />
-              <TextAppear
-                as="p"
-                text={notFound.supporting}
-                tokenization="line"
-                blur={10}
-                y={20}
-                startDelay={0.2}
-                duration={0.7}
-                className={`t-small balance ${styles.supporting}`}
-                style={{ textAlign: "center" }}
-              />
-            </div>
-            <motion.div
-              className={styles.button}
-              initial={{ opacity: 0.001, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: "tween", delay: 0.4, duration: 1.5, ease }}
-            >
-              <Button text={notFound.button} href="/" variant="primary-md" newTab={false} />
-            </motion.div>
-          </div>
-          <div className={styles.shader}>
-            <BandsShader fallback={fallbacks[bp]} />
-          </div>
-        </div>
-      </div>
-    </SiteFrame>
-  );
+  return <NotFoundView />;
 }

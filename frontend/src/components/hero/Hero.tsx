@@ -4,21 +4,19 @@ import { motion } from "motion/react";
 import { TextAppear } from "@/components/motion/TextAppear";
 import { Button } from "@/components/ui/Button";
 import { hero, links } from "@/lib/content";
-import { useBreakpoint } from "@/lib/useBreakpoint";
-import { BandsShader } from "./BandsShader";
+import { BandsShader, type ShaderFallbacks } from "./BandsShader";
 import styles from "./Hero.module.css";
 
 const ease = [0.12, 0.23, 0.17, 0.99] as const;
 
 // Shader still images per breakpoint (shown until WebGL renders).
-const fallbacks = {
-  desktop: "/images/3IJLNtjweQho9PNl12tZDwW4M.png",
-  tablet: "/images/L1BBincTzsxAzBJoZCQxL2y0UGE.png",
-  phone: "/images/Bug1gV55GlocHtSojwH9Wwgz7M.png",
+const fallbacks: ShaderFallbacks = {
+  desktop: "/images/3IJLNtjweQho9PNl12tZDwW4M.webp",
+  tablet: "/images/L1BBincTzsxAzBJoZCQxL2y0UGE.webp",
+  phone: "/images/Bug1gV55GlocHtSojwH9Wwgz7M.webp",
 };
 
 export function Hero() {
-  const bp = useBreakpoint();
   return (
     <header className={styles.hero} id="hero">
       <div className={styles.inner}>
@@ -63,17 +61,18 @@ export function Hero() {
           transition={{ type: "tween", delay: 0.3, duration: 1, ease }}
         >
           <img
-            src="/images/tui-hero.png"
-            alt=""
-            width={1944}
-            height={1400}
+            src={hero.image.src}
+            alt={hero.image.alt}
+            width={hero.image.width}
+            height={hero.image.height}
             className={styles.dashImage}
+            fetchPriority="high"
             draggable={false}
           />
         </motion.div>
       </div>
       <div className={styles.shader}>
-        <BandsShader fallback={fallbacks[bp]} />
+        <BandsShader fallbacks={fallbacks} />
       </div>
     </header>
   );

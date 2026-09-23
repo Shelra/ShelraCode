@@ -173,7 +173,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
       <div className={styles.mobileLinks}>
         {[...mobileNav, account].map((item, i) => (
           <div key={item.label} className={styles.mobileRow}>
-            <motion.h1
+            <motion.p
               className={`t-h1 pre ${styles.mobileLink}`}
               initial={{ y: 160, opacity: 1 }}
               animate={{ y: 0, opacity: 1 }}
@@ -183,7 +183,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
               <a href={item.href} className="link-footer">
                 {item.label}
               </a>
-            </motion.h1>
+            </motion.p>
           </div>
         ))}
       </div>

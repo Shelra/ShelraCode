@@ -945,6 +945,20 @@
   size-adjust: 98.29%;
 }
 
+/*
+ * Geist Mono's stand-in while it loads: Courier New and its metric clones have the same 0.6 em advance, so a
+ * heading wraps the same before and after the swap (no layout shift). Overrides from Geist Mono's own
+ * metrics: 1000 units per em, ascender 1005, descender -295, no line gap.
+ */
+@font-face {
+  font-family: "Geist Mono Placeholder";
+  src: local("Courier New"), local("Liberation Mono"), local("Cousine");
+  ascent-override: 100.52%;
+  descent-override: 29.5%;
+  line-gap-override: 0%;
+  size-adjust: 99.98%;
+}
+
 @font-face {
   font-family: "JetBrains Mono Placeholder";
   src: local("Arial");

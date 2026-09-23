@@ -12,6 +12,15 @@
   background-color: var(--base);
 }
 
+/* The page's own content: laid out like the frame's other children. */
+.main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
 .spacer {
   background: transparent;
   flex-grow: 1;

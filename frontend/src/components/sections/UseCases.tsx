@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Appear } from "@/components/motion/Appear";
 import { Button } from "@/components/ui/Button";
 import { BlocksIcon, BugIcon, CheckIcon, FlaskConicalIcon, type IconProps } from "@/components/ui/Icons";
@@ -19,7 +19,31 @@ export function UseCases() {
   const bp = useBreakpoint();
   const mobile = bp !== "desktop";
   const [active, setActive] = useState(0);
-  const item = useCases.items[active];
+  const id = useId();
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Arrow keys move between tabs and select them (WAI-ARIA tabs pattern, automatic activation).
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const last = useCases.tabs.length - 1;
+    const next =
+      event.key === "ArrowRight"
+        ? active === last
+          ? 0
+          : active + 1
+        : event.key === "ArrowLeft"
+          ? active === 0
+            ? last
+            : active - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    setActive(next);
+    tabs.current[next]?.focus();
+  };
 
   return (
     <section className={shared.section} id="use-cases">
@@ -27,10 +51,20 @@ export function UseCases() {
       <Appear className={styles.wrap} threshold={0} transition={{ type: "tween", delay: 0.2, duration: 1, ease }}>
         <div className={styles.useCases}>
           <div className={styles.content}>
-            <div className={`${styles.top} ${mobile ? styles.topMobile : ""}`}>
+            <div
+              className={`${styles.top} ${mobile ? styles.topMobile : ""}`}
+              role="tablist"
+              aria-label={useCases.badge}
+              onKeyDown={onKeyDown}
+            >
               {useCases.tabs.map((label, i) => (
                 <Tab
                   key={label}
+                  ref={(element) => {
+                    tabs.current[i] = element;
+                  }}
+                  id={`${id}-tab-${i}`}
+                  panel={`${id}-panel-${i}`}
                   label={label}
                   icon={icons[i]}
                   active={i === active}
@@ -40,7 +74,17 @@ export function UseCases() {
               ))}
             </div>
             <div className={styles.bottom}>
-              <UseCaseItem key={active} item={item} mobile={mobile} />
+              {/* Every use case is in the server HTML; the ones not selected are hidden. */}
+              {useCases.items.map((item, i) => (
+                <UseCaseItem
+                  key={item.title}
+                  id={`${id}-panel-${i}`}
+                  tab={`${id}-tab-${i}`}
+                  hidden={i !== active}
+                  item={item}
+                  mobile={mobile}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -50,6 +94,9 @@ export function UseCases() {
 }
 
 type TabProps = {
+  ref: React.Ref<HTMLButtonElement>;
+  id: string;
+  panel: string;
   label: string;
   icon: (props: IconProps) => React.JSX.Element;
   active: boolean;
@@ -57,7 +104,7 @@ type TabProps = {
   onClick: () => void;
 };
 
-function Tab({ label, icon: Icon, active, mobile, onClick }: TabProps) {
+function Tab({ ref, id, panel, label, icon: Icon, active, mobile, onClick }: TabProps) {
   const [hover, setHover] = useState(false);
   const background = mobile
     ? active
@@ -68,7 +115,14 @@ function Tab({ label, icon: Icon, active, mobile, onClick }: TabProps) {
       : "var(--base)";
   const iconColor = mobile ? (active ? "var(--on-light)" : "var(--subtle)") : "var(--default)";
   return (
-    <motion.div
+    <motion.button
+      ref={ref}
+      type="button"
+      role="tab"
+      id={id}
+      aria-selected={active}
+      aria-controls={panel}
+      tabIndex={active ? 0 : -1}
       className={`${styles.tab} ${mobile && !active ? `fb ${styles.tabOutline}` : ""}`}
       onClick={onClick}
       onHoverStart={() => setHover(true)}
@@ -77,19 +131,19 @@ function Tab({ label, icon: Icon, active, mobile, onClick }: TabProps) {
       animate={{ backgroundColor: background }}
       transition={spring}
     >
-      <div className={`${styles.tabInner} ${mobile ? styles.tabInnerMobile : ""}`}>
+      <span className={`${styles.tabInner} ${mobile ? styles.tabInnerMobile : ""}`}>
         {!mobile && (
-          <motion.div
+          <motion.span
             className={styles.underline}
             initial={false}
             animate={{ backgroundColor: active ? "var(--accent)" : "var(--accent-0)" }}
             transition={spring}
           />
         )}
-        <motion.div className={styles.tabIcon} initial={false} animate={{ color: iconColor }} transition={spring}>
+        <motion.span className={styles.tabIcon} initial={false} animate={{ color: iconColor }} transition={spring}>
           <Icon size={mobile ? 12 : 16} strokeWidth={2} color="currentColor" />
-        </motion.div>
-        <p
+        </motion.span>
+        <span
           className={`${mobile ? "t-small-mono" : "t-body-mono"} pre ${styles.tabTitle}`}
           style={{
             textAlign: "center",
@@ -97,19 +151,33 @@ function Tab({ label, icon: Icon, active, mobile, onClick }: TabProps) {
           }}
         >
           {label}
-        </p>
-      </div>
-    </motion.div>
+        </span>
+      </span>
+    </motion.button>
   );
 }
 
-function UseCaseItem({ item, mobile }: { item: (typeof useCases.items)[number]; mobile: boolean }) {
+type ItemProps = {
+  id: string;
+  tab: string;
+  hidden: boolean;
+  item: (typeof useCases.items)[number];
+  mobile: boolean;
+};
+
+function UseCaseItem({ id, tab, hidden, item, mobile }: ItemProps) {
   return (
-    <div className={`${styles.item} ${mobile ? styles.itemMobile : ""}`}>
+    <div
+      id={id}
+      role="tabpanel"
+      aria-labelledby={tab}
+      hidden={hidden}
+      className={`${styles.item} ${mobile ? styles.itemMobile : ""}`}
+    >
       <div className={styles.left}>
         <div className={`fb ${styles.leftCard}`}>
           <div className={styles.leftTexts}>
-            <p className="t-body-strong wrap">{item.title}</p>
+            <h3 className="t-body-strong wrap">{item.title}</h3>
             <p className="t-body wrap">{item.description}</p>
           </div>
           <div className={styles.checks}>
@@ -128,7 +196,15 @@ function UseCaseItem({ item, mobile }: { item: (typeof useCases.items)[number]; 
       </div>
       <div className={`fb ${styles.right}`}>
         <div className={`fb ${styles.image}`} style={{ aspectRatio: `${item.image.width} / ${item.image.height}` }}>
-          <img src={item.image.src} alt="" width={item.image.width} height={item.image.height} draggable={false} />
+          <img
+            src={item.image.src}
+            alt={item.image.alt}
+            width={item.image.width}
+            height={item.image.height}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+          />
         </div>
       </div>
     </div>

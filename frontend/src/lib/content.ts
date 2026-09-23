@@ -1,5 +1,7 @@
 // All copy and links of the site: ShelraCode, the terminal coding agent.
-// Facts come from the repository (README, --help, bench/field/SCOREBOARD.md, docs/design).
+// Facts come from the repository (README, --help, bench/field/SCOREBOARD.md, docs/design). Measured numbers come from
+// bench-summary.json (bun run bench:sync), never typed: the field notes below read it like the Benchmark section.
+import bench from "./bench-summary.json";
 
 const repo = "https://github.com/yosoyjavieruiz/ShelraCode";
 
@@ -12,10 +14,11 @@ export const links = {
   bench: `${repo}/blob/main/bench/README.md`,
   benchHistory: `${repo}/blob/main/bench/history/benchmark-history.json`,
   memoryDesign: `${repo}/blob/main/docs/design/shelra-memory-engine.md`,
+  harnessLog: `${repo}/blob/main/docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md`,
+  routingDesign: `${repo}/blob/main/docs/architecture/OPENROUTER-RUNTIME.md`,
   issues: `${repo}/issues`,
   license: `${repo}/blob/main/LICENSE`,
   author: "https://github.com/yosoyjavieruiz",
-  npm: "https://www.npmjs.com/package/shelra",
   openrouter: "https://openrouter.ai",
   // Names the sections import for their calls to action.
   getStarted: `${repo}#install`,
@@ -24,23 +27,37 @@ export const links = {
   placeholder: repo,
 };
 
+// The guide pages (src/lib/guides.ts holds their copy).
+export const guideLinks = {
+  memory: { label: "Project memory", href: "/memory" },
+  local: { label: "Local mode", href: "/local" },
+  freeModels: { label: "Free models", href: "/free-models" },
+};
+
 export const nav = [
-  { label: "Benchmark", href: "#benchmark" },
-  { label: "Features", href: "#features-overview" },
-  { label: "Use cases", href: "#use-cases" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Field notes", href: "#testimonials" },
-  { label: "Pricing", href: "#pricing" },
+  { label: "Benchmark", href: "/#benchmark" },
+  { label: "Features", href: "/#features-overview" },
+  { label: "Use cases", href: "/#use-cases" },
+  { label: "How It Works", href: "/#how-it-works" },
+  { label: "Field notes", href: "/#testimonials" },
+  { label: "Pricing", href: "/#pricing" },
 ];
 
 export const mobileNav = [
-  { label: "Benchmark", href: "#benchmark" },
-  { label: "Features", href: "#features-overview" },
-  { label: "Use cases", href: "#use-cases" },
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Field notes", href: "#testimonials" },
-  { label: "Pricing", href: "#pricing" },
+  { label: "Benchmark", href: "/#benchmark" },
+  { label: "Features", href: "/#features-overview" },
+  { label: "Use cases", href: "/#use-cases" },
+  { label: "How it works", href: "/#how-it-works" },
+  { label: "Field notes", href: "/#testimonials" },
+  { label: "Pricing", href: "/#pricing" },
 ];
+
+// How the displayed costs were obtained: billed by the provider, or estimated from catalog prices.
+function costNote(): string {
+  const kinds = new Set(bench.rows.map((row) => row.costKind));
+  if (kinds.size === 1 && kinds.has("exact")) return "cost as billed by the provider";
+  return kinds.has("exact") ? "cost billed or estimated from catalog prices" : "cost estimated from catalog prices";
+}
 
 // Shelra Bench on the landing page; the numbers come from src/lib/bench-summary.json (scripts/bench-summary.ts).
 export const benchmark = {
@@ -64,8 +81,7 @@ export const benchmark = {
   unsolved: "Not solved",
   reruns: "Re-runs on later commits",
   toolCalls: "tool calls",
-  method:
-    "One run is one sample · benchmark-owned oracle · model pinned per run · cost as billed by the provider · full record in bench/history",
+  method: `One run is one sample · benchmark-owned oracle · model pinned per run · ${costNote()} · full record in bench/history`,
   button: "See every run",
   link: links.benchHistory,
 };
@@ -75,6 +91,12 @@ export const hero = {
   supporting:
     "Type the task. ShelraCode reads your repo, plans, edits, runs the tests and verifies the result — on OpenRouter Free by default, on your own key when you allow it, fully local when you say so.",
   cta: "Get started",
+  image: {
+    src: "/images/tui-hero.webp",
+    width: 1944,
+    height: 1400,
+    alt: "ShelraCode in a terminal fixing token refresh tests: it plans three steps, edits src/auth.ts, creates src/token.ts and works through the plan.",
+  },
 };
 
 /** A wordmark of the logo wall: text set in the site's mono, no image. */
@@ -116,6 +138,7 @@ export const features = {
       title: "OpenRouter Free by default",
       description:
         "The live catalog is discovered and filtered by capability. The free policy routes to models that can do the job and never picks a paid one silently; your key and your caps decide the rest.",
+      link: guideLinks.freeModels.href,
       delay: 0,
     },
     {
@@ -125,6 +148,7 @@ export const features = {
       title: "It remembers your project",
       description:
         "Facts about the codebase live in .shelra/memory and are retrieved for every request. After a verified change, one bounded reflection proposes what to keep and a deterministic gate decides.",
+      link: guideLinks.memory.href,
       delay: 0.2,
     },
     {
@@ -143,6 +167,8 @@ export const useCases = {
   badge: "USE CASES",
   heading: ["Every task a senior dev would dread. ", "ShelraCode runs it."],
   tabs: ["Fix a bug", "Build a feature", "Verify an app"],
+  // Each image's width and height are the box the approved design shows it in (object-fit: cover), not the
+  // capture's own 1944×1400: changing them changes the crop.
   items: [
     {
       title: "Find it. Fix it. Prove it.",
@@ -155,7 +181,12 @@ export const useCases = {
       ],
       button: "Get started",
       link: links.getStarted,
-      image: { src: "/images/tui-fix-bug.png", width: 2016, height: 1408 },
+      image: {
+        src: "/images/tui-fix-bug.webp",
+        width: 2016,
+        height: 1408,
+        alt: "ShelraCode's summary after a bug fix: what changed, the passing bun test run, and one new memory entry.",
+      },
     },
     {
       title: "From goal to verified plan, then code.",
@@ -168,7 +199,12 @@ export const useCases = {
       ],
       button: "Get started",
       link: links.getStarted,
-      image: { src: "/images/tui-build-feature.png", width: 2016, height: 1408 },
+      image: {
+        src: "/images/tui-build-feature.webp",
+        width: 2016,
+        height: 1408,
+        alt: "ShelraCode in plan mode asking where sessions should be stored before it edits any file.",
+      },
     },
     {
       title: "Build it, boot it, click it.",
@@ -181,7 +217,12 @@ export const useCases = {
       ],
       button: "Get started",
       link: links.getStarted,
-      image: { src: "/images/tui-verify.png", width: 2016, height: 1408 },
+      image: {
+        src: "/images/tui-verify.webp",
+        width: 2016,
+        height: 1408,
+        alt: "ShelraCode's Checks view: bun test passes and every acceptance criterion is linked to a completed step.",
+      },
     },
   ],
 };
@@ -263,31 +304,40 @@ export const benefits = {
   ],
 } as const;
 
-// Field notes: real problems and measurements (bench/field/SCOREBOARD.md, Shelra Bench).
+// Field notes: real problems and measurements (bench/field/SCOREBOARD.md, Shelra Bench), read from the summary.
+const case001 = bench.fieldCases.find((fieldCase) => fieldCase.id.startsWith("001"));
+const firstRerun = case001?.reruns[0];
+const lastRerun = case001?.reruns.at(-1);
+const progressRuns = bench.progress.runs;
+const firstProgress = progressRuns[0];
+const bestProgress = progressRuns.reduce((best, run) => (run.resolved > best.resolved ? run : best), progressRuns[0]);
+const progressRow = bench.rows.find((row) => row.model === bench.progress.model);
+// "qwen/qwen3-coder-30b-a3b-instruct" → "qwen3-coder-30b"
+const modelName = (id: string) => (id.split("/").pop() ?? id).replace(/^(.*?\d+b)-.*$/, "$1");
+const count = (n: number) => ["no", "one", "two", "three", "four", "five"][n] ?? String(n);
+const tries = (n: number | null) => (n === 1 ? "on its first answer" : `in ${count(n ?? 0)} tries`);
+
 export const testimonials = {
   badge: "FIELD NOTES",
   heading: ["Real problems. ", "What happened when they met free models."],
   items: [
     {
       badge: "FIELD CASE 001",
-      quote:
-        "Google Meet said the camera was in use. On a free model, ShelraCode named the process holding it on its first answer. Claude Sonnet 5 needed three tries.",
-      author: "nvidia/nemotron-3-ultra-550b-a55b:free",
-      position: "2026-09-22 · 1 try vs 3",
+      quote: `Google Meet said the camera was in use. On a free model, ShelraCode named the process holding it ${tries(case001?.tries ?? null)}. ${case001?.reference?.agent} needed ${count(case001?.reference?.tries ?? 0)} tries.`,
+      author: case001?.model ?? "",
+      position: `${case001?.date} · ${case001?.tries} ${case001?.tries === 1 ? "try" : "tries"} vs ${case001?.reference?.tries}`,
     },
     {
       badge: "RE-RUNS",
-      quote:
-        "Three harness commits later the same case ran in 3.1 minutes with 14 tool calls and no completion-gate loops, down from 7.0 minutes and 29 calls.",
-      author: "Case 001 · e16b716 → 50ac81b",
+      quote: `Across ${count(case001?.reruns.length ?? 0)} later harness commits the same case went from ${firstRerun?.minutes.toFixed(1)} minutes and ${firstRerun?.toolCalls} tool calls to ${lastRerun?.minutes.toFixed(1)} minutes and ${lastRerun?.toolCalls}, with ${count(lastRerun?.gateLoops ?? 0)} completion-gate loops.`,
+      author: `Case 001 · ${firstRerun?.commit} → ${lastRerun?.commit}`,
       position: "Same free model, same prompt",
     },
     {
       badge: "SHELRA BENCH",
-      quote:
-        "The real turn loop went from 1 of 8 tasks to 5 of 8 with the same 30B model. The model did not change; the harness did.",
-      author: "shelra-agent-core v0.2",
-      position: "qwen3-coder-30b · $1.33 · 27 min",
+      quote: `The real turn loop went from ${firstProgress.resolved} of ${firstProgress.total} tasks to ${bestProgress.resolved} of ${bestProgress.total} with the same model. The model did not change; the harness did.`,
+      author: `${bench.suite.name} v${bench.suite.version.replace(/\.0$/, "")}`,
+      position: `${modelName(bench.progress.model)} · $${progressRow?.costUsd?.toFixed(2)} · ${progressRow?.minutes} min`,
     },
     {
       badge: "RESILIENCE",
@@ -299,7 +349,7 @@ export const testimonials = {
     {
       badge: "MEMORY",
       quote:
-        "After a verified change, one bounded reflection proposes durable facts; a deterministic gate admits, merges or rejects them. No secrets, no instruction-shaped text, nothing you said overwritten.",
+        "After a verified change, one bounded reflection proposes durable facts; a deterministic gate admits, merges or rejects them. No secrets, no prompt-injection phrasing, no inference over what you said.",
       author: "docs/design/shelra-memory-engine.md",
       position: "Proof suite · shelra-memory-v0.1",
     },
@@ -323,7 +373,7 @@ export const pricing = {
       button: "Install",
       link: links.install,
       included: [
-        "Live OpenRouter Free catalog",
+        "Free models: 50–1,000 requests a day",
         "Memory, sub-agents, web research",
         "Skills, MCP servers, hooks",
         "Telegram remote control",
@@ -352,9 +402,9 @@ export const pricing = {
       description:
         "Private or offline: a managed llama.cpp engine with a SHA-verified GGUF, chosen for your hardware, health-checked before chat.",
       button: "Run --local",
-      link: links.localMode,
+      link: guideLinks.local.href,
       included: [
-        "No API key, nothing leaves the box",
+        "No API key, no model provider",
         "Resumable, verified GGUF download",
         "Picks the model for your hardware",
         "Same agent loop, tools and memory",
@@ -378,9 +428,16 @@ export const faq = {
         "Whatever OpenRouter serves. The catalog is discovered live and filtered by capability and by your spend policy; the default policy is Free and never picks a paid model silently. Pin one with shelra models use <id>.",
     },
     {
+      question: "Is the free tier really free?",
+      answer:
+        "Yes: the default policy only uses OpenRouter's free models, which cost nothing. OpenRouter allows them 20 requests a minute and 50 a day, or 1,000 a day once you have bought $10 of credits, and a real task can take dozens. When a limit hits, ShelraCode retries and falls back; --local has no limit at all.",
+      link: { label: "What the free tier allows", href: guideLinks.freeModels.href },
+    },
+    {
       question: "Does my code leave my machine?",
       answer:
-        "In cloud mode the context the model needs goes to the provider you chose. In --local mode nothing leaves: a managed llama.cpp server on loopback runs a verified GGUF.",
+        "In cloud mode the context the model needs goes to the provider you chose. In --local mode the model runs on your machine (a managed llama.cpp server on loopback with a verified GGUF), so no model provider sees your code; web research and the commands the agent runs can still reach the network.",
+      link: { label: "How local mode works", href: guideLinks.local.href },
     },
     {
       question: "What happens when a provider fails mid-task?",
@@ -391,6 +448,7 @@ export const faq = {
       question: "How does it remember my project?",
       answer:
         "Project memory under .shelra/memory: every request retrieves the relevant entries; after a verified change one bounded reflection proposes durable facts and a deterministic gate admits, merges or rejects them. Rules you state are captured directly; repeated procedures become skills.",
+      link: { label: "What it keeps and what it refuses", href: guideLinks.memory.href },
     },
     {
       question: "Can I run it without the TUI?",
@@ -405,6 +463,12 @@ export const finalCta = {
   supporting: "Give ShelraCode the task. Get it back verified.",
   button: "Install ShelraCode",
   link: links.install,
+  image: {
+    src: "/images/tui-home.webp",
+    width: 1944,
+    height: 1400,
+    alt: "The ShelraCode start screen: the project it opened and what it already knows, 3 memories, 1 skill and AGENTS.md.",
+  },
 };
 
 export const footer = {
@@ -415,10 +479,12 @@ export const footer = {
   license: "MIT",
   navigationTitle: "Navigation",
   navigation: nav,
-  socialsTitle: "Links",
+  socialsTitle: "Resources",
   socials: [
+    guideLinks.memory,
+    guideLinks.local,
+    guideLinks.freeModels,
     { label: "GitHub", href: links.github },
-    { label: "npm", href: links.npm },
     { label: "Field cases", href: links.fieldCases },
     { label: "Issues", href: links.issues },
   ],
@@ -516,8 +582,7 @@ export const authCopy = {
 };
 
 export const seo = {
-  title: "ShelraCode – the terminal coding agent that finishes the job",
+  title: "ShelraCode – open-source terminal coding agent, free models first",
   description:
-    "A cloud-first coding agent for your terminal: OpenRouter Free by default, your own key with spend caps, or a fully local llama.cpp model. Persistent project memory, sub-agents, verification before done, Telegram remote control. Open source, MIT.",
-  socialImage: "/images/og-shelra.png",
+    "An open-source (MIT) terminal coding agent: it plans, edits, runs your tests and reports what it verified. OpenRouter's free models by default, or fully local.",
 };

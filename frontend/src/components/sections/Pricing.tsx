@@ -51,7 +51,7 @@ export function Pricing() {
           <p className="t-large pre" style={{ color: "var(--subtle)" }}>
             {pricing.monthly}
           </p>
-          <Toggle on={yearly} onToggle={() => setYearly((v) => !v)} />
+          <Toggle on={yearly} onToggle={() => setYearly((v) => !v)} label={pricing.yearly} />
           <p className="t-large pre" style={{ color: "var(--subtle)" }}>
             {pricing.yearly}
           </p>
@@ -72,10 +72,10 @@ export function Pricing() {
               <div className={styles.headWrap}>
                 <div className={styles.head}>
                   <div className={styles.nameRow}>
-                    <p className="t-large pre">{starter.name}</p>
+                    <h3 className="t-large pre">{starter.name}</h3>
                   </div>
                   <div className={styles.priceRow}>
-                    <h2 className="t-h2 pre">{starter.price}</h2>
+                    <p className="t-h2 pre">{starter.price}</p>
                     <div className={styles.period}>
                       <p className="t-body pre">{starter.period}</p>
                     </div>
@@ -103,7 +103,7 @@ export function Pricing() {
             <div className={styles.planInner} style={{ zIndex: 2 }}>
               <div className={styles.head}>
                 <div className={styles.nameRow} style={{ overflow: "visible" }}>
-                  <p className="t-large pre">{pro.name}</p>
+                  <h3 className="t-large pre">{pro.name}</h3>
                   <Badge text={pro.badge} leadingIcon={false} />
                 </div>
                 <div className={styles.priceRow}>
@@ -136,16 +136,17 @@ export function Pricing() {
             <div className={styles.planInner}>
               <div className={styles.head}>
                 <div className={styles.nameRow}>
-                  <p className="t-large pre">{enterprise.name}</p>
+                  <h3 className="t-large pre">{enterprise.name}</h3>
                 </div>
                 <div className={styles.priceRow}>
-                  <h2 className="t-h2 pre">{enterprise.price}</h2>
+                  <p className="t-h2 pre">{enterprise.price}</p>
                 </div>
                 <p className="t-body wrap">{enterprise.description}</p>
               </div>
               <Button
                 text={enterprise.button}
                 href={enterprise.link}
+                newTab={!enterprise.link.startsWith("/")}
                 variant={mobile ? "primary-md" : "secondary-md"}
               />
               <FeaturesDivider />

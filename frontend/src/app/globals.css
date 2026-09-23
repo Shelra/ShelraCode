@@ -28,7 +28,7 @@
 
   --font-inter: "Inter", "Inter Placeholder", sans-serif;
   --font-inter-display: "Inter Display", "Inter Display Placeholder", sans-serif;
-  --font-geist-mono: "Geist Mono", monospace;
+  --font-geist-mono: "Geist Mono", "Geist Mono Placeholder", monospace;
   --font-jetbrains: "JetBrains Mono", "JetBrains Mono Placeholder", sans-serif;
 
   -webkit-font-smoothing: antialiased;

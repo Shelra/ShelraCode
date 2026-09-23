@@ -17,12 +17,12 @@ export function Footer() {
       <div className={styles.inner}>
         <div className={styles.left}>
           <div className={styles.top}>
-            <a href="/" className={styles.logo} aria-label="Home">
+            <a href="/" className={styles.logo}>
               <Wordmark size={20} />
             </a>
             <p className={`t-body balance ${styles.tagline}`}>{footer.tagline}</p>
             <div className={styles.socials}>
-              <SocialsButton href={links.github} icon={GithubLogoIcon} mobile={mobile} />
+              <SocialsButton href={links.github} label="ShelraCode on GitHub" icon={GithubLogoIcon} mobile={mobile} />
             </div>
           </div>
           <div className={styles.createdBy}>
@@ -53,7 +53,7 @@ export function Footer() {
             <p className="t-small-strong wrap">{footer.navigationTitle}</p>
             {footer.navigation.map((item) => (
               <p key={item.label} className="t-body wrap">
-                <a href={`/${item.href}`} className="link-footer">
+                <a href={item.href} className="link-footer">
                   {item.label}
                 </a>
               </p>
@@ -63,7 +63,11 @@ export function Footer() {
             <p className="t-small-strong wrap">{footer.socialsTitle}</p>
             {footer.socials.map((item) => (
               <p key={item.label} className="t-body wrap">
-                <a href={item.href} target="_blank" rel="noopener" className="link-footer">
+                <a
+                  href={item.href}
+                  className="link-footer"
+                  {...(item.href.startsWith("/") ? {} : { target: "_blank", rel: "noopener" })}
+                >
                   {item.label}
                 </a>
               </p>

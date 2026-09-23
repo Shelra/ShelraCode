@@ -7,6 +7,8 @@ import styles from "./SocialsButton.module.css";
 
 type Props = {
   href: string;
+  /** The link's accessible name: the button shows only an icon. */
+  label: string;
   icon: (props: IconProps) => React.JSX.Element;
   /** The tablet/phone variant is always tinted; desktop tints on hover. */
   mobile?: boolean;
@@ -15,7 +17,7 @@ type Props = {
 const spring = { type: "spring", bounce: 0.2, duration: 0.4 } as const;
 
 // Square social link of the footer.
-export function SocialsButton({ href, icon: Icon, mobile = false }: Props) {
+export function SocialsButton({ href, label, icon: Icon, mobile = false }: Props) {
   const [hover, setHover] = useState(false);
   const active = mobile || hover;
   return (
@@ -23,6 +25,7 @@ export function SocialsButton({ href, icon: Icon, mobile = false }: Props) {
       href={href}
       target="_blank"
       rel="noopener"
+      aria-label={label}
       className={`${styles.button} ${mobile ? styles.mobile : ""}`}
       onHoverStart={() => setHover(true)}
       onHoverEnd={() => setHover(false)}

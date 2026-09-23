@@ -37,7 +37,7 @@ export function Benefits() {
                 <div className={styles.container}>
                   <Icon size={24} strokeWidth={2} color="var(--default)" className={styles.icon} />
                   <div className={styles.text}>
-                    <p className="t-body-strong wrap">{card.title}</p>
+                    <h3 className="t-body-strong wrap">{card.title}</h3>
                     <p className="t-small balance">{card.description}</p>
                   </div>
                 </div>

@@ -23,7 +23,7 @@ export function HowItWorks() {
                 <div className={`fb ${styles.cardBack}`} />
                 <div className={`fb ${styles.cardFront}`}>
                   <div className={styles.texts}>
-                    <p className="t-body-strong wrap">{card.title}</p>
+                    <h3 className="t-body-strong wrap">{card.title}</h3>
                     <p className="t-body balance">{card.description}</p>
                   </div>
                 </div>

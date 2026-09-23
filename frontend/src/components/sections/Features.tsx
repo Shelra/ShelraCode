@@ -23,14 +23,23 @@ export function Features() {
               <div className={styles.cardBody}>
                 <div className={`fb ${styles.cardBack}`} />
                 <div className={`fb ${styles.cardFront}`}>
-                  <p className="t-body-strong pre">{card.name}</p>
+                  <h3 className="t-body-strong pre">{card.name}</h3>
                   <div className={styles.illustrationBox}>
                     <div className={styles.illustrationCenter}>
                       <Illustration variant={card.illustration as 1 | 2 | 3} />
                     </div>
                   </div>
                   <div className={styles.texts}>
-                    <p className="t-small-strong wrap">{card.title}</p>
+                    <p className="t-small-strong wrap">
+                      {/* The title links to the guide on the topic; no extra line, so the card keeps its layout. */}
+                      {"link" in card && card.link ? (
+                        <a href={card.link} className={`link-nav ${styles.titleLink}`}>
+                          {card.title} <span aria-hidden="true">→</span>
+                        </a>
+                      ) : (
+                        card.title
+                      )}
+                    </p>
                     <p className="t-body balance">{card.description}</p>
                   </div>
                 </div>

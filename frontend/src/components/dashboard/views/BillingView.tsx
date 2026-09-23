@@ -180,7 +180,7 @@ export function BillingView() {
           <p className="t-body wrap">Billing cycle</p>
           <div className={styles.row}>
             <span className="t-small-strong pre">Monthly</span>
-            <Toggle on={w.yearly} onToggle={() => changePlan(w.plan, !w.yearly)} />
+            <Toggle on={w.yearly} onToggle={() => changePlan(w.plan, !w.yearly)} label="Yearly billing" />
             <span className="t-small-strong pre">Yearly · 20% off</span>
           </div>
         </div>
