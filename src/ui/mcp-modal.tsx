@@ -176,7 +176,7 @@ export function McpBrowserModal({
                 paddingRight={2}
               >
                 <text fg={selected ? t.selected : t.primary}>
-                  <b>{"□ Add Custom MCP"}</b>
+                  <b>{"○ Add custom MCP"}</b>
                 </text>
               </box>
             );

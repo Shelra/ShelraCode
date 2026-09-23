@@ -403,7 +403,7 @@ function TrendView({ t, runs, trendDimension }: BenchViewInput) {
                   ? previous
                     ? "N/A (scope changed)"
                     : "· first point"
-                  : `Δ ${signedDelta(latestDelta)}`
+                  : `change ${signedDelta(latestDelta)}`
               }`}
             </text>
           ) : null}
@@ -438,7 +438,7 @@ function CompareView({ t, comparison }: BenchViewInput) {
           comparison.comparable ? "Compatible benchmark versions" : (comparison.reason ?? "Not directly comparable")
         }
       />
-      <TableHeader t={t} columns={["metric", ...comparison.runs.map((run) => `#${run.runNumber}`), "Δ first"]} />
+      <TableHeader t={t} columns={["metric", ...comparison.runs.map((run) => `#${run.runNumber}`), "vs first"]} />
       {comparison.metrics.map((metric) => (
         <box key={metric.dimension} paddingLeft={2} paddingRight={2}>
           <text fg={metric.deltaFromFirst !== null && metric.deltaFromFirst < 0 ? t.danger : t.text}>
@@ -464,8 +464,8 @@ function CompareView({ t, comparison }: BenchViewInput) {
         </text>
         <text fg={t.textSecondary}>
           {comparison.comparable
-            ? `Cost Δ ${signedMoney(comparison.costDeltaMicros)}  ·  Time Δ ${signedDuration(comparison.durationDeltaMs)}`
-            : "Cost Δ N/A  ·  Time Δ N/A"}
+            ? `Cost change ${signedMoney(comparison.costDeltaMicros)}  ·  Time change ${signedDuration(comparison.durationDeltaMs)}`
+            : "Cost change n/a  ·  Time change n/a"}
         </text>
       </box>
       {comparison.taskChanges.regressed.length > 0 ? (
@@ -882,7 +882,7 @@ function padLeft(value: string, width: number): string {
 }
 
 function sparkline(values: number[]): string {
-  const glyphs = "▁▂▃▄▅▆▇█";
+  const glyphs = "·░▪█";
   if (values.length === 0) return "";
   const min = Math.min(...values);
   const max = Math.max(...values);

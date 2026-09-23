@@ -5841,7 +5841,7 @@ function DelegationListView({ t, content }: { t: Theme; content: string }) {
         return (
           <box key={item.id}>
             <text>
-              <span style={{ fg: statusColor }}>{"◆ "}</span>
+              <span style={{ fg: statusColor }}>{"▪ "}</span>
               <span style={{ fg: t.text }}>{item.id}</span>
               <span style={{ fg: statusColor }}>{` ${item.status}`}</span>
               <span style={{ fg: t.textMuted }}>
@@ -5871,7 +5871,7 @@ function BackgroundProcessLine({ t, id, pid, command }: { t: Theme; id: number; 
   return (
     <box paddingLeft={3}>
       <text>
-        <span style={{ fg: t.subagentAccent }}>{"◆ "}</span>
+        <span style={{ fg: t.subagentAccent }}>{"▪ "}</span>
         <span style={{ fg: t.subagentAccent }}>
           <b>{"Background process"}</b>
         </span>
@@ -6875,11 +6875,7 @@ function PaymentApprovalPanel({
       paddingTop={1}
       paddingBottom={1}
     >
-      <text>
-        <span style={{ fg: t.planTitle ?? t.primary }}>
-          <b>{"Payment required"}</b>
-        </span>
-      </text>
+      <SectionBadge t={t} label="Payment" detail="needs your approval" />
       <box marginTop={1} flexDirection="column">
         <text>
           <span style={{ fg: t.text }}>{payment.url}</span>

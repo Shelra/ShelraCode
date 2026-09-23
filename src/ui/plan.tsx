@@ -279,7 +279,7 @@ function QuestionBody({ t, question: q, state }: { t: Theme; question: PlanQuest
             <box backgroundColor={isOnCustom ? t.selectedBg : undefined} paddingLeft={1}>
               {state.editing && isOnCustom ? (
                 <box backgroundColor={t.planInputBg} paddingLeft={1} paddingRight={1} flexGrow={1}>
-                  <text fg={t.planInputText}>{`${customText}▌`}</text>
+                  <text fg={t.planInputText}>{`${customText}█`}</text>
                 </box>
               ) : (
                 <text>
