@@ -154,9 +154,15 @@ The normal interactive Agent mode also exposes `generate_plan`. For work that
 spans several files or acceptance conditions the agent publishes the goal,
 requirements, acceptance criteria, verification methods, and task-to-criterion
 mapping before editing; a one-file, obvious change may skip it. What the host
-enforces is verification, not planning: a turn that changed files but ran no
-real check (tests, build, type-check, a request against the running app) is
-asked to verify before it may complete, and is marked "Not verified" if it
+enforces is verification, not planning. When a project states its checks
+(package.json scripts, a command table in AGENTS.md or CLAUDE.md, Makefile or
+justfile targets, or the conventions of pyproject.toml, Cargo.toml and go.mod),
+its tests, type-check and lint are the definition of done: after a turn that
+changed files, Shelra runs them on the final code itself, reusing a run the
+agent made after its last change, sends failures back with their output up to
+three times, and marks the turn "Not verified" if they still fail. A build is
+never run for you. Where a project states no checks, a turn that changed files
+but ran no real check is asked to verify, and is marked "Not verified" if it
 never does. The existing Plan-mode view renders the same fields; plans without
 questions are retained when switching from Plan to Agent mode.
 Autonomous mode begins executing after publishing its plan; use `Ctrl+C` to

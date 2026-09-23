@@ -2,6 +2,8 @@ import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
 import type { ContextPacket } from "../context/types";
+import { type ContractCheckRunner, contractChecks, evaluateTurnContract } from "../contract/contract";
+import { discoverChecks } from "../contract/discover";
 import { executeEventHooks } from "../hooks/index";
 import type {
   NotificationHookInput,
@@ -127,6 +129,7 @@ import { scratchLineFor } from "./scratch";
 import {
   describeDelegatedEvidence,
   describeVerificationEvidence,
+  isVerificationCommand,
   maskedVerificationCommand,
 } from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
@@ -169,6 +172,8 @@ const OVERFLOW_RECOVERY_KEPT_TURNS = 2;
  * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §12.
  */
 const MAX_VERIFICATION_RETRIES = 3;
+/** How long one of the project's own checks may run when the host runs it on the final code. */
+const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
 /** Text documents: nothing runs them, so a turn that only wrote these gets one fact-check request. */
 const DOCUMENT_FILE_RE = /\.(?:md|mdx|markdown|txt|rst|adoc|org)$/i;
 /**
@@ -244,6 +249,8 @@ export interface AgentOptions {
   mcpTimeoutMs?: number;
   /** Harness subsystems switched off to measure what each adds (`shelra bench --ablate`); see ablation.ts. */
   ablate?: readonly Ablation[];
+  /** Runs the task contract's checks on the final code; the agent's own shell by default. Tests inject one. */
+  checkRunner?: ContractCheckRunner;
 }
 
 type ProcessMessageFinishReason = "stop" | "length" | "content-filter" | "tool-calls" | "error" | "other";
@@ -278,7 +285,7 @@ export interface ProcessMessageToolFinish {
   timestamp: number;
 }
 
-export type ProcessMessageStage = "hooks" | "notifications" | "context" | "mcp" | "model" | "recap";
+export type ProcessMessageStage = "hooks" | "notifications" | "context" | "mcp" | "model" | "checks" | "recap";
 
 export interface ProcessMessageStatus {
   stage: ProcessMessageStage;
@@ -848,6 +855,8 @@ export class Agent {
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
   /** Subsystems a benchmark switched off for this agent; none outside `--ablate` runs. */
   private readonly ablations: Ablations;
+  /** Runs the project's checks when the host verifies a turn's final code (the task contract). */
+  private readonly checkRunner: ContractCheckRunner;
   /** Questions about destructive commands wait in line, so the user sees one at a time. */
   private destructiveCommandQueue: Promise<unknown> = Promise.resolve();
   private sessionStartHookFired = false;
@@ -903,6 +912,18 @@ export class Agent {
     this.mcpTimeoutMs =
       options.mcpTimeoutMs ?? readPositiveMilliseconds("SHELRA_MCP_TIMEOUT_MS", DEFAULT_MCP_TIMEOUT_MS);
     this.ablations = options.ablate?.length ? new Ablations(options.ablate) : NO_ABLATIONS;
+    // Host checks run the way the agent's own commands do: same shell, same sandbox, same workspace.
+    this.checkRunner =
+      options.checkRunner ??
+      (async (command, { timeoutMs, signal }) => {
+        const startedAt = Date.now();
+        const result = await this.bash.execute(command, timeoutMs, signal);
+        return {
+          passed: result.success,
+          output: (result.success ? result.output : (result.error ?? result.output)) ?? "",
+          durationMs: Date.now() - startedAt,
+        };
+      });
 
     if (options.persistSession !== false) {
       this.sessionStore = new SessionStore(this.bash.getCwd());
@@ -2628,6 +2649,14 @@ export class Agent {
     // passed before later changes does not vouch for the final code.
     const turnStartState = this.mode === "agent" ? captureWorkspaceState(this.bash.getCwd()) : null;
     let lastPassingCheck: { state: WorkspaceState; mutationEvents: number; evidence: string } | null = null;
+    /** Every check run this turn, the agent's and the host's, with the workspace as it stood then. */
+    const checkRuns: Array<{
+      command: string;
+      passed: boolean;
+      detail: string;
+      mutationEvents: number;
+      state: WorkspaceState | null;
+    }> = [];
 
     try {
       while (true) {
@@ -2861,6 +2890,15 @@ export class Agent {
                     output: (tr.success ? tr.output : (tr.error ?? tr.output)) ?? "",
                   });
                   if (turnCommands.length > 24) turnCommands.shift();
+                  if (turnStartState && isVerificationCommand(digestCommand)) {
+                    checkRuns.push({
+                      command: digestCommand,
+                      passed: tr.success,
+                      detail: ((tr.success ? tr.output : (tr.error ?? tr.output)) ?? "").slice(-1_200),
+                      mutationEvents: turnMutationEvents,
+                      state: captureWorkspaceState(this.bash.getCwd()),
+                    });
+                  }
                 }
                 notifyObserver(observer?.onToolFinish, {
                   toolCall: tc,
@@ -3149,7 +3187,102 @@ export class Agent {
           // copy of its own report as "evidence"; asked once, it ran the type-check).
           const documentsOnly =
             mutatedThisTurn && !unverifiedSinceAudit && mutations.every((path) => DOCUMENT_FILE_RE.test(path));
+
+          // The task contract (audit doc 15, Phase 1.3–1.4): when the project states its checks, the host
+          // decides "done" by running them on the final code, instead of accepting any check at all.
+          const contract =
+            this.mode === "agent" &&
+            !this.ablations.has("gate") &&
+            !this.ablations.has("contract") &&
+            mutatedThisTurn &&
+            !documentsOnly
+              ? contractChecks(discoverChecks(cwd))
+              : [];
+          if (contract.length > 0) {
+            const results = await evaluateTurnContract({
+              checks: contract,
+              runs: checkRuns.map((run) => ({
+                command: run.command,
+                passed: run.passed,
+                detail: run.detail,
+                fresh:
+                  run.mutationEvents === turnMutationEvents &&
+                  run.state !== null &&
+                  endState !== null &&
+                  changedPaths(run.state, endState)?.length === 0,
+                beforeFirstChange:
+                  run.mutationEvents === 0 &&
+                  run.state !== null &&
+                  turnStartState !== null &&
+                  changedPaths(turnStartState, run.state)?.length === 0,
+              })),
+              workspace: cwd,
+              runCheck: (command, options) => {
+                reportStatus("checks", `Running \`${command}\` on the final code`);
+                return this.checkRunner(command, options);
+              },
+              timeoutMs: CONTRACT_CHECK_TIMEOUT_MS,
+              signal,
+            });
+            // The host's own runs count as runs: unless something changes, they need not run again.
+            const stateAfterChecks = captureWorkspaceState(cwd);
+            for (const result of results.filter((item) => item.by === "host")) {
+              checkRuns.push({
+                command: result.check.command,
+                passed: result.passed,
+                detail: result.detail,
+                mutationEvents: turnMutationEvents,
+                state: stateAfterChecks,
+              });
+            }
+            const failing = results.filter((result) => !result.passed);
+            if (failing.length === 0) {
+              for (const result of results) {
+                this.turnVerificationEvidence.push(
+                  `${result.check.command} passed (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
+                );
+              }
+              if (results.some((result) => result.by === "host")) {
+                const note = `[Checked by Shelra on the final code: ${results
+                  .map((result) => `\`${result.check.command}\` passed`)
+                  .join(", ")}]`;
+                this.recordVerdict(note);
+                yield { type: "content", content: `\n\n${note}` };
+              }
+            } else if (verificationRetries < MAX_VERIFICATION_RETRIES) {
+              verificationRetries += 1;
+              const nudge = [
+                "Completion blocked: the project's own checks fail on your final code (Shelra ran them after your last change):",
+                ...failing.map(
+                  (result) =>
+                    `- \`${result.check.command}\`${result.failedBefore ? " (it already failed before your first change)" : ""}: ${result.detail.slice(-1_200)}`,
+                ),
+                "Fix what your change broke and run the checks again. If a failure predates this request and has nothing to do with it, say so plainly instead of changing unrelated code.",
+              ].join("\n");
+              this.messages.push({ role: "user", content: nudge });
+              this.messageSeqs.push(null);
+              this.kernel?.recordObservation(
+                `Task contract: ${failing.length} project check(s) fail on the final code (attempt ${verificationRetries}/${MAX_VERIFICATION_RETRIES}).`,
+              );
+              this.persistKernelIndex(`Project checks failing: ${failing.map((r) => r.check.command).join(", ")}`);
+              continue;
+            } else {
+              const olderThanTurn = failing.every((result) => result.failedBefore);
+              const reason = `${failing.map((result) => `\`${result.check.command}\``).join(", ")} ${
+                failing.length === 1 ? "fails" : "fail"
+              } on the final code${olderThanTurn ? ", as before this turn" : ""}, after ${verificationRetries} automatic request(s).`;
+              this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+              this.persistKernelIndex(reason);
+              const verdict = `[Not verified — ${reason}]`;
+              this.recordVerdict(verdict);
+              yield { type: "content", content: `\n\n${verdict}` };
+              yield { type: "done" };
+              return;
+            }
+          }
+
           if (
+            contract.length === 0 &&
             !this.ablations.has("gate") &&
             mutatedThisTurn &&
             (documentsOnly || this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)

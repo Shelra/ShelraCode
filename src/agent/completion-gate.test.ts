@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import type {
   ProviderAdapter,
@@ -861,5 +862,148 @@ describe("benchmark ablations of the gate (audit doc 15, item 0.1)", () => {
     // Initial round and the verification nudge; with the audit on there is a third, audit round.
     expect(provider.round).toBe(2);
     expect(provider.requests.some((request) => lastUserText(request).includes("audit the request"))).toBe(false);
+  });
+});
+
+describe("task contract: the project's own checks decide (audit doc 15, Phase 1.3-1.4)", () => {
+  /** A workspace whose package.json states its test command, as most projects do. */
+  const projectWorkspace = () => {
+    const dir = mkdtempSync(join(tmpdir(), "shelra-contract-gate-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+    return dir;
+  };
+
+  it("runs the project's tests itself on an unverified change, and finishes when they pass", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }]);
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "3 pass", durationMs: 10 }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner,
+    });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    // No nudge round: the host's own run of the project's tests is the evidence.
+    expect(provider.round).toBe(1);
+    expect(checkRunner.mock.calls.map(([command]) => command)).toEqual(["bun run test"]);
+    expect(
+      chunks.some((c) => c.content?.includes("[Checked by Shelra on the final code: `bun run test` passed]")),
+    ).toBe(true);
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+  });
+
+  it("sends a failing project check back with its output, then reports it", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }]);
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+      passed: false,
+      output: "1 fail: slugify trims",
+      durationMs: 10,
+    }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner,
+    });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(4);
+    const nudge = lastUserText(provider.requests[1]);
+    expect(nudge).toContain("the project's own checks fail on your final code");
+    expect(nudge).toContain("`bun run test`");
+    expect(nudge).toContain("slugify trims");
+    const verdict = chunks.find((c) => c.content?.includes("Not verified"));
+    expect(verdict?.content).toContain("`bun run test` fails on the final code");
+  });
+
+  it("reuses the agent's own run of the check after its last change instead of running it again", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    let round = 0;
+    const provider: ProviderAdapter = {
+      id: "self-verifier",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({
+        modelId,
+        modelInfo: {
+          id: modelId,
+          name: "Gate test model",
+          contextWindow: 32_768,
+          inputPrice: 0,
+          outputPrice: 0,
+          reasoning: false,
+          description: "Test-only provider",
+          supportsClientTools: true,
+          supportsMaxOutputTokens: true,
+          runtimeKind: "managed-llama",
+        },
+      }),
+      stream: () => {
+        round += 1;
+        return {
+          events: (async function* () {
+            yield toolCallEvent("call-write", "write_file", { path: "src/clock.ts", content: "x" });
+            yield toolResultEvent("call-write", "write_file", {
+              success: true,
+              output: "Created src/clock.ts",
+              diff: { filePath: "src/clock.ts", additions: 1, removals: 0, patch: "", isNew: true },
+            });
+            // The script's own body: the same check as `bun run test`.
+            yield toolCallEvent("call-test", "bash", { command: "bun test" });
+            yield toolResultEvent("call-test", "bash", { success: true, output: "3 pass" }, { command: "bun test" });
+            yield { type: "text-delta", text: "Done, tests pass." } as ProviderEvent;
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+      passed: false,
+      output: "should not run",
+      durationMs: 10,
+    }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner,
+    });
+
+    for await (const _chunk of agent.processMessage("Create a digital clock")) {
+      // drain
+    }
+
+    expect(round).toBe(1);
+    expect(checkRunner).not.toHaveBeenCalled();
+  });
+
+  it("falls back to asking for any check when the contract is switched off", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }]);
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "", durationMs: 1 }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: projectWorkspace(),
+      checkRunner,
+      ablate: ["contract"],
+    });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(checkRunner).not.toHaveBeenCalled();
+    expect(provider.round).toBe(4);
+    expect(chunks.find((c) => c.content?.includes("Not verified"))?.content).toContain("No verification action");
   });
 });

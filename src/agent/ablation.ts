@@ -5,7 +5,8 @@ import type { ToolSet } from "ai";
  * rule 4: a capability whose ablation changes nothing has not been shown to exist).
  *
  * - memory: no memory tools, retrieval, standing-rule capture or reflection
- * - gate: no completion gate (and so no requirement audit either)
+ * - gate: no completion gate (and so no task contract or requirement audit either)
+ * - contract: no task contract; the gate only asks that some check ran after the last change
  * - audit: no requirement audit
  * - plan: no plan tools or planning step in the prompt
  * - skills: no skill catalog in the prompt
@@ -14,7 +15,18 @@ import type { ToolSet } from "ai";
  * - web: no web research tools or guidance
  * - bare: all of the above, a prompt of environment facts only, and six basic tools
  */
-export const ABLATIONS = ["memory", "gate", "audit", "plan", "skills", "context", "subagents", "web", "bare"] as const;
+export const ABLATIONS = [
+  "memory",
+  "gate",
+  "contract",
+  "audit",
+  "plan",
+  "skills",
+  "context",
+  "subagents",
+  "web",
+  "bare",
+] as const;
 
 export type Ablation = (typeof ABLATIONS)[number];
 

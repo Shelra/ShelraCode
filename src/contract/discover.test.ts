@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { discoverChecks } from "./discover";
+import { discoverChecks, isSameCheck } from "./discover";
 
 let root: string;
 
@@ -82,10 +82,25 @@ describe("discoverChecks", () => {
     const checks = discoverChecks(dir);
     expect(checks).toEqual([
       { kind: "test", command: "bun run test:all", source: "AGENTS.md" },
-      { kind: "typecheck", command: "bun run typecheck", source: "package.json scripts.typecheck" },
+      {
+        kind: "typecheck",
+        command: "bun run typecheck",
+        source: "package.json scripts.typecheck",
+        runs: "tsc --noEmit",
+      },
       { kind: "lint", command: "bun run lint", source: "AGENTS.md" },
       { kind: "build", command: "make build", source: "Makefile build" },
     ]);
+  });
+
+  it("treats running a script's body as the same check, but not a filtered run", () => {
+    const [check] = discoverChecks(
+      project("same", { "package.json": JSON.stringify({ scripts: { test: "bun test" } }) }),
+    );
+    if (!check) throw new Error("no check discovered");
+    expect(isSameCheck("bun run test", check)).toBe(true);
+    expect(isSameCheck("bun  test ", check)).toBe(true);
+    expect(isSameCheck("bun test src/a.test.ts", check)).toBe(false);
   });
 
   it("finds nothing in a folder that states no checks", () => {

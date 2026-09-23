@@ -22,6 +22,21 @@ export interface DiscoveredCheck {
   command: string;
   /** Where the command came from, such as "package.json scripts.test" or "AGENTS.md". */
   source: string;
+  /** What a package script runs (`bun test` for `bun run test`): running that directly is the same check. */
+  runs?: string;
+}
+
+/** Whether a command someone ran is this check, exactly: a filtered or partial run is not. */
+export function isSameCheck(command: string, check: DiscoveredCheck): boolean {
+  const normalized = normalizeCommand(command);
+  return (
+    normalized === normalizeCommand(check.command) ||
+    (check.runs !== undefined && normalized === normalizeCommand(check.runs))
+  );
+}
+
+function normalizeCommand(command: string): string {
+  return command.trim().replace(/\s+/gu, " ");
 }
 
 const KINDS: readonly CheckKind[] = ["test", "typecheck", "lint", "build"];
@@ -116,7 +131,14 @@ function fromPackageJson(workspace: string): DiscoveredCheck[] {
       // npm init's placeholder is not a test suite.
       return script !== undefined && !/no test specified/iu.test(script);
     });
-    if (name) checks.push({ kind, command: runScript(manager, name), source: `package.json scripts.${name}` });
+    if (name) {
+      checks.push({
+        kind,
+        command: runScript(manager, name),
+        source: `package.json scripts.${name}`,
+        runs: scripts[name],
+      });
+    }
   }
   return checks;
 }
