@@ -60,7 +60,7 @@ const TOOLS_BY_SUBSYSTEM: Partial<Record<Exclude<Ablation, "bare">, readonly str
   memory: ["memory_list", "memory_read", "memory_write", "memory_delete"],
   plan: ["generate_plan", "update_plan_step"],
   subagents: ["task", "delegate", "delegation_read", "delegation_list"],
-  web: ["search_web", "open_web", "search_x"],
+  web: ["search_web", "open_web"],
 };
 
 const BARE_TOOLS: ReadonlySet<string> = new Set([

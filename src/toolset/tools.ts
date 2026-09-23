@@ -150,7 +150,7 @@ async function refuseDestructiveCommand(
 
 export function createTools(
   bash: BashTool,
-  provider: ProviderToolContext,
+  _provider: ProviderToolContext,
   mode: AgentMode = "agent",
   options: CreateToolsOptions = {},
 ) {
@@ -176,23 +176,6 @@ export function createTools(
     } catch {
       // Checkpointing must never block a mutation.
     }
-  };
-
-  const runResponsesSearch = async (
-    query: string,
-    toolName: "web_search" | "x_search",
-    abortSignal?: AbortSignal,
-  ): Promise<{ success: boolean; output: string }> => {
-    // Web research is provider-neutral. OpenRouter and local models must have
-    // the same research capability as the legacy xAI adapter.
-    if (toolName === "web_search") {
-      const result = await searchWeb(query, { signal: abortSignal, maxResults: 5 });
-      return { success: result.success, output: result.output };
-    }
-    if (!provider.responseSearch) {
-      return { success: false, output: "X search is unavailable for the selected provider." };
-    }
-    return provider.responseSearch(query, toolName, abortSignal);
   };
 
   const base = {
@@ -299,7 +282,9 @@ export function createTools(
         query: z.string().describe("The search query"),
       }),
       execute: async ({ query }, { abortSignal }) => {
-        return runResponsesSearch(query, "web_search", abortSignal);
+        // Web research is provider-neutral: every model gets the same search.
+        const result = await searchWeb(query, { signal: abortSignal, maxResults: 5 });
+        return { success: result.success, output: result.output };
       },
     }),
 
@@ -324,19 +309,6 @@ export function createTools(
 
   const tools: ToolSet = { ...base };
   let structuredPlanPublished = options.planState?.structured ?? false;
-
-  if (provider.responseSearch) {
-    tools.search_x = tool({
-      description:
-        "Search X (Twitter) for real-time posts, discussions, opinions, and trends. Returns relevant posts with authors and engagement data.",
-      inputSchema: z.object({
-        query: z.string().describe("The search query"),
-      }),
-      execute: async ({ query }, { abortSignal }) => {
-        return runResponsesSearch(query, "x_search", abortSignal);
-      },
-    });
-  }
 
   if (isLspToolEnabled()) {
     tools.lsp = tool({

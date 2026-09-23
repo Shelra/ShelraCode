@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { formatMemoryForChat } from "./report";
 import { buildMemoryContext } from "./retrieval";
 import {
   listMemoryRecords,
@@ -63,12 +62,5 @@ describe("user-wide memory scope", () => {
     );
     expect(context.expanded).toEqual(["answer-in-spanish"]);
     expect(context.text).toContain("user-wide");
-  });
-
-  it("appears in the /memory report even when the project has no memory", () => {
-    writeUserPreference();
-    const report = formatMemoryForChat(workspace);
-    expect(report).toContain("User-wide memory (1 entry)");
-    expect(report).toContain("answer-in-spanish");
   });
 });

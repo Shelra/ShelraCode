@@ -115,13 +115,11 @@ export interface ProviderStructuredResult {
   usage?: ProviderUsage;
 }
 
-export interface ProviderToolContext {
-  responseSearch?: (
-    query: string,
-    toolName: "web_search" | "x_search",
-    signal?: AbortSignal,
-  ) => Promise<{ success: boolean; output: string }>;
-}
+/**
+ * Tools a provider adds to the tool set. Web research is provider-neutral (search_web, open_web), and no
+ * provider adds one of its own today; the X search hook no provider implemented is gone (audit doc 15, Q4).
+ */
+export type ProviderToolContext = Record<string, never>;
 
 /** Provider contract consumed by the application Agent façade. */
 export interface ProviderAdapter {

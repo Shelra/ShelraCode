@@ -52,7 +52,7 @@ export const DEFAULT_TASK_TIMEOUT_MS = 20 * 60_000;
 const HOST_END_NOTE_RE = /\[(?:Not verified|Not marked complete|Paused|No response|Cancelled)\b/u;
 
 const MUTATION_TOOLS = new Set(["write_file", "edit_file", "delete_file"]);
-const RESEARCH_TOOLS = new Set(["search_web", "open_web", "search_x"]);
+const RESEARCH_TOOLS = new Set(["search_web", "open_web"]);
 const DELEGATION_TOOLS = new Set(["task", "delegate"]);
 
 interface TurnCounters {

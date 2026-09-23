@@ -47,7 +47,6 @@ export function normalizeToolInput(toolName: string, input: unknown): Record<str
     case "grep":
       return { pattern: scalarInput };
     case "search_web":
-    case "search_x":
       return { query: scalarInput };
     case "open_web":
       return { url: scalarInput };

@@ -3,7 +3,9 @@
  * code (tests, build, type-check, lint, a request against the app running on this machine), running a
  * file the turn changed, a rendered-output observation, or a delegated verification sub-agent that
  * itself ran such a check. Reading a file back, listing a directory, printing text or restating the
- * diff never counts — that is the model's own claim, not evidence.
+ * diff never counts — that is the model's own claim, not evidence. Why it exists (2026-09-13): a
+ * headless turn wrote three files, read them back, stopped its own dev server and reported "Done.",
+ * mistaking code state for runtime reality.
  *
  * The decision is made on the program a command runs, never on words in its text: the audit of
  * 2026-09-23 reproduced `echo "all good, tsc passes"`, `curl https://example.com` and

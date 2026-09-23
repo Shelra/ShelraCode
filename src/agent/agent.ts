@@ -658,7 +658,7 @@ function buildSubagentPrompt(
                 ? [
                     "Do not make durable source edits. Report precise mismatches and evidence to the parent agent.",
                     "Run three passes over the same rendered workspace: structure, information hierarchy, then interaction/resilience.",
-                    "Pass 1 checks the two-column layout, transcript semantics, live row above the composer, agents below it, and sidebar order.",
+                    "Pass 1 checks the single-column log (the only permanent surface), transcript semantics, the live row above the composer, active agents below it, and that the plan, changes, checks and context views appear only when they have something to show.",
                     "Pass 2 checks density, alignment, wrapping, markers, elapsed-time placement, and whether low-level tool noise is grouped.",
                     "Pass 3 checks failure/repair/verification visibility, narrow widths, long content, focus/interrupt affordances, and stale or fabricated data.",
                     "Use terminal output, accessibility snapshots, or screenshots when available. Never claim visual quality from source inspection alone.",
@@ -3645,9 +3645,6 @@ function formatSubagentActivity(toolName: string, args?: unknown): string {
   if (toolName === "edit_file") return `Edit ${parsed.path || "file"}`;
   if (toolName === "delete_file") return `Delete ${parsed.path || "file"}`;
   if (toolName === "search_web") return `Web search "${truncate(parsed.query || "", 50)}"`;
-  if (toolName === "search_x") return `X search "${truncate(parsed.query || "", 50)}"`;
-  if (toolName === "generate_image") return `Generate image "${truncate(parsed.prompt || "", 50)}"`;
-  if (toolName === "generate_video") return `Generate video "${truncate(parsed.prompt || "", 50)}"`;
   if (toolName === "computer_snapshot") return `Snapshot ${parsed.app || "desktop"}`;
   if (toolName === "computer_screenshot") return "Capture desktop screenshot";
   if (toolName === "computer_click")
@@ -3778,21 +3775,6 @@ function isAuthenticationError(error: unknown): boolean {
   );
 }
 
-/**
- * Deterministic detector for whether a tool call actually observed reality (a network
- * request, a test/build run, a browser/desktop observation) rather than only re-reading the
- * source the model itself just wrote. Reproduced live (2026-09-13): a headless coding turn
- * wrote three files, re-read them with `read_file`, stopped its own dev server without ever
- * requesting it, and reported "Done." — code state was mistaken for runtime reality (the
- * failure §14 of the reconstruction brief names). Deliberately conservative: only tool calls
- * that touch something outside the model's own text count as evidence, and `read_file`/`bash`
- * `Get-ChildItem`/`ls`-style inspection does not. A successful delegation to `verify`/`ui-verify`/
- * `computer` also counts: those sub-agents are prompted to do the real thing themselves (build,
- * test, start the app, real browser smoke test, or a desktop/UI observation) — see
- * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §13. Without this, a parent turn that
- * correctly delegated real verification work still got blocked, because the gate only ever
- * looked at the parent's own direct tool calls.
- */
 const STATUS_MESSAGES: Record<number, string> = {
   400: "The request was invalid. This may be caused by an unsupported parameter or model.",
   401: "Authentication failed. Your API key may be invalid or expired.",

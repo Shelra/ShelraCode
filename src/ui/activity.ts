@@ -209,8 +209,6 @@ export function describeToolCall(toolCall: ToolCall): ActivityPhrase {
     }
     case "search_web":
       return { verb: "Searching the web for", object: truncateText(arg(toolCall, "query"), MAX_OBJECT) };
-    case "search_x":
-      return { verb: "Searching X for", object: truncateText(arg(toolCall, "query"), MAX_OBJECT) };
     case "open_web":
       return { verb: "Reading", object: truncateText(arg(toolCall, "url"), MAX_OBJECT) };
     case "generate_plan":
@@ -466,7 +464,6 @@ function groupFor(name: string, command: string, path: string): ActivityGroup {
     case "lsp":
       return "explore";
     case "search_web":
-    case "search_x":
     case "open_web":
       return "research";
     case "write_file":
@@ -537,7 +534,6 @@ export function describeToolResult(
       };
     }
     case "search_web":
-    case "search_x":
     case "open_web": {
       const phrase = describeToolCall(toolCall);
       const verb = name === "open_web" ? "Read" : "Searched the web for";

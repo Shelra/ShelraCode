@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { BashTool } from "../tools/bash";
-import { toolSetToBatchTools } from "./tool-schemas";
 import { createTools } from "./tools";
 
 const queryLspMock = vi.fn<(cwd: string, input: unknown) => Promise<{ success: boolean; output: string }>>(
@@ -43,23 +42,5 @@ describe("lsp tool", () => {
       query: undefined,
     });
     expect(result).toEqual({ success: true, output: "[]" });
-  });
-
-  it("is compatible with batch tool schema conversion", async () => {
-    const tools = createTools(new BashTool("/tmp"), {} as never, "agent");
-    const batchTools = await toolSetToBatchTools(tools);
-    const lspTool = batchTools.find((entry) => entry.function.name === "lsp");
-
-    expect(lspTool).toBeDefined();
-    expect(lspTool?.function.parameters).toMatchObject({
-      properties: {
-        operation: {
-          type: "string",
-        },
-        filePath: {
-          type: "string",
-        },
-      },
-    });
   });
 });

@@ -5618,11 +5618,10 @@ export function MessageView({
             pending={false}
           >{`Read ${trunc(tryParseArg(entry.toolCall, "path") || args, 60)}`}</InlineTool>
         );
-      if (name === "search_web" || name === "search_x")
+      if (name === "search_web")
         return (
           <InlineTool t={t} pending={false}>
-            {name === "search_web" ? "Web" : "X"}
-            {` Search "${trunc(args, 60)}"`}
+            {`Web Search "${trunc(args, 60)}"`}
           </InlineTool>
         );
 
