@@ -26,8 +26,8 @@ Experience → Memory → Knowledge → Skill → Better decisions → Better ex
 | Lexical/agentic retrieval wins for code; embeddings add staleness, exfiltration surface and a subsystem to keep correct | lane 13 §1 (Anthropic, Cursor, AAAI 2026) | Deterministic lexical ranking (`retrieval.ts`): token overlap, path overlap, provenance, recency, staleness; no vector index |
 | Progressive disclosure: metadata always, body on trigger, resources on demand | lane 13 §2; Claude Code skills | Index lines always; top-k bodies within a character budget; the rest as pointers loadable with `memory_read` |
 | Evidence must be re-checkable; staleness self-detection by models is ~55% | lane 14 (STALE) | Cheap mechanical staleness: `relatedFiles` mtimes vs `lastConfirmed` mark an entry "may be stale" |
-| Untrusted content becoming permanent memory is the sharpest security gap in the field | lane 14 | Secret-shaped and instruction-shaped text is rejected at the gate; `source: web` never carries directives |
-| Skills are the durable form of procedural knowledge | Anthropic skill-development guidance | Procedures used in ≥2 turns are promoted to `.agents/skills/<slug>/SKILL.md` automatically |
+| Untrusted content becoming permanent memory is the sharpest security gap in the field | lane 14 | Secret-shaped text and prompt-injection phrasing are rejected at the gate; the gate refuses directives from `source: web` entries, but no live writer records that source yet, so that rule does not run (2026-09-23) |
+| Skills are the durable form of procedural knowledge | Anthropic skill-development guidance | Procedures credited in ≥2 turns whose checks passed are promoted to `.agents/skills/<slug>/SKILL.md` automatically |
 
 ## Components
 
@@ -35,22 +35,27 @@ Experience → Memory → Knowledge → Skill → Better decisions → Better ex
   (`MEMORY.md`, capped at 200 lines / 25 KB), one topic file per entry with the extended frontmatter,
   and `history.jsonl` (created / updated / confirmed / deleted / promoted, rotated at 1 MB).
   `recordMemoryUse` bumps `uses`/`lastUsed` on retrieval; `confirmMemoryEntry` refreshes `lastConfirmed`.
-- **Write gate** (`src/memory/gate.ts`): reject (too short/long, credential-shaped, instruction-shaped,
-  web-derived directive), update (same slug, or a near-duplicate with more confidence/trust), skip
-  (exact repeat, near-duplicate that is no better, human-stated entry vs an inference, per-type cap),
-  create (novel). Pure function of candidate + current records; every decision carries a reason.
+- **Write gate** (`src/memory/gate.ts`): reject (too short/long, credential-shaped, prompt-injection
+  phrasing, web-derived directive), update (same slug; a near-duplicate with more confidence or trust; or a
+  close rewrite of equal standing, similarity up to 0.85), skip (exact repeat, near-duplicate that is no
+  better, human-stated entry vs an inference, per-type cap), create (novel). Pure function of candidate +
+  current records; every decision carries a reason.
 - **Retrieval** (`src/memory/retrieval.ts`): `score = (relevance + pathOverlap) × trust × recency ×
-  stalePenalty`; expands up to 4 bodies within 3,000 characters, lists the rest. Runs before every
-  turn and before every sub-agent brief; nothing is embedded.
-- **Reflection** (`src/memory/reflection.ts`): after a turn that changed files and verified them, or
-  worked through a failure, or involved ≥8 tool calls, one bounded model call (30 s, ~1.2K output
-  tokens) sees a digest (request, files changed, last 12 commands with outcomes, final report,
-  existing slugs) and proposes ≤5 durable facts as JSON; the gate decides. Explicit user directives
-  ("always …", "never …", "prefer …") are captured deterministically as `source: human` without a model.
-- **Skill promotion** (`src/memory/skills.ts`): `procedure` entries used in ≥2 turns from a trusted
-  source become project skills with provenance in the body; idempotent, regenerated when the memory changes.
-- **Tools**: `memory_list`, `memory_read`, `memory_write` (now gated, with `related_files`, `confidence`,
-  `source`), `memory_delete`.
+  stalePenalty`; expands up to 4 bodies within 3,000 characters, lists the next 12 by title and counts the
+  rest. Runs before every turn and before every sub-agent brief; nothing is embedded.
+- **Reflection** (`src/memory/reflection.ts`): after a turn that changed files (verified, or ended with its
+  checks still failing), worked through a failure, or involved ≥8 tool calls, a bounded reflection (30 s and
+  1,500 output tokens per attempt, up to three attempts) sees a digest (request, files changed, last 12
+  commands with outcomes, final report, existing slugs) and proposes ≤5 durable facts as JSON; the gate
+  decides. What an unverified turn teaches is tagged `unverified`, its confidence capped at 0.4. Explicit
+  user directives ("always …", "never …", "prefer …") are captured deterministically as `source: human`
+  without a model.
+- **Skill promotion** (`src/memory/skills.ts`): `procedure` entries credited in ≥2 turns whose checks passed,
+  from a trusted source, become project skills with provenance in the body; idempotent, regenerated when the
+  memory changes.
+- **Tools**: `memory_list`, `memory_read`, `memory_write` (gated, with `related_files`, `confidence` and
+  `scope`; the host records its source as `inference`), `memory_delete` (not gated; `history.jsonl` records
+  the deletion).
 
 ## Retention
 
