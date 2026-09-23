@@ -1,5 +1,6 @@
 import { Hero } from "@/components/hero/Hero";
 import { SiteFrame } from "@/components/layout/SiteFrame";
+import { Benchmark } from "@/components/sections/Benchmark";
 import { Benefits } from "@/components/sections/Benefits";
 import { Faq } from "@/components/sections/Faq";
 import { Features } from "@/components/sections/Features";
@@ -16,6 +17,7 @@ export default function Home() {
       <div className={styles.page}>
         <Hero />
         <SocialProof />
+        <Benchmark />
         <Features />
         <UseCases />
         <HowItWorks />

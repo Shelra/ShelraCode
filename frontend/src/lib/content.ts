@@ -10,6 +10,7 @@ export const links = {
   localMode: `${repo}#cloud-runtime-and-secondary-local-mode`,
   fieldCases: `${repo}/blob/main/bench/field/SCOREBOARD.md`,
   bench: `${repo}/blob/main/bench/README.md`,
+  benchHistory: `${repo}/blob/main/bench/history/benchmark-history.json`,
   memoryDesign: `${repo}/blob/main/docs/design/shelra-memory-engine.md`,
   issues: `${repo}/issues`,
   license: `${repo}/blob/main/LICENSE`,
@@ -24,6 +25,7 @@ export const links = {
 };
 
 export const nav = [
+  { label: "Benchmark", href: "#benchmark" },
   { label: "Features", href: "#features-overview" },
   { label: "Use cases", href: "#use-cases" },
   { label: "How It Works", href: "#how-it-works" },
@@ -32,12 +34,41 @@ export const nav = [
 ];
 
 export const mobileNav = [
+  { label: "Benchmark", href: "#benchmark" },
   { label: "Features", href: "#features-overview" },
   { label: "Use cases", href: "#use-cases" },
   { label: "How it works", href: "#how-it-works" },
   { label: "Field notes", href: "#testimonials" },
   { label: "Pricing", href: "#pricing" },
 ];
+
+// Shelra Bench on the landing page; the numbers come from src/lib/bench-summary.json (scripts/bench-summary.ts).
+export const benchmark = {
+  badge: "BENCHMARK",
+  heading: ["Measured, not promised. ", "Same tasks, same oracle, every run on record."],
+  suiteLabel: "CORE SUITE",
+  updated: "updated",
+  columns: ["Agent · model", "Resolved", "Cost", "Time", "Run"],
+  // Reference agents measured on the same tasks and oracle; shown as pending until their runs are recorded.
+  references: [
+    { agent: "claude-code", label: "Claude Code", model: "Sonnet 5" },
+    { agent: "codex", label: "Codex", model: "gpt-5.6-luna" },
+  ],
+  pendingNote: "being recorded · audit 2026-09-23",
+  infraNote: "lost to the provider",
+  infraFootnote: "tasks lost to the provider, not to the harness",
+  progressLabel: "HARNESS PROGRESS",
+  progressCaption: "Same model and tasks; only the harness changed between runs.",
+  fieldLabel: "FIELD CASE",
+  solved: "Solved",
+  unsolved: "Not solved",
+  reruns: "Re-runs on later commits",
+  toolCalls: "tool calls",
+  method:
+    "One run is one sample · benchmark-owned oracle · model pinned per run · cost as billed by the provider · full record in bench/history",
+  button: "See every run",
+  link: links.benchHistory,
+};
 
 export const hero = {
   heading: "The terminal coding agent that finishes the job.",

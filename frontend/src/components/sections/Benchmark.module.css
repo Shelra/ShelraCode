@@ -1,0 +1,254 @@
+.benchmark {
+  border-radius: 20px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: 640px;
+  position: relative;
+  flex: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  width: 100%;
+  align-items: start;
+}
+
+.board,
+.panel {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  background-color: var(--base);
+}
+
+.boardHead,
+.panelHead {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.headLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: 1.7fr 1.5fr 0.6fr 0.7fr 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 24px;
+}
+
+.colsHead {
+  padding: 10px 24px;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.colLabel {
+  color: var(--subtle);
+  text-transform: uppercase;
+}
+
+.row {
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.row:last-child {
+  box-shadow: none;
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.track {
+  width: 100%;
+  height: 4px;
+  overflow: clip;
+  background-color: var(--border);
+  position: relative;
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background-color: var(--accent);
+}
+
+.fillRef {
+  background-color: var(--default);
+}
+
+.num {
+  text-align: right;
+}
+
+.run {
+  text-align: right;
+}
+
+.pending {
+  opacity: 0.55;
+}
+
+.pendingNote {
+  grid-column: 2 / -1;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.bars {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: 16px;
+  height: 160px;
+  padding: 24px 24px 12px;
+}
+
+.bar {
+  flex: 1 1 0px;
+  max-width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.barFill {
+  width: 100%;
+  background-color: var(--accent-40);
+}
+
+.barBest {
+  background-color: var(--accent);
+}
+
+.caption {
+  padding: 0 24px 20px;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.versus {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.side1 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.foot {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+@media (max-width: 1199.98px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 809.98px) {
+  .colsHead {
+    display: none;
+  }
+
+  .cols {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .who,
+  .score,
+  .run {
+    grid-column: 1 / -1;
+  }
+
+  .num,
+  .run {
+    text-align: left;
+  }
+
+  .pendingNote {
+    grid-column: 1 / -1;
+  }
+
+  .boardHead,
+  .panelHead,
+  .panelBody {
+    padding: 16px;
+  }
+
+  .bars {
+    padding: 20px 16px 8px;
+  }
+
+  .caption {
+    padding: 0 16px 16px;
+  }
+
+  .versus {
+    grid-template-columns: 1fr;
+  }
+}
