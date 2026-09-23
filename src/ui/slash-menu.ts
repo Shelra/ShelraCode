@@ -38,7 +38,7 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   {
     id: "theme",
     label: "theme",
-    description: "Appearance and motion",
+    description: "Full or reduced motion",
     aliases: ["appearance"],
   },
   { id: "sandbox", label: "sandbox", description: "Shell sandbox mode" },

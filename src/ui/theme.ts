@@ -1,10 +1,4 @@
-/**
- * Kept for settings files written when Shelra had a light theme; every preference resolves to the one
- * dark palette now, like the approved web design.
- */
-export type ThemePreference = "system" | "dark" | "light";
 export type MotionPreference = "full" | "reduced";
-export type TerminalThemeMode = "dark" | "light" | null | undefined;
 /** How many colours the terminal can show: exact 24-bit colour, or the xterm 256-colour palette. */
 export type ColorMode = "truecolor" | "256";
 
@@ -244,14 +238,10 @@ export function scrollbarStyle(t: Theme) {
 }
 
 /**
- * The theme to draw with. Appearance preferences no longer change it: the terminal's own scheme is
+ * The theme to draw with. There is one, dark like the approved web design: the terminal's own scheme is
  * never used for brand surfaces, so a light terminal still gets the dark palette.
  */
-export function resolveTheme(
-  _preference?: ThemePreference,
-  _systemTheme: TerminalThemeMode = null,
-  environment: Record<string, string | undefined> = process.env,
-): Theme {
+export function resolveTheme(environment: Record<string, string | undefined> = process.env): Theme {
   return colorModeFrom(environment) === "256" ? dark256 : dark;
 }
 

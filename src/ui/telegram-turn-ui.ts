@@ -1,7 +1,6 @@
 import type { ChatEntry, ToolCall, ToolResult } from "../types/index";
 
 export interface EntryDecoration {
-  modeColor?: string;
   remoteKey?: string;
   sourceLabel?: string;
 }
@@ -15,7 +14,6 @@ export function buildUserEntry(content: string, decoration: EntryDecoration = {}
     type: "user",
     content,
     timestamp: new Date(),
-    modeColor: decoration.modeColor,
     remoteKey: decoration.remoteKey,
     sourceLabel: decoration.sourceLabel,
   };
@@ -26,7 +24,6 @@ export function buildAssistantEntry(content: string, decoration: EntryDecoration
     type: "assistant",
     content,
     timestamp: new Date(),
-    modeColor: decoration.modeColor,
     remoteKey: decoration.remoteKey,
     sourceLabel: decoration.sourceLabel,
   };
@@ -41,7 +38,6 @@ export function buildToolResultEntry(
     type: "tool_result",
     content: toolResult.success ? toolResult.output || "Success" : toolResult.error || "Error",
     timestamp: new Date(),
-    modeColor: decoration.modeColor,
     remoteKey: decoration.remoteKey,
     sourceLabel: decoration.sourceLabel,
     toolCall,

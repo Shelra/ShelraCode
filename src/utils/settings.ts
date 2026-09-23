@@ -203,8 +203,6 @@ export interface UserSettings {
   payments?: PaymentSettings;
   tools?: ToolGroupSettings;
   modeModels?: Partial<Record<AgentMode, string>>;
-  /** Terminal interface appearance; system follows the renderer when it reports a scheme. */
-  appearance?: "system" | "dark" | "light";
   /** Explicit terminal equivalent of reduced motion. */
   motion?: "full" | "reduced";
 }
@@ -243,16 +241,8 @@ export function loadUserSettings(): UserSettings {
   return readJson<UserSettings>(USER_SETTINGS_PATH) || {};
 }
 
-export function normalizeAppearancePreference(value: unknown): "system" | "dark" | "light" {
-  return value === "dark" || value === "light" ? value : "system";
-}
-
 export function normalizeMotionPreference(value: unknown): "full" | "reduced" {
   return value === "reduced" ? "reduced" : "full";
-}
-
-export function loadAppearancePreference(): "system" | "dark" | "light" {
-  return normalizeAppearancePreference(loadUserSettings().appearance);
 }
 
 export function loadMotionPreference(): "full" | "reduced" {
@@ -267,7 +257,6 @@ export function saveUserSettings(partial: Partial<UserSettings>): void {
     ...(partial.apiKey !== undefined ? { apiKey: partial.apiKey } : {}),
     ...(partial.defaultModel !== undefined ? { defaultModel: normalizeModelId(partial.defaultModel) } : {}),
     ...(partial.sandboxMode !== undefined ? { sandboxMode: normalizeSandboxMode(partial.sandboxMode) } : {}),
-    ...(partial.appearance !== undefined ? { appearance: normalizeAppearancePreference(partial.appearance) } : {}),
     ...(partial.motion !== undefined ? { motion: normalizeMotionPreference(partial.motion) } : {}),
     ...(partial.reasoningEffortByModel !== undefined
       ? {

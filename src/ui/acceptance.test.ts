@@ -19,7 +19,6 @@ const EXEMPT: ReadonlyArray<{ file: string; pattern: RegExp }> = [
   { file: "activity.ts", pattern: /FAIL\|×\|✗\|✕/ }, // test-runner failure lines
   { file: "activity.ts", pattern: /✖\\s\+/ }, // ESLint's summary line
   { file: "app.tsx", pattern: /\.replace\("▣/ }, // a marker older versions wrote into tool output
-  { file: "app.tsx", pattern: /case "#[0-9a-f]{6}":/ }, // mode colours stored by older sessions
 ];
 
 function sourceFiles(dir: string): string[] {

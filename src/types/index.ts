@@ -220,7 +220,6 @@ export interface ChatEntry {
   type: "user" | "assistant" | "tool_call" | "tool_result";
   content: string;
   timestamp: Date;
-  modeColor?: string;
   remoteKey?: string;
   sourceLabel?: string;
   queued?: boolean;
@@ -332,8 +331,8 @@ export interface SessionSnapshot {
   totalCostMicros?: number;
 }
 
-export const MODES: { id: AgentMode; label: string; tone: "info" | "modePlan" | "brand" }[] = [
-  { id: "agent", label: "Agent", tone: "info" },
-  { id: "plan", label: "Plan", tone: "modePlan" },
-  { id: "ask", label: "Ask", tone: "brand" },
+export const MODES: { id: AgentMode; label: string }[] = [
+  { id: "agent", label: "Agent" },
+  { id: "plan", label: "Plan" },
+  { id: "ask", label: "Ask" },
 ];

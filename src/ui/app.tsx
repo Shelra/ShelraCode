@@ -49,7 +49,6 @@ import {
   getApiKey,
   getTelegramBotToken,
   isReservedSubagentName,
-  loadAppearancePreference,
   loadMcpServers,
   loadMotionPreference,
   loadPaymentSettings,
@@ -145,15 +144,7 @@ import {
   replaceTurnEntries,
 } from "./telegram-turn-ui";
 import { getCompactTuiSelectionText } from "./terminal-selection-text";
-import {
-  type MotionPreference,
-  reducedMotionEnabled,
-  resolveTheme,
-  scrollbarStyle,
-  type TerminalThemeMode,
-  type Theme,
-  type ThemePreference,
-} from "./theme";
+import { type MotionPreference, reducedMotionEnabled, resolveTheme, scrollbarStyle, type Theme } from "./theme";
 import {
   ActivityLine,
   ErrorBlock,
@@ -165,26 +156,7 @@ import {
   TurnSummaryLine,
 } from "./transcript";
 
-const THEME_OPTIONS: ThemePreference[] = ["system", "dark", "light"];
 const MOTION_OPTIONS: MotionPreference[] = ["full", "reduced"];
-
-function modeAccent(t: Theme, _mode: (typeof MODES)[number]): string {
-  return t.brand;
-}
-
-function resolvedEntryModeColor(t: Theme, storedColor: string | undefined, fallback: string): string {
-  switch (storedColor?.toLowerCase()) {
-    case "brand":
-    case "#22c55e":
-    case "info":
-    case "#5c9cf5":
-    case "warning":
-    case "#e5c07b":
-      return t.brand;
-    default:
-      return storedColor || fallback;
-  }
-}
 
 type ContextStats = {
   contextWindow: number;
@@ -628,7 +600,6 @@ interface AppProps {
 interface ActiveTurnState {
   kind: "local" | "telegram";
   agent: Agent;
-  modeColor?: string;
   remoteKey?: string;
   sourceLabel?: string;
   userId?: number;
@@ -638,19 +609,9 @@ interface ActiveTurnState {
 
 export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) {
   const renderer = useRenderer();
-  const [themePreference, setThemePreference] = useState<ThemePreference>(() => loadAppearancePreference());
   const [motionPreference, setMotionPreference] = useState<MotionPreference>(() => loadMotionPreference());
-  const [systemTheme, setSystemTheme] = useState<TerminalThemeMode>(() => renderer.themeMode ?? "dark");
-  const t = resolveTheme(themePreference, systemTheme);
+  const t = resolveTheme();
   const reducedMotion = reducedMotionEnabled(motionPreference, process.env);
-
-  useEffect(() => {
-    const onThemeMode = (next: "dark" | "light") => setSystemTheme(next);
-    renderer.on("theme_mode", onThemeMode);
-    return () => {
-      renderer.off("theme_mode", onThemeMode);
-    };
-  }, [renderer]);
   const initialHasApiKey = agent.hasApiKey();
   const [hasApiKey, setHasApiKey] = useState(initialHasApiKey);
   const [messages, setMessages] = useState<ChatEntry[]>(() => agent.getChatEntries());
@@ -675,8 +636,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [sandboxSettingsEditBuffer, setSandboxSettingsEditBuffer] = useState("");
   const [showRecapPicker, setShowRecapPicker] = useState(false);
   const [recapsEnabled, setRecapsEnabledState] = useState(() => agent.getRecapsEnabled());
-  const [showThemePicker, setShowThemePicker] = useState(false);
-  const [themePickerIndex, setThemePickerIndex] = useState(0);
+  const [showMotionPicker, setShowMotionPicker] = useState(false);
   const [showEffortPicker, setShowEffortPicker] = useState(false);
   const [reasoningEffort, setReasoningEffortState] = useState<ReasoningEffort | null>(() => agent.getReasoningEffort());
   const [showWalletPicker, setShowWalletPicker] = useState(false);
@@ -804,7 +764,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const queuedMessagesRef = useRef<QueuedMessage[]>([]);
   const processMessageRef = useRef<(text: string, displayText?: string) => Promise<void> | void>(() => {});
   const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
-  const modeInfoRef = useRef<(typeof MODES)[number]>(MODES[0]);
   const activeRunIdRef = useRef(0);
   const interruptedRunIdRef = useRef<number | null>(null);
   const activeTurnRef = useRef<ActiveTurnState | null>(null);
@@ -943,7 +902,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   }, [mode, setMode]);
 
   const modeInfo = MODES.find((m) => m.id === mode)!;
-  modeInfoRef.current = modeInfo;
   const modelInfo = agent.getModelInfo() ?? getModelInfo(model);
   const contextStats = modelInfo ? agent.getContextStats(modelInfo.contextWindow, streamContent) : null;
   const memoryVersion = activityEvents.reduce((count, event) => (event.kind === "memory" ? count + 1 : count), 0);
@@ -1065,21 +1023,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setShowRecapPicker(true);
   }, []);
 
-  const applyThemePreference = useCallback((preference: ThemePreference) => {
-    setThemePreference(preference);
-    saveUserSettings({ appearance: preference });
-  }, []);
-
   const applyMotionPreference = useCallback((preference: MotionPreference) => {
     setMotionPreference(preference);
     saveUserSettings({ motion: preference });
   }, []);
 
-  const openThemePicker = useCallback(() => {
-    setThemePickerIndex(1);
+  const openMotionPicker = useCallback(() => {
     setShowSlashMenu(false);
     setSlashSearchQuery("");
-    setShowThemePicker(true);
+    setShowMotionPicker(true);
   }, []);
 
   const applyReasoningEffort = useCallback(
@@ -1809,7 +1761,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setMessages((prev) => [
       ...prev,
       buildAssistantEntry(cleaned, {
-        modeColor: activeTurn.modeColor,
         remoteKey: activeTurn.remoteKey,
         sourceLabel: activeTurn.sourceLabel,
       }),
@@ -1862,7 +1813,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       setMessages((prev) => [
         ...prev,
         buildToolResultEntry(toolCall, toolResult, {
-          modeColor: activeTurn.modeColor,
           remoteKey: activeTurn.remoteKey,
           sourceLabel: activeTurn.sourceLabel,
         }),
@@ -1907,7 +1857,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         setMessages((prev) => [
           ...prev,
           buildAssistantEntry(finalContent, {
-            modeColor: activeTurn.modeColor,
             remoteKey: activeTurn.remoteKey,
             sourceLabel: activeTurn.sourceLabel,
           }),
@@ -1952,9 +1901,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setIsProcessing(true);
 
     await coordinatorRef.current.run(async () => {
-      const color = modeInfoRef.current.tone;
-      beginLiveTurn({ kind: "local", agent, modeColor: color });
-      setMessages((prev) => [...prev, buildUserEntry("/verify", { modeColor: color })]);
+      beginLiveTurn({ kind: "local", agent });
+      setMessages((prev) => [...prev, buildUserEntry("/verify")]);
       setTimeout(scrollToBottom, 50);
       recordActivity({
         id: `verification:${runId}`,
@@ -2591,9 +2539,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           .then(setSessionTitle)
           .catch(() => {});
       await coordinatorRef.current.run(async () => {
-        const color = modeInfoRef.current.tone;
-        beginLiveTurn({ kind: "local", agent, modeColor: color });
-        setMessages((prev) => [...prev, buildUserEntry((displayText ?? text).trim(), { modeColor: color })]);
+        beginLiveTurn({ kind: "local", agent });
+        setMessages((prev) => [...prev, buildUserEntry((displayText ?? text).trim())]);
         setTimeout(scrollToBottom, 50);
         await new Promise((r) => setTimeout(r, 0));
         let turnHadError = false;
@@ -2840,7 +2787,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         return true;
       }
       if (c === "/theme" || c === "/appearance") {
-        openThemePicker();
+        openMotionPicker();
         return true;
       }
       if (c === "/effort" || c === "/reasoning") {
@@ -2947,7 +2894,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       openMcpModal,
       openRecapPicker,
       openSandboxPicker,
-      openThemePicker,
+      openMotionPicker,
       openWalletPicker,
       openScheduleModal,
       processMessage,
@@ -2977,7 +2924,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           openRecapPicker();
           break;
         case "theme":
-          openThemePicker();
+          openMotionPicker();
           break;
         case "effort":
           openEffortPicker();
@@ -3059,7 +3006,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       openMcpModal,
       openRecapPicker,
       openSandboxPicker,
-      openThemePicker,
+      openMotionPicker,
       openWalletPicker,
       openScheduleModal,
       processMessage,
@@ -3079,7 +3026,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     showMcpModal ||
     showSandboxPicker ||
     showRecapPicker ||
-    showThemePicker ||
+    showMotionPicker ||
     showEffortPicker ||
     showWalletPicker ||
     !!pendingPaymentApproval ||
@@ -3769,35 +3716,21 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
         return;
       }
-      if (showThemePicker) {
+      if (showMotionPicker) {
         if (isEscapeKey(key)) {
-          setShowThemePicker(false);
+          setShowMotionPicker(false);
           return;
         }
-        if (key.name === "up") {
-          setThemePickerIndex((index) => Math.max(1, index - 1));
-          return;
-        }
-        if (key.name === "down") {
-          setThemePickerIndex((index) => Math.min(1, index + 1));
-          return;
-        }
-
-        const options: readonly string[] = themePickerIndex === 0 ? THEME_OPTIONS : MOTION_OPTIONS;
-        const current = themePickerIndex === 0 ? themePreference : motionPreference;
         if (key.name === "left" || key.name === "right" || key.name === "return") {
-          const currentIndex = options.indexOf(current);
+          const currentIndex = MOTION_OPTIONS.indexOf(motionPreference);
           const nextIndex =
             key.name === "left"
               ? Math.max(0, currentIndex - 1)
               : key.name === "right"
-                ? Math.min(options.length - 1, currentIndex + 1)
-                : (currentIndex + 1) % options.length;
-          const next = options[nextIndex];
-          if (next && next !== current) {
-            if (themePickerIndex === 0) applyThemePreference(next as ThemePreference);
-            else applyMotionPreference(next as MotionPreference);
-          }
+                ? Math.min(MOTION_OPTIONS.length - 1, currentIndex + 1)
+                : (currentIndex + 1) % MOTION_OPTIONS.length;
+          const next = MOTION_OPTIONS[nextIndex];
+          if (next && next !== motionPreference) applyMotionPreference(next);
           return;
         }
         return;
@@ -4164,7 +4097,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       applyReasoningEffort,
       applySandboxMode,
       applySandboxSettings,
-      applyThemePreference,
       applyMotionPreference,
       model,
       motionPreference,
@@ -4180,7 +4112,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       showPlanPanel,
       showRecapPicker,
       showSandboxPicker,
-      showThemePicker,
+      showMotionPicker,
       pendingPaymentApproval,
       processMessage,
       showWalletPicker,
@@ -4193,8 +4125,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       showInspector,
       submitApiKey,
       submitPlanAnswers,
-      themePickerIndex,
-      themePreference,
       copyTuiSelectionToHost,
       toggleSavedMcp,
       messages,
@@ -4465,7 +4395,6 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                         entry={item.entry}
                         index={item.sourceIndex}
                         t={t}
-                        modeColor={modeAccent(t, modeInfo)}
                         expandedMessages={expandedMessages}
                         paced={item.sourceIndex === lastAnswerIndex}
                         reducedMotion={reducedMotion}
@@ -4862,16 +4791,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         />
       )}
       {showRecapPicker && <RecapPickerModal t={t} enabled={recapsEnabled} width={width} height={height} />}
-      {showThemePicker && (
-        <ThemePickerModal
-          t={t}
-          appearance={themePreference}
-          motion={motionPreference}
-          focusIndex={themePickerIndex}
-          width={width}
-          height={height}
-        />
-      )}
+      {showMotionPicker && <MotionPickerModal t={t} motion={motionPreference} width={width} height={height} />}
       {showEffortPicker && (
         <EffortPickerModal t={t} modelId={model} effort={reasoningEffort} width={width} height={height} />
       )}
@@ -4969,7 +4889,7 @@ function SessionHeader({
     <box flexShrink={0} width="100%">
       <box flexDirection="row" width="100%" paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2}>
         <text>
-          <span style={{ fg: modeAccent(t, modeInfo) }}>{`[ ${modeInfo.label.toUpperCase()} ]`}</span>
+          <span style={{ fg: t.brand }}>{`[ ${modeInfo.label.toUpperCase()} ]`}</span>
           {title ? (
             <>
               <span>{"  "}</span>
@@ -5178,7 +5098,7 @@ function PromptBox({
   );
 }
 
-function HintText({ t, hints, alertFirst }: { t: Theme; hints: readonly Hint[]; alertFirst?: boolean }) {
+function HintText({ t, hints }: { t: Theme; hints: readonly Hint[] }) {
   return (
     <text wrapMode="none">
       {hints.map((hint, index) => (
@@ -5247,7 +5167,7 @@ function ComposerFooter({
           {notice.length > room && room > 8 ? `${notice.slice(0, room - 1)}…` : notice}
         </text>
       ) : (
-        <HintText t={t} hints={hints} alertFirst={isProcessing} />
+        <HintText t={t} hints={hints} />
       )}
     </box>
   );
@@ -5264,18 +5184,14 @@ function PromptModeLabel({
 }) {
   if (!isProcessing) {
     return (
-      <text fg={modeAccent(t, modeInfo)}>
+      <text fg={t.brand}>
         <b>{modeInfo.label}</b>
       </text>
     );
   }
 
-  return <PromptLoadingBoxes color={modeAccent(t, modeInfo)} />;
-}
-
-function PromptLoadingBoxes({ color }: { color: string }) {
-  // A flat, static marker: the mode label stays useful to screen readers and reduced-motion users.
-  return <text fg={color}>{"●"}</text>;
+  // While a turn runs, a static dot stands in for the label; the activity line carries the motion.
+  return <text fg={t.brand}>{"●"}</text>;
 }
 
 function CopyFlashBanner({ t, width }: { t: Theme; width: number }) {
@@ -5460,11 +5376,10 @@ function PacedMarkdown({
   return <Markdown content={visible} t={t} streaming={streaming || visible.length < content.length} />;
 }
 
-function MessageView({
+export function MessageView({
   entry,
   index,
   t,
-  modeColor,
   expandedMessages,
   paced = false,
   reducedMotion = false,
@@ -5473,19 +5388,17 @@ function MessageView({
   entry: ChatEntry;
   index: number;
   t: Theme;
-  modeColor: string;
   expandedMessages?: Set<number>;
   /** The newest answer: it continues the reveal the streaming view started. */
   paced?: boolean;
   reducedMotion?: boolean;
   onReveal?: () => void;
 }) {
-  const entryColor = resolvedEntryModeColor(t, entry.modeColor, modeColor);
   switch (entry.type) {
     case "user":
       return (
         <box flexDirection="row" paddingLeft={1} marginTop={index === 0 ? 0 : 1} marginBottom={1}>
-          <text fg={entryColor}>
+          <text fg={t.brand}>
             <b>{"$ "}</b>
           </text>
           <box flexDirection="column" flexGrow={1}>
@@ -5518,7 +5431,7 @@ function MessageView({
       return (
         <box paddingLeft={3} marginTop={1}>
           <text>
-            <span style={{ fg: entryColor }}>{"▸ "}</span>
+            <span style={{ fg: t.brand }}>{"▸ "}</span>
             <span style={{ fg: t.textMuted }}>{entry.content.replace("▣  ", "")}</span>
           </text>
         </box>
@@ -6690,24 +6603,21 @@ function RecapPickerModal({
   );
 }
 
-function ThemePickerModal({
+export function MotionPickerModal({
   t,
-  appearance,
   motion,
-  focusIndex,
   width,
   height,
 }: {
   t: Theme;
   width: number;
-  appearance: ThemePreference;
   motion: MotionPreference;
-  focusIndex: number;
   height: number;
 }) {
   const panelHeight = Math.min(10, Math.floor(height * 0.6));
   const top = bottomAlignedModalTop(height, panelHeight);
-  const rows = [{ label: "Motion", value: motion === "reduced" ? "Reduced" : "Full" }];
+  // The dialog's only row, so it always holds the cursor.
+  const rows = [{ label: "Motion", value: motion === "reduced" ? "Reduced" : "Full", focused: true }];
 
   return (
     <box
@@ -6736,8 +6646,7 @@ function ThemePickerModal({
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexGrow={1} minHeight={0} flexDirection="column">
-          {rows.map((row, index) => {
-            const focused = focusIndex === index;
+          {rows.map(({ focused, ...row }) => {
             return (
               <box key={row.label} backgroundColor={focused ? t.brandSoft : undefined} paddingLeft={2} paddingRight={2}>
                 <box width="100%" flexDirection="row" justifyContent="space-between">
@@ -6752,7 +6661,7 @@ function ThemePickerModal({
           </box>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
-          <text fg={t.textMuted}>{"up/down select  left/right change  enter cycle  esc close"}</text>
+          <text fg={t.textMuted}>{"left/right change  enter cycle  esc close"}</text>
         </box>
       </box>
     </box>
@@ -6767,10 +6676,6 @@ function ToggleValue({ t, value, color }: { t: Theme; value: string; color: stri
   if (/^(on|enabled|true|yes)$/i.test(value)) return <text fg={t.brand}>{"──●"}</text>;
   if (/^(off|disabled|false|no)$/i.test(value)) return <text fg={t.brand}>{"○──"}</text>;
   return <text fg={color}>{`< ${value} >`}</text>;
-}
-
-function formatThemePreference(preference: ThemePreference): string {
-  return preference[0].toUpperCase() + preference.slice(1);
 }
 
 function EffortPickerModal({

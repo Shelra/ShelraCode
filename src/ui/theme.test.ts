@@ -88,8 +88,8 @@ describe("Shelra palette", () => {
     expect(colorModeFrom({ SHELRA_THEME: "256" })).toBe("256");
     expect(colorModeFrom({ SHELRA_THEME: "truecolor", TERM_PROGRAM: "Apple_Terminal" })).toBe("truecolor");
     expect(colorModeFrom({ TERM_PROGRAM: "Apple_Terminal" })).toBe("256");
-    expect(resolveTheme("light", "light", {})).toBe(dark);
-    expect(resolveTheme("system", null, { SHELRA_THEME: "256" })).toBe(dark256);
+    expect(resolveTheme({})).toBe(dark);
+    expect(resolveTheme({ SHELRA_THEME: "256" })).toBe(dark256);
   });
 
   it("honours the explicit reduced-motion preference and the terminal-safe environment override", () => {

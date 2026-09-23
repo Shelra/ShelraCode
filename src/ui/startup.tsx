@@ -1,15 +1,14 @@
 import type { MouseEvent } from "@opentui/core";
-import { useRenderer, useTerminalDimensions } from "@opentui/react";
-import { useEffect, useMemo, useState } from "react";
+import { useTerminalDimensions } from "@opentui/react";
+import { useMemo } from "react";
 import type { HardwareProfile } from "../hardware/profile";
 import { formatDownloadSize, formatDownloadSpeed } from "../models/huggingface";
 import type { ModelRecommendation } from "../models/recommendation";
 import { PRODUCT_NAME } from "../product/identity";
 import type { LocalRuntimeDiscovery } from "../runtimes/types";
 import type { StartupProgress } from "../startup/types";
-import { loadAppearancePreference } from "../utils/settings";
 import { SectionBadge } from "./components/badge";
-import { resolveTheme, type TerminalThemeMode, type Theme } from "./theme";
+import { resolveTheme, type Theme } from "./theme";
 
 interface StartupScreenProps {
   progress: StartupProgress;
@@ -93,21 +92,6 @@ function ProgressBar({ t, progress }: { t: Theme; progress: StartupProgress }) {
   );
 }
 
-function useStartupTheme(): Theme {
-  const renderer = useRenderer();
-  const [systemTheme, setSystemTheme] = useState<TerminalThemeMode>(() => renderer.themeMode ?? "dark");
-
-  useEffect(() => {
-    const onThemeMode = (next: "dark" | "light") => setSystemTheme(next);
-    renderer.on("theme_mode", onThemeMode);
-    return () => {
-      renderer.off("theme_mode", onThemeMode);
-    };
-  }, [renderer]);
-
-  return resolveTheme(loadAppearancePreference(), systemTheme);
-}
-
 export function StartupScreen({
   progress,
   hardware,
@@ -121,7 +105,7 @@ export function StartupScreen({
   canBootstrapRuntime = false,
 }: StartupScreenProps) {
   const { width, height } = useTerminalDimensions();
-  const t = useStartupTheme();
+  const t = resolveTheme();
   const gpu = useMemo(() => {
     const gpu = hardware.gpu?.[0];
     if (!gpu && ["booting", "detecting-runtime", "detecting-hardware"].includes(progress.state)) {
@@ -268,7 +252,7 @@ export function CloudStartupScreen({
   onExit: () => void;
 }) {
   const { width, height } = useTerminalDimensions();
-  const t = useStartupTheme();
+  const t = resolveTheme();
   const failed = progress.state === "recoverable-error" || progress.state === "fatal-error";
   const panelWidth = Math.min(92, Math.max(58, width - 6));
   const panelHeight = Math.min(Math.max(16, height - 5), 24);
