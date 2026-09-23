@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { DECISION_SOURCES, type Decision, type DecisionProposal, type DecisionStatus } from "./types";
 
@@ -60,16 +60,83 @@ export function formatDecision(decision: Decision): string {
   return lines.join("\n");
 }
 
-function parseValue(raw: string): unknown {
+/** A YAML scalar as people write it: "double" (JSON), 'single' ('' is a quote) or plain (a # comment dropped). */
+function parseScalar(raw: string): string {
   const value = raw.trim();
-  if (value.startsWith('"') || value.startsWith("[")) {
+  if (value.startsWith('"')) {
     try {
-      return JSON.parse(value);
+      const parsed: unknown = JSON.parse(value);
+      if (typeof parsed === "string") return parsed;
     } catch {
-      return undefined;
+      // Not JSON: kept as written.
+    }
+    return value;
+  }
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replaceAll("''", "'");
+  }
+  return value.replace(/\s+#.*$/u, "");
+}
+
+/** A flow list, JSON (`["a"]`, what the ledger writes) or YAML with plain items (`[a, 'b']`). */
+function parseFlowList(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string");
+  } catch {
+    // YAML's own flow form.
+  }
+  const items: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quote: string | undefined;
+  // Commas inside quotes and inside {a,b} alternatives belong to the item.
+  for (const char of raw.slice(1, raw.lastIndexOf("]"))) {
+    if (quote) {
+      if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth = Math.max(0, depth - 1);
+    } else if (char === "," && depth === 0) {
+      items.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  items.push(current);
+  return items.map(parseScalar).filter(Boolean);
+}
+
+/** The front matter's top-level fields: scalars, flow lists and block lists (`key:` then `- item` lines). */
+function frontMatterFields(block: string): Record<string, string | string[]> {
+  const fields: Record<string, string | string[]> = {};
+  const lines = block.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (/^\s|^#/u.test(line)) continue;
+    const colon = line.indexOf(":");
+    if (colon <= 0) continue;
+    const key = line.slice(0, colon).trim();
+    const value = line.slice(colon + 1).trim();
+    if (value.startsWith("[")) {
+      fields[key] = parseFlowList(value);
+    } else if (value === "") {
+      const items: string[] = [];
+      while (/^\s*-(?:\s|$)/u.test(lines[index + 1] ?? "")) {
+        index += 1;
+        const item = parseScalar((lines[index] ?? "").replace(/^\s*-/u, ""));
+        if (item) items.push(item);
+      }
+      fields[key] = items;
+    } else {
+      fields[key] = parseScalar(value);
     }
   }
-  return value;
+  return fields;
 }
 
 function section(body: string, heading: string): string | undefined {
@@ -83,12 +150,7 @@ export function parseDecision(raw: string, file: string): Decision | null {
   const text = raw.replaceAll("\r\n", "\n");
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/u.exec(text);
   if (!match) return null;
-  const fields: Record<string, unknown> = {};
-  for (const line of (match[1] ?? "").split("\n")) {
-    const colon = line.indexOf(":");
-    if (colon <= 0) continue;
-    fields[line.slice(0, colon).trim()] = parseValue(line.slice(colon + 1));
-  }
+  const fields = frontMatterFields(match[1] ?? "");
   const id = fields.id;
   const status = fields.status;
   const source = fields.source;
@@ -98,11 +160,11 @@ export function parseDecision(raw: string, file: string): Decision | null {
   const body = match[2] ?? "";
   const rule = body.split(/\n## /u)[0]?.trim() ?? "";
   if (typeof fields.title !== "string" || !rule) return null;
-  const scope = Array.isArray(fields.scope)
-    ? fields.scope.filter((item): item is string => typeof item === "string")
-    : [];
-  const optional = (key: string) =>
-    typeof fields[key] === "string" && fields[key] ? (fields[key] as string) : undefined;
+  const scope = Array.isArray(fields.scope) ? fields.scope : [];
+  const optional = (key: string) => {
+    const value = fields[key];
+    return typeof value === "string" && value ? value : undefined;
+  };
   const why = section(body, "Why");
   const evidence = section(body, "Evidence");
   const check = optional("check");
@@ -231,10 +293,31 @@ export function proposeDecision(workspace: string, proposal: DecisionProposal, n
   return { ok: true, decision };
 }
 
-function setStatus(workspace: string, decision: Decision, status: DecisionStatus, extra: Partial<Decision>): Decision {
-  const updated = { ...decision, ...extra, status };
-  saveDecision(workspace, updated);
-  return updated;
+/**
+ * Changes a decision's status by editing its front matter lines in the file as written, so nothing else a
+ * person put in it (other keys, comments, sections beyond Why and Evidence, line endings) is lost.
+ */
+function setStatus(
+  workspace: string,
+  decision: Decision,
+  status: DecisionStatus,
+  fields: Record<string, string>,
+): Decision {
+  const path = join(workspace, decision.file);
+  const raw = readFileSync(path, "utf8");
+  const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+  const text = raw.replaceAll("\r\n", "\n");
+  const match = /^---\n([\s\S]*?)\n---(?=\n|$)/u.exec(text);
+  if (!match) return decision;
+  const lines = (match[1] ?? "").split("\n");
+  for (const [key, value] of Object.entries({ status, ...fields })) {
+    const at = lines.findIndex((line) => line.startsWith(`${key}:`));
+    if (at >= 0) lines[at] = `${key}: ${value}`;
+    else lines.push(`${key}: ${value}`);
+  }
+  const updated = ["---", ...lines, "---"].join("\n") + text.slice(match[0].length);
+  writeAtomic(path, updated.replaceAll("\n", eol));
+  return parseDecision(updated, basename(decision.file)) ?? { ...decision, status };
 }
 
 /** The user's yes: a proposal becomes an active commitment, and the decision it supersedes steps down. */
@@ -245,7 +328,7 @@ export function approveDecision(workspace: string, id: string, now = new Date())
     return { ok: false, reason: `${decision.id} is ${decision.status}, not a proposal.` };
   if (decision.supersedes) {
     const replaced = findDecision(workspace, decision.supersedes);
-    if (replaced?.status === "active") setStatus(workspace, replaced, "superseded", { supersededBy: decision.id });
+    if (replaced?.status === "active") setStatus(workspace, replaced, "superseded", { superseded_by: decision.id });
   }
   return { ok: true, decision: setStatus(workspace, decision, "active", { approved: today(now) }) };
 }

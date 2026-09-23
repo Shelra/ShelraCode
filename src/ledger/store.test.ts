@@ -105,4 +105,66 @@ describe("decision ledger", () => {
     writeFileSync(join(workspace, LEDGER_DIR, "README.md"), "Decisions of this project.\n");
     expect(listDecisions(workspace).map((decision) => decision.id)).toEqual(["D-0001"]);
   });
+
+  it("reads the YAML a person writes by hand, and approving it changes only its status", () => {
+    const handWritten = [
+      "---",
+      "id: D-0001",
+      "title: 'Money is integer cents'",
+      "status: proposed",
+      "source: user",
+      "owner: billing",
+      "scope:",
+      "  - src/billing/**",
+      "  - 'src/**/*.{ts,tsx}'",
+      "check: bun test src/billing  # the billing suite",
+      "proposed: 2026-09-20",
+      "---",
+      "",
+      "Store and compute money as integer cents, never floats.",
+      "",
+      "## Why",
+      "",
+      "Float rounding lost a cent on invoices.",
+      "",
+      "## Alternatives considered",
+      "",
+      "Decimal strings, slower to sum.",
+      "",
+    ].join("\r\n");
+    mkdirSync(join(workspace, LEDGER_DIR), { recursive: true });
+    const path = join(workspace, LEDGER_DIR, "0001-money.md");
+    writeFileSync(path, handWritten);
+    const expected = {
+      title: "Money is integer cents",
+      scope: ["src/billing/**", "src/**/*.{ts,tsx}"],
+      check: "bun test src/billing",
+      why: "Float rounding lost a cent on invoices.",
+    };
+    expect(listDecisions(workspace)).toMatchObject([{ ...expected, status: "proposed" }]);
+
+    expect(approveDecision(workspace, "D-0001", day)).toMatchObject({
+      ok: true,
+      decision: { ...expected, status: "active", approved: "2026-09-23" },
+    });
+    expect(readFileSync(path, "utf8")).toBe(
+      handWritten
+        .replace("status: proposed", "status: active")
+        .replace("proposed: 2026-09-20\r\n", "proposed: 2026-09-20\r\napproved: 2026-09-23\r\n"),
+    );
+  });
+
+  it("reads a flow list with plain items, keeping {a,b} alternatives whole", () => {
+    const text = [
+      "---",
+      "id: D-0002",
+      "title: Dates are UTC",
+      "status: active",
+      "source: user",
+      "scope: [src/**/*.{ts,tsx}, 'docs/**']",
+      "---",
+      "Dates are stored in UTC.",
+    ].join("\n");
+    expect(parseDecision(text, "0002-dates.md")).toMatchObject({ scope: ["src/**/*.{ts,tsx}", "docs/**"] });
+  });
 });
