@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+  ███████╗ ██╗  ██╗ ███████╗ ██╗      ██████╗   █████╗       ██████╗  ██████╗  ██████╗  ███████╗                        
+  ██╔════╝ ██║  ██║ ██╔════╝ ██║      ██╔══██╗ ██╔══██╗     ██╔════╝ ██╔═══██╗ ██╔══██╗ ██╔════╝                        
+  ███████╗ ███████║ █████╗   ██║      ██████╔╝ ███████║     ██║      ██║   ██║ ██║  ██║ █████╗                          
+  ╚════██║ ██╔══██║ ██╔══╝   ██║      ██╔══██╗ ██╔══██║     ██║      ██║   ██║ ██║  ██║ ██╔══╝                          
+  ███████║ ██║  ██║ ███████╗ ███████╗ ██║  ██║ ██║  ██║     ╚██████╗ ╚██████╔╝ ██████╔╝ ███████╗                        
+  ╚══════╝ ╚═╝  ╚═╝ ╚══════╝ ╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝      ╚═════╝  ╚═════╝  ╚═════╝  ╚══════╝                        
+                                                                                                                        
+                              Commands                                                 esc                              
+  [ PROJECT ]                                                                                                           
+  acme-api  ~\projects        Search...                                                                                 
+                                                                                                                        
+  [ KNOWS ]                   /models          Choose a model                              █                            
+  3 memories  ·  1 skill  ·   /plan            The plan and what is left                   █                            
+                              /diff            Files changed in this session               █                            
+                              /checks          Tests, types and lint results               █                            
+                              /context         What is loaded and how full it is           █                            
+                              /status          Plan, activity and evidence                 █                            
+                              /help            Shortcuts and commands                      █                            
+                              /verify          Run local verification                      █                            
+                              /review          Review recent changes                       █                            
+                              /memory          What Shelra knows about this project                                     
+                              /skills          Skills available to Shelra                                               
+                              /agents          Custom sub-agents                                                        
+                              /tasks           Background and delegated agents                                          
+                              /effort          Reasoning effort                                                         
+                              /new session     Start a new session                                                      
+                              /commit & push   Commit and push                                                          
+                              /commit & pr     Commit and open a PR                                                     
+                              /btw             Ask a side question                                                      
+                                                                                                                        
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │                                                                                                                  │  
+  │  Agent  /                                                                                                        │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left         ? shortcuts · ctrl+o details · tab mode · @ files · shift+enter new line  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                v1.1.7  
+                                                                                                                        

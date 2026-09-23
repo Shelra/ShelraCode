@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+  █    █░░█ █    █░░░ █  █ █  █ ░░░ █    █  █ █  █ █                            
+   ██░                                                                          
+  ░  █  Add API key                                                  esc        
+  ███                                                                           
+     ░  Paste a compatible provider API key. You can hide this prompt           
+  ░░░░  with esc.                                                               
+                                                                                
+  [ PR   provider key...                                                        
+  acme                                                                          
+                                                                                
+  [ KN                                                                          
+  3 me  enter save key  ·  esc hide                                             
+  ╭───                                                                    ───╮  
+  │                                                                          │  
+  │  Agent  What are we building?                                            │  
+  │                                                                          │  
+  │  qwen/qwen3-coder:free          ? shortcuts · ctrl+o details · tab mode  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                

@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+   ╭────────────────────────────────────────────────────────────────────────╮   
+   │                                                                        │   
+   │   Ahlocalocoding environment that prepares itself PRIVATE BY DEFAULT   │   
+   │                                                                        │   
+   │   STARTUP CHECKLIST        Noelocal modelpisvinstalledgyet.sion        │   
+   │                                                                        │   
+   │   [ok] Hardware                                                        │   
+   │   [  ] Local engine          VRAMI4.0eGBrc| G32.06GB RAM               │   
+   │   [..] Model                 0 local models detected                   │   
+   │   [  ] Readiness                                                       │   
+   │                                                                        │   
+   │                            │  Qwen2.5NCoderO1.5BU                      │   
+   │                            │  Fits the 4 GB GPU with room for the      │   
+   │                            │  Approx. 1.4dGB.memory                    │   
+   │                               Downloaded from Hugging Face             │   
+   │                                                                        │   
+   │   ╭─────────────────────────────╮ ╭────────────────╮ ╭─────────────╮   │   
+   │   │ [ Enter ] Install           │ │ [ r ] Scan again │ [ esc ]     │   │   
+   │   ╰─────────────────────────────╯ ╰────────────────╯ ╰─────────────╯   │   
+   │   No account, API key, or remote provider is required                  │   
+   ╰────────────────────────────────────────────────────────────────────────╯   
+                                                                                

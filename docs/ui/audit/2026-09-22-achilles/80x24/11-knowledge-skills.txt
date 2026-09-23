@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+                                                                                
+     What Shelra knows                                            esc close     
+                                                                                
+     1 Project memory 3   2 Skills 1   3 Across projects 1                      
+                                                                                
+    ◆ release-notes  project                                                    
+      Drafts release notes from merged pull requests and git tags, grouped      
+    by change type.                                                             
+      ~\projects\acme-api\.agents\skills\release-notes                          
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+     ↑↓ move · ←→ tab                                                           
+                                                                                
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                

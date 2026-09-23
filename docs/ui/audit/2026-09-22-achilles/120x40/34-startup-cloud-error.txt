@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+              ╭──────────────────────────────────────────────────────────────────────────────────────────╮              
+              │                                                                                          │              
+              │   ShelraCode                                                               CLOUD FIRST   │              
+              │   OpenRouter Free is the primary model route.                                            │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │   Remote model setup needs attention                                                     │              
+              │   OpenRouter returned no usable models. Try again with network access.                   │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │                                                                                          │              
+              │   OpenRouter returned no usable models. Try again with network access.                   │              
+              │                                                                                          │              
+              │   ╭─────────────╮ ╭──────────────╮                                                       │              
+              │   │ [ r ] Retry │ │ [ esc ] Exit │                                                       │              
+              │   ╰─────────────╯ ╰──────────────╯                                                       │              
+              │                                                                                          │              
+              │   Use --local only for explicit offline/private local inference.                         │              
+              ╰──────────────────────────────────────────────────────────────────────────────────────────╯              
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

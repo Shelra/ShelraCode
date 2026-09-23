@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+  █    █░░█ █    █░░░ █  █ █  █ ░░░ █    █  █ █  █ █                            
+   ██░ █                                                                        
+  ░  █ █  Commands                                                 esc          
+  ███  █                                                                        
+     ░    Search...                                                             
+  ░░░░ ░                                                                        
+          /models          Choose a model                              ▀        
+  [ PROJ  /plan            The plan and what is left                            
+  acme-a  /diff            Files changed in this session                        
+          /checks          Tests, types and lint results                        
+  [ KNOW  /context         What is loaded and how full it is                    
+  3 memo  /status          Plan, activity and evidence                          
+  ╭─────  /help            Shortcuts and commands                       ─────╮  
+  │       /verify          Run local verification                            │  
+  │  Age                                                                     │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                

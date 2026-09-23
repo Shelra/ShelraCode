@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+   ╭────────────────────────────────────────────────────────────────────────╮   
+   │                                                                        │   
+   │  Session control surface                       no session | esc close  │   
+   │                                                                        │   
+   │  Agent | qwen/qwen3-coder:free | ~\projects\acme-api                   │   
+   │                                                                        │   
+   │   1 Overview   2 Plan   3 Activity   4 Evidence   5 Agents             │   
+   │                                                                        │   
+   │                                                                       ▀│   
+   │  What Shelra is doing                                                  │   
+   │                                                                        │   
+   │  State:Paused: Observing result | Last runtime state; not currently    │▄  
+   │        running                                                         │   
+  ╭│  Current activity: Paused: Observing result                            │╮  
+  ││                                                                        ││  
+  ││  Intent                                                                ││  
+  ││                                                                        ││  
+  ││  1-5 switch view | tab/shift-tab move | esc close                      ││  
+  ╰│                                                                        │╯  
+   ╰────────────────────────────────────────────────────────────────────────╯   
+  ~\projects\acme-api                                                           
+                                                                                

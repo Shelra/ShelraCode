@@ -333,10 +333,54 @@ const RICH: DemoTurn[] = [
   ],
 ];
 
+/** The parent delegates to the explore sub-agent; the child's stream plays the second turn. */
+const SUBAGENT: DemoTurn[] = [
+  [
+    [
+      { say: "I'll send an explorer to map where sessions are stored while I check the tests." },
+      {
+        call: "task",
+        input: {
+          agent: "explore",
+          description: "Map session storage",
+          prompt: "Find where sessions are created, stored and refreshed. Report the file paths.",
+        },
+        ms: 300,
+      },
+    ],
+    [
+      {
+        say: "Sessions are created and refreshed in `src/auth.ts` and kept in the in-memory `Map` in `src/session-store.ts`, so a restart drops every session.",
+      },
+    ],
+  ],
+  [
+    [
+      { think: "Search for where sessions are created and stored, then read the store. " },
+      { call: "grep", input: { pattern: "Session|sessions", include: "*.ts" }, ms: 900 },
+      { call: "read_file", input: { path: "src/session-store.ts" }, ms: 900 },
+      { wait: 4000 },
+    ],
+    [{ say: "Created in src/auth.ts, stored in a Map in src/session-store.ts, refreshed by refreshSession." }],
+  ],
+];
+
+/** A paid API call waits for the user's approval in the payment dialog. */
+const PAYMENT: DemoTurn[] = [
+  [
+    [
+      { say: "The usage report API charges per request, so it needs your approval first." },
+      { approve: "paid_request", input: { url: "https://reports.example.invalid/v1/usage", method: "GET" } },
+    ],
+  ],
+];
+
 export const SCENARIOS: Record<string, DemoTurn[]> = {
   "fix-auth": [FIX_AUTH_TURN_1, FIX_AUTH_TURN_2],
   errors: ERRORS,
   markdown: MARKDOWN,
   rich: RICH,
   "plan-questions": PLAN_QUESTIONS,
+  subagent: SUBAGENT,
+  payment: PAYMENT,
 };

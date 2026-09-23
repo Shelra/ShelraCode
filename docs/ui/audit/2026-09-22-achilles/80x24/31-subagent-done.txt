@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+                                                                                
+     [ SHELRA ]                                                                 
+     I'll send an explorer to map where sessions are stored while I check the   
+     tests.                                                                     
+                                                                             █  
+     ✓ explore finished Map session storage                              7.6s█  
+                                                                             █  
+     [ SHELRA ]                                                              █  
+     Sessions are created and refreshed in src/auth.ts and kept in the in-   █  
+     memory Map in src/session-store.ts, so a restart drops every session.   █  
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

@@ -1,0 +1,40 @@
+                                                                                                                        
+  Agent  ·  Fix token refresh tests                                                                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+  [ CONTEXT ]                                                                                                      1%   
+  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                                                              
+  2K of 262K tokens                                                                                                     
+  package.json, AGENTS.md, auth.ts, index.ts, session-store.ts, auth.test.ts                                            
+                                                                                                                        
+  [ LOADED ]                                                                                                            
+  Rules   AGENTS.md                                                                                                     
+  Skills  release-notes                                                                                                 
+  Agents  6 built in                                                                                                    
+  Memory  4 saved · 3 recalled this turn                                                                                
+                                                                                                                        
+  [ SESSION ]                                                                                                           
+  qwen/qwen3-coder:free · Agent                                                                                         
+  46s                                                                                                                   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left          esc back to the log · ? shortcuts · ctrl+o details · tab mode · @ files  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

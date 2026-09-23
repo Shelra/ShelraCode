@@ -1,0 +1,3156 @@
+{
+  "method": "cells captured from the real app (scripts/ui-demo) through ConPTY and xterm.js; colours compared with the brief's palette, non-ASCII characters with its glyph set",
+  "offPaletteColours": {
+    "#010101": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 0,
+      "bgCells": 62312,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/03-help",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/10-knowledge-memory",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/26-status-inspector",
+        "80x24/33-api-key"
+      ]
+    },
+    "#050505": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 0,
+      "bgCells": 9456,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/33-api-key"
+      ]
+    },
+    "#2c2c2c": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 8822,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/26-status-inspector",
+        "80x24/33-api-key"
+      ]
+    },
+    "#060606": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 5116,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/26-status-inspector",
+        "80x24/33-api-key"
+      ]
+    },
+    "#222222": {
+      "darkTokens": ["border", "mdHr"],
+      "lightTokens": [],
+      "fgCells": 3425,
+      "bgCells": 0,
+      "screens": [
+        "120x40/25-view-context",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "120x40/32-payment-approval",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-downloading",
+        "120x40/34-startup-local-onboarding",
+        "80x24/25-view-context",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/32-payment-approval",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-downloading",
+        "80x24/34-startup-local-onboarding"
+      ]
+    },
+    "#444444": {
+      "darkTokens": ["borderStrong"],
+      "lightTokens": [],
+      "fgCells": 2922,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/06-theme-picker",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/26-status-inspector",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "80x24/02-slash-menu",
+        "80x24/03-help",
+        "80x24/04-model-picker",
+        "80x24/06-theme-picker",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval"
+      ]
+    },
+    "#07301c": {
+      "darkTokens": ["brandSoft", "selectedBg"],
+      "lightTokens": [],
+      "fgCells": 0,
+      "bgCells": 2624,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/13-mcp",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/29-plan-questions",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/10-knowledge-memory",
+        "80x24/11-knowledge-skills",
+        "80x24/13-mcp",
+        "80x24/15-remote-control",
+        "80x24/26-status-inspector",
+        "80x24/29-plan-questions"
+      ]
+    },
+    "#5e5e5e": {
+      "darkTokens": ["textDim", "diffSeparatorFg"],
+      "lightTokens": [],
+      "fgCells": 2298,
+      "bgCells": 0,
+      "screens": [
+        "120x40/01-home",
+        "120x40/04-model-picker",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/26-status-inspector",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "120x40/31-subagent-done",
+        "120x40/32-payment-approval",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-downloading",
+        "120x40/34-startup-local-onboarding",
+        "80x24/01-home",
+        "80x24/04-model-picker",
+        "80x24/10-knowledge-memory",
+        "80x24/11-knowledge-skills",
+        "80x24/16-plan-empty-notice",
+        "80x24/17-composer-typed",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-downloading",
+        "80x24/34-startup-local-onboarding"
+      ]
+    },
+    "#e6e6e6": {
+      "darkTokens": [],
+      "lightTokens": ["surfaceRaised", "backgroundElement", "diffContext", "mdCodeBlockBg", "planInputBg"],
+      "fgCells": 0,
+      "bgCells": 2168,
+      "screens": ["120x40/35-light-home", "120x40/36-light-done", "80x24/35-light-home", "80x24/36-light-done"]
+    },
+    "#141414": {
+      "darkTokens": ["diffContext", "mdCodeBlockBg"],
+      "lightTokens": [],
+      "fgCells": 0,
+      "bgCells": 2136,
+      "screens": [
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/28-markdown-answer",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/28-markdown-answer"
+      ]
+    },
+    "#191919": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 1805,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/33-api-key"
+      ]
+    },
+    "#007a40": {
+      "darkTokens": [],
+      "lightTokens": [
+        "borderActive",
+        "composerFocusBorder",
+        "brand",
+        "accent",
+        "mdCode",
+        "planBorder",
+        "planStepNum",
+        "planOptionSelected"
+      ],
+      "fgCells": 960,
+      "bgCells": 0,
+      "screens": ["120x40/35-light-home", "120x40/36-light-done", "80x24/35-light-home", "80x24/36-light-done"]
+    },
+    "#b8b8b8": {
+      "darkTokens": ["textSecondary", "diffContextFg", "diffHeaderFg", "mdItalic", "planStepDesc", "planOptionDefault"],
+      "lightTokens": [],
+      "fgCells": 859,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/06-theme-picker",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/31-subagent-done",
+        "80x24/02-slash-menu",
+        "80x24/06-theme-picker",
+        "80x24/18-run-thinking",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/28-markdown-answer",
+        "80x24/31-subagent-done"
+      ]
+    },
+    "#ffb84d": {
+      "darkTokens": ["warning", "modePlan"],
+      "lightTokens": [],
+      "fgCells": 633,
+      "bgCells": 0,
+      "screens": [
+        "120x40/16-plan-empty-notice",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/32-payment-approval",
+        "80x24/16-plan-empty-notice",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/32-payment-approval"
+      ]
+    },
+    "#8cffc4": {
+      "darkTokens": ["diffAddedFg", "mdCode"],
+      "lightTokens": [],
+      "fgCells": 461,
+      "bgCells": 0,
+      "screens": [
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/23-view-diff",
+        "120x40/28-markdown-answer",
+        "120x40/31-subagent-done",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/23-view-diff",
+        "80x24/31-subagent-done"
+      ]
+    },
+    "#5cb8ff": {
+      "darkTokens": ["info", "mdLink", "planStepFile"],
+      "lightTokens": [],
+      "fgCells": 439,
+      "bgCells": 0,
+      "screens": [
+        "120x40/01-home",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/30-subagent-running",
+        "120x40/31-subagent-done",
+        "120x40/32-payment-approval",
+        "80x24/01-home",
+        "80x24/16-plan-empty-notice",
+        "80x24/17-composer-typed",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval"
+      ]
+    },
+    "#ff5c6c": {
+      "darkTokens": ["danger"],
+      "lightTokens": [],
+      "fgCells": 437,
+      "bgCells": 0,
+      "screens": [
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/27-errors",
+        "120x40/30-subagent-running",
+        "120x40/34-startup-cloud-error",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/27-errors",
+        "80x24/30-subagent-running",
+        "80x24/34-startup-cloud-error"
+      ]
+    },
+    "#5c5c5c": {
+      "darkTokens": [],
+      "lightTokens": ["textMuted", "diffLineNumber", "mdListBullet", "planHint"],
+      "fgCells": 363,
+      "bgCells": 0,
+      "screens": ["120x40/35-light-home", "120x40/36-light-done", "80x24/35-light-home", "80x24/36-light-done"]
+    },
+    "#e0e0e0": {
+      "darkTokens": ["mdCodeBlockFg"],
+      "lightTokens": [],
+      "fgCells": 302,
+      "bgCells": 0,
+      "screens": [
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/28-markdown-answer",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/28-markdown-answer"
+      ]
+    },
+    "#ffffff": {
+      "darkTokens": ["mdBold"],
+      "lightTokens": ["surface", "backgroundPanel", "diffHeader"],
+      "fgCells": 286,
+      "bgCells": 0,
+      "screens": [
+        "120x40/28-markdown-answer",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-onboarding",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-onboarding"
+      ]
+    },
+    "#002e19": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 265,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/12-agents",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/33-api-key"
+      ]
+    },
+    "#11212e": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 138,
+      "bgCells": 0,
+      "screens": [
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/26-status-inspector",
+        "120x40/33-api-key",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/12-agents",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/26-status-inspector",
+        "80x24/33-api-key"
+      ]
+    },
+    "#767676": {
+      "darkTokens": [],
+      "lightTokens": ["textDim", "disabled", "diffSeparatorFg"],
+      "fgCells": 102,
+      "bgCells": 0,
+      "screens": ["120x40/35-light-home", "120x40/36-light-done", "80x24/35-light-home", "80x24/36-light-done"]
+    },
+    "#1f1f1f": {
+      "darkTokens": [],
+      "lightTokens": ["mdCodeBlockFg"],
+      "fgCells": 88,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done", "80x24/36-light-done"]
+    },
+    "#8ac7ff": {
+      "darkTokens": ["subagentAccent"],
+      "lightTokens": [],
+      "fgCells": 82,
+      "bgCells": 0,
+      "screens": ["120x40/30-subagent-running", "80x24/30-subagent-running"]
+    },
+    "#3e3e3e": {
+      "darkTokens": [],
+      "lightTokens": [
+        "textSecondary",
+        "diffContextFg",
+        "diffHeaderFg",
+        "mdItalic",
+        "planStepDesc",
+        "planOptionDefault"
+      ],
+      "fgCells": 81,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done", "80x24/36-light-done"]
+    },
+    "#0b62c4": {
+      "darkTokens": [],
+      "lightTokens": ["info", "subagentAccent", "mdLink", "planStepFile"],
+      "fgCells": 56,
+      "bgCells": 0,
+      "screens": ["120x40/35-light-home", "120x40/36-light-done", "80x24/35-light-home", "80x24/36-light-done"]
+    },
+    "#040404": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 0,
+      "bgCells": 32,
+      "screens": ["120x40/26-status-inspector"]
+    },
+    "#ff9aa4": {
+      "darkTokens": ["diffRemovedFg"],
+      "lightTokens": [],
+      "fgCells": 12,
+      "bgCells": 0,
+      "screens": [
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/23-view-diff",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/23-view-diff"
+      ]
+    },
+    "#8a5a00": {
+      "darkTokens": [],
+      "lightTokens": ["warning", "modePlan"],
+      "fgCells": 11,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done"]
+    },
+    "#087a47": {
+      "darkTokens": [],
+      "lightTokens": ["success", "planOptionCheck"],
+      "fgCells": 6,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done", "80x24/36-light-done"]
+    },
+    "#192e24": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 5,
+      "bgCells": 0,
+      "screens": ["120x40/26-status-inspector"]
+    },
+    "#002614": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 4,
+      "bgCells": 0,
+      "screens": ["120x40/26-status-inspector"]
+    },
+    "#0b5a34": {
+      "darkTokens": [],
+      "lightTokens": ["diffAddedFg"],
+      "fgCells": 4,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done", "80x24/36-light-done"]
+    },
+    "#a01f2d": {
+      "darkTokens": [],
+      "lightTokens": ["diffRemovedFg"],
+      "fgCells": 4,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done", "80x24/36-light-done"]
+    },
+    "#0c0c0c": {
+      "darkTokens": ["surfaceMuted", "diffSeparator", "queueBg"],
+      "lightTokens": [],
+      "fgCells": 2,
+      "bgCells": 0,
+      "screens": ["120x40/26-status-inspector", "80x24/26-status-inspector"]
+    },
+    "#8a8a8a": {
+      "darkTokens": [],
+      "lightTokens": ["borderStrong"],
+      "fgCells": 2,
+      "bgCells": 0,
+      "screens": ["120x40/36-light-done", "80x24/36-light-done"]
+    },
+    "#292929": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 1,
+      "bgCells": 0,
+      "screens": ["120x40/26-status-inspector"]
+    },
+    "#212121": {
+      "darkTokens": [],
+      "lightTokens": [],
+      "fgCells": 1,
+      "bgCells": 0,
+      "screens": ["120x40/26-status-inspector"]
+    }
+  },
+  "disallowedGlyphs": {
+    "═": {
+      "codepoint": "U+2550",
+      "cells": 1514,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/33-api-key",
+        "120x40/35-light-home"
+      ]
+    },
+    "║": {
+      "codepoint": "U+2551",
+      "cells": 486,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/33-api-key",
+        "120x40/35-light-home"
+      ]
+    },
+    "╗": {
+      "codepoint": "U+2557",
+      "cells": 414,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/33-api-key",
+        "120x40/35-light-home"
+      ]
+    },
+    "╝": {
+      "codepoint": "U+255D",
+      "cells": 396,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/33-api-key",
+        "120x40/35-light-home"
+      ]
+    },
+    "╚": {
+      "codepoint": "U+255A",
+      "cells": 290,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/33-api-key",
+        "120x40/35-light-home"
+      ]
+    },
+    "╔": {
+      "codepoint": "U+2554",
+      "cells": 288,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/33-api-key",
+        "120x40/35-light-home"
+      ]
+    },
+    "╰": {
+      "codepoint": "U+2570",
+      "cells": 104,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/26-status-inspector",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "120x40/31-subagent-done",
+        "120x40/32-payment-approval",
+        "120x40/33-api-key",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-downloading",
+        "120x40/34-startup-local-onboarding",
+        "120x40/35-light-home",
+        "120x40/36-light-done",
+        "80x24/01-home",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/16-plan-empty-notice",
+        "80x24/17-composer-typed",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval",
+        "80x24/33-api-key",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-downloading",
+        "80x24/34-startup-local-onboarding",
+        "80x24/35-light-home",
+        "80x24/36-light-done"
+      ]
+    },
+    "╯": {
+      "codepoint": "U+256F",
+      "cells": 102,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/26-status-inspector",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "120x40/31-subagent-done",
+        "120x40/32-payment-approval",
+        "120x40/33-api-key",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-downloading",
+        "120x40/34-startup-local-onboarding",
+        "120x40/35-light-home",
+        "120x40/36-light-done",
+        "80x24/01-home",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/11-knowledge-skills",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/16-plan-empty-notice",
+        "80x24/17-composer-typed",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval",
+        "80x24/33-api-key",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-downloading",
+        "80x24/34-startup-local-onboarding",
+        "80x24/35-light-home",
+        "80x24/36-light-done"
+      ]
+    },
+    "╭": {
+      "codepoint": "U+256D",
+      "cells": 99,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/26-status-inspector",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "120x40/31-subagent-done",
+        "120x40/32-payment-approval",
+        "120x40/33-api-key",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-downloading",
+        "120x40/34-startup-local-onboarding",
+        "120x40/35-light-home",
+        "120x40/36-light-done",
+        "80x24/01-home",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/16-plan-empty-notice",
+        "80x24/17-composer-typed",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval",
+        "80x24/33-api-key",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-downloading",
+        "80x24/34-startup-local-onboarding",
+        "80x24/35-light-home",
+        "80x24/36-light-done"
+      ]
+    },
+    "╮": {
+      "codepoint": "U+256E",
+      "cells": 98,
+      "screens": [
+        "120x40/01-home",
+        "120x40/02-slash-menu",
+        "120x40/03-help",
+        "120x40/04-model-picker",
+        "120x40/05-effort-picker",
+        "120x40/06-theme-picker",
+        "120x40/07-sandbox-picker",
+        "120x40/08-recaps-picker",
+        "120x40/09-wallet-settings",
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/12-agents",
+        "120x40/13-mcp",
+        "120x40/14-schedule",
+        "120x40/15-remote-control",
+        "120x40/16-plan-empty-notice",
+        "120x40/17-composer-typed",
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/22-view-plan",
+        "120x40/23-view-diff",
+        "120x40/24-view-checks",
+        "120x40/25-view-context",
+        "120x40/26-status-inspector",
+        "120x40/27-errors",
+        "120x40/28-markdown-answer",
+        "120x40/29-plan-questions",
+        "120x40/30-subagent-running",
+        "120x40/31-subagent-done",
+        "120x40/32-payment-approval",
+        "120x40/33-api-key",
+        "120x40/34-startup-cloud-booting",
+        "120x40/34-startup-cloud-error",
+        "120x40/34-startup-local-downloading",
+        "120x40/34-startup-local-onboarding",
+        "120x40/35-light-home",
+        "120x40/36-light-done",
+        "80x24/01-home",
+        "80x24/02-slash-menu",
+        "80x24/04-model-picker",
+        "80x24/05-effort-picker",
+        "80x24/06-theme-picker",
+        "80x24/07-sandbox-picker",
+        "80x24/08-recaps-picker",
+        "80x24/09-wallet-settings",
+        "80x24/12-agents",
+        "80x24/13-mcp",
+        "80x24/14-schedule",
+        "80x24/15-remote-control",
+        "80x24/16-plan-empty-notice",
+        "80x24/17-composer-typed",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/22-view-plan",
+        "80x24/23-view-diff",
+        "80x24/24-view-checks",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/31-subagent-done",
+        "80x24/32-payment-approval",
+        "80x24/33-api-key",
+        "80x24/34-startup-cloud-booting",
+        "80x24/34-startup-cloud-error",
+        "80x24/34-startup-local-downloading",
+        "80x24/34-startup-local-onboarding",
+        "80x24/35-light-home",
+        "80x24/36-light-done"
+      ]
+    },
+    "▄": {
+      "codepoint": "U+2584",
+      "cells": 14,
+      "screens": [
+        "120x40/20-run-done",
+        "120x40/21-details-mode",
+        "120x40/26-status-inspector",
+        "120x40/36-light-done",
+        "80x24/19-run-tools",
+        "80x24/20-run-done",
+        "80x24/21-details-mode",
+        "80x24/26-status-inspector",
+        "80x24/27-errors",
+        "80x24/28-markdown-answer",
+        "80x24/29-plan-questions",
+        "80x24/30-subagent-running",
+        "80x24/32-payment-approval",
+        "80x24/36-light-done"
+      ]
+    },
+    "×": {
+      "codepoint": "U+00D7",
+      "cells": 12,
+      "screens": [
+        "120x40/10-knowledge-memory",
+        "120x40/19-run-tools",
+        "120x40/27-errors",
+        "80x24/10-knowledge-memory",
+        "80x24/27-errors"
+      ]
+    },
+    "■": {
+      "codepoint": "U+25A0",
+      "cells": 12,
+      "screens": [
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/30-subagent-running",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/30-subagent-running"
+      ]
+    },
+    "↑": {
+      "codepoint": "U+2191",
+      "cells": 10,
+      "screens": [
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/15-remote-control",
+        "120x40/29-plan-questions",
+        "120x40/32-payment-approval",
+        "80x24/10-knowledge-memory",
+        "80x24/11-knowledge-skills",
+        "80x24/15-remote-control",
+        "80x24/29-plan-questions",
+        "80x24/32-payment-approval"
+      ]
+    },
+    "↓": {
+      "codepoint": "U+2193",
+      "cells": 10,
+      "screens": [
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "120x40/15-remote-control",
+        "120x40/29-plan-questions",
+        "120x40/32-payment-approval",
+        "80x24/10-knowledge-memory",
+        "80x24/11-knowledge-skills",
+        "80x24/15-remote-control",
+        "80x24/29-plan-questions",
+        "80x24/32-payment-approval"
+      ]
+    },
+    "▀": {
+      "codepoint": "U+2580",
+      "cells": 8,
+      "screens": [
+        "120x40/04-model-picker",
+        "120x40/13-mcp",
+        "80x24/02-slash-menu",
+        "80x24/03-help",
+        "80x24/04-model-picker",
+        "80x24/13-mcp",
+        "80x24/25-view-context",
+        "80x24/26-status-inspector"
+      ]
+    },
+    "□": {
+      "codepoint": "U+25A1",
+      "cells": 8,
+      "screens": ["120x40/13-mcp", "80x24/13-mcp"]
+    },
+    "•": {
+      "codepoint": "U+2022",
+      "cells": 8,
+      "screens": ["120x40/20-run-done", "120x40/21-details-mode", "120x40/26-status-inspector", "120x40/36-light-done"]
+    },
+    "⬝": {
+      "codepoint": "U+2B1D",
+      "cells": 6,
+      "screens": [
+        "120x40/18-run-thinking",
+        "120x40/19-run-tools",
+        "120x40/30-subagent-running",
+        "80x24/18-run-thinking",
+        "80x24/19-run-tools",
+        "80x24/30-subagent-running"
+      ]
+    },
+    "←": {
+      "codepoint": "U+2190",
+      "cells": 4,
+      "screens": [
+        "120x40/10-knowledge-memory",
+        "120x40/11-knowledge-skills",
+        "80x24/10-knowledge-memory",
+        "80x24/11-knowledge-skills"
+      ]
+    },
+    "┼": {
+      "codepoint": "U+253C",
+      "cells": 4,
+      "screens": ["120x40/28-markdown-answer"]
+    },
+    "┴": {
+      "codepoint": "U+2534",
+      "cells": 4,
+      "screens": ["120x40/28-markdown-answer", "80x24/28-markdown-answer"]
+    },
+    "◆": {
+      "codepoint": "U+25C6",
+      "cells": 2,
+      "screens": ["120x40/11-knowledge-skills", "80x24/11-knowledge-skills"]
+    },
+    "┬": {
+      "codepoint": "U+252C",
+      "cells": 2,
+      "screens": ["120x40/28-markdown-answer"]
+    },
+    "⇆": {
+      "codepoint": "U+21C6",
+      "cells": 2,
+      "screens": ["120x40/29-plan-questions", "80x24/29-plan-questions"]
+    },
+    "↳": {
+      "codepoint": "U+21B3",
+      "cells": 2,
+      "screens": ["120x40/30-subagent-running", "80x24/30-subagent-running"]
+    },
+    "⠋": {
+      "codepoint": "U+280B",
+      "cells": 1,
+      "screens": ["120x40/18-run-thinking"]
+    },
+    "⠴": {
+      "codepoint": "U+2834",
+      "cells": 1,
+      "screens": ["120x40/19-run-tools"]
+    },
+    "⠧": {
+      "codepoint": "U+2827",
+      "cells": 1,
+      "screens": ["120x40/30-subagent-running"]
+    },
+    "⠏": {
+      "codepoint": "U+280F",
+      "cells": 1,
+      "screens": ["80x24/18-run-thinking"]
+    },
+    "⠇": {
+      "codepoint": "U+2807",
+      "cells": 1,
+      "screens": ["80x24/19-run-tools"]
+    },
+    "⠙": {
+      "codepoint": "U+2819",
+      "cells": 1,
+      "screens": ["80x24/30-subagent-running"]
+    }
+  },
+  "screens": {
+    "120x40/01-home": {
+      "offPaletteFg": {
+        "#5e5e5e": 24,
+        "#5cb8ff": 5
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/02-slash-menu": {
+      "offPaletteFg": {
+        "#2c2c2c": 452,
+        "#002e19": 12,
+        "#b8b8b8": 12,
+        "#444444": 9,
+        "#191919": 63,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 2808,
+        "#07301c": 63,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/03-help": {
+      "offPaletteFg": {
+        "#2c2c2c": 14,
+        "#191919": 1,
+        "#060606": 128
+      },
+      "offPaletteBg": {
+        "#010101": 872,
+        "#050505": 8
+      },
+      "disallowedGlyphs": {
+        "╚": 2,
+        "═": 2,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "…": 1
+      }
+    },
+    "120x40/04-model-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 82,
+        "#444444": 4,
+        "#5e5e5e": 46,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3504,
+        "#07301c": 118,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "▀": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/05-effort-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 90,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3768,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/06-theme-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 90,
+        "#444444": 144,
+        "#b8b8b8": 6,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3704,
+        "#07301c": 62,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/07-sandbox-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 90,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3896,
+        "#07301c": 64,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/08-recaps-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 90,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3896,
+        "#07301c": 64,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/09-wallet-settings": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 81,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3576,
+        "#07301c": 64,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/10-knowledge-memory": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#5e5e5e": 112,
+        "#191919": 73,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 2136,
+        "#07301c": 288,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "×": 3,
+        "↑": 1,
+        "↓": 1,
+        "←": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/11-knowledge-skills": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 73,
+        "#5e5e5e": 61,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 2808,
+        "#07301c": 288,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "◆": 1,
+        "↑": 1,
+        "↓": 1,
+        "←": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/12-agents": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 90,
+        "#444444": 107,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3804,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/13-mcp": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#444444": 235,
+        "#002e19": 12,
+        "#191919": 73,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 2136,
+        "#07301c": 186,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "□": 6,
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2,
+        "▀": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/14-schedule": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 82,
+        "#444444": 138,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3684,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/15-remote-control": {
+      "offPaletteFg": {
+        "#2c2c2c": 451,
+        "#002e19": 12,
+        "#191919": 90,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3784,
+        "#07301c": 56,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "↑": 1,
+        "↓": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/16-plan-empty-notice": {
+      "offPaletteFg": {
+        "#5e5e5e": 20,
+        "#5cb8ff": 5,
+        "#ffb84d": 51
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/17-composer-typed": {
+      "offPaletteFg": {
+        "#5e5e5e": 24,
+        "#5cb8ff": 5
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/18-run-thinking": {
+      "offPaletteFg": {
+        "#5cb8ff": 9,
+        "#5e5e5e": 25,
+        "#b8b8b8": 24,
+        "#444444": 240,
+        "#ff5c6c": 3
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "■": 2,
+        "⠋": 1,
+        "╭": 1,
+        "╮": 1,
+        "⬝": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/19-run-tools": {
+      "offPaletteFg": {
+        "#5cb8ff": 8,
+        "#5e5e5e": 46,
+        "#b8b8b8": 89,
+        "#ff5c6c": 107,
+        "#8cffc4": 34,
+        "#444444": 243
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "■": 2,
+        "×": 1,
+        "⠴": 1,
+        "╭": 1,
+        "╮": 1,
+        "⬝": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/20-run-done": {
+      "offPaletteFg": {
+        "#5cb8ff": 30,
+        "#5e5e5e": 32,
+        "#b8b8b8": 61,
+        "#8cffc4": 118,
+        "#e0e0e0": 63,
+        "#ffb84d": 11,
+        "#ff9aa4": 2,
+        "#444444": 1
+      },
+      "offPaletteBg": {
+        "#141414": 448
+      },
+      "disallowedGlyphs": {
+        "•": 2,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/21-details-mode": {
+      "offPaletteFg": {
+        "#5cb8ff": 30,
+        "#5e5e5e": 28,
+        "#8cffc4": 118,
+        "#e0e0e0": 63,
+        "#ffb84d": 45,
+        "#ff9aa4": 2,
+        "#b8b8b8": 20,
+        "#444444": 1
+      },
+      "offPaletteBg": {
+        "#141414": 448
+      },
+      "disallowedGlyphs": {
+        "•": 2,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/22-view-plan": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 25,
+        "#ffb84d": 25
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/23-view-diff": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 34,
+        "#b8b8b8": 23,
+        "#8cffc4": 4,
+        "#ff9aa4": 2
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/24-view-checks": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 115,
+        "#b8b8b8": 116
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "—": 1
+      }
+    },
+    "120x40/25-view-context": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 55,
+        "#222222": 40,
+        "#b8b8b8": 54
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/26-status-inspector": {
+      "offPaletteFg": {
+        "#11212e": 10,
+        "#2c2c2c": 39,
+        "#444444": 284,
+        "#002614": 4,
+        "#191919": 24,
+        "#5e5e5e": 124,
+        "#192e24": 5,
+        "#292929": 1,
+        "#212121": 1,
+        "#0c0c0c": 1,
+        "#060606": 136
+      },
+      "offPaletteBg": {
+        "#010101": 1296,
+        "#07301c": 12,
+        "#040404": 32,
+        "#050505": 40
+      },
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "•": 2,
+        "╰": 2,
+        "╯": 2,
+        "▄": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/27-errors": {
+      "offPaletteFg": {
+        "#5cb8ff": 11,
+        "#5e5e5e": 30,
+        "#ff5c6c": 196,
+        "#b8b8b8": 52
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "×": 4,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "…": 1,
+        "—": 1
+      }
+    },
+    "120x40/28-markdown-answer": {
+      "offPaletteFg": {
+        "#5cb8ff": 30,
+        "#5e5e5e": 27,
+        "#8cffc4": 71,
+        "#ffffff": 5,
+        "#b8b8b8": 83,
+        "#222222": 569,
+        "#e0e0e0": 63,
+        "#ffb84d": 11,
+        "#444444": 1
+      },
+      "offPaletteBg": {
+        "#141414": 448
+      },
+      "disallowedGlyphs": {
+        "┼": 4,
+        "╭": 2,
+        "┬": 2,
+        "╰": 2,
+        "┴": 2,
+        "╮": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/29-plan-questions": {
+      "offPaletteFg": {
+        "#ffb84d": 8,
+        "#5e5e5e": 54,
+        "#b8b8b8": 15,
+        "#444444": 13,
+        "#222222": 240
+      },
+      "offPaletteBg": {
+        "#07301c": 109
+      },
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2,
+        "⇆": 1,
+        "↑": 1,
+        "↓": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/30-subagent-running": {
+      "offPaletteFg": {
+        "#5cb8ff": 9,
+        "#5e5e5e": 30,
+        "#8ac7ff": 41,
+        "#444444": 240,
+        "#ff5c6c": 3,
+        "#222222": 116
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "■": 2,
+        "⠧": 1,
+        "↳": 1,
+        "╭": 1,
+        "╮": 1,
+        "⬝": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/31-subagent-done": {
+      "offPaletteFg": {
+        "#5cb8ff": 11,
+        "#5e5e5e": 29,
+        "#b8b8b8": 32,
+        "#8cffc4": 34
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/32-payment-approval": {
+      "offPaletteFg": {
+        "#5cb8ff": 43,
+        "#5e5e5e": 26,
+        "#ffb84d": 256,
+        "#222222": 240
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2,
+        "↑": 1,
+        "↓": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/33-api-key": {
+      "offPaletteFg": {
+        "#2c2c2c": 462,
+        "#002e19": 12,
+        "#191919": 66,
+        "#060606": 240,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 3460,
+        "#050505": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/34-startup-cloud-booting": {
+      "offPaletteFg": {
+        "#222222": 228,
+        "#5e5e5e": 65,
+        "#ffffff": 34
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/34-startup-cloud-error": {
+      "offPaletteFg": {
+        "#222222": 228,
+        "#5e5e5e": 65,
+        "#ff5c6c": 59,
+        "#ffffff": 34
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 3,
+        "╮": 3,
+        "╰": 3,
+        "╯": 3
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/34-startup-local-downloading": {
+      "offPaletteFg": {
+        "#222222": 260,
+        "#5e5e5e": 59
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/34-startup-local-onboarding": {
+      "offPaletteFg": {
+        "#222222": 260,
+        "#5e5e5e": 59,
+        "#ffffff": 76
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 4,
+        "╮": 4,
+        "╰": 4,
+        "╯": 4
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/35-light-home": {
+      "offPaletteFg": {
+        "#767676": 24,
+        "#007a40": 252,
+        "#5c5c5c": 90,
+        "#0b62c4": 5
+      },
+      "offPaletteBg": {
+        "#e6e6e6": 456
+      },
+      "disallowedGlyphs": {
+        "═": 84,
+        "║": 27,
+        "╗": 23,
+        "╝": 22,
+        "╔": 16,
+        "╚": 16,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "120x40/36-light-done": {
+      "offPaletteFg": {
+        "#0b62c4": 30,
+        "#767676": 32,
+        "#087a47": 5,
+        "#3e3e3e": 61,
+        "#5c5c5c": 119,
+        "#007a40": 356,
+        "#1f1f1f": 63,
+        "#8a5a00": 11,
+        "#0b5a34": 2,
+        "#a01f2d": 2,
+        "#8a8a8a": 1
+      },
+      "offPaletteBg": {
+        "#e6e6e6": 904
+      },
+      "disallowedGlyphs": {
+        "•": 2,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/01-home": {
+      "offPaletteFg": {
+        "#5e5e5e": 21,
+        "#5cb8ff": 5
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/02-slash-menu": {
+      "offPaletteFg": {
+        "#2c2c2c": 149,
+        "#b8b8b8": 12,
+        "#444444": 1,
+        "#002e19": 8,
+        "#191919": 35,
+        "#060606": 96,
+        "#11212e": 3
+      },
+      "offPaletteBg": {
+        "#010101": 856,
+        "#07301c": 63,
+        "#050505": 168
+      },
+      "disallowedGlyphs": {
+        "▀": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/03-help": {
+      "offPaletteFg": {
+        "#444444": 1
+      },
+      "offPaletteBg": {
+        "#010101": 248
+      },
+      "disallowedGlyphs": {
+        "▀": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "…": 1
+      }
+    },
+    "80x24/04-model-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 159,
+        "#444444": 4,
+        "#002e19": 11,
+        "#5e5e5e": 46,
+        "#191919": 37,
+        "#060606": 100,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 904,
+        "#07301c": 118,
+        "#050505": 176
+      },
+      "disallowedGlyphs": {
+        "▀": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/05-effort-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 214,
+        "#002e19": 8,
+        "#191919": 53,
+        "#060606": 160,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 1048,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/06-theme-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 214,
+        "#444444": 144,
+        "#002e19": 8,
+        "#b8b8b8": 6,
+        "#191919": 53,
+        "#060606": 96,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 984,
+        "#07301c": 62,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/07-sandbox-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 249,
+        "#002e19": 8,
+        "#191919": 74,
+        "#060606": 160,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 1176,
+        "#07301c": 64,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/08-recaps-picker": {
+      "offPaletteFg": {
+        "#2c2c2c": 249,
+        "#002e19": 8,
+        "#191919": 74,
+        "#060606": 160,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 1176,
+        "#07301c": 64,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/09-wallet-settings": {
+      "offPaletteFg": {
+        "#2c2c2c": 186,
+        "#002e19": 8,
+        "#191919": 53,
+        "#060606": 96,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 920,
+        "#07301c": 64,
+        "#050505": 232
+      },
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/10-knowledge-memory": {
+      "offPaletteFg": {
+        "#5e5e5e": 112
+      },
+      "offPaletteBg": {
+        "#010101": 248,
+        "#07301c": 228
+      },
+      "disallowedGlyphs": {
+        "×": 3,
+        "↑": 1,
+        "↓": 1,
+        "←": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/11-knowledge-skills": {
+      "offPaletteFg": {
+        "#2c2c2c": 103,
+        "#5e5e5e": 61,
+        "#060606": 78,
+        "#191919": 30
+      },
+      "offPaletteBg": {
+        "#010101": 630,
+        "#07301c": 304,
+        "#050505": 74
+      },
+      "disallowedGlyphs": {
+        "◆": 1,
+        "↑": 1,
+        "↓": 1,
+        "←": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/12-agents": {
+      "offPaletteFg": {
+        "#2c2c2c": 222,
+        "#444444": 107,
+        "#002e19": 11,
+        "#191919": 55,
+        "#060606": 160,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 1084,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/13-mcp": {
+      "offPaletteFg": {
+        "#2c2c2c": 103,
+        "#444444": 181,
+        "#060606": 78,
+        "#191919": 30
+      },
+      "offPaletteBg": {
+        "#010101": 630,
+        "#07301c": 146,
+        "#050505": 74
+      },
+      "disallowedGlyphs": {
+        "□": 2,
+        "╰": 2,
+        "╯": 2,
+        "╭": 1,
+        "╮": 1,
+        "▀": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/14-schedule": {
+      "offPaletteFg": {
+        "#2c2c2c": 194,
+        "#444444": 138,
+        "#002e19": 11,
+        "#191919": 55,
+        "#060606": 100,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 964,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/15-remote-control": {
+      "offPaletteFg": {
+        "#2c2c2c": 224,
+        "#002e19": 12,
+        "#191919": 57,
+        "#060606": 104,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 1064,
+        "#07301c": 56,
+        "#050505": 296
+      },
+      "disallowedGlyphs": {
+        "↑": 1,
+        "↓": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/16-plan-empty-notice": {
+      "offPaletteFg": {
+        "#5e5e5e": 20,
+        "#5cb8ff": 5,
+        "#ffb84d": 32
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "…": 1
+      }
+    },
+    "80x24/17-composer-typed": {
+      "offPaletteFg": {
+        "#5e5e5e": 21,
+        "#5cb8ff": 5
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/18-run-thinking": {
+      "offPaletteFg": {
+        "#5cb8ff": 8,
+        "#5e5e5e": 24,
+        "#444444": 165,
+        "#b8b8b8": 24,
+        "#ff5c6c": 3
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "■": 2,
+        "⠏": 1,
+        "╭": 1,
+        "╮": 1,
+        "⬝": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/19-run-tools": {
+      "offPaletteFg": {
+        "#5cb8ff": 8,
+        "#5e5e5e": 41,
+        "#444444": 161,
+        "#ff5c6c": 3
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "■": 2,
+        "⠇": 1,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "⬝": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/20-run-done": {
+      "offPaletteFg": {
+        "#5cb8ff": 16,
+        "#5e5e5e": 25,
+        "#e0e0e0": 25,
+        "#8cffc4": 22,
+        "#ff9aa4": 2,
+        "#b8b8b8": 20,
+        "#444444": 1
+      },
+      "offPaletteBg": {
+        "#141414": 216
+      },
+      "disallowedGlyphs": {
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/21-details-mode": {
+      "offPaletteFg": {
+        "#5cb8ff": 16,
+        "#5e5e5e": 24,
+        "#e0e0e0": 25,
+        "#8cffc4": 22,
+        "#ff9aa4": 2,
+        "#b8b8b8": 20,
+        "#444444": 1,
+        "#ffb84d": 32
+      },
+      "offPaletteBg": {
+        "#141414": 216
+      },
+      "disallowedGlyphs": {
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "…": 1
+      }
+    },
+    "80x24/22-view-plan": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 25,
+        "#ffb84d": 25
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/23-view-diff": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 30,
+        "#b8b8b8": 23,
+        "#8cffc4": 4,
+        "#ff9aa4": 2,
+        "#ffb84d": 25
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/24-view-checks": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 112,
+        "#b8b8b8": 116
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "—": 1
+      }
+    },
+    "80x24/25-view-context": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 44,
+        "#444444": 2,
+        "#222222": 40,
+        "#b8b8b8": 30
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "▀": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/26-status-inspector": {
+      "offPaletteFg": {
+        "#11212e": 5,
+        "#2c2c2c": 20,
+        "#444444": 185,
+        "#5e5e5e": 87,
+        "#0c0c0c": 1,
+        "#060606": 12
+      },
+      "offPaletteBg": {
+        "#010101": 440,
+        "#07301c": 12
+      },
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2,
+        "▀": 1,
+        "▄": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/27-errors": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 25,
+        "#ff5c6c": 1,
+        "#444444": 1
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "×": 1,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {
+        "…": 1,
+        "—": 1
+      }
+    },
+    "80x24/28-markdown-answer": {
+      "offPaletteFg": {
+        "#5cb8ff": 30,
+        "#5e5e5e": 23,
+        "#222222": 72,
+        "#b8b8b8": 4,
+        "#e0e0e0": 63,
+        "#ffb84d": 11,
+        "#444444": 1
+      },
+      "offPaletteBg": {
+        "#141414": 360
+      },
+      "disallowedGlyphs": {
+        "╰": 2,
+        "┴": 2,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/29-plan-questions": {
+      "offPaletteFg": {
+        "#ffb84d": 8,
+        "#5e5e5e": 21,
+        "#444444": 1,
+        "#222222": 160
+      },
+      "offPaletteBg": {
+        "#07301c": 69
+      },
+      "disallowedGlyphs": {
+        "╰": 2,
+        "╯": 2,
+        "⇆": 1,
+        "↑": 1,
+        "↓": 1,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/30-subagent-running": {
+      "offPaletteFg": {
+        "#5cb8ff": 8,
+        "#5e5e5e": 27,
+        "#8ac7ff": 41,
+        "#444444": 161,
+        "#ff5c6c": 3,
+        "#222222": 76
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "■": 2,
+        "⠙": 1,
+        "↳": 1,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "⬝": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/31-subagent-done": {
+      "offPaletteFg": {
+        "#5cb8ff": 10,
+        "#5e5e5e": 25,
+        "#444444": 6,
+        "#b8b8b8": 17,
+        "#8cffc4": 34
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/32-payment-approval": {
+      "offPaletteFg": {
+        "#5cb8ff": 42,
+        "#5e5e5e": 21,
+        "#ffb84d": 93,
+        "#444444": 1,
+        "#222222": 160
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╰": 2,
+        "╯": 2,
+        "↑": 1,
+        "↓": 1,
+        "▄": 1,
+        "╭": 1,
+        "╮": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/33-api-key": {
+      "offPaletteFg": {
+        "#2c2c2c": 157,
+        "#002e19": 4,
+        "#191919": 41,
+        "#060606": 92,
+        "#11212e": 5
+      },
+      "offPaletteBg": {
+        "#010101": 808,
+        "#050505": 228
+      },
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/34-startup-cloud-booting": {
+      "offPaletteFg": {
+        "#222222": 182,
+        "#5e5e5e": 65,
+        "#ffffff": 34
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 2,
+        "╮": 2,
+        "╰": 2,
+        "╯": 2
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/34-startup-cloud-error": {
+      "offPaletteFg": {
+        "#222222": 182,
+        "#5e5e5e": 65,
+        "#ff5c6c": 59,
+        "#ffffff": 34
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 3,
+        "╮": 3,
+        "╰": 3,
+        "╯": 3
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/34-startup-local-downloading": {
+      "offPaletteFg": {
+        "#222222": 186,
+        "#5e5e5e": 59
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/34-startup-local-onboarding": {
+      "offPaletteFg": {
+        "#222222": 186,
+        "#5e5e5e": 59,
+        "#ffffff": 69
+      },
+      "offPaletteBg": {},
+      "disallowedGlyphs": {
+        "╭": 4,
+        "╮": 4,
+        "╰": 4,
+        "╯": 4
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/35-light-home": {
+      "offPaletteFg": {
+        "#767676": 21,
+        "#007a40": 172,
+        "#5c5c5c": 74,
+        "#0b62c4": 5
+      },
+      "offPaletteBg": {
+        "#e6e6e6": 296
+      },
+      "disallowedGlyphs": {
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    },
+    "80x24/36-light-done": {
+      "offPaletteFg": {
+        "#0b62c4": 16,
+        "#767676": 25,
+        "#1f1f1f": 25,
+        "#007a40": 180,
+        "#5c5c5c": 80,
+        "#0b5a34": 2,
+        "#a01f2d": 2,
+        "#087a47": 1,
+        "#3e3e3e": 20,
+        "#8a8a8a": 1
+      },
+      "offPaletteBg": {
+        "#e6e6e6": 512
+      },
+      "disallowedGlyphs": {
+        "▄": 1,
+        "╭": 1,
+        "╮": 1,
+        "╰": 1,
+        "╯": 1
+      },
+      "defaultColourCells": 0,
+      "typographic": {}
+    }
+  }
+}

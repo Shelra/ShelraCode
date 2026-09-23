@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+                                                                                
+  ✓ Checks passed                                                               
+    Host verification not run · /verify                                         
+                                                                                
+  [ PLAN ]                                                                3/3   
+  ✓ Make expiry inclusive                                                       
+  ✓ Rotate the token on refresh                                                 
+  ✓ Run the full suite                                                          
+                                                                                
+                                                                                
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left            Details off: steps are folded  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

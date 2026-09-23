@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+     ╰──────────────┴───────────────────────┴────────────────────────────────   
+                                                                                
+     Code                                                                       
+      ts                                                                        
+      export function isExpired(session: Session, now = Date.now()): boolean    
+      {                                                                         
+        return session.expiresAt <= now; // inclusive                           
+      }                                                                         
+                                                                                
+     Add a regression test around the boundary next.                         ▄  
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

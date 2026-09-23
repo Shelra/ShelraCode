@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+  ███████╗ ██╗  ██╗ ███████╗ ██╗      ██████╗   █████╗       ██████╗  ██████╗  ██████╗  ███████╗                        
+  ██╔════╝ ██║  ██║ ██╔════╝ ██║      ██╔══██╗ ██╔══██╗     ██╔════╝ ██╔═══██╗ ██╔══██╗ ██╔════╝                        
+  ███████╗ ███████║ █████╗   ██║      ██████╔╝ ███████║     ██║      ██║   ██║ ██║  ██║ █████╗                          
+  ╚════██║ ██╔══██║ ██╔══╝   ██║      ██╔══██╗ ██╔══██║     ██║      ██║   ██║ ██║  ██║ ██╔══╝                          
+  ███████║ ██║  ██║ ███████╗ ███████╗ ██║  ██║ ██║  ██║     ╚██████╗ ╚██████╔╝ ██████╔╝ ███████╗                        
+  ╚══════╝ ╚═╝  ╚═╝ ╚══════╝ ╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝      ╚═════╝  ╚═════╝  ╚═════╝  ╚══════╝                        
+            ╭──────────────────────────────────────────────────────────────────────────────────────────────╮            
+            │                                                                                              │            
+  [ PROJECT │  MCP Servers                                                                            esc  │            
+  acme-api  │                                                                                              │            
+            │  Search servers...                                                                           │            
+  [ KNOWS ] │                                                                                              │            
+  3 memories│  □ GitHub                                                                          Popular  ▀│            
+            │  Integration with GitHub issues and related workflows.                                       │            
+            │  □ Supabase                                                                        Popular   │            
+            │  PostgREST-backed operations for Postgres databases.                                         │            
+            │  □ Vercel                                                                          Popular   │            
+            │  Vercel infrastructure and deployment workflows.                                             │            
+            │  □ Cloudflare                                                                      Popular   │            
+            │  Workers, KV, R2, and D1 operations on Cloudflare.                                           │            
+            │  □ Stripe                                                                          Popular   │            
+            │  Stripe API access for billing and payment workflows.                                        │            
+            │  □ Notion                                                                          Popular   │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │  enter toggle  ·  ctrl+e edit  ·  ctrl+a add  ·  ctrl+x delete                               │            
+            │                                                                                              │            
+            │                                                                                              │            
+            ╰──────────────────────────────────────────────────────────────────────────────────────────────╯            
+                                                                                                                        
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │                                                                                                                  │  
+  │  Agent  What are we building?                                                                                    │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left         ? shortcuts · ctrl+o details · tab mode · @ files · shift+enter new line  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                v1.1.7  
+                                                                                                                        

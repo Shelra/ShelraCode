@@ -1,0 +1,40 @@
+                                                                                                                        
+  Agent  ·  Fix token refresh tests                                                                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+   > Please look at the config loader                                                                                   
+                                                                                                                        
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     Let me look at the config loader.                                                                                  
+                                                                                                                        
+     × Read src/config.ts                                                                                         95ms  
+       File not found: src/config.ts                                                                                    
+                                                                                                                        
+     × Could not edit src/auth.ts                                                                                123ms  
+       old_string not found in src/auth.ts                                                                              
+                                                                                                                        
+     × Tests failed bun test tests/missing.test.ts                                                      failed · 556ms  
+       note: To treat the "tests/missing.test.ts" filter as a path, run "bun test ./tests/missing.test.ts"              
+                                                                                                                        
+     [ SHELRA ]                                                                                                         
+     Trying the next route…                                                                                             
+                                                                                                                        
+     [Model connection interrupted (429 Too Many Requests — free-models-per-min limit reached for qwen/qwen3-coder:     
+     free); retrying in 2s.]                                                                                            
+                                                                                                                        
+     That is everything I have scripted for this demo.                                                                  
+                                                                                                                        
+     ─ tests × · 3.1s                                                                                                   
+                                                                                                                        
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left                ? shortcuts · ctrl+o details · alt+2-5 views · tab mode · @ files  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+  █    █░░█ █    █░░░ █  █ █  █ ░░░ █    █  █ █  █ █                            
+   ██░ ████ ███░ █░░░ ███  ████ ░░░ █░░░ █░░█ █░░█ ███░                         
+  ░  █ █  █ █  ░ █░░░ █  █ █  █ ░░░ █░░░ █░░█ █░░█ █  ░                         
+  ███  █░░█                                                                     
+     ░  ░░    Connect                                          esc              
+  ░░░░ ░░░░                                                                     
+              Choose a channel                                                  
+  [ PROJECT                                                                     
+  acme-api    Telegram          Chat with ShelraCode from Telegram              
+                                                                                
+  [ KNOWS ]   enter select  ·  ↑↓ navigate  ·  esc close                        
+  3 memories                                                                    
+  ╭─────────                                                        ─────────╮  
+  │                                                                          │  
+  │  Agent  What are we building?                                            │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                

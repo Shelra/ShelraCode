@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+     [ SHELRA ]                                                                 
+     Rotation needs a fresh, unguessable token, so I'll add a small helper      
+     rather than inline it.                                                     
+                                                                                
+     [ PLAN 1/3 ]                                                               
+     ✓ Make expiry inclusive                                                    
+     ● Rotate the token on refresh                                              
+     · Run the full suite                                                       
+                                                                                
+     ⠇ Writing src/token.ts                                                0s▄  
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  ■■⬝  Queue a follow-up...                                               │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left                   esc stop · enter queue  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

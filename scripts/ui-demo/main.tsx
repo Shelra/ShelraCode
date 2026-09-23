@@ -75,8 +75,9 @@ const OTHER_MODELS: ModelInfo[] = [
 ];
 
 const provider = new ScriptedProvider({ turns, model: MODEL, speed: Number(process.env.SHELRA_DEMO_SPEED ?? 1) });
+// SHELRA_DEMO_NO_KEY=1 starts without a provider, as a first run without an API key does.
 const agent = new Agent(undefined, undefined, MODEL.id, 24, {
-  provider,
+  provider: process.env.SHELRA_DEMO_NO_KEY === "1" ? undefined : provider,
   persistSession: false,
   cwd: dir,
   sandboxMode: "off",

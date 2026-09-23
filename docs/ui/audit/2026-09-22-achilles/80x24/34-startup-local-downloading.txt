@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+   ╭────────────────────────────────────────────────────────────────────────╮   
+   │                                                                        │   
+   │   ShelraCode                                      PRIVATE BY DEFAULT   │   
+   │   A local coding environment that prepares itself                      │   
+   │                                                                        │   
+   │   STARTUP CHECKLIST        Downloading Qwen2.5 Coder 1.5B              │   
+   │                                                                        │   
+   │   [ok] Hardware            ############--------  62%                   │   
+   │   [  ] Local engine        658 MB / 1.0 GB  |  18 MB/s  |  ETA 00:22   │   
+   │   [..] Model                                                           │   
+   │   [  ] Readiness                                                       │   
+   │                              THIS COMPUTER                             │   
+   │                              NVIDIA GeForce GTX 1650                   │   
+   │                              VRAM 4.0 GB  |  32.0 GB RAM               │   
+   │                              0 local models detected                   │   
+   │                                                                        │   
+   │                                                                        │   
+   │                                                                        │   
+   │                                                                        │   
+   │   No account, API key, or remote provider is required                  │   
+   ╰────────────────────────────────────────────────────────────────────────╯   
+                                                                                

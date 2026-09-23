@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+                                                                                
+     ⠙ Delegating to explore Map session storage                           2s   
+       ↳ Explore: Read src/session-store.ts                                  ▄  
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  ■■⬝  Queue a follow-up...                                               │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left                   esc stop · enter queue  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+  ────────────────────────────────────────────────────────────────────────────  
+                                                                                
+    AGENTS                                                                      
+                                                                                
+    ● Explore                                                             1s    
+      Read src/session-store.ts                                                 
+                                                                                
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

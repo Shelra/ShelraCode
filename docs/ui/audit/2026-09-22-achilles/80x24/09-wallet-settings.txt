@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+  █    █░░█ █    █░░░ █  █ █  █ ░░░ █    █  █ █  █ █                            
+   ██░ ████ ███░ █░░░ ███  ████ ░░░ █░░░ █░░█ █░░█ ███░                         
+  ░  █ █                                                                        
+  ███  █  Wallet & Payments                                        esc          
+     ░    Payments                                        < disabled >          
+  ░░░░ ░  Chain                                       < base-sepolia >          
+          Auto-approve                                         < off >          
+  [ PROJ  Address                                            No wallet          
+  acme-a  ETH                                                      ...          
+          USDC                                                     ...          
+  [ KNOW                                                                        
+  3 memo                                                                        
+  ╭─────  arrows navigate  left/right toggle  esc close                 ─────╮  
+  │                                                                          │  
+  │  Agent  What are we building?                                            │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                

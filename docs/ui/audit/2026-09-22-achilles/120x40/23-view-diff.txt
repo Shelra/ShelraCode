@@ -1,0 +1,40 @@
+                                                                                                                        
+  Agent  ·  Fix token refresh tests                                                                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+  [ CHANGES ]                                                                                                 2 files   
+  M src/auth.ts                                                                                                 +4 -2   
+  A src/token.ts                                                                                                   +5   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │                                                                                                                  │  
+  │  Agent  Ask Shelra...                                                                                            │  
+  │                                                                                                                  │  
+  │  Qwen3 Coder  99% context left          esc back to the log · ? shortcuts · ctrl+o details · tab mode · @ files  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

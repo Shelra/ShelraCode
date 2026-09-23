@@ -1,0 +1,40 @@
+                                                                                                                        
+  Agent  ·  Fix token refresh tests                                                                                     
+                                                                                                                        
+        ╭──────────────────────────────────────────────────────────────────────────────────────────────────────╮        
+     ✓ C│                                                                                                      │   +5   
+     ✓ E│  Session control surface                                                     no session | esc close  │+1 -1   
+     ✓ E│                                                                                                      │   +2   
+        │  Agent | qwen/qwen3-coder:free | ~\projects\acme-api                                                 │        
+     ✓ T│                                                                                                      │ 1.5s   
+        │   1 Overview   2 Plan   3 Activity   4 Evidence   5 Agents                                           │        
+     [ S│                                                                                                      │        
+     Fix│                                                                                                     █│        
+        │  What Shelra is doing                                                                               █│        
+     Wha│                                                                                                     █│        
+     • i│  State: Paused: Observing result | Last runtime state; not currently running                        █│        
+     • r│  Current activity: Paused: Observing result                                                         █│        
+        │                                                                                                     █│        
+     Ver│  Intent                                                                                             █│        
+     bun│                                                                                                     █│        
+        │  Original request:Fix the failing token refresh tests in src/auth.ts and keep the public API        █│        
+      ts│                   unchanged.                                                                        █│        
+      ex│  Runtime objectiveFix the failing token refresh tests in src/auth.ts and keep the public API        █│        
+        │                   unchanged.                                                                        █│        
+      } │  Source: host-owned AgentKernel objective                                                           █│        
+        │                                                                                                     █│        
+     Nex│  Work summary                                                                                        │        
+        │                                                                                                      │        
+     ─ 2│  Plan: 3 structured steps                                                                            │        
+        │  Changed files: 2                                                                                    │        
+     · M│  Structured events: 18                                                                               │ailed▄  
+        │  Live tools: 0                                                                                       │        
+  ╭─────│  Live agent: None                                                                                    │─────╮  
+  │     │                                                                                                      │     │  
+  │  Age│  1-5 switch view | tab/shift-tab move | esc close                                                    │     │  
+  │     │                                                                                                      │     │  
+  │  Qwe╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯les  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                        
+  ~\projects\acme-api                                                                                                   
+                                                                                                                        

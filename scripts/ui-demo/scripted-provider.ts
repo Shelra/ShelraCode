@@ -17,7 +17,9 @@ export type DemoPart =
   | { think: string; pace?: number }
   | { call: string; input: Record<string, unknown>; ms?: number }
   | { wait: number }
-  | { fail: string };
+  | { fail: string }
+  /** Asks the user to approve a tool call (the payment dialog), then ends the step. */
+  | { approve: string; input: Record<string, unknown> };
 
 /** A model step is one assistant message plus the tool calls it makes. */
 export type DemoStep = DemoPart[];
@@ -106,6 +108,14 @@ export class ScriptedProvider implements ProviderAdapter {
           } else if ("fail" in part) {
             yield { type: "error", error: new Error(part.fail) };
             return;
+          } else if ("approve" in part) {
+            const toolCall: ToolCall = {
+              id: nextId(),
+              type: "function",
+              function: { name: part.approve, arguments: JSON.stringify(part.input) },
+            };
+            yield { type: "tool-approval-request", approvalId: `approval_${toolCall.id}`, toolCall };
+            break;
           } else {
             stepHadTools = true;
             const toolCall: ToolCall = {

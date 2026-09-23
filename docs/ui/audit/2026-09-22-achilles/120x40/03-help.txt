@@ -1,0 +1,40 @@
+                                                                                                                        
+                                                                                                                        
+  ██                                                                                                                    
+  ██   Keyboard and commands                                                                            esc close       
+  ██                                                                                                                    
+  ╚═   Compose                                                     Commands                                             
+  ██   enter          Send the message                             /models         Choose a model                       
+  ╚═   shift+enter    Insert a new line                            /plan           The plan and what is left            
+       @              Mention a file                               /diff           Files changed in this session        
+       /              Open the command list                        /checks         Tests, types and lint results        
+  [    tab            Next mode: agent, plan, ask                  /context        What is loaded and how full it       
+  ac                                                               /status         Plan, activity and evidence          
+       While Shelra works                                          /help           Shortcuts and commands               
+  [    esc            Stop the current run                         /verify         Run local verification               
+  3    ctrl+c         Stop the current run                         /review         Review recent changes                
+       enter          Queue a follow-up                            /memory         What Shelra knows about this pr      
+                                                                   /skills         Skills available to Shelra           
+       Review                                                      /agents         Custom sub-agents                    
+       alt+1…5        Switch view: Log, Plan, Changes, Checks,     /tasks          Background and delegated agents      
+       esc            Back to the log from another view            /effort         Reasoning effort                     
+       ctrl+o         Show or hide step details                    /new session    Start a new session                  
+       ctrl+e         Expand your last message                     /commit & push  Commit and push                      
+       /status        Plan, activity and evidence                  /commit & pr    Commit and open a PR                 
+       ctrl+y         Copy the selected text                       /btw            Ask a side question                  
+                                                                   /recaps         Session recaps on or off             
+       Session                                                     /theme          Appearance and motion                
+       /new           Start a new session                          /sandbox        Shell sandbox mode                   
+       ctrl+c         Clear the prompt; twice to exit              /mcp            MCP servers                          
+                                                                   /schedule       Scheduled runs                       
+                                                                   /wallet         Wallet and payments                  
+                                                                   /remote-control Remote control                       
+                                                                   /update         Update ShelraCode                    
+  ╭─                                                               /exit           Quit Shelra                      ─╮  
+  │                                                                                                                  │  
+  │                                                                                                                  │  
+  │                                                                                                                  │  
+  │                                                                                                                  │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  
+                                                                                                                v1.1.7  
+                                                                                                                        

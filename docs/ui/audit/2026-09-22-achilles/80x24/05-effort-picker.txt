@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+  █    █░░█ █    █░░░ █  █ █  █ ░░░ █    █  █ █  █ █                            
+   ██░ ████ ███░ █░░░ ███  ████ ░░░ █░░░ █░░█ █░░█ ███░                         
+  ░  █ █  █ █  ░ █░░░ █  █ █  █ ░░░ █░░░ █░░█ █░░█ █  ░                         
+  ███  █                                                                        
+     ░    Reasoning effort                                         esc          
+  ░░░░ ░  qwen/qwen3-coder:free does not support reasoning effort               
+          control.                                                              
+  [ PROJ                                                                        
+  acme-a  auto = high in agent mode when the model supports it,                 
+          otherwise the provider's default.                                     
+  [ KNOW  left/right toggle  enter cycle  esc close                             
+  3 memo                                                                        
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  Agent  What are we building?                                            │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                

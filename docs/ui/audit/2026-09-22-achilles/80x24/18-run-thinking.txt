@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+     API unchanged.                                                             
+                                                                                
+                                                                                
+     [ SHELRA ]                                                                 
+     I'll read the auth module and its tests first, to see what the refresh     
+     path is supposed to guarantee.                                          █  
+                                                                             █  
+     · Loaded skill release-notes                                            █  
+                                                                             █  
+     ⠏ Searching for refreshSession|isExpired                              0s█  
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  ■■⬝  Queue a follow-up...                                               │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left                   esc stop · enter queue  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

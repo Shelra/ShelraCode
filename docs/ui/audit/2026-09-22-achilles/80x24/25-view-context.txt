@@ -1,0 +1,24 @@
+                                                                                
+  Agent  ·  Fix token refresh tests                                             
+                                                                                
+                                                                                
+                                                                             █  
+  [ CONTEXT ]                                                             1% ▀  
+  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                      
+  2K of 262K tokens                                                             
+  package.json, AGENTS.md, auth.ts, index.ts, session-store.ts, auth.test.ts    
+                                                                                
+  [ LOADED ]                                                                    
+  Rules   AGENTS.md                                                             
+  Skills  release-notes                                                         
+  Agents  6 built in                                                            
+                                                                                
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │                                                                          │  
+  │  Agent  Ask Shelra...                                                    │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left        esc back to the log · ? shortcuts  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                                
+  ~\projects\acme-api                                                           
+                                                                                

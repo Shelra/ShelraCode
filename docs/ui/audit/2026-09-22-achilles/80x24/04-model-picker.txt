@@ -1,0 +1,24 @@
+                                                                                
+                                                                                
+  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░ ░░░░ ░░░░ ░░░░ ░░░░                         
+  ░███ █░░█ ████ █░░░ ███░ ░██░ ░░░ ████ ░██░ ███░ ████                         
+  █    █░░█ █    █░░░ █  █ █  █ ░░░ █    █  █ █  █ █                            
+   ██░ ███                                                                      
+  ░  █ █    Select model                                         esc            
+  ███  █░░                                                                      
+     ░  ░░  Search...                                                           
+  ░░░░ ░░░                                                                      
+            DeepSeek V3.1                                            █          
+  [ PROJEC  free · 164K ctx · tools                                  █          
+  acme-api  Free Models Router                                       █          
+            free · 200K ctx · tools                                  ▀          
+  [ KNOWS   gpt-oss-120b                                                        
+  3 memori  free · 131K ctx · tools, reasoning                                  
+  ╭───────                                                            ───────╮  
+  │         enter select  esc close                                          │  
+  │  Agent                                                                   │  
+  │                                                                          │  
+  │  Qwen3 Coder  99% context left             ? shortcuts · ctrl+o details  │  
+  ╰──────────────────────────────────────────────────────────────────────────╯  
+                                                                        v1.1.7  
+                                                                                
