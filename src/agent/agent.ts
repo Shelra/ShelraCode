@@ -8,7 +8,7 @@ import {
   contractChecks,
   evaluateTurnContract,
 } from "../contract/contract";
-import { discoverChecks } from "../contract/discover";
+import { discoverChecks, isSameCheck } from "../contract/discover";
 import { describeFailures, failureSignature } from "../contract/failures";
 import { isTestFile, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
@@ -26,7 +26,15 @@ import type {
   TaskCreatedHookInput,
   UserPromptSubmitHookInput,
 } from "../hooks/types";
-import { approveDecision, findDecision, type LedgerResult, proposeDecision, rejectDecision } from "../ledger/store";
+import { inScope } from "../ledger/glob";
+import {
+  activeDecisions,
+  approveDecision,
+  findDecision,
+  type LedgerResult,
+  proposeDecision,
+  rejectDecision,
+} from "../ledger/store";
 import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
@@ -2988,21 +2996,43 @@ export class Agent {
           // The task contract (audit doc 15, Phase 1.3–1.4): when the project states its checks, or the plan
           // gave a command that failed before the change, the host decides "done" by running them on the
           // final code, instead of accepting any check at all.
-          const contract: ContractCheck[] =
+          const contractApplies =
             this.mode === "agent" &&
             !this.ablations.has("gate") &&
             !this.ablations.has("contract") &&
             mutatedThisTurn &&
-            !documentsOnly
-              ? [
-                  ...contractChecks(discoverChecks(cwd)),
-                  ...(this.activeAcceptanceCriteria ?? []).flatMap((criterion): ContractCheck[] =>
-                    criterion.command && criterion.commandBefore !== "passed"
-                      ? [{ kind: "task", command: criterion.command, source: `plan ${criterion.id}` }]
-                      : [],
-                  ),
-                ]
+            !documentsOnly;
+          // Decisions the user approved whose files this turn changed: their checks join the contract (the
+          // ledger's phase 3), so a change that breaks one cannot be reported as done.
+          const governing =
+            contractApplies && !this.ablations.has("ledger")
+              ? activeDecisions(cwd).filter(
+                  (decision) => decision.check !== undefined && mutations.some((path) => inScope(path, decision.scope)),
+                )
               : [];
+          const brokenDecisions = (command: string) =>
+            governing.filter(
+              (decision) => decision.check !== undefined && isSameCheck(command, { command: decision.check }),
+            );
+          const baseContract: ContractCheck[] = contractApplies
+            ? [
+                ...contractChecks(discoverChecks(cwd)),
+                ...(this.activeAcceptanceCriteria ?? []).flatMap((criterion): ContractCheck[] =>
+                  criterion.command && criterion.commandBefore !== "passed"
+                    ? [{ kind: "task", command: criterion.command, source: `plan ${criterion.id}` }]
+                    : [],
+                ),
+              ]
+            : [];
+          const contract: ContractCheck[] = [
+            ...baseContract,
+            // A decision whose check is already one of the project's checks runs once, under that check.
+            ...governing.flatMap((decision): ContractCheck[] =>
+              decision.check && !baseContract.some((check) => isSameCheck(decision.check as string, check))
+                ? [{ kind: "decision", command: decision.check, source: decision.id }]
+                : [],
+            ),
+          ];
           if (contract.length > 0) {
             const results = await evaluateTurnContract({
               checks: contract,
@@ -3110,8 +3140,18 @@ export class Agent {
                       : result.failedBefore
                         ? " (it already failed before your first change)"
                         : "";
-                  return `- \`${result.check.command}\`${note}:\n${describeFailures(result.detail)}`;
+                  const broken = brokenDecisions(result.check.command);
+                  const decisionNote =
+                    broken.length > 0
+                      ? ` It enforces ${broken.map((decision) => `${decision.id} (${decision.title})`).join(", ")}, a decision the user approved.`
+                      : "";
+                  return `- \`${result.check.command}\`${note}:${decisionNote}\n${describeFailures(result.detail)}`;
                 }),
+                ...(failing.some((result) => brokenDecisions(result.check.command).length > 0)
+                  ? [
+                      "Your change breaks a decision the user approved. Restore what the decision requires; if the decision itself should change, say so and propose a superseding decision with propose_decision. Never weaken or skip its check.",
+                    ]
+                  : []),
                 ...(regression && byFileTools.length > 0
                   ? [
                       `Your last attempt changed ${fileList(byFileTools)}${
@@ -3141,9 +3181,14 @@ export class Agent {
               continue;
             } else {
               const olderThanTurn = failing.every((result) => result.failedBefore);
+              const violated = [...new Set(failing.flatMap((result) => brokenDecisions(result.check.command)))];
               const reason = `${failing.map((result) => `\`${result.check.command}\``).join(", ")} ${
                 failing.length === 1 ? "fails" : "fail"
-              } on the final code${olderThanTurn ? ", as before this turn" : ""}, after ${verificationRetries} automatic request(s).`;
+              } on the final code${olderThanTurn ? ", as before this turn" : ""}, after ${verificationRetries} automatic request(s).${
+                violated.length > 0
+                  ? ` This breaks ${violated.map((decision) => `${decision.id} (${decision.title})`).join(", ")}: revert the change, or approve a decision that supersedes ${violated.length === 1 ? "it" : "them"}.`
+                  : ""
+              }`;
               this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
               this.persistKernelIndex(reason);
               // The memories this turn was given did not lead to passing checks (audit doc 15, M3).

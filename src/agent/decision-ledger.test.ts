@@ -2,8 +2,9 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
-import { activeDecisions, listDecisions } from "../ledger/store";
+import { activeDecisions, approveDecision, listDecisions, proposeDecision } from "../ledger/store";
 import type { ProviderAdapter, ProviderEvent, ProviderStreamRequest } from "../providers/types";
 
 /**
@@ -42,6 +43,7 @@ vi.mock("../hooks/index", () => ({
   executePostToolFailureHooks: vi.fn(async () => ({})),
 }));
 
+import type { Ablation } from "./ablation";
 import { Agent } from "./agent";
 
 let workspace: string;
@@ -164,5 +166,107 @@ describe("propose_decision in a turn", () => {
     expect(output?.output).toContain("declined D-0001");
     expect(listDecisions(workspace)).toEqual([]);
     expect(existsSync(join(workspace, "docs", "decisions"))).toBe(true);
+  });
+});
+
+describe("an approved decision is enforced when a change touches what it covers (phase 3)", () => {
+  function seedDecision(scope: string[]) {
+    const proposed = proposeDecision(workspace, { ...proposal, scope, check: "bun test money", source: "user" });
+    if (!proposed.ok) throw new Error(proposed.reason);
+    approveDecision(workspace, proposed.decision.id);
+  }
+
+  /** A model that rewrites src/money.ts every round and claims it is done; records what each round was asked. */
+  function editingModel() {
+    const asked: string[] = [];
+    let round = 0;
+    const provider: ProviderAdapter = {
+      id: "editing",
+      defaultModelId: "ledger-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: (request: ProviderStreamRequest) => {
+        const messages = (request.messages ?? []) as Array<{ role: string; content: unknown }>;
+        const lastUser = [...messages].reverse().find((message) => message.role === "user");
+        asked.push(typeof lastUser?.content === "string" ? lastUser.content : "");
+        round += 1;
+        const id = `w${round}`;
+        return {
+          events: (async function* () {
+            const call: ProviderEvent = {
+              type: "tool-call",
+              toolCall: {
+                id,
+                type: "function",
+                function: { name: "write_file", arguments: JSON.stringify({ path: "src/money.ts" }) },
+              },
+            };
+            yield call;
+            yield {
+              type: "tool-result",
+              toolCall: call.toolCall,
+              output: {
+                success: true,
+                output: "Updated src/money.ts",
+                diff: { filePath: "src/money.ts", additions: 1, removals: 1, patch: "", isNew: false },
+              },
+            };
+            yield { type: "text-delta", text: "Done." };
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: '{"memories":[]}', modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    return { provider, asked };
+  }
+
+  async function runEdit(ablate: Ablation[] = []) {
+    const { provider, asked } = editingModel();
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+      passed: false,
+      output: "(fail) money > sums in cents",
+      durationMs: 1,
+    }));
+    const agent = new Agent(undefined, undefined, "ledger-model", undefined, {
+      provider,
+      cwd: workspace,
+      persistSession: false,
+      checkRunner,
+      ablate,
+    });
+    let text = "";
+    for await (const chunk of agent.processMessage("Store prices as dollars with decimals")) {
+      if (chunk.type === "content") text += chunk.content ?? "";
+    }
+    return { asked, checkRunner, text };
+  }
+
+  it("blocks a change that breaks an approved decision, names it, and asks to revert or supersede", async () => {
+    seedDecision(["src/**"]);
+    const { asked, checkRunner, text } = await runEdit();
+
+    expect(checkRunner.mock.calls.map(([command]) => command)).toContain("bun test money");
+    expect(asked[1]).toContain("It enforces D-0001 (Money is stored in integer cents), a decision the user approved.");
+    expect(asked[1]).toContain("propose a superseding decision with propose_decision");
+    expect(text).toContain(
+      "This breaks D-0001 (Money is stored in integer cents): revert the change, or approve a decision that supersedes it.",
+    );
+  });
+
+  it("leaves a decision's check alone when the change is outside what it covers", async () => {
+    seedDecision(["src/billing/**"]);
+    const { checkRunner, text } = await runEdit();
+
+    expect(checkRunner).not.toHaveBeenCalled();
+    expect(text).not.toContain("D-0001");
+  });
+
+  it("enforces nothing when the ledger is switched off", async () => {
+    seedDecision(["src/**"]);
+    const { checkRunner, text } = await runEdit(["ledger"]);
+
+    expect(checkRunner).not.toHaveBeenCalled();
+    expect(text).not.toContain("D-0001");
   });
 });

@@ -27,7 +27,8 @@ export interface ObservedCheckRun {
  * agent proposed and which failed before its change.
  */
 export interface ContractCheck {
-  kind: CheckKind | "task";
+  /** A project check, a plan criterion's command, or the check of a decision the user approved. */
+  kind: CheckKind | "task" | "decision";
   command: string;
   source: string;
   runs?: string;
