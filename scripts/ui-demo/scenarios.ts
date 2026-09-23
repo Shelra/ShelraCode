@@ -386,6 +386,28 @@ const DESTRUCTIVE: DemoTurn[] = [
   ],
 ];
 
+/** The agent proposes a decision for the project's ledger and it waits for the user's answer. */
+const DECISION: DemoTurn[] = [
+  [
+    [
+      { say: "You want money kept in integer cents from now on, so I'll record that as a decision of this project." },
+      {
+        call: "propose_decision",
+        input: {
+          title: "Money is integer cents",
+          rule: "Amounts are integers of cents everywhere; dollars appear only when a value is displayed.",
+          why: "Summing floating-point dollars loses cents.",
+          evidence: "The user, in this session.",
+          scope: ["src/**"],
+          check: "bun test",
+        },
+        ms: 300,
+      },
+    ],
+    [{ say: "Recorded as you answered. I'll keep amounts in cents in this change." }],
+  ],
+];
+
 export const SCENARIOS: Record<string, DemoTurn[]> = {
   "fix-auth": [FIX_AUTH_TURN_1, FIX_AUTH_TURN_2],
   errors: ERRORS,
@@ -395,4 +417,5 @@ export const SCENARIOS: Record<string, DemoTurn[]> = {
   subagent: SUBAGENT,
   payment: PAYMENT,
   destructive: DESTRUCTIVE,
+  decision: DECISION,
 };

@@ -163,6 +163,33 @@ describe("describeToolResult", () => {
     });
   });
 
+  it("says what became of a proposed decision", () => {
+    const proposal = call("propose_decision", { title: "Money is integer cents" });
+    const answer = (output: string, success = true) => describeToolResult(proposal, { success, output });
+    expect(answer("Saved as D-0003, a proposal in docs/decisions/0003-money.md. It counts once …")).toMatchObject({
+      verb: "Proposed decision",
+      object: "Money is integer cents",
+      meta: "D-0003 · pending",
+      tone: "warning",
+      group: "memory",
+    });
+    expect(answer("The user approved D-0003: it is an active decision now.")).toMatchObject({
+      verb: "Recorded decision",
+      meta: "D-0003",
+      tone: "success",
+    });
+    expect(answer("The user declined D-0003; it was not recorded.")).toMatchObject({ verb: "Dropped proposal" });
+    expect(answer("This is already recorded as D-0001 (active).", false)).toMatchObject({
+      verb: "Could not propose",
+      tone: "danger",
+    });
+    expect(describeToolResult(call("restore_file", { path: "src/a.ts" }), { success: true })).toMatchObject({
+      verb: "Restored",
+      object: "src/a.ts",
+      group: "change",
+    });
+  });
+
   it("labels a new file as created", () => {
     const result: ToolResult = {
       success: true,

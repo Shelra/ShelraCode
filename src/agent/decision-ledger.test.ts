@@ -123,16 +123,20 @@ async function runTurn(setup?: (agent: Agent) => void) {
     persistSession: false,
   });
   setup?.(agent);
-  for await (const _chunk of agent.processMessage("From now on money is integer cents. Record that decision.")) {
-    // drain
+  let text = "";
+  for await (const chunk of agent.processMessage("From now on money is integer cents. Record that decision.")) {
+    if (chunk.type === "content") text += chunk.content ?? "";
   }
-  return outputs;
+  return Object.assign(outputs, { text });
 }
 
 describe("propose_decision in a turn", () => {
   it("leaves the proposal waiting in the ledger when nobody can approve it", async () => {
-    const [output] = await runTurn();
+    const outputs = await runTurn();
+    const [output] = outputs;
 
+    // The ledger file is the host's record, not work of the agent's that needs a check.
+    expect(outputs.text).not.toContain("[Not verified");
     expect(output).toMatchObject({ success: true, output: expect.stringContaining("shelra decisions approve D-0001") });
     expect(listDecisions(workspace)).toEqual([
       expect.objectContaining({ id: "D-0001", status: "proposed", source: "agent", check: proposal.check }),

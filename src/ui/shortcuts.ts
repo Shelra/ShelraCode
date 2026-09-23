@@ -61,6 +61,13 @@ export const APPROVAL_HINTS: readonly Hint[] = [
   { key: "up/down", label: "choose" },
 ];
 
+/** A proposed decision waits above the composer: esc leaves it proposed, it never approves or drops it. */
+export const DECISION_HINTS: readonly Hint[] = [
+  { key: "enter", label: "confirm" },
+  { key: "esc", label: "not now" },
+  { key: "up/down", label: "choose" },
+];
+
 export const SUGGESTION_HINTS: readonly Hint[] = [
   { key: "tab", label: "accept" },
   { key: "up/down", label: "navigate" },

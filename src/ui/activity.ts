@@ -243,6 +243,10 @@ export function describeToolCall(toolCall: ToolCall): ActivityPhrase {
       return { verb: "Checking project memory", object: truncateText(arg(toolCall, "slug"), 60) };
     case "memory_delete":
       return { verb: "Removing project memory", object: truncateText(arg(toolCall, "slug"), 60) };
+    case "propose_decision":
+      return { verb: "Proposing a decision", object: truncateText(arg(toolCall, "title"), 60) };
+    case "restore_file":
+      return { verb: "Restoring", object: shortenPath(arg(toolCall, "path")) };
     case "generate_image":
     case "generate_video":
       return {
@@ -469,11 +473,14 @@ function groupFor(name: string, command: string, path: string): ActivityGroup {
     case "write_file":
     case "edit_file":
     case "delete_file":
+    case "restore_file":
       return "change";
     case "bash":
       return isVerificationCommand(command) ? "verify" : "command";
     case "generate_plan":
       return "plan";
+    case "propose_decision":
+      return "memory";
     case "task":
     case "delegate":
       return "agent";
@@ -640,6 +647,36 @@ ${result.output ?? ""}`,
         lines: result.success ? (result.task?.summary ? [truncateText(result.task.summary, 140)] : []) : [failedText],
       };
     }
+    case "propose_decision": {
+      // The agent writes these outputs itself (proposeDecisionFromTool), so their openings are stable.
+      const output = result.output ?? "";
+      const decisionId = /\bD-\d{4,}\b/u.exec(output)?.[0];
+      const title = truncateText(arg(toolCall, "title"), 60);
+      if (!result.success) {
+        return { ...base, tone: "danger", verb: "Could not propose", object: title, lines: [failedText] };
+      }
+      if (output.startsWith("The user approved")) {
+        return { ...base, tone: "success", verb: "Recorded decision", object: title, meta: decisionId };
+      }
+      if (output.startsWith("The user declined")) {
+        return { ...base, tone: "neutral", verb: "Dropped proposal", object: title, meta: decisionId };
+      }
+      return {
+        ...base,
+        tone: "warning",
+        verb: "Proposed decision",
+        object: title,
+        meta: decisionId ? `${decisionId} · pending` : "pending",
+      };
+    }
+    case "restore_file":
+      return {
+        ...base,
+        tone: result.success ? "neutral" : "danger",
+        verb: result.success ? "Restored" : "Could not restore",
+        object: shortenPath(arg(toolCall, "path")),
+        lines: result.success ? [] : [failedText],
+      };
     default:
       return null;
   }

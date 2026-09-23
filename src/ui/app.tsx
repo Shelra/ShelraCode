@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Agent, type ProcessMessageObserver } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
 import { type HookIssue, setHookIssueListener } from "../hooks/index";
+import type { Decision } from "../ledger/types";
 import { POPULAR_MCP_CATALOG } from "../mcp/catalog";
 import { parseEnvLines, parseHeaderLines } from "../mcp/parse-headers";
 import { toMcpServerId, validateMcpServerConfig } from "../mcp/validate";
@@ -135,6 +136,7 @@ import {
 } from "./session-inspector";
 import {
   APPROVAL_HINTS,
+  DECISION_HINTS,
   fitHints,
   type Hint,
   IDLE_HINTS,
@@ -669,6 +671,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   } | null>(null);
   const [pendingCommandApproval, setPendingCommandApproval] = useState<CommandApproval | null>(null);
   const commandApprovalRef = useRef<PendingCommandAnswer | null>(null);
+  const [pendingDecisionApproval, setPendingDecisionApproval] = useState<DecisionApprovalState | null>(null);
+  const decisionApprovalRef = useRef<PendingDecisionAnswer | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
   const [sessionTitle, setSessionTitle] = useState<string | null>(() => agent.getSessionTitle());
   const [sessionId, setSessionId] = useState<string | null>(() => agent.getSessionId());
@@ -2443,6 +2447,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         key?.stopPropagation();
         return true;
       }
+      const decisionApproval = decisionApprovalRef.current;
+      if (decisionApproval) {
+        // Esc leaves the proposal waiting in the ledger ("Not now") and the turn goes on.
+        if (!decisionApproval.settled && Date.now() - decisionApproval.shownAt > 150) decisionApproval.answer("later");
+        key?.preventDefault();
+        key?.stopPropagation();
+        return true;
+      }
       if (!isProcessingRef.current) return false;
       key?.preventDefault();
       key?.stopPropagation();
@@ -2735,6 +2747,36 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     // several input layers, and the later ones must not cancel the turn the answer let go on.
     if (!pendingCommandApproval && commandApprovalRef.current?.settled) commandApprovalRef.current = null;
   }, [pendingCommandApproval]);
+  useEffect(() => {
+    agent.setDecisionApproval(
+      (decision, signal) =>
+        new Promise<DecisionAnswer>((resolve) => {
+          const entry: PendingDecisionAnswer = {
+            shownAt: Date.now(),
+            settled: false,
+            answer: (answer) => {
+              if (entry.settled) return;
+              entry.settled = true;
+              signal?.removeEventListener("abort", onAbort);
+              setPendingDecisionApproval(null);
+              resolve(answer);
+            },
+          };
+          const onAbort = () => entry.answer("later");
+          signal?.addEventListener("abort", onAbort, { once: true });
+          decisionApprovalRef.current = entry;
+          // "Not now" starts selected: a stray enter neither records a commitment nor drops the proposal.
+          setPendingDecisionApproval({ decision, selected: 1 });
+        }),
+    );
+    return () => {
+      agent.setDecisionApproval(null);
+      decisionApprovalRef.current?.answer("later");
+    };
+  }, [agent]);
+  useEffect(() => {
+    if (!pendingDecisionApproval && decisionApprovalRef.current?.settled) decisionApprovalRef.current = null;
+  }, [pendingDecisionApproval]);
   useEffect(
     () =>
       agent.onSubagentStatus((status) => {
@@ -3082,6 +3124,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     showWalletPicker ||
     !!pendingPaymentApproval ||
     !!pendingCommandApproval ||
+    !!pendingDecisionApproval ||
     showScheduleModal ||
     showAgentsModal ||
     showAgentsEditor ||
@@ -3209,6 +3252,25 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
         if (key.name === "return") {
           approval?.answer(pendingCommandApproval.selected === 0);
+          return;
+        }
+        return;
+      }
+      if (pendingDecisionApproval) {
+        const approval = decisionApprovalRef.current;
+        if (isEscapeKey(key)) {
+          approval?.answer("later");
+          return;
+        }
+        if (key.name === "up" || key.name === "down") {
+          const step = key.name === "up" ? DECISION_OPTIONS.length - 1 : 1;
+          setPendingDecisionApproval((p) =>
+            p ? { ...p, selected: (p.selected + step) % DECISION_OPTIONS.length } : p,
+          );
+          return;
+        }
+        if (key.name === "return") {
+          approval?.answer(DECISION_OPTIONS[pendingDecisionApproval.selected]?.answer ?? "later");
           return;
         }
         return;
@@ -4183,6 +4245,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       showMotionPicker,
       pendingPaymentApproval,
       pendingCommandApproval,
+      pendingDecisionApproval,
       processMessage,
       showWalletPicker,
       walletSettings,
@@ -4365,12 +4428,16 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   // priority order (a running tool beats a stage; a stage beats waiting on the model).
   const livePhrase = useMemo<ActivityPhrase>(() => {
     if (pendingCommandApproval) return { verb: "Waiting for your answer on", object: pendingCommandApproval.command };
+    if (pendingDecisionApproval) {
+      const { decision } = pendingDecisionApproval;
+      return { verb: "Waiting for your answer on", object: `${decision.id} ${decision.title}` };
+    }
     if (activePresentationTool) return describeToolCall(activePresentationTool);
     if (liveStatus && livePhase.kind === "waiting") return describeStatusStage(liveStatus.stage, liveStatus.detail);
     if (livePhase.kind === "thinking") return { verb: "Thinking", object: "" };
     if (livePhase.kind === "writing") return { verb: "Writing response", object: "" };
     return { verb: "Waiting for", object: model };
-  }, [pendingCommandApproval, activePresentationTool, liveStatus, livePhase.kind, model]);
+  }, [pendingCommandApproval, pendingDecisionApproval, activePresentationTool, liveStatus, livePhase.kind, model]);
   const liveElapsedMs = useMemo(() => {
     if (activePresentationTool) {
       const startedAt = toolStartedAtRef.current.get(activePresentationTool.id);
@@ -4565,6 +4632,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 {showPlanPanel && <PlanQuestionsPanel t={t} questions={planQuestions} state={pqs} />}
                 {pendingPaymentApproval && <PaymentApprovalPanel t={t} payment={pendingPaymentApproval} />}
                 {pendingCommandApproval && <CommandApprovalPanel t={t} approval={pendingCommandApproval} />}
+                {pendingDecisionApproval && <DecisionApprovalPanel t={t} approval={pendingDecisionApproval} />}
               </scrollbox>
               {missionTab !== "log" ? (
                 <MissionPanel
@@ -4632,7 +4700,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   viewOpen={missionTab !== "log"}
                   width={chatWidth - 4}
                   notice={notice}
-                  approvalOpen={!!pendingCommandApproval}
+                  approvalOpen={pendingDecisionApproval ? "decision" : !!pendingCommandApproval}
                 />
                 <ActiveAgentsStrip
                   t={t}
@@ -5073,8 +5141,8 @@ function PromptBox({
   /** Outer width in cells; decides how many hints fit. */
   width?: number;
   notice?: string | null;
-  /** A command waits for approval above the composer, so enter and esc answer it. */
-  approvalOpen?: boolean;
+  /** A command (true) or a proposed decision waits for an answer above the composer, so enter and esc answer it. */
+  approvalOpen?: boolean | "decision";
 }) {
   const hasQueue = (queuedMessages?.length ?? 0) > 0;
   const showSuggestions = typeahead?.visible ?? false;
@@ -5215,7 +5283,7 @@ export function ComposerFooter({
   hasViews: boolean;
   viewOpen: boolean;
   notice?: string | null;
-  approvalOpen: boolean;
+  approvalOpen: boolean | "decision";
 }) {
   const inner = Math.max(20, width - 6);
   const modelLabel = model.length > 26 ? `${model.slice(0, 25)}…` : model;
@@ -5223,7 +5291,9 @@ export function ComposerFooter({
   const leftWidth = modelLabel.length + (meter ? meter.length + 2 : 0);
   const room = Math.max(0, inner - leftWidth - 3);
   const base = approvalOpen
-    ? APPROVAL_HINTS
+    ? approvalOpen === "decision"
+      ? DECISION_HINTS
+      : APPROVAL_HINTS
     : isProcessing
       ? WORKING_HINTS
       : showSuggestions
@@ -6872,6 +6942,75 @@ export function CommandApprovalPanel({ t, approval }: { t: Theme; approval: Comm
       </box>
       <box marginTop={1} flexDirection="column">
         {options.map((label, i) => {
+          const isSel = i === approval.selected;
+          return (
+            <text key={label}>
+              <span style={{ fg: isSel ? t.success : t.textMuted }}>{isSel ? "> " : "  "}</span>
+              <span style={{ fg: isSel ? t.text : t.textMuted }}>{isSel ? <b>{label}</b> : label}</span>
+            </text>
+          );
+        })}
+      </box>
+    </box>
+  );
+}
+
+type DecisionAnswer = "approve" | "reject" | "later";
+
+/** A decision the agent proposed, waiting for the user's answer (the agent's `setDecisionApproval`). */
+interface DecisionApprovalState {
+  decision: Decision;
+  selected: number;
+}
+
+interface PendingDecisionAnswer {
+  shownAt: number;
+  settled: boolean;
+  answer: (answer: DecisionAnswer) => void;
+}
+
+const DECISION_OPTIONS: ReadonlyArray<{ label: string; answer: DecisionAnswer }> = [
+  { label: "Approve", answer: "approve" },
+  { label: "Not now", answer: "later" },
+  { label: "Reject", answer: "reject" },
+];
+
+export function DecisionApprovalPanel({ t, approval }: { t: Theme; approval: DecisionApprovalState }) {
+  const { decision } = approval;
+  // One line of facts and a rule cut to two lines keep the whole panel, header included, inside the log
+  // of an 80x24 terminal; the full text is in the decision's file.
+  const details = [
+    decision.scope.length > 0 ? `Covers ${decision.scope.join(", ")}` : "Covers the whole project",
+    decision.check ? `checked by ${decision.check}` : "no check, context only",
+    ...(decision.supersedes ? [`replaces ${decision.supersedes}`] : []),
+  ].join(" · ");
+  const rule = decision.rule.replace(/\s+/gu, " ").trim();
+  return (
+    <box
+      flexDirection="column"
+      border={["top", "left", "right", "bottom"]}
+      borderStyle="single"
+      borderColor={t.info}
+      marginTop={1}
+      paddingLeft={2}
+      paddingRight={2}
+    >
+      <SectionBadge t={t} label="Decision" detail="needs your approval" />
+      <box flexDirection="column">
+        <text>
+          <span style={{ fg: t.text }}>
+            <b>{`${decision.id} ${decision.title}`}</b>
+          </span>
+        </text>
+        <text>
+          <span style={{ fg: t.textSecondary }}>{rule.length > 150 ? `${rule.slice(0, 149)}…` : rule}</span>
+        </text>
+        <text>
+          <span style={{ fg: t.textMuted }}>{details}</span>
+        </text>
+      </box>
+      <box flexDirection="column">
+        {DECISION_OPTIONS.map(({ label }, i) => {
           const isSel = i === approval.selected;
           return (
             <text key={label}>

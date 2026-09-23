@@ -3,7 +3,7 @@ import { testRender } from "@opentui/react/test-utils";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import type { ChatEntry } from "../types/index";
-import { CommandApprovalPanel, ComposerFooter, MessageView, MotionPickerModal } from "./app";
+import { CommandApprovalPanel, ComposerFooter, DecisionApprovalPanel, MessageView, MotionPickerModal } from "./app";
 import { dark } from "./theme";
 
 async function render(node: ReactNode, width = 60, height = 8) {
@@ -70,6 +70,41 @@ describe("CommandApprovalPanel", () => {
   });
 });
 
+describe("DecisionApprovalPanel", () => {
+  it("shows the proposed rule, what it covers and how it is checked, with Not now chosen", async () => {
+    const { frame, spans } = await render(
+      <DecisionApprovalPanel
+        t={dark}
+        approval={{
+          decision: {
+            id: "D-0004",
+            title: "Money is integer cents",
+            status: "proposed",
+            source: "agent",
+            rule: "Amounts are integers of cents; dollars appear only at display time.",
+            scope: ["src/**"],
+            check: "bun test src/money.test.ts",
+            proposed: "2026-09-23",
+            file: "docs/decisions/0004-money-is-integer-cents.md",
+          },
+          selected: 1,
+        }}
+      />,
+      76,
+      14,
+    );
+    expect(frame).toContain("[ DECISION ]");
+    expect(frame).toContain("D-0004 Money is integer cents");
+    expect(frame).toContain("Amounts are integers of cents; dollars appear only at display time.");
+    expect(frame).toContain("Covers src/** · checked by bun test src/money.test.ts");
+    expect(frame).toContain("> Not now");
+    expect(frame).not.toContain("> Approve");
+    expect(find(spans, "Covers src")?.fg.equals(RGBA.fromHex(dark.textMuted))).toBe(true);
+    // Nine rows here, ten with a rule that wraps: the whole panel, border included, fits the log of an 80x24 terminal.
+    expect(frame.split(String.fromCharCode(10)).filter((line) => line.trim()).length).toBe(9);
+  });
+});
+
 describe("ComposerFooter", () => {
   it("offers the keys that answer a command waiting for approval, not stop and queue", async () => {
     const { frame } = await render(
@@ -91,5 +126,25 @@ describe("ComposerFooter", () => {
     expect(frame).toContain("esc don't run");
     expect(frame).not.toContain("esc stop");
     expect(frame).not.toContain("enter queue");
+  });
+
+  it("offers esc as not now while a proposed decision waits", async () => {
+    const { frame } = await render(
+      <ComposerFooter
+        t={dark}
+        width={80}
+        model="Qwen3 Coder"
+        isProcessing
+        showSuggestions={false}
+        queuedCount={0}
+        hasViews={false}
+        viewOpen={false}
+        approvalOpen="decision"
+      />,
+      80,
+      1,
+    );
+    expect(frame).toContain("esc not now");
+    expect(frame).not.toContain("esc don't run");
   });
 });

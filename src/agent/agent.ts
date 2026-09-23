@@ -26,7 +26,7 @@ import type {
   TaskCreatedHookInput,
   UserPromptSubmitHookInput,
 } from "../hooks/types";
-import { approveDecision, type LedgerResult, proposeDecision, rejectDecision } from "../ledger/store";
+import { approveDecision, findDecision, type LedgerResult, proposeDecision, rejectDecision } from "../ledger/store";
 import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
@@ -444,6 +444,8 @@ export class Agent {
   private planState: { published: boolean; structured: boolean } = { published: true, structured: false };
   /** Files as they were before each attempt of this turn changed them; read by restore_file. */
   private attemptJournal = new AttemptJournal();
+  /** Ledger files this turn wrote through the ledger itself: the host's record, never work to verify. */
+  private turnLedgerWrites = new Set<string>();
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
@@ -693,6 +695,11 @@ export class Agent {
     }
     if (!result.ok) return { success: false, output: result.reason };
     const { decision } = result;
+    this.turnLedgerWrites.add(decision.file);
+    if (decision.supersedes) {
+      const replaced = findDecision(cwd, decision.supersedes);
+      if (replaced) this.turnLedgerWrites.add(replaced.file);
+    }
     const waiting = `Saved as ${decision.id}, a proposal in ${decision.file}. It counts once the user approves it (\`shelra decisions approve ${decision.id}\`); tell the user it is waiting.`;
     const ask = this.askDecisionApproval;
     if (!ask) return { success: true, output: waiting };
@@ -2214,6 +2221,7 @@ export class Agent {
     this.kernel = null;
     this.contextSummary = null;
     this.attemptJournal = new AttemptJournal();
+    this.turnLedgerWrites = new Set();
     this.emitSubagentStatus(null);
     const reportStatus = (stage: ProcessMessageStage, detail: string) => {
       notifyObserver(observer?.onStatus, { stage, detail, timestamp: Date.now() });
@@ -2893,11 +2901,13 @@ export class Agent {
           // generator): the workspace is read again and compared with its state at the turn's start.
           const cwd = this.bash.getCwd();
           const endState = turnStartState ? captureWorkspaceState(cwd) : null;
+          // The ledger's own files are the host's record of the user's answers, not work to verify.
+          const ledgerWrite = (path: string) => this.turnLedgerWrites.has(path.replaceAll("\\", "/"));
           const mutations = mergeChangedFiles(
             cwd,
             this.kernel?.snapshot().mutations ?? [],
             (turnStartState && endState && changedPaths(turnStartState, endState)) ?? [],
-          );
+          ).filter((path) => !ledgerWrite(path));
           const mutatedThisTurn = mutations.length > 0;
           // A passing check vouches only for the code it ran against: anything changed after it,
           // through a file tool or the shell, needs the checks to run again.
@@ -2906,7 +2916,7 @@ export class Agent {
                 cwd,
                 turnMutationEvents > lastPassingCheck.mutationEvents ? (this.kernel?.snapshot().mutations ?? []) : [],
                 (endState && changedPaths(lastPassingCheck.state, endState)) ?? [],
-              )
+              ).filter((path) => !ledgerWrite(path))
             : [];
           const staleEvidence =
             mutatedThisTurn &&
