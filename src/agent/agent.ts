@@ -56,6 +56,7 @@ import {
   loadTranscriptState,
   recordCheckpoint,
   recordUsageEvent,
+  replaceMessage,
   SessionStore,
   upsertObjectiveIndex,
 } from "../storage/index";
@@ -1516,6 +1517,34 @@ export class Agent {
     this.persistKernelIndex();
     yield { type: "content", content: `[${notice}]\n\n` };
     return fallback;
+  }
+
+  /**
+   * The host's verdict on a turn ("[Not verified — …]") joins the turn's last reply, in memory and in
+   * the stored transcript, so the next turn's model and a resumed session see that the work was not
+   * verified. It used to be streamed only, and vanished. It is appended to the reply rather than sent
+   * as a separate system message, which some open models' chat templates reject mid-conversation.
+   */
+  private recordVerdict(verdict: string): void {
+    try {
+      let index = this.messages.length - 1;
+      while (index >= 0 && this.messages[index]?.role !== "assistant") index -= 1;
+      if (index < 0) {
+        this.messages.push({ role: "assistant", content: verdict });
+        this.messageSeqs.push(null);
+        return;
+      }
+      const message = this.messages[index] as ModelMessage & { role: "assistant" };
+      const updated: ModelMessage =
+        typeof message.content === "string"
+          ? { ...message, content: message.content.trim() ? `${message.content}\n\n${verdict}` : verdict }
+          : { ...message, content: [...message.content, { type: "text", text: verdict }] };
+      this.messages[index] = updated;
+      const seq = this.messageSeqs[index];
+      if (this.session && typeof seq === "number") replaceMessage(this.session.id, seq, updated);
+    } catch {
+      // The verdict was already shown; failing to store it must not end the turn.
+    }
   }
 
   private discardAbortedTurn(userMessage: ModelMessage): void {
@@ -3098,10 +3127,9 @@ export class Agent {
               : "Run the relevant checks yourself, or ask me to, before treating this as done.";
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
-            yield {
-              type: "content",
-              content: `\n\n[Not verified — ${reason} ${advice}${criteriaList ? `\n${criteriaList}` : ""}]`,
-            };
+            const verdict = `[Not verified — ${reason} ${advice}${criteriaList ? `\n${criteriaList}` : ""}]`;
+            this.recordVerdict(verdict);
+            yield { type: "content", content: `\n\n${verdict}` };
             yield { type: "done" };
             return;
           }
@@ -3141,6 +3169,7 @@ export class Agent {
             this.kernel?.recordObservation(`Stop hook blocked completion: ${reason}`);
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
+            this.recordVerdict(`[Not marked complete — ${reason}]`);
             yield { type: "content", content: `\n\n[Not marked complete — ${reason}]` };
             yield { type: "done" };
             return;

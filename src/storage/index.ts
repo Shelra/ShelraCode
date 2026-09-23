@@ -48,6 +48,7 @@ export {
   loadRawTranscript,
   loadTranscript,
   loadTranscriptState,
+  replaceMessage,
 } from "./transcript";
 export { buildEffectiveTranscript, type LoadedTranscriptState, type PersistedCompaction } from "./transcript-view";
 export {

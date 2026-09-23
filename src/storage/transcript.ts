@@ -208,6 +208,21 @@ export function appendSystemMessage(sessionId: string, content: string): number 
   return appendMessages(sessionId, [{ role: "system", content }])[0] ?? null;
 }
 
+/**
+ * Rewrites one stored message in place (the host's verdict joining a turn's last reply). Tool calls
+ * and results recorded for the message are left as they are. Returns whether a message was replaced.
+ */
+export function replaceMessage(sessionId: string, seq: number, message: ModelMessage): boolean {
+  let changed = false;
+  withTransaction((db) => {
+    const result = db
+      .prepare("UPDATE messages SET role = ?, message_json = ? WHERE session_id = ? AND seq = ?")
+      .run(message.role, JSON.stringify(message), sessionId, seq) as { changes?: number };
+    changed = (result.changes ?? 0) > 0;
+  });
+  return changed;
+}
+
 export function appendCompaction(sessionId: string, firstKeptSeq: number, summary: string, tokensBefore: number): void {
   withTransaction((db) => {
     db.prepare(`

@@ -47,6 +47,7 @@ vi.mock("../storage/index", () => ({
   loadTranscriptState: vi.fn(() => ({ messages: [], seqs: [] })),
   recordCheckpoint: vi.fn(),
   recordUsageEvent: vi.fn(),
+  replaceMessage: vi.fn(),
   upsertObjectiveIndex,
   SessionStore: class {
     getWorkspace() {
@@ -742,6 +743,24 @@ describe("completion/verification gate", () => {
     expect(lastUserText(provider.requests[2])).toContain("after your last passing check");
     expect(lastUserText(provider.requests[2])).toContain("src/lexer.ts");
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
+  });
+
+  it("keeps the unverified verdict in the conversation for the next turn (audit 2026-09-23)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done, trust me." }]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
+
+    for await (const _chunk of agent.processMessage("Create a digital clock")) {
+      // drain: the turn ends [Not verified]
+    }
+    const turnOneRequests = provider.requests.length;
+    for await (const _chunk of agent.processMessage("continue")) {
+      // drain
+    }
+
+    const nextTurn = provider.requests[turnOneRequests]?.messages as Array<{ role: string; content: unknown }>;
+    const assistantTexts = nextTurn.filter((message) => message.role === "assistant").map((m) => JSON.stringify(m));
+    expect(assistantTexts.some((text) => text.includes("[Not verified"))).toBe(true);
   });
 
   it("counts a change made through the shell (audit 2026-09-23)", async () => {

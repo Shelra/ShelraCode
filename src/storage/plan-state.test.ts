@@ -6,7 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Plan, ToolResult } from "../types/index";
 import { closeDatabase } from "./db";
 import { SessionStore } from "./sessions";
-import { appendCompaction, appendMessages, buildChatEntries, loadPersistedPlanState } from "./transcript";
+import {
+  appendCompaction,
+  appendMessages,
+  buildChatEntries,
+  loadPersistedPlanState,
+  loadTranscript,
+  replaceMessage,
+} from "./transcript";
 
 const originalHome = process.env.HOME;
 
@@ -76,6 +83,26 @@ describe("durable executable plan state", () => {
       { title: "Persist", status: "complete", evidence: "saved in SQLite" },
       { title: "Resume", status: "pending" },
     ]);
+  });
+
+  it("keeps the host's verdict on a turn when its last reply is rewritten, across a reopen", () => {
+    const session = new SessionStore(tempCwd).createSession("test-model", "agent", tempCwd);
+    const [, replySeq] = appendMessages(session.id, [
+      { role: "user", content: "Fix the parser" },
+      { role: "assistant", content: "Done." },
+    ]);
+    expect(typeof replySeq).toBe("number");
+
+    const withVerdict: ModelMessage = {
+      role: "assistant",
+      content: "Done.\n\n[Not verified — No verification action was observed.]",
+    };
+    expect(replaceMessage(session.id, replySeq as number, withVerdict)).toBe(true);
+    closeDatabase();
+
+    const transcript = loadTranscript(session.id);
+    expect(transcript.at(-1)).toEqual(withVerdict);
+    expect(replaceMessage(session.id, 9_999, withVerdict)).toBe(false);
   });
 });
 
