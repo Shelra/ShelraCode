@@ -216,6 +216,8 @@ export interface ToolResult {
   lspDiagnostics?: LspDiagnosticFile[];
   /** A shell command the destructive-command guard did not run: the user said no, or nobody could be asked. */
   refused?: "declined" | "blocked";
+  /** The agent reported that the task cannot be done as asked (report_blocker), and why. */
+  blocker?: string;
 }
 
 export interface ToolCall {

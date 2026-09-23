@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -1072,5 +1072,132 @@ describe("task contract: the project's own checks decide (audit doc 15, Phase 1.
     expect(checkRunner).not.toHaveBeenCalled();
     expect(provider.round).toBe(4);
     expect(chunks.find((c) => c.content?.includes("Not verified"))?.content).toContain("No verification action");
+  });
+});
+
+describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
+  /** A scripted model: each round's events, the last repeated for later rounds. */
+  function scripted(
+    rounds: Array<() => ProviderEvent[]>,
+  ): ProviderAdapter & { round: number; requests: ProviderStreamRequest[] } {
+    const provider = {
+      id: "scripted",
+      defaultModelId: "gate-test-model",
+      round: 0,
+      requests: [] as ProviderStreamRequest[],
+      resolveModelRuntime: (modelId: string) => ({
+        modelId,
+        modelInfo: {
+          id: modelId,
+          name: "Gate test model",
+          contextWindow: 32_768,
+          inputPrice: 0,
+          outputPrice: 0,
+          reasoning: false,
+          description: "Test-only provider",
+          supportsClientTools: true,
+          supportsMaxOutputTokens: true,
+          runtimeKind: "managed-llama" as const,
+        },
+      }),
+      stream(request: ProviderStreamRequest): ProviderStream {
+        provider.requests.push(request);
+        provider.round += 1;
+        const events = (rounds[provider.round - 1] ?? rounds.at(-1) ?? (() => []))();
+        return {
+          events: (async function* () {
+            yield* events;
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+        };
+      },
+      generateText: async (request: ProviderTextRequest): Promise<ProviderTextResult> => ({
+        text: "Summary.",
+        modelId: request.modelId,
+      }),
+      getToolContext: (): ProviderToolContext => ({}),
+    };
+    return provider;
+  }
+
+  it("ends the turn with the agent's reason when it reports a blocker, without asking it to verify", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const reason = "The tests expect UTC but the request asks for local time; which one is right?";
+    const provider = scripted([
+      () => [
+        toolCallEvent("w", "write_file", { path: "clock.ts", content: "x" }),
+        toolResultEvent("w", "write_file", {
+          success: true,
+          output: "Created clock.ts",
+          diff: { filePath: "clock.ts", additions: 1, removals: 0, patch: "", isNew: true },
+        }),
+        toolCallEvent("b", "report_blocker", { reason }),
+        toolResultEvent("b", "report_blocker", { success: true, output: "Blocker reported", blocker: reason }),
+        { type: "text-delta", text: "I stopped." },
+      ],
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Make the clock show local time")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(1);
+    expect(chunks.some((c) => c.content?.includes(`[Stopped — ${reason}]`))).toBe(true);
+  });
+
+  /** A workspace with a test that exists before the turn; each scripted round edits it on disk. */
+  function withExistingTest() {
+    const dir = mkdtempSync(join(tmpdir(), "shelra-test-protection-"));
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "slug.test.ts"), "expect(slugify(' A ')).toBe('a');\n");
+    const weakenTest = (): ProviderEvent[] => {
+      writeFileSync(join(dir, "src", "slug.test.ts"), "// expectations removed\n");
+      return [
+        toolCallEvent("t", "write_file", { path: "src/slug.test.ts", content: "// expectations removed\n" }),
+        toolResultEvent("t", "write_file", {
+          success: true,
+          output: "Updated src/slug.test.ts",
+          diff: { filePath: "src/slug.test.ts", additions: 1, removals: 1, patch: "", isNew: false },
+        }),
+        toolCallEvent("c", "bash", { command: "bun test" }),
+        toolResultEvent("c", "bash", { success: true, output: "0 fail" }, { command: "bun test" }),
+        { type: "text-delta", text: "Tests pass." },
+      ];
+    };
+    return { dir, weakenTest };
+  }
+
+  it("asks once to restore tests the request said not to modify, then reports it", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const { dir, weakenTest } = withExistingTest();
+    const provider = scripted([weakenTest, () => [{ type: "text-delta", text: "Done anyway." }]]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Implement slugify. Do not modify tests.")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(2);
+    expect(lastUserText(provider.requests[1])).toContain("you changed tests that existed before this request");
+    const verdict = chunks.find((c) => c.content?.includes("Not verified"));
+    expect(verdict?.content).toContain("src/slug.test.ts");
+  });
+
+  it("lets a request that asks for test changes change them", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const { dir, weakenTest } = withExistingTest();
+    const provider = scripted([weakenTest]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Update the slugify tests for the new rules.")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(1);
+    expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
   });
 });

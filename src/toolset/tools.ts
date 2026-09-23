@@ -1341,6 +1341,23 @@ export function createTools(
     },
   });
 
+  if (mode === "agent") {
+    // An honest exit (audit doc 15, Phase 1.5): saying why the task cannot be done beats weakening a test,
+    // special-casing a check or claiming success.
+    tools.report_blocker = tool({
+      description:
+        "Stop and tell the user why the task cannot be done as asked: a missing credential or service, requirements that contradict each other, or a check that cannot pass without breaking what was asked. Use it instead of weakening a test, special-casing a check or claiming success. The turn ends with your reason.",
+      inputSchema: z.object({
+        reason: z.string().describe("What blocks the task, what you tried, and what would unblock it"),
+      }),
+      execute: async ({ reason }) => ({
+        success: true,
+        output: `Blocker reported to the user: ${reason.trim()}`,
+        blocker: reason.trim() || "No reason given.",
+      }),
+    });
+  }
+
   return hardenToolSet(tools, { cwd, sessionId: options.sessionId });
 }
 

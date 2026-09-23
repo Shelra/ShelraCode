@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { captureWorkspaceState, changedPaths, mergeChangedFiles } from "./workspace-state";
+import { captureWorkspaceState, changedPaths, existedAt, mergeChangedFiles } from "./workspace-state";
 
 function workspace(): string {
   return mkdtempSync(join(tmpdir(), "shelra-workspace-state-"));
@@ -75,6 +75,17 @@ describe.skipIf(!hasGit)("workspace state in a git repository", () => {
     writeFileSync(join(root, "generated", "out.js"), "x\n");
 
     expect(changedPaths(before, captureWorkspaceState(root))).toEqual(["a.ts", "b.ts"]);
+  });
+
+  it("knows which files existed at the start: tracked ones, and ones already changed then (audit doc 15, 1.5)", () => {
+    const root = repo();
+    writeFileSync(join(root, "draft.ts"), "export {};\n");
+    const start = captureWorkspaceState(root);
+    writeFileSync(join(root, "new.ts"), "export {};\n");
+
+    expect(existedAt(start, root, "a.ts")).toBe(true);
+    expect(existedAt(start, root, "draft.ts")).toBe(true);
+    expect(existedAt(start, root, "new.ts")).toBe(false);
   });
 
   it("sees a file changed again after it was already dirty", async () => {

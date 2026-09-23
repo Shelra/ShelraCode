@@ -138,6 +138,22 @@ export function changedPaths(before: WorkspaceState, after: WorkspaceState): str
   return [...changed].sort();
 }
 
+/**
+ * Whether `path` (relative to `cwd`) existed when `start` was read. A walk lists every file; git status lists
+ * only what differed from the last commit, so an unlisted file existed if git tracks it.
+ */
+export function existedAt(start: WorkspaceState, cwd: string, path: string): boolean {
+  const signatureAtStart = start.files.get(path);
+  if (signatureAtStart !== undefined) return signatureAtStart !== "deleted";
+  if (start.kind !== "git") return false;
+  const result = spawnSync("git", ["-C", cwd, "ls-files", "--error-unmatch", "--", path], {
+    encoding: "utf8",
+    timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
+  });
+  return !result.error && result.status === 0;
+}
+
 /** One list of changed files from two sources, relative to the workspace, without duplicates. */
 export function mergeChangedFiles(cwd: string, ...lists: ReadonlyArray<readonly string[]>): string[] {
   const merged = new Map<string, string>();
