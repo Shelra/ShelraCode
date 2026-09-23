@@ -725,13 +725,16 @@ export function explainError(message: string): ErrorExplanation {
     return { title: "Authentication failed", hint: "Check your API key, then retry." };
   }
   if (/timed? ?out|timeout|ETIMEDOUT|no response|stalled|idle/i.test(message)) {
-    return { title: "The model timed out", hint: "Retry with ↑ then enter, or choose a faster model with /models." };
+    return {
+      title: "The model timed out",
+      hint: "Retry: press up, then enter. Or choose a faster model with /models.",
+    };
   }
   if (/ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|network|offline/i.test(message)) {
-    return { title: "Can't reach the provider", hint: "Check your connection, then retry with ↑ then enter." };
+    return { title: "Can't reach the provider", hint: "Check your connection, then retry: press up, then enter." };
   }
   if (/context (?:length|window)|too long|maximum context|token limit/i.test(message)) {
     return { title: "The context is full", hint: "Start a fresh session with /new, or ask for a smaller step." };
   }
-  return { title: "Request failed", hint: "Retry with ↑ then enter." };
+  return { title: "Request failed", hint: "Retry: press up, then enter." };
 }

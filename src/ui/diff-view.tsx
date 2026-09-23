@@ -93,7 +93,7 @@ export function DiffView({ t, diff, maxRows = DEFAULT_MAX_DIFF_ROWS, showHeader 
             return (
               // biome-ignore lint/suspicious/noArrayIndexKey: separator rows lack unique identifiers
               <box key={`sep-${i}`} backgroundColor={t.diffSeparator} paddingLeft={1}>
-                <text fg={t.diffSeparatorFg}>{`⋯  ${row.count} unchanged lines`}</text>
+                <text fg={t.diffSeparatorFg}>{`·  ${row.count} unchanged lines`}</text>
               </box>
             );
           }
@@ -123,7 +123,7 @@ export function DiffView({ t, diff, maxRows = DEFAULT_MAX_DIFF_ROWS, showHeader 
 
         {truncated ? (
           <box backgroundColor={t.diffSeparator} paddingLeft={1}>
-            <text fg={t.diffSeparatorFg}>{`⋯  ${rows.length - maxRows} more lines`}</text>
+            <text fg={t.diffSeparatorFg}>{`·  ${rows.length - maxRows} more lines`}</text>
           </box>
         ) : null}
       </box>

@@ -5,7 +5,7 @@ import type { KernelState } from "../agent/kernel";
 import type { DelegationRun, Plan, SubagentStatus } from "../types/index";
 import type { CheckSummary } from "./observability";
 import { ActiveAgentsStrip, MissionPanel, SessionInspector, type VerificationStatus } from "./session-inspector";
-import { dark as defaultDark, light, type Theme } from "./theme";
+import { dark as defaultDark, dark256 as light, type Theme } from "./theme";
 
 const dark = defaultDark;
 const NOW = new Date("2026-09-13T12:00:42.000Z").getTime();
@@ -179,7 +179,7 @@ describe("mission views", () => {
     // mark (§9 of the reconstruction brief: no fabricated per-criterion precision).
     expect(frame).toContain("AC1: Activity is visible");
     if (state === "failed") {
-      expect(frame).toContain("× AC1");
+      expect(frame).toContain("✗ AC1");
       expect(frame).toContain("2 fail");
       expect(frame).toContain("No verification action observed");
     } else {
@@ -206,7 +206,7 @@ describe("mission views", () => {
     screen.renderer.destroy();
   });
 
-  it("keeps every view legible in the light palette", async () => {
+  it("keeps every view legible in the 256-colour palette", async () => {
     const { screen, frame, colors } = await renderView("working", "plan", light);
     expect(frame).toContain("PLAN");
     expect(frameUsesForeground(colors, light.brand)).toBe(true);

@@ -63,7 +63,7 @@ function rowFor(record: MemoryRecord, scope: "project" | "user", workspace: stri
   const facts = [
     meta.source ?? "inference",
     meta.confidence !== undefined ? `${Math.round(meta.confidence * 100)}%` : null,
-    `used ${meta.uses ?? 0}×`,
+    `used ${meta.uses ?? 0} ${(meta.uses ?? 0) === 1 ? "time" : "times"}`,
     confirmed ? `confirmed ${confirmed}` : null,
   ]
     .filter((fact): fact is string => fact !== null)

@@ -110,7 +110,7 @@ const ITEM = /^(\s*)([-*+]|\d{1,3}[.)])\s+(.*)$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 const TABLE_SEPARATOR = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/;
 
-const BULLETS = ["•", "◦", "▪"] as const;
+const BULLETS = ["▪", "·", "›"] as const;
 
 function startsBlock(line: string, next: string | undefined): boolean {
   return (
@@ -204,7 +204,7 @@ export function parseBlocks(text: string): Block[] {
           current = {
             depth,
             ordered,
-            marker: ordered ? (match[2] ?? "1.") : (BULLETS[Math.min(depth, BULLETS.length - 1)] ?? "•"),
+            marker: ordered ? (match[2] ?? "1.") : (BULLETS[Math.min(depth, BULLETS.length - 1)] ?? "▪"),
             text: (match[3] ?? "").trim(),
           };
           items.push(current);

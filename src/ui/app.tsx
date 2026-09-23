@@ -166,21 +166,19 @@ import {
 const THEME_OPTIONS: ThemePreference[] = ["system", "dark", "light"];
 const MOTION_OPTIONS: MotionPreference[] = ["full", "reduced"];
 
-function modeAccent(t: Theme, mode: (typeof MODES)[number]): string {
-  return t[mode.tone];
+function modeAccent(t: Theme, _mode: (typeof MODES)[number]): string {
+  return t.brand;
 }
 
 function resolvedEntryModeColor(t: Theme, storedColor: string | undefined, fallback: string): string {
   switch (storedColor?.toLowerCase()) {
     case "brand":
     case "#22c55e":
-      return t.brand;
     case "info":
     case "#5c9cf5":
-      return t.info;
     case "warning":
     case "#e5c07b":
-      return t.warning;
+      return t.brand;
     default:
       return storedColor || fallback;
   }
@@ -213,12 +211,12 @@ function getFileMentionToken(block: FileMentionBlock): string {
 // compact raster keeps the welcome screen readable at the common 80-column
 // terminal size; the wide mark is reserved for wide terminals.
 const WIDE_HERO_LOGO = [
-  "███████╗ ██╗  ██╗ ███████╗ ██╗      ██████╗   █████╗       ██████╗  ██████╗  ██████╗  ███████╗",
-  "██╔════╝ ██║  ██║ ██╔════╝ ██║      ██╔══██╗ ██╔══██╗     ██╔════╝ ██╔═══██╗ ██╔══██╗ ██╔════╝",
-  "███████╗ ███████║ █████╗   ██║      ██████╔╝ ███████║     ██║      ██║   ██║ ██║  ██║ █████╗  ",
-  "╚════██║ ██╔══██║ ██╔══╝   ██║      ██╔══██╗ ██╔══██║     ██║      ██║   ██║ ██║  ██║ ██╔══╝  ",
-  "███████║ ██║  ██║ ███████╗ ███████╗ ██║  ██║ ██║  ██║     ╚██████╗ ╚██████╔╝ ██████╔╝ ███████╗",
-  "╚══════╝ ╚═╝  ╚═╝ ╚══════╝ ╚══════╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝      ╚═════╝  ╚═════╝  ╚═════╝  ╚══════╝",
+  "███████░ ██░  ██░ ███████░ ██░      ██████░   █████░       ██████░  ██████░  ██████░  ███████░",
+  "██░░░░░░ ██░  ██░ ██░░░░░░ ██░      ██░░░██░ ██░░░██░     ██░░░░░░ ██░░░░██░ ██░░░██░ ██░░░░░░",
+  "███████░ ███████░ █████░   ██░      ██████░░ ███████░     ██░      ██░   ██░ ██░  ██░ █████░  ",
+  "░░░░░██░ ██░░░██░ ██░░░░   ██░      ██░░░██░ ██░░░██░     ██░      ██░   ██░ ██░  ██░ ██░░░░  ",
+  "███████░ ██░  ██░ ███████░ ███████░ ██░  ██░ ██░  ██░     ░██████░ ░██████░░ ██████░░ ███████░",
+  "░░░░░░░░ ░░░  ░░░ ░░░░░░░░ ░░░░░░░░ ░░░  ░░░ ░░░  ░░░      ░░░░░░░  ░░░░░░░  ░░░░░░░  ░░░░░░░░",
 ] as const;
 
 const COMPACT_HERO_LOGO = [
@@ -278,11 +276,11 @@ function HomeContext({
   return (
     <box width={width} flexShrink={0} flexDirection="column">
       <text wrapMode="none">
-        <span style={{ fg: t.textDim }}>{"[ "}</span>
+        <span style={{ fg: t.brand }}>{"[ "}</span>
         <span style={{ fg: t.brand }}>
           <b>{"PROJECT"}</b>
         </span>
-        <span style={{ fg: t.textDim }}>{" ]"}</span>
+        <span style={{ fg: t.brand }}>{" ]"}</span>
       </text>
       <text wrapMode="none">
         <span style={{ fg: t.text }}>
@@ -292,11 +290,11 @@ function HomeContext({
       </text>
       <box height={1} />
       <text wrapMode="none">
-        <span style={{ fg: t.textDim }}>{"[ "}</span>
+        <span style={{ fg: t.brand }}>{"[ "}</span>
         <span style={{ fg: t.brand }}>
           <b>{"KNOWS"}</b>
         </span>
-        <span style={{ fg: t.textDim }}>{" ]"}</span>
+        <span style={{ fg: t.brand }}>{" ]"}</span>
       </text>
       <text fg={t.textMuted} wrapMode="none">
         {chips.join("  ·  ")}
@@ -319,17 +317,17 @@ const _EMPTY = {
   rightT: "",
 };
 const _LINE = {
-  topLeft: "━",
-  bottomLeft: "━",
+  topLeft: "─",
+  bottomLeft: "─",
   vertical: "",
-  topRight: "━",
-  bottomRight: "━",
-  horizontal: "━",
-  bottomT: "━",
-  topT: "━",
-  cross: "━",
-  leftT: "━",
-  rightT: "━",
+  topRight: "─",
+  bottomRight: "─",
+  horizontal: "─",
+  bottomT: "─",
+  topT: "─",
+  cross: "─",
+  leftT: "─",
+  rightT: "─",
 };
 
 const REVIEW_PROMPT = `Review all current changes in this repository. Follow these steps:
@@ -4683,7 +4681,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           {updateInfo?.hasUpdate && (
             <box paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0}>
               <text fg={t.warning}>
-                {"┃ Update available: v"}
+                {"│ Update available: v"}
                 {startupConfig.version}
                 {" → v"}
                 {updateInfo.latestVersion}
@@ -4693,13 +4691,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           )}
           {isUpdating && (
             <box paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0}>
-              <text fg={t.warning}>{"┃ Updating..."}</text>
+              <text fg={t.warning}>{"│ Updating..."}</text>
             </box>
           )}
           {updateOutput && !isUpdating && (
             <box paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0}>
               <text fg={updateOutput.startsWith("Update complete") ? t.success : t.danger}>
-                {"┃ "}
+                {"│ "}
                 {updateOutput}
               </text>
             </box>
@@ -4975,7 +4973,7 @@ function RecapBanner({ t, recap }: { t: Theme; recap: string }) {
   return (
     <box width="100%" paddingBottom={1}>
       <text>
-        <span style={{ fg: t.textDim }}>{"※ recap: "}</span>
+        <span style={{ fg: t.textDim }}>{"· recap: "}</span>
         <span style={{ fg: t.textMuted }}>{truncateLine(recap, 180)}</span>
       </text>
     </box>
@@ -5081,7 +5079,7 @@ function PromptBox({
   return (
     <box
       border={["top", "left", "right", "bottom"]}
-      borderStyle="rounded"
+      borderStyle="single"
       borderColor={composerBorder}
       flexDirection="column"
     >
@@ -5107,7 +5105,7 @@ function PromptBox({
               <span style={{ fg: t.primary }}>{"enter "}</span>
               <span style={{ fg: t.textMuted }}>{"send now"}</span>
               <span style={{ fg: t.textDim }}>{" · "}</span>
-              <span style={{ fg: t.primary }}>{"↑ "}</span>
+              <span style={{ fg: t.primary }}>{"up "}</span>
               <span style={{ fg: t.textMuted }}>{"edit"}</span>
               <span style={{ fg: t.textDim }}>{" · "}</span>
               <span style={{ fg: t.primary }}>{"esc "}</span>
@@ -5262,7 +5260,7 @@ function PromptModeLabel({
 
 function PromptLoadingBoxes({ color }: { color: string }) {
   // A flat, static marker: the mode label stays useful to screen readers and reduced-motion users.
-  return <text fg={color}>{"■■⬝"}</text>;
+  return <text fg={color}>{"●"}</text>;
 }
 
 function CopyFlashBanner({ t, width }: { t: Theme; width: number }) {
@@ -5444,7 +5442,7 @@ function MessageView({
       return (
         <box flexDirection="row" paddingLeft={1} marginTop={index === 0 ? 0 : 1} marginBottom={1}>
           <text fg={entryColor}>
-            <b>{"> "}</b>
+            <b>{"$ "}</b>
           </text>
           <box flexDirection="column" flexGrow={1}>
             {entry.sourceLabel ? <text fg={t.textDim}>{entry.sourceLabel}</text> : null}
@@ -5457,9 +5455,9 @@ function MessageView({
       return (
         <box paddingLeft={3} marginTop={1} flexShrink={0} flexDirection="column">
           <text wrapMode="none">
-            <span style={{ fg: t.textDim }}>{"[ "}</span>
-            <span style={{ fg: t.textMuted }}>{"SHELRA"}</span>
-            <span style={{ fg: t.textDim }}>{" ]"}</span>
+            <span style={{ fg: t.brand }}>{"[ "}</span>
+            <span style={{ fg: t.brand }}>{"SHELRA"}</span>
+            <span style={{ fg: t.brand }}>{" ]"}</span>
             {entry.sourceLabel ? <span style={{ fg: t.textDim }}>{`  ${entry.sourceLabel}`}</span> : null}
           </text>
           <box flexDirection="column">
@@ -5472,7 +5470,7 @@ function MessageView({
       return (
         <box paddingLeft={3} marginTop={1}>
           <text>
-            <span style={{ fg: entryColor }}>{"▣ "}</span>
+            <span style={{ fg: entryColor }}>{"▸ "}</span>
             <span style={{ fg: t.textMuted }}>{entry.content.replace("▣  ", "")}</span>
           </text>
         </box>
@@ -5628,7 +5626,7 @@ function LspResultView({
         {truncated && (
           <box backgroundColor={t.diffSeparator} paddingLeft={1}>
             <text fg={t.diffSeparatorFg}>
-              {"⌃  "}
+              {"·  "}
               {lines.length - MAX_LSP_RESULT_LINES}
               {" more lines"}
             </text>
@@ -5649,7 +5647,7 @@ function LspDiagnosticsView({ t, diagnostics }: { t: Theme; diagnostics: NonNull
         </box>
         {files.map((entry) => (
           <box key={`${entry.serverId}:${entry.filePath}`} flexDirection="column">
-            <text fg={t.textDim}>{`${entry.serverId} • ${entry.filePath}`}</text>
+            <text fg={t.textDim}>{`${entry.serverId} · ${entry.filePath}`}</text>
             {entry.diagnostics.slice(0, 5).map((diagnostic, index) => (
               <text
                 // biome-ignore lint/suspicious/noArrayIndexKey: diagnostics may not include stable ids
@@ -5699,7 +5697,7 @@ function SubagentTaskLine({ t, agent, label, pending }: { t: Theme; agent: strin
   return (
     <box paddingLeft={3}>
       <text>
-        {pending ? <span style={{ fg: t.subagentAccent }}>{"◌"}</span> : null}
+        {pending ? <span style={{ fg: t.subagentAccent }}>{"○"}</span> : null}
         {pending ? " " : ""}
         <span style={{ fg: t.subagentAccent }}>
           <b>{`${displayAgent}: ${displayLabel}`}</b>
@@ -5716,9 +5714,9 @@ function DelegationTaskLine({ t, label, pending, id }: { t: Theme; label: string
     <box paddingLeft={3}>
       <text>
         {pending ? (
-          <span style={{ fg: t.subagentAccent }}>{"◌"}</span>
+          <span style={{ fg: t.subagentAccent }}>{"○"}</span>
         ) : (
-          <span style={{ fg: t.subagentAccent }}>{"◆"}</span>
+          <span style={{ fg: t.subagentAccent }}>{"▪"}</span>
         )}{" "}
         <span style={{ fg: t.subagentAccent }}>
           <b>{"Background"}</b>
@@ -6193,7 +6191,7 @@ function ConnectModal({
           <text>
             <span style={{ fg: t.primary }}>{"enter "}</span>
             <span style={{ fg: t.textMuted }}>{"select  ·  "}</span>
-            <span style={{ fg: t.primary }}>{"↑↓ "}</span>
+            <span style={{ fg: t.primary }}>{"up/down "}</span>
             <span style={{ fg: t.textMuted }}>{"navigate  ·  "}</span>
             <span style={{ fg: t.primary }}>{"esc "}</span>
             <span style={{ fg: t.textMuted }}>{"close"}</span>
@@ -6699,7 +6697,7 @@ function ThemePickerModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -6840,7 +6838,7 @@ function PaymentApprovalPanel({
     <box
       flexDirection="column"
       border={["top", "left", "right", "bottom"]}
-      borderStyle="rounded"
+      borderStyle="single"
       borderColor={t.warning}
       marginTop={1}
       paddingLeft={2}
@@ -6889,7 +6887,7 @@ function PaymentApprovalPanel({
       </box>
       <box flexDirection="row" gap={3} marginTop={1} flexShrink={0}>
         <text>
-          <span style={{ fg: t.text }}>{"↑↓"}</span>
+          <span style={{ fg: t.text }}>{"up/down"}</span>
           <span style={{ fg: t.textMuted }}>{" select"}</span>
         </text>
         <text>

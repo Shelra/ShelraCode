@@ -17,7 +17,7 @@ export function PlanView({ plan, t }: PlanViewProps) {
         <text>
           <span style={{ fg: t.planTitle }}>
             <b>
-              {"◆ "}
+              {"▪ "}
               {plan.title}
             </b>
           </span>
@@ -128,7 +128,7 @@ export function PlanQuestionsPanel({ t, questions, state }: PlanQuestionsPanelPr
     <box
       flexDirection="column"
       border={["top", "left", "right", "bottom"]}
-      borderStyle="rounded"
+      borderStyle="single"
       borderColor={t.planBorder}
       marginTop={1}
       paddingLeft={2}
@@ -137,11 +137,11 @@ export function PlanQuestionsPanel({ t, questions, state }: PlanQuestionsPanelPr
     >
       <box flexShrink={0} marginBottom={1}>
         <text wrapMode="none">
-          <span style={{ fg: t.textDim }}>{"[ "}</span>
+          <span style={{ fg: t.brand }}>{"[ "}</span>
           <span style={{ fg: t.brand }}>
             <b>{isSingle ? "QUESTION" : "QUESTIONS"}</b>
           </span>
-          <span style={{ fg: t.textDim }}>{" ]"}</span>
+          <span style={{ fg: t.brand }}>{" ]"}</span>
           {isSingle ? null : (
             <span style={{ fg: t.textMuted }}>
               {isConfirmTab ? "  review" : `  ${state.tab + 1}/${questions.length}`}
@@ -192,12 +192,12 @@ export function PlanQuestionsPanel({ t, questions, state }: PlanQuestionsPanelPr
       <box flexDirection="row" gap={3} marginTop={1} flexShrink={0}>
         {!isSingle && (
           <text>
-            <span style={{ fg: t.text }}>{"⇆"}</span>
+            <span style={{ fg: t.text }}>{"tab"}</span>
             <span style={{ fg: t.planHint }}>{" tab"}</span>
           </text>
         )}
         <text>
-          <span style={{ fg: t.text }}>{"↑↓"}</span>
+          <span style={{ fg: t.text }}>{"up/down"}</span>
           <span style={{ fg: t.planHint }}>{" select"}</span>
         </text>
         <text>
@@ -240,7 +240,7 @@ function QuestionBody({ t, question: q, state }: { t: Theme; question: PlanQuest
         <box backgroundColor={t.planInputBg} paddingLeft={1} paddingRight={1}>
           <text fg={t.planInputText}>
             {state.editing || customText ? (
-              customText + (state.editing ? "▌" : "")
+              customText + (state.editing ? "█" : "")
             ) : (
               <span style={{ fg: t.textMuted }}>{"Type your answer..."}</span>
             )}

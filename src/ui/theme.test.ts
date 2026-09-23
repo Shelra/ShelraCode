@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { dark, light, reducedMotionEnabled, resolveTheme } from "./theme";
+import {
+  ansi256Hex,
+  colorModeFrom,
+  dark,
+  dark256,
+  PALETTE,
+  paletteColors,
+  reducedMotionEnabled,
+  resolveTheme,
+} from "./theme";
 
 function luminance(hex: string): number {
   const values = hex
@@ -19,23 +28,68 @@ function contrast(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-describe("Shelra themes", () => {
-  it("resolves explicit and system appearance without an inversion fallback", () => {
-    expect(resolveTheme("dark", "light")).toBe(dark);
-    expect(resolveTheme("light", "dark")).toBe(light);
-    expect(resolveTheme("system", "light")).toBe(light);
-    expect(resolveTheme("system", null)).toBe(dark);
+describe("Shelra palette", () => {
+  it("is the approved web palette, with exactly two status colours added", () => {
+    expect(PALETTE.base.hex).toBe("#080808");
+    expect(PALETTE.surface.hex).toBe("#111111");
+    expect(PALETTE.border.hex).toBe("#1A1A1A");
+    expect(PALETTE.default.hex).toBe("#F0F0F0");
+    expect(PALETTE.subtle.hex).toBe("#888888");
+    expect(PALETTE.accent.hex).toBe("#00FF88");
+    expect(PALETTE.hover.hex).toBe("#00CF6E");
+    expect(PALETTE.warning.hex).toBe("#FFB454");
+    expect(PALETTE.error.hex).toBe("#FF5C5C");
   });
 
-  it("keeps the interactive brand accent readable in both themes", () => {
-    expect(contrast(dark.brand, dark.background)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(light.brand, light.surface)).toBeGreaterThanOrEqual(4.5);
-  });
-
-  it("keeps semantic states distinct from the brand role", () => {
-    for (const theme of [dark, light]) {
-      expect(new Set([theme.brand, theme.success, theme.warning, theme.danger, theme.info]).size).toBe(5);
+  it("uses only palette colours for every role, in both colour modes", () => {
+    for (const [mode, theme] of [
+      ["truecolor", dark],
+      ["256", dark256],
+    ] as const) {
+      const allowed = new Set(Object.values(paletteColors(mode)));
+      for (const [role, value] of Object.entries(theme)) {
+        expect(allowed.has(value), `${mode} ${role} = ${value}`).toBe(true);
+      }
     }
+  });
+
+  it("never uses a status colour as a surface", () => {
+    const surfaces = [dark.background, dark.surface, dark.surfaceRaised, dark.overlay, dark.selectedBg, dark.diffAdded];
+    for (const surface of [...surfaces, dark.diffRemoved, dark.mdCodeBlockBg]) {
+      expect([PALETTE.warning.hex, PALETTE.error.hex]).not.toContain(surface);
+    }
+  });
+
+  it("keeps text readable: 4.5:1 for default and subtle on base and surface", () => {
+    for (const text of [dark.text, dark.textMuted]) {
+      expect(contrast(text, dark.background)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(text, dark.surface)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(dark.textMuted, dark.background)).toBeCloseTo(5.65, 1);
+    expect(contrast(dark.onAccent, dark.accent)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("maps each token to its exact xterm-256 colour", () => {
+    expect(ansi256Hex(232)).toBe("#080808");
+    expect(ansi256Hex(233)).toBe("#121212");
+    expect(ansi256Hex(234)).toBe("#1c1c1c");
+    expect(ansi256Hex(255)).toBe("#eeeeee");
+    expect(ansi256Hex(102)).toBe("#878787");
+    expect(ansi256Hex(48)).toBe("#00ff87");
+    expect(ansi256Hex(41)).toBe("#00d75f");
+    expect(ansi256Hex(22)).toBe("#005f00");
+    expect(ansi256Hex(215)).toBe("#ffaf5f");
+    expect(ansi256Hex(203)).toBe("#ff5f5f");
+    expect(dark256.brand).toBe("#00FF87");
+  });
+
+  it("chooses the colour mode from SHELRA_THEME, then the terminal", () => {
+    expect(colorModeFrom({})).toBe("truecolor");
+    expect(colorModeFrom({ SHELRA_THEME: "256" })).toBe("256");
+    expect(colorModeFrom({ SHELRA_THEME: "truecolor", TERM_PROGRAM: "Apple_Terminal" })).toBe("truecolor");
+    expect(colorModeFrom({ TERM_PROGRAM: "Apple_Terminal" })).toBe("256");
+    expect(resolveTheme("light", "light", {})).toBe(dark);
+    expect(resolveTheme("system", null, { SHELRA_THEME: "256" })).toBe(dark256);
   });
 
   it("honours the explicit reduced-motion preference and the terminal-safe environment override", () => {

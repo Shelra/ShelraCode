@@ -83,7 +83,7 @@ export function SubagentsBrowserModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -196,7 +196,7 @@ export function SubagentEditorModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}

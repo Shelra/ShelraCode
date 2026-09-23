@@ -51,7 +51,7 @@ describe("buildKnowledge", () => {
     expect(tests).toMatchObject({ title: "Run tests with bun", scope: "project", stale: null });
     expect(tests?.facts).toContain("observed");
     expect(tests?.facts).toContain("90%");
-    expect(tests?.facts).toContain("used 0×");
+    expect(tests?.facts).toContain("used 0 times");
     expect(tests?.body).toContain("bun test");
   });
 

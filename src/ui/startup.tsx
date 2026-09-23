@@ -46,7 +46,7 @@ function StartupAction({
     <box
       backgroundColor={highlighted && !disabled ? t.brand : disabled ? t.surfaceMuted : t.background}
       border={highlighted ? ["top", "bottom", "left", "right"] : undefined}
-      borderStyle="rounded"
+      borderStyle="single"
       borderColor={highlighted && !disabled ? t.brand : undefined}
       paddingLeft={1}
       paddingRight={1}
@@ -149,7 +149,7 @@ export function StartupScreen({
         width={panelWidth}
         height={panelHeight}
         border={["top", "bottom", "left", "right"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.border}
         paddingLeft={3}
         paddingRight={3}
@@ -276,7 +276,7 @@ export function CloudStartupScreen({
         width={panelWidth}
         height={panelHeight}
         border={["top", "bottom", "left", "right"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.border}
         paddingLeft={3}
         paddingRight={3}

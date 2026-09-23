@@ -55,7 +55,7 @@ export const WORKING_HINTS: readonly Hint[] = [
 
 export const SUGGESTION_HINTS: readonly Hint[] = [
   { key: "tab", label: "accept" },
-  { key: "↑↓", label: "navigate" },
+  { key: "up/down", label: "navigate" },
   { key: "esc", label: "dismiss" },
 ];
 

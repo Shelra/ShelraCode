@@ -109,7 +109,7 @@ export function BenchModal({
         height={panelHeight}
         backgroundColor={t.backgroundPanel}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -144,7 +144,7 @@ export function BenchModal({
           <text fg={filterActive ? t.accent : t.textMuted}>
             {filterActive ? "/" : "filter: "}
             {filter || (filterActive ? "" : "Shelra · compatible runs")}
-            {filterActive ? "▌" : ""}
+            {filterActive ? "█" : ""}
           </text>
           <text fg={loading ? t.accent : t.textMuted}>
             {loading ? "loading…" : "j/k move · enter inspect · r refresh"}
@@ -580,7 +580,7 @@ function TaskRow({ t, task }: { t: Theme; task: BenchmarkTaskResult }) {
           key={criterion.id}
           fg={criterion.status === "passed" ? t.success : criterion.status === "failed" ? t.danger : t.warning}
         >
-          {`${criterion.status === "passed" ? "✓" : criterion.status === "failed" ? "×" : "·"} ${criterion.id} ${criterion.description}`}
+          {`${criterion.status === "passed" ? "✓" : criterion.status === "failed" ? "✗" : "·"} ${criterion.id} ${criterion.description}`}
         </text>
       ))}
     </box>

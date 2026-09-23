@@ -1,28 +1,101 @@
-/** User-controlled appearance. `system` follows OpenTUI's terminal scheme signal. */
+/**
+ * Kept for settings files written when Shelra had a light theme; every preference resolves to the one
+ * dark palette now, like the approved web design.
+ */
 export type ThemePreference = "system" | "dark" | "light";
 export type MotionPreference = "full" | "reduced";
 export type TerminalThemeMode = "dark" | "light" | null | undefined;
+/** How many colours the terminal can show: exact 24-bit colour, or the xterm 256-colour palette. */
+export type ColorMode = "truecolor" | "256";
 
 /**
- * Semantic presentation contract for Shelra's terminal UI. Every value is a flat
- * colour: Shelra draws no gradients, glows or fades. The terminal owns the font;
- * components consume these roles rather than smuggling palette values into layout code.
- *
- * The dark palette is the Shelra web palette: near-black `#080808`, surfaces `#111111` and
- * `#1A1A1A`, text `#F0F0F0` and `#888888`, one neon accent `#00FF88` (`#00CF6E` pressed).
- * The web fonts are Geist Mono (headings), Inter (body) and JetBrains Mono (labels); a
- * terminal cannot load fonts, so the same hierarchy is carried by weight, case and colour.
+ * The Shelra palette: the tokens of the approved landing page (`frontend/src/app/globals.css`), each
+ * with its xterm-256 fallback. A terminal has no alpha, so the site's alpha tokens are blended on base
+ * here. Warning and error are the only colours the site does not have; they colour text and glyphs,
+ * never a surface. Nothing else may appear on screen: no gradients, shadows or glows.
+ */
+export const PALETTE = {
+  /** App background, every full-screen surface. */
+  base: { hex: "#080808", ansi256: 232 },
+  /** Panels, cards, inputs. */
+  surface: { hex: "#111111", ansi256: 233 },
+  /** Hairlines, dividers, the empty part of a progress bar. */
+  border: { hex: "#1A1A1A", ansi256: 234 },
+  /** Primary text. */
+  default: { hex: "#F0F0F0", ansi256: 255 },
+  /** Secondary text, metadata, placeholders. */
+  subtle: { hex: "#888888", ansi256: 102 },
+  /** Brand green: labels, the active tab, links, success, running. */
+  accent: { hex: "#00FF88", ansi256: 48 },
+  /** Pressed or active state of the accent. */
+  hover: { hex: "#00CF6E", ansi256: 41 },
+  /** Text on an accent surface. */
+  onLight: { hex: "#080808", ansi256: 232 },
+  /** Accent at 16% on base: the cursor row, badge fills. */
+  accent16: { hex: "#073020", ansi256: 234 },
+  /** Accent at 40% on base: the border of the focused panel. */
+  accent40: { hex: "#056B3B", ansi256: 22 },
+  /** White at 8% on base: hover on base. */
+  white8: { hex: "#1C1C1C", ansi256: 234 },
+  warning: { hex: "#FFB454", ansi256: 215 },
+  error: { hex: "#FF5C5C", ansi256: 203 },
+} as const;
+
+export type PaletteToken = keyof typeof PALETTE;
+
+const CUBE_LEVELS = [0, 95, 135, 175, 215, 255] as const;
+
+/** The colour an xterm-256 index shows, as `#rrggbb`: 16-231 is the 6x6x6 cube, 232-255 the greys. */
+export function ansi256Hex(index: number): string {
+  const hex = (value: number) => value.toString(16).padStart(2, "0");
+  if (index >= 232 && index <= 255) {
+    const grey = 8 + (index - 232) * 10;
+    return `#${hex(grey)}${hex(grey)}${hex(grey)}`;
+  }
+  if (index >= 16 && index <= 231) {
+    const offset = index - 16;
+    const red = CUBE_LEVELS[Math.floor(offset / 36)] ?? 0;
+    const green = CUBE_LEVELS[Math.floor((offset % 36) / 6)] ?? 0;
+    const blue = CUBE_LEVELS[offset % 6] ?? 0;
+    return `#${hex(red)}${hex(green)}${hex(blue)}`;
+  }
+  throw new Error(`Shelra's palette uses xterm-256 indices 16-255, not ${index}`);
+}
+
+/**
+ * The palette for a colour mode. In 256-colour mode every token is exactly one of the terminal's own
+ * 256 colours, so a terminal that maps 24-bit colour to its palette lands on the intended one.
+ */
+export function paletteColors(mode: ColorMode): Record<PaletteToken, string> {
+  const entries = Object.entries(PALETTE) as Array<[PaletteToken, { hex: string; ansi256: number }]>;
+  return Object.fromEntries(
+    entries.map(([token, value]) => [token, mode === "256" ? ansi256Hex(value.ansi256).toUpperCase() : value.hex]),
+  ) as Record<PaletteToken, string>;
+}
+
+/** `SHELRA_THEME=256` or `truecolor` forces a mode; Apple Terminal has no 24-bit colour. */
+export function colorModeFrom(environment: Record<string, string | undefined>): ColorMode {
+  const forced = environment.SHELRA_THEME?.trim().toLowerCase();
+  if (forced === "256") return "256";
+  if (forced === "truecolor") return "truecolor";
+  return environment.TERM_PROGRAM === "Apple_Terminal" ? "256" : "truecolor";
+}
+
+/**
+ * Semantic roles for Shelra's terminal UI. Components use roles, never palette values, and every
+ * role is one palette token. The terminal owns the font, so the site's type hierarchy is carried by
+ * weight, case, brackets and these two text colours.
  */
 export interface Theme {
   background: string;
-  /** Standard application surface: composer shell, picker, and sidebar. */
+  /** Standard application surface: composer, pickers, panels. */
   surface: string;
-  /** Raised/selected technical surface. */
+  /** Hover on base. */
   surfaceRaised: string;
-  /** Quiet, disabled, or queue surface. */
   surfaceMuted: string;
   backgroundPanel: string;
   backgroundElement: string;
+  /** Behind a dialog. Opaque: a terminal cannot dim what is under it. */
   overlay: string;
   border: string;
   borderStrong: string;
@@ -32,17 +105,17 @@ export interface Theme {
   textSecondary: string;
   textMuted: string;
   textDim: string;
-  /** Existing neutral heading/control alias; use `brand` for interaction. */
   primary: string;
   brand: string;
   brandHover: string;
   brandSoft: string;
   accent: string;
+  /** Text on an accent surface: the active tab, a primary action, the chosen item. */
+  onAccent: string;
   success: string;
   warning: string;
   danger: string;
   info: string;
-  /** Mode label for Plan; amber, so it never reads as brand or as a link. */
   modePlan: string;
   subagentAccent: string;
   selected: string;
@@ -87,154 +160,99 @@ export interface Theme {
   queueBg: string;
 }
 
-export const dark: Theme = {
-  background: "#080808",
-  surface: "#111111",
-  surfaceRaised: "#1A1A1A",
-  surfaceMuted: "#0C0C0C",
-  backgroundPanel: "#111111",
-  backgroundElement: "#1A1A1A",
-  overlay: "#000000CC",
-  border: "#222222",
-  borderStrong: "#444444",
-  borderActive: "#00FF88",
-  composerFocusBorder: "#00FF88",
-  text: "#F0F0F0",
-  textSecondary: "#B8B8B8",
-  textMuted: "#888888",
-  textDim: "#5E5E5E",
-  primary: "#F0F0F0",
-  brand: "#00FF88",
-  brandHover: "#00CF6E",
-  brandSoft: "#07301C",
-  accent: "#00FF88",
-  success: "#00CF6E",
-  warning: "#FFB84D",
-  danger: "#FF5C6C",
-  info: "#5CB8FF",
-  modePlan: "#FFB84D",
-  subagentAccent: "#8AC7FF",
-  selected: "#F0F0F0",
-  selectedBg: "#07301C",
-  disabled: "#6B6B6B",
-  diffAdded: "#0B2E1D",
-  diffAddedFg: "#8CFFC4",
-  diffAddedLineNum: "#00A85A",
-  diffRemoved: "#33161B",
-  diffRemovedFg: "#FF9AA4",
-  diffRemovedLineNum: "#B04A57",
-  diffContext: "#141414",
-  diffContextFg: "#B8B8B8",
-  diffLineNumber: "#6B6B6B",
-  diffHeader: "#111111",
-  diffHeaderFg: "#B8B8B8",
-  diffSeparator: "#0C0C0C",
-  diffSeparatorFg: "#5E5E5E",
-  mdHeading: "#F0F0F0",
-  mdBold: "#FFFFFF",
-  mdItalic: "#B8B8B8",
-  mdCode: "#8CFFC4",
-  mdCodeBlockBg: "#141414",
-  mdCodeBlockFg: "#E0E0E0",
-  mdLink: "#5CB8FF",
-  mdLinkText: "#A6D8FF",
-  mdHr: "#222222",
-  mdListBullet: "#888888",
-  planBorder: "#00FF88",
-  planTitle: "#F0F0F0",
-  planStepNum: "#00FF88",
-  planStepTitle: "#F0F0F0",
-  planStepDesc: "#B8B8B8",
-  planStepFile: "#5CB8FF",
-  planQuestionText: "#F0F0F0",
-  planOptionDefault: "#B8B8B8",
-  planOptionSelected: "#00FF88",
-  planOptionCheck: "#00CF6E",
-  planInputBg: "#1A1A1A",
-  planInputText: "#F0F0F0",
-  planHint: "#888888",
-  queueBg: "#0C0C0C",
-};
-
-/** The web palette is dark-only; the light theme keeps its neutrals and swaps the neon for a readable green. */
-export const light: Theme = {
-  background: "#F0F0F0",
-  surface: "#FFFFFF",
-  surfaceRaised: "#E6E6E6",
-  surfaceMuted: "#DCDCDC",
-  backgroundPanel: "#FFFFFF",
-  backgroundElement: "#E6E6E6",
-  overlay: "#08080866",
-  border: "#D4D4D4",
-  borderStrong: "#8A8A8A",
-  borderActive: "#007A40",
-  composerFocusBorder: "#007A40",
-  text: "#080808",
-  textSecondary: "#3E3E3E",
-  textMuted: "#5C5C5C",
-  textDim: "#767676",
-  primary: "#080808",
-  brand: "#007A40",
-  brandHover: "#006633",
-  brandSoft: "#CFF7E1",
-  accent: "#007A40",
-  success: "#087A47",
-  warning: "#8A5A00",
-  danger: "#C42B3A",
-  info: "#0B62C4",
-  modePlan: "#8A5A00",
-  subagentAccent: "#0B62C4",
-  selected: "#080808",
-  selectedBg: "#CFF7E1",
-  disabled: "#767676",
-  diffAdded: "#DDF7E8",
-  diffAddedFg: "#0B5A34",
-  diffAddedLineNum: "#2E9A62",
-  diffRemoved: "#FBE3E6",
-  diffRemovedFg: "#A01F2D",
-  diffRemovedLineNum: "#C55B63",
-  diffContext: "#E6E6E6",
-  diffContextFg: "#3E3E3E",
-  diffLineNumber: "#5C5C5C",
-  diffHeader: "#FFFFFF",
-  diffHeaderFg: "#3E3E3E",
-  diffSeparator: "#DCDCDC",
-  diffSeparatorFg: "#767676",
-  mdHeading: "#080808",
-  mdBold: "#080808",
-  mdItalic: "#3E3E3E",
-  mdCode: "#007A40",
-  mdCodeBlockBg: "#E6E6E6",
-  mdCodeBlockFg: "#1F1F1F",
-  mdLink: "#0B62C4",
-  mdLinkText: "#0A4F9E",
-  mdHr: "#D4D4D4",
-  mdListBullet: "#5C5C5C",
-  planBorder: "#007A40",
-  planTitle: "#080808",
-  planStepNum: "#007A40",
-  planStepTitle: "#080808",
-  planStepDesc: "#3E3E3E",
-  planStepFile: "#0B62C4",
-  planQuestionText: "#080808",
-  planOptionDefault: "#3E3E3E",
-  planOptionSelected: "#007A40",
-  planOptionCheck: "#087A47",
-  planInputBg: "#E6E6E6",
-  planInputText: "#080808",
-  planHint: "#5C5C5C",
-  queueBg: "#DCDCDC",
-};
-
-/** Flat scrollbar: a quiet thumb on the page colour, so a long list never draws a heavy bar. */
-export function scrollbarStyle(t: Theme) {
-  return { trackOptions: { foregroundColor: t.borderStrong, backgroundColor: t.background } };
+function themeFrom(p: Record<PaletteToken, string>): Theme {
+  return {
+    background: p.base,
+    surface: p.surface,
+    surfaceRaised: p.white8,
+    surfaceMuted: p.base,
+    backgroundPanel: p.surface,
+    backgroundElement: p.surface,
+    overlay: p.base,
+    border: p.border,
+    borderStrong: p.border,
+    borderActive: p.accent40,
+    composerFocusBorder: p.accent40,
+    text: p.default,
+    textSecondary: p.subtle,
+    textMuted: p.subtle,
+    textDim: p.subtle,
+    primary: p.default,
+    brand: p.accent,
+    brandHover: p.hover,
+    brandSoft: p.accent16,
+    accent: p.accent,
+    onAccent: p.onLight,
+    success: p.accent,
+    warning: p.warning,
+    danger: p.error,
+    info: p.default,
+    modePlan: p.accent,
+    subagentAccent: p.accent,
+    selected: p.default,
+    selectedBg: p.accent16,
+    disabled: p.subtle,
+    // Diffs: no tinted rows; added text in accent, removed text in the error colour.
+    diffAdded: p.base,
+    diffAddedFg: p.accent,
+    diffAddedLineNum: p.subtle,
+    diffRemoved: p.base,
+    diffRemovedFg: p.error,
+    diffRemovedLineNum: p.subtle,
+    diffContext: p.base,
+    diffContextFg: p.subtle,
+    diffLineNumber: p.subtle,
+    diffHeader: p.surface,
+    diffHeaderFg: p.default,
+    diffSeparator: p.base,
+    diffSeparatorFg: p.subtle,
+    mdHeading: p.default,
+    mdBold: p.default,
+    mdItalic: p.subtle,
+    mdCode: p.accent,
+    mdCodeBlockBg: p.surface,
+    mdCodeBlockFg: p.default,
+    mdLink: p.accent,
+    mdLinkText: p.accent,
+    mdHr: p.border,
+    mdListBullet: p.subtle,
+    planBorder: p.border,
+    planTitle: p.default,
+    planStepNum: p.accent,
+    planStepTitle: p.default,
+    planStepDesc: p.subtle,
+    planStepFile: p.accent,
+    planQuestionText: p.default,
+    planOptionDefault: p.default,
+    planOptionSelected: p.accent,
+    planOptionCheck: p.accent,
+    planInputBg: p.surface,
+    planInputText: p.default,
+    planHint: p.subtle,
+    queueBg: p.surface,
+  };
 }
 
-export function resolveTheme(preference: ThemePreference, systemTheme: TerminalThemeMode = null): Theme {
-  if (preference === "light") return light;
-  if (preference === "dark") return dark;
-  return systemTheme === "light" ? light : dark;
+/** The Shelra theme in 24-bit colour. */
+export const dark: Theme = themeFrom(paletteColors("truecolor"));
+/** The same roles on the xterm 256-colour palette. */
+export const dark256: Theme = themeFrom(paletteColors("256"));
+
+/** Flat scrollbar: a hairline thumb on the page colour. */
+export function scrollbarStyle(t: Theme) {
+  return { trackOptions: { foregroundColor: t.textMuted, backgroundColor: t.background } };
+}
+
+/**
+ * The theme to draw with. Appearance preferences no longer change it: the terminal's own scheme is
+ * never used for brand surfaces, so a light terminal still gets the dark palette.
+ */
+export function resolveTheme(
+  _preference?: ThemePreference,
+  _systemTheme: TerminalThemeMode = null,
+  environment: Record<string, string | undefined> = process.env,
+): Theme {
+  return colorModeFrom(environment) === "256" ? dark256 : dark;
 }
 
 export function reducedMotionEnabled(

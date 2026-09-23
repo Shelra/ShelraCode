@@ -29,7 +29,7 @@ export function BtwOverlay({ state, theme: t }: { state: BtwState; theme: Theme 
 
       {state.status === "loading" && (
         <text>
-          <span style={{ fg: t.textMuted }}>{"◌"}</span>
+          <span style={{ fg: t.textMuted }}>{"○"}</span>
           <span style={{ fg: t.textMuted }}> Answering…</span>
         </text>
       )}

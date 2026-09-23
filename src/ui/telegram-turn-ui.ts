@@ -7,7 +7,7 @@ export interface EntryDecoration {
 }
 
 export function getTelegramSourceLabel(kind: "user" | "assistant", userId: number): string {
-  return kind === "user" ? `Telegram user ${userId}` : `Telegram ShelraCode • user ${userId}`;
+  return kind === "user" ? `Telegram user ${userId}` : `Telegram ShelraCode · user ${userId}`;
 }
 
 export function buildUserEntry(content: string, decoration: EntryDecoration = {}): ChatEntry {

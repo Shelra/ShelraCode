@@ -2,7 +2,7 @@ import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import { describe, expect, it } from "vitest";
 import { Markdown } from "./markdown";
-import { dark, light, type Theme } from "./theme";
+import { dark, dark256 as light, type Theme } from "./theme";
 
 const CONTENT =
   "Fixed both failures.\n\n## What changed\n\n- one\n- two\n\n## Verification\n\nDone.\n\n```ts\nconst a = 1;\n```\n\nAfter code.";
@@ -23,7 +23,7 @@ describe("Markdown", () => {
     const lines = frame.split("\n").map((line) => line.trimEnd());
     const at = (text: string) => lines.findIndex((line) => line.includes(text));
     expect(lines[at("What changed") - 1]).toBe("");
-    expect(at("• one")).toBe(at("What changed") + 1);
+    expect(at("▪ one")).toBe(at("What changed") + 1);
     expect(lines[at("Verification") - 1]).toBe("");
     expect(lines[at("After code.") - 1]).toBe("");
   });
@@ -35,7 +35,7 @@ describe("Markdown", () => {
       .split("\n")
       .map((line) => line.trimEnd())
       .filter(Boolean);
-    expect(lines[0]?.startsWith("• word")).toBe(true);
+    expect(lines[0]?.startsWith("▪ word")).toBe(true);
     expect(lines.length).toBeGreaterThan(2);
     for (const line of lines.slice(1)) expect(line.startsWith("  word")).toBe(true);
   });
@@ -61,7 +61,7 @@ describe("Markdown", () => {
 
   it.each([
     ["dark", dark],
-    ["light", light],
+    ["256-colour", light],
   ] as const)("draws fenced code from theme tokens in the %s theme", async (_name, t) => {
     const { frame, spans } = await render(t);
     expect(frame).toContain("const a = 1;");

@@ -99,7 +99,7 @@ export function turnSummaryGroups(item: TranscriptSummaryItem): SummarySegment[]
     const failures = /(\d+)\s*fail/i.exec(check.meta)?.[1];
     groups.push([
       { text: `${check.label} `, tone: "neutral" },
-      { text: failed ? (failures ? `× ${failures} failed` : "×") : "✓", tone: failed ? "danger" : "success" },
+      { text: failed ? (failures ? `✗ ${failures} failed` : "✗") : "✓", tone: failed ? "danger" : "success" },
     ]);
   }
   if (item.durationMs !== null && item.durationMs >= 1000) {
@@ -440,7 +440,7 @@ export function workStatus(input: {
 }): WorkStatus {
   const { kernel, isProcessing, changedCount, checks, requestFailed } = input;
   if (isProcessing) return { tone: "active", label: "Working" };
-  if (requestFailed) return { tone: "danger", label: "Request failed", hint: "Retry with ↑ then enter" };
+  if (requestFailed) return { tone: "danger", label: "Request failed", hint: "Retry: press up, then enter" };
   if (kernel?.phase === "blocked") return { tone: "danger", label: "Blocked", hint: kernel.blockedReason };
   if (kernel?.phase === "cancelled") return { tone: "neutral", label: "Stopped" };
   // The latest result of a check beats the kernel's opinion: "Verified" next to a red check is a contradiction.

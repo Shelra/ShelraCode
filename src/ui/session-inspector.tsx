@@ -66,7 +66,7 @@ export function SessionStatusStrip({
   // While a turn runs, the live line in the transcript is the single source of "what now".
   if (isProcessing || (status !== "blocked" && status !== "verification-needed")) return null;
 
-  const marker = isProcessing ? "●" : status === "blocked" ? "×" : "!";
+  const marker = isProcessing ? "●" : status === "blocked" ? "✗" : "!";
   const statusColor = isProcessing ? t.accent : completionColor(status, t);
   const title = isProcessing
     ? currentActivity || phaseLabel(kernel, true)
@@ -188,7 +188,7 @@ export function ActiveAgentsStrip({
         <AgentStripRow
           key={delegation.id}
           t={t}
-          marker={delegation.status === "error" ? "×" : "✓"}
+          marker={delegation.status === "error" ? "✗" : "✓"}
           name={formatSubagentName(delegation.agent)}
           detail={delegation.summary}
           elapsed={null}
@@ -600,11 +600,11 @@ function RailSection({
     <box paddingTop={1} flexDirection="column">
       <box flexDirection="row" flexShrink={0}>
         <text wrapMode="none">
-          <span style={{ fg: t.textDim }}>{"[ "}</span>
+          <span style={{ fg: t.brand }}>{"[ "}</span>
           <span style={{ fg: t.brand }}>
             <b>{title}</b>
           </span>
-          <span style={{ fg: t.textDim }}>{" ]"}</span>
+          <span style={{ fg: t.brand }}>{" ]"}</span>
         </text>
         <box flexGrow={1} />
         {meta ? (
@@ -824,7 +824,7 @@ export function SessionInspector({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -1163,7 +1163,7 @@ function AgentsTab({
         finished.slice(0, 12).map((delegation) => (
           <box key={delegation.id} paddingBottom={1} flexDirection="column">
             <text fg={delegation.status === "error" ? t.danger : t.success}>
-              {`${delegation.status === "error" ? "×" : "✓"} ${formatSubagentName(delegation.agent)} · ${delegation.id}`}
+              {`${delegation.status === "error" ? "✗" : "✓"} ${formatSubagentName(delegation.agent)} · ${delegation.id}`}
             </text>
             <text fg={t.textMuted}>{normalizeText(delegation.summary)}</text>
             <text fg={t.textDim}>{describeFinishedAgo(delegation.completedAt, now)}</text>
@@ -1383,7 +1383,7 @@ function criterionMarkSymbol(mark: CriterionMark): string {
     case "linked":
       return "●";
     case "unverified":
-      return "×";
+      return "✗";
     case "attempted":
       return "○";
     case "pending":
@@ -1491,7 +1491,7 @@ function planStepMark(status: PlanStepStatus | undefined): string {
     case "complete":
       return "✓";
     case "failed":
-      return "×";
+      return "✗";
     default:
       return "○";
   }

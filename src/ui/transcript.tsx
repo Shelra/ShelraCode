@@ -24,11 +24,11 @@ import type { Theme } from "./theme";
 
 export const GLYPH = {
   done: "✓",
-  failed: "×",
+  failed: "✗",
   active: "●",
   quiet: "·",
   collapsed: "▸",
-  expanded: "▾",
+  expanded: "▪",
 } as const;
 
 /** The glyph that goes with a work status; colour reinforces it, never replaces it. */
@@ -63,8 +63,9 @@ function toneGlyph(tone: ActivityTone): string {
 
 /* ── Spinner ─────────────────────────────────────────────────────── */
 
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const SPINNER_INTERVAL_MS = 90;
+/** Four frames of one allowed glyph, a corner turning: it reads as motion in every terminal font. */
+const SPINNER_FRAMES = ["┌", "┐", "┘", "└"];
+const SPINNER_INTERVAL_MS = 120;
 
 /** One animated glyph: proof of life for the current action. Static under reduced motion. */
 export function Spinner({ color, reducedMotion }: { color: string; reducedMotion: boolean }) {
@@ -112,9 +113,7 @@ export function ActivityLine({ t, tone, verb, object, meta, width, glyph, quiet 
       <text wrapMode="none">
         <span style={{ fg: glyphColor }}>{`${glyph ?? toneGlyph(tone)} `}</span>
         <span style={{ fg: failed ? t.danger : quiet ? t.textSecondary : t.text }}>{verb}</span>
-        {shownObject ? (
-          <span style={{ fg: failed ? t.textSecondary : t.textSecondary }}>{` ${shownObject}`}</span>
-        ) : null}
+        {shownObject ? <span style={{ fg: failed ? t.textSecondary : t.brand }}>{` ${shownObject}`}</span> : null}
       </text>
       <box flexGrow={1} />
       {meta ? (
@@ -258,12 +257,12 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
   return (
     <box flexDirection="column" flexShrink={0}>
       <text wrapMode="none">
-        <span style={{ fg: t.textDim }}>{"[ "}</span>
+        <span style={{ fg: t.brand }}>{"[ "}</span>
         <span style={{ fg: t.brand }}>
           <b>{"PLAN"}</b>
         </span>
         <span style={{ fg: t.textMuted }}>{` ${done}/${total}`}</span>
-        <span style={{ fg: t.textDim }}>{" ]"}</span>
+        <span style={{ fg: t.brand }}>{" ]"}</span>
       </text>
       {start > 0 ? <text fg={t.textDim}>{`  ${start} earlier`}</text> : null}
       {visible.map((step, offset) => {
@@ -454,7 +453,7 @@ export function LiveTurn({
       ) : null}
       {agentLine ? (
         <box paddingLeft={2} flexShrink={0}>
-          <text fg={t.subagentAccent} wrapMode="none">{`↳ ${truncateText(agentLine, Math.max(16, width - 10))}`}</text>
+          <text fg={t.subagentAccent} wrapMode="none">{`› ${truncateText(agentLine, Math.max(16, width - 10))}`}</text>
         </box>
       ) : null}
       {note ? (

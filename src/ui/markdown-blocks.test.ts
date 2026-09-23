@@ -84,10 +84,10 @@ describe("parseBlocks", () => {
     const blocks = parseBlocks("- one\n  continued\n  - nested\n    - deeper\n- two\n\n1. first\n2. second");
     const first = blocks[0] as Extract<Block, { type: "list" }>;
     expect(first.items.map((item) => `${item.depth}${item.marker} ${item.text}`)).toEqual([
-      "0• one continued",
-      "1◦ nested",
-      "2▪ deeper",
-      "0• two",
+      "0▪ one continued",
+      "1· nested",
+      "2› deeper",
+      "0▪ two",
     ]);
     const second = blocks[1] as Extract<Block, { type: "list" }>;
     expect(second.items.map((item) => `${item.marker} ${item.text}`)).toEqual(["1. first", "2. second"]);

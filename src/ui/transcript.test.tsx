@@ -64,7 +64,7 @@ describe("LiveTurn", () => {
     expect(frame).toContain("No response yet.");
   });
 
-  it("turns red with the × marker when the live step failed", async () => {
+  it("turns red with the ✗ marker when the live step failed", async () => {
     const frame = await frameOf(
       <LiveTurn
         t={dark}
@@ -75,7 +75,7 @@ describe("LiveTurn", () => {
         width={90}
       />,
     );
-    expect(frame).toContain("× Running tests");
+    expect(frame).toContain("✗ Running tests");
   });
 });
 
@@ -111,7 +111,7 @@ describe("TranscriptActivityView", () => {
       }),
     ]);
     const frame = await frameOf(<TranscriptActivityView t={dark} item={failing} width={90} detailed={false} />);
-    expect(frame).toContain("× Tests failed bun test");
+    expect(frame).toContain("✗ Tests failed bun test");
     expect(frame).toContain("3 pass · 2 fail · 1.3s");
     expect(frame).toContain("isExpired > is true exactly at expiry");
     expect(frame).toContain("refreshSession > rotates the token");
@@ -202,7 +202,7 @@ describe("PlanBlock", () => {
     const frame = await frameOf(
       <PlanBlock t={dark} plan={planOf(["complete", "failed", "pending"])} width={90} detailed={false} />,
     );
-    expect(frame).toContain("× Step 2");
+    expect(frame).toContain("✗ Step 2");
   });
 });
 
@@ -231,7 +231,7 @@ describe("TurnSummaryLine", () => {
         item={{ ...item, checks: [{ command: "bun test", label: "tests", tone: "danger", meta: "3 pass · 2 fail" }] }}
       />,
     );
-    expect(frame).toContain("tests × 2 failed");
+    expect(frame).toContain("tests ✗ 2 failed");
   });
 });
 

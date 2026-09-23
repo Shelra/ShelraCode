@@ -106,7 +106,7 @@ export function McpBrowserModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -137,7 +137,7 @@ export function McpBrowserModal({
                 >
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={enabledColor}>
-                      {row.server.enabled ? "■ " : "□ "}
+                      {row.server.enabled ? "● " : "○ "}
                       {row.server.label}
                     </text>
                     <text fg={row.server.enabled ? t.diffAddedFg : t.textMuted}>{row.server.transport}</text>
@@ -158,7 +158,7 @@ export function McpBrowserModal({
                 >
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={selected ? t.selected : t.text}>
-                      {"□ "}
+                      {"○ "}
                       {row.entry.name}
                     </text>
                     <text fg={t.textMuted}>{"Popular"}</text>
@@ -273,7 +273,7 @@ export function McpEditorModal({
         height={panelHeight}
         backgroundColor={t.surface}
         border={["top", "right", "bottom", "left"]}
-        borderStyle="rounded"
+        borderStyle="single"
         borderColor={t.borderStrong}
         paddingTop={1}
         paddingBottom={1}
@@ -459,7 +459,7 @@ export function McpEditorModal({
               <span style={{ fg: t.textMuted }}>{"save  ·  "}</span>
               <span style={{ fg: t.primary }}>{"tab "}</span>
               <span style={{ fg: t.textMuted }}>{"next field  ·  "}</span>
-              <span style={{ fg: t.primary }}>{"←→ "}</span>
+              <span style={{ fg: t.primary }}>{"left/right "}</span>
               <span style={{ fg: t.textMuted }}>{"transport"}</span>
             </text>
           )}

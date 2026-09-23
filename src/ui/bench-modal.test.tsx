@@ -9,7 +9,7 @@ import type {
   BenchmarkTaskResult,
 } from "../bench/types";
 import { BenchModal } from "./bench-modal";
-import { dark, light } from "./theme";
+import { dark, dark256 as light } from "./theme";
 
 const NOW = new Date("2026-09-13T22:05:15.000Z");
 
@@ -171,7 +171,7 @@ describe("Shelra Bench visual contract", () => {
     screen.renderer.destroy();
   });
 
-  it("shows failed/interrupted history and per-criterion evidence in light mode", async () => {
+  it("shows failed/interrupted history and per-criterion evidence in the 256-colour palette", async () => {
     const screen = await testRender(
       <BenchModal
         t={light}

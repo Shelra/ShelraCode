@@ -257,7 +257,7 @@ describe("projectTranscript turn summaries", () => {
     };
     const summary = projectTranscript([user("run", 0), failing]).at(-1);
     expect(turnSummaryGroups(summary as never).map((group) => group.map((part) => part.text).join(""))).toContain(
-      "tests × 2 failed",
+      "tests ✗ 2 failed",
     );
   });
 

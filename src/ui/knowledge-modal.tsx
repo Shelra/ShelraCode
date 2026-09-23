@@ -61,7 +61,7 @@ function MemoryEntry({
       flexShrink={0}
     >
       <text wrapMode="none">
-        <span style={{ fg: selected ? t.brand : t.textDim }}>{open ? "▾ " : "▸ "}</span>
+        <span style={{ fg: selected ? t.brand : t.textDim }}>{open ? "▪ " : "▸ "}</span>
         <span style={{ fg: selected ? t.selected : t.text }}>
           <b>{row.title}</b>
         </span>
@@ -102,7 +102,7 @@ function SkillEntry({ t, row, selected }: { t: Theme; row: SkillRow; selected: b
       flexShrink={0}
     >
       <text wrapMode="none">
-        <span style={{ fg: selected ? t.brand : t.textDim }}>{"◆ "}</span>
+        <span style={{ fg: selected ? t.brand : t.textDim }}>{"▪ "}</span>
         <span style={{ fg: selected ? t.selected : t.text }}>
           <b>{row.name}</b>
         </span>
@@ -243,7 +243,7 @@ export function KnowledgeModal({
         </scrollbox>
         <box flexShrink={0} paddingLeft={3} paddingTop={1} flexDirection="row">
           <text wrapMode="none">
-            <span style={{ fg: t.text }}>{"↑↓ "}</span>
+            <span style={{ fg: t.text }}>{"up/down "}</span>
             <span style={{ fg: t.textMuted }}>{"move"}</span>
             {actionable ? (
               <>
@@ -259,7 +259,7 @@ export function KnowledgeModal({
               </>
             ) : null}
             <span style={{ fg: t.textDim }}>{" · "}</span>
-            <span style={{ fg: t.text }}>{"←→ "}</span>
+            <span style={{ fg: t.text }}>{"left/right "}</span>
             <span style={{ fg: t.textMuted }}>{"tab"}</span>
           </text>
         </box>
