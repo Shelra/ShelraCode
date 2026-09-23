@@ -25,22 +25,22 @@
   },
   "fixes": [
     {
-      "commit": "e16b716",
+      "commit": "a9c053c",
       "what": "PowerShell table output was lost (15 empty results), the completion gate did not count running the changed script (3 gate loops), and the prompt had no date."
     },
     {
-      "commit": "a795732",
+      "commit": "8721685",
       "what": "The prompt asks for independent checks in one step; the session probed one thing per model round."
     },
     {
-      "commit": "a8ef1c1",
+      "commit": "7b5c265",
       "what": "Helper scripts go to a scratch folder instead of the home folder."
     }
   ],
   "reruns": [
     {
       "date": "2026-09-22",
-      "commit": "e16b716",
+      "commit": "a9c053c",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "cost": "free",
       "seconds": 420,
@@ -50,7 +50,7 @@
     },
     {
       "date": "2026-09-22",
-      "commit": "a795732",
+      "commit": "8721685",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "cost": "free",
       "seconds": 316,
@@ -60,7 +60,7 @@
     },
     {
       "date": "2026-09-22",
-      "commit": "50ac81b",
+      "commit": "aa36908",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "cost": "free",
       "session": "2fb9fa376a63",

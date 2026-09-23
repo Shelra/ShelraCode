@@ -29,7 +29,7 @@ Captures: [`80x24/`](80x24) and [`120x40/`](120x40), 39 states each, `NN-name.pn
 
 ## Found and fixed during the audit
 
-**Plan questions never opened** (fixed in `65a89da`). OpenTUI's React reconciler updates `onSubmit`
+**Plan questions never opened** (fixed in `4f20173`). OpenTUI's React reconciler updates `onSubmit`
 only on `<input>`; a `<textarea>` keeps the handler it was created with. The composer's submit
 handler, and everything it closes over, was frozen at the first render: after switching to plan mode
 the app still read mode `agent`, so the questions panel (state 29) never appeared. `TextArea`
@@ -39,7 +39,7 @@ one. Its test pins the library behaviour, so it will say when the wrapper is no 
 ## After the passes (2026-09-23)
 
 The same 39 states, captured again the same way after the theme module, the component passes and the
-code-review fixes (at `8d80830`): [`after/80x24/`](after/80x24) and [`after/120x40/`](after/120x40), with
+code-review fixes (at `7eb60fe`): [`after/80x24/`](after/80x24) and [`after/120x40/`](after/120x40), with
 the per-screen results in [`after/inventory.json`](after/inventory.json). The rest of this page describes
 the screens before the passes.
 

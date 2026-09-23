@@ -4,10 +4,10 @@
   "title": "A broad audit of the Shelra project: research plan, market validation and a code review",
   "setting": "Windows 11, Windows PowerShell 5.1, run in the Shelra repository",
   "prompt": "realiza una amplia auditoria al proyecto de shelra pero quiero que sean algo amplio, genera un plan de investigacion profunda, analisis validacion del mercado\ntienes que buscar en google contexto\n\ntambien debes revisar todo el codigo actual",
-  "workspace": { "repository": "self", "commit": "3497032" },
+  "workspace": { "repository": "self", "commit": "9af7cb8" },
   "shelra": {
     "date": "2026-09-23",
-    "commit": "3497032",
+    "commit": "9af7cb8",
     "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
     "cost": "free",
     "session": "84c3480c9ffd",
@@ -19,46 +19,46 @@
   },
   "fixes": [
     {
-      "commit": "1916ef4",
+      "commit": "d6fac56",
       "what": "read_file returned whole files; a read now stops at 2,000 lines and 50,000 characters and says where to read on."
     },
     {
-      "commit": "ea5b955",
+      "commit": "77998fe",
       "what": "The completion gate asked three times for a check that no document can have; a turn that only wrote documents is now asked once to check its facts, then reported unverified."
     },
     {
-      "commit": "842a060",
+      "commit": "96aa41f",
       "what": "Headless JSON output dropped the gate's closing note and the retry and model-switch notices."
     },
     {
-      "commit": "07f96a8",
+      "commit": "859a45d",
       "what": "Every step re-sent every earlier tool result; past 160,000 characters, results older than the last three steps go out as a one-line note."
     },
     {
-      "commit": "a3d1aa7",
+      "commit": "3f3b700",
       "what": "A check piped into head counted as passing, and a type-check counted as proof of an audit document."
     },
     {
-      "commit": "7a6c7ee",
+      "commit": "b53e7b0",
       "what": "Acceptance criteria sent as a JSON array inside a string became one criterion holding the whole array."
     },
     {
-      "commit": "e645b9c",
+      "commit": "c954ef1",
       "what": "A round cut short by a stall was saved with 0 tokens, so spend limits missed it."
     },
     {
-      "commit": "d82d454",
+      "commit": "9c82cd5",
       "what": "AGENTS.md sent agents to docs/architecture/, most of it history about an older codebase; its file names ended up in the audits."
     },
     {
-      "commit": "1ae6e7c",
+      "commit": "1b0c676",
       "what": "The re-run's clone had no dependencies installed, so every check the model ran failed."
     }
   ],
   "reruns": [
     {
       "date": "2026-09-23",
-      "commit": "b77af2d",
+      "commit": "14b709d",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "cost": "free",
       "session": "0d45517f3b75",
@@ -69,7 +69,7 @@
     },
     {
       "date": "2026-09-23",
-      "commit": "a381a54",
+      "commit": "b11606d",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "cost": "free",
       "session": "482a80dc84c0",
@@ -80,7 +80,7 @@
     },
     {
       "date": "2026-09-23",
-      "commit": "1386ea7",
+      "commit": "3e402ab",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "cost": "free",
       "session": "117a46cca39f",

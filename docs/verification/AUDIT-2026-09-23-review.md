@@ -3,7 +3,7 @@
 Shelra wrote the audit in a live run on 2026-09-23 (session `84c3480c9ffd`, `nemotron-3-ultra-550b-a55b:free`,
 72 tool calls in this repository) from the prompt "do a broad audit of the project, a deep research plan and
 a market validation; search the web for context; review all the current code". This page records how
-true it is, checked the same day against the code at `d2ef76f` and the public sources it cites.
+true it is, checked the same day against the code at `f0e4eb9` and the public sources it cites.
 
 ## Verdict
 
