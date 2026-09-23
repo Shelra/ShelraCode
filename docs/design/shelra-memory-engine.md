@@ -82,4 +82,7 @@ that skipped `.shelra`, later fixed and tested).
   cannot invent a good one.
 - Skill promotion writes into the repository (`.agents/skills`); teams should review promoted skills
   like any other committed file.
-- Memory is per workspace; user-level preferences across projects are not stored globally yet.
+- Entries do not link to each other: no `[[links]]`, backlinks or graph; `supersedes` and `relatedFiles`
+  are the only references.
+- Project memory lives under `.shelra/`, which this repository ignores, so its history is `history.jsonl`
+  rather than git. User-wide memory (`~/.shelra/memory`) is retrieved next to the project's on every turn.
