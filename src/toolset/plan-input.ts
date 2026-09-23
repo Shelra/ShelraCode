@@ -41,6 +41,7 @@ export interface LooseCriterion {
   id?: string;
   description: string;
   verification?: string;
+  command?: string;
 }
 
 /** A step the host built from loose input. */
@@ -100,7 +101,15 @@ export function looseCriteriaList<T>(value: readonly (T | string)[] | string): A
         if (!description) return [];
         const id = field(item, "id");
         const verification = field(item, "verification");
-        return [{ ...(id ? { id } : {}), description, ...(verification ? { verification } : {}) }];
+        const command = field(item, "command");
+        return [
+          {
+            ...(id ? { id } : {}),
+            description,
+            ...(verification ? { verification } : {}),
+            ...(command ? { command } : {}),
+          },
+        ];
       });
     }
     return parseLooseItems(value).map((item) => (item.id ? { id: item.id, description: item.text } : item.text));

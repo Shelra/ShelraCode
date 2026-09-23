@@ -33,6 +33,13 @@ export interface PlanAcceptanceCriterion {
   description: string;
   /** Concrete command, test, observation, or evidence that will prove the criterion. */
   verification: string;
+  /** A command that exits 0 once the criterion holds; the host runs it on the final code (the task contract). */
+  command?: string;
+  /**
+   * What `command` did when the plan was published: a check that already passed before the change cannot show
+   * the change works, so it does not join the contract. "not_run" when the turn had already changed files.
+   */
+  commandBefore?: "failed" | "passed" | "not_run";
 }
 
 export interface PlanQuestion {

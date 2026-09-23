@@ -43,7 +43,7 @@ import {
 } from "../tools/file";
 import { executeGrep } from "../tools/grep";
 import type { ScheduleDaemonStatus, ScheduleManager, StoredSchedule } from "../tools/schedule";
-import type { AgentMode, TaskRequest, ToolResult } from "../types/index";
+import type { AgentMode, PlanAcceptanceCriterion, TaskRequest, ToolResult } from "../types/index";
 import {
   type CustomSubagentConfig,
   type DestructiveCommandPolicy,
@@ -102,6 +102,14 @@ interface CreateToolsOptions {
   confirmDestructiveCommand?: (command: string, reason: string, signal?: AbortSignal) => Promise<boolean>;
   /** Overrides the `shell.destructive` setting (tests, embedded hosts). */
   destructiveCommandPolicy?: DestructiveCommandPolicy;
+  /**
+   * Runs a plan criterion's command when the plan is published, to learn whether it fails before the
+   * change. Returns null when it did not run (the turn had already changed files, or the command is unsafe).
+   */
+  probeCriterionCommand?: (
+    command: string,
+    signal?: AbortSignal,
+  ) => Promise<{ passed: boolean; output: string } | null>;
 }
 
 /**
@@ -1161,6 +1169,12 @@ export function createTools(
                 .string()
                 .optional()
                 .describe("Specific test, command, or observation that will prove the condition"),
+              command: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional: a shell command that exits 0 once this holds, such as one test that exercises it. It must fail now, before your change; Shelra runs it on the final code.",
+                ),
             }),
             z
               .string()
@@ -1207,15 +1221,18 @@ export function createTools(
         .optional()
         .describe("Questions for the user to answer before proceeding"),
     }),
-    execute: async ({
-      title,
-      summary: rawSummary,
-      goal,
-      requirements: rawRequirements,
-      acceptanceCriteria: rawCriteria,
-      steps: rawSteps,
-      questions,
-    }) => {
+    execute: async (
+      {
+        title,
+        summary: rawSummary,
+        goal,
+        requirements: rawRequirements,
+        acceptanceCriteria: rawCriteria,
+        steps: rawSteps,
+        questions,
+      },
+      { abortSignal },
+    ) => {
       structuredPlanPublished = true;
       if (options.planState) {
         options.planState.published = true;
@@ -1223,7 +1240,7 @@ export function createTools(
       }
       const summary = rawSummary?.trim() || goal;
       const requirements = looseStringList(rawRequirements);
-      const acceptanceCriteria = looseCriteriaList(rawCriteria).map((criterion, index) =>
+      const acceptanceCriteria: PlanAcceptanceCriterion[] = looseCriteriaList(rawCriteria).map((criterion, index) =>
         typeof criterion === "string"
           ? {
               id: `AC${index + 1}`,
@@ -1234,8 +1251,21 @@ export function createTools(
               id: criterion.id?.trim() || `AC${index + 1}`,
               description: criterion.description,
               verification: criterion.verification?.trim() || "Run the project's relevant check and observe it pass",
+              ...("command" in criterion && typeof criterion.command === "string" && criterion.command.trim()
+                ? { command: criterion.command.trim() }
+                : {}),
             },
       );
+      // A check that already passes before the change cannot show the change works (fail before, pass after).
+      const vacuous: string[] = [];
+      for (const criterion of acceptanceCriteria) {
+        if (!criterion.command) continue;
+        const before = options.probeCriterionCommand
+          ? await options.probeCriterionCommand(criterion.command, abortSignal).catch(() => null)
+          : null;
+        criterion.commandBefore = before === null ? "not_run" : before.passed ? "passed" : "failed";
+        if (before?.passed) vacuous.push(criterion.id);
+      }
       const steps = looseStepList(rawSteps).map((step) =>
         typeof step === "string"
           ? { title: step, description: step, satisfies: [] as string[] }
@@ -1248,13 +1278,23 @@ export function createTools(
         ...requirements.map((requirement, index) => `  R${index + 1}. ${requirement}`),
         "Acceptance criteria:",
         ...acceptanceCriteria.map(
-          (criterion) => `  ${criterion.id}. ${criterion.description} | verify: ${criterion.verification}`,
+          (criterion) =>
+            `  ${criterion.id}. ${criterion.description} | verify: ${criterion.verification}${
+              criterion.command
+                ? ` | command: ${criterion.command} (before the change: ${criterion.commandBefore})`
+                : ""
+            }`,
         ),
         "Steps:",
         ...steps.map(
           (step, index) =>
             `  ${index + 1}. ${step.title}: ${step.description} | satisfies: ${step.satisfies.join(", ") || "not mapped"}`,
         ),
+        ...(vacuous.length > 0
+          ? [
+              `The command of ${vacuous.join(", ")} already passes before any change, so it cannot show your change works and Shelra will not count it. Give a check that fails now (for example a new test of the missing behavior), or drop the command.`,
+            ]
+          : []),
       ].join("\n");
       return {
         success: true,

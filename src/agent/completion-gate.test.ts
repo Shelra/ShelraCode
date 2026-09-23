@@ -167,6 +167,8 @@ class ScenarioProvider implements ProviderAdapter {
     private readonly secondRoundEvents: ProviderEvent[] | ProviderEvent[][],
     /** The files round 1 writes. */
     private readonly firstWrites: readonly string[] = ["index.html"],
+    /** The plan round 1 publishes. */
+    private readonly planResult: unknown = PLAN_TOOL_RESULT,
   ) {}
 
   resolveModelRuntime(modelId: string): ProviderModelRuntime {
@@ -194,7 +196,7 @@ class ScenarioProvider implements ProviderAdapter {
       this.round === 1
         ? [
             toolCallEvent("call-plan", "generate_plan", {}),
-            toolResultEvent("call-plan", "generate_plan", PLAN_TOOL_RESULT),
+            toolResultEvent("call-plan", "generate_plan", this.planResult),
             ...this.firstWrites.flatMap((file, index): ProviderEvent[] => {
               const id = index === 0 ? "call-write" : `call-write-${index}`;
               const content = file === "index.html" ? "<html></html>" : "Findings.";
@@ -984,6 +986,71 @@ describe("task contract: the project's own checks decide (audit doc 15, Phase 1.
 
     expect(round).toBe(1);
     expect(checkRunner).not.toHaveBeenCalled();
+  });
+
+  /** A plan whose criterion names a command, with what that command did before the change. */
+  const planWithCommand = (commandBefore: "failed" | "passed") => ({
+    ...PLAN_TOOL_RESULT,
+    plan: {
+      ...PLAN_TOOL_RESULT.plan,
+      acceptanceCriteria: [
+        {
+          id: "AC1",
+          description: "Clock ticks every second",
+          verification: "run its test",
+          command: "bun test clock",
+          commandBefore,
+        },
+      ],
+    },
+  });
+
+  it("holds the final code to a plan criterion's command that failed before the change", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    // No stated project checks here: the contract is the plan's own executable criterion.
+    const provider = new ScenarioProvider(
+      [{ type: "text-delta", text: "Still done." }],
+      ["index.html"],
+      planWithCommand("failed"),
+    );
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: mkdtempSync(join(tmpdir(), "shelra-contract-plan-")),
+      checkRunner,
+    });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(provider.round).toBe(1);
+    expect(checkRunner.mock.calls.map(([command]) => command)).toEqual(["bun test clock"]);
+    expect(chunks.some((c) => c.content?.includes("`bun test clock` passed"))).toBe(true);
+  });
+
+  it("does not count a plan criterion's command that already passed before the change", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScenarioProvider(
+      [{ type: "text-delta", text: "Still done." }],
+      ["index.html"],
+      planWithCommand("passed"),
+    );
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "", durationMs: 5 }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: mkdtempSync(join(tmpdir(), "shelra-contract-plan-")),
+      checkRunner,
+    });
+
+    for await (const _chunk of agent.processMessage("Create a digital clock")) {
+      // drain
+    }
+
+    // It proves nothing, so there is no contract: the gate asks for real verification as before.
+    expect(checkRunner).not.toHaveBeenCalled();
+    expect(provider.round).toBe(4);
   });
 
   it("falls back to asking for any check when the contract is switched off", async () => {

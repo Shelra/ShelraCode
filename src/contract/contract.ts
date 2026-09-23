@@ -1,6 +1,6 @@
 import type { BrowserObservation, CommandOutcome, HttpProbe } from "../exec/types";
 import { destructiveCommandReason } from "../security/destructive";
-import { type DiscoveredCheck, isSameCheck } from "./discover";
+import { type CheckKind, type DiscoveredCheck, isSameCheck } from "./discover";
 import { evaluateAcceptance } from "./evaluate";
 import type { AcceptanceCriterion } from "./types";
 
@@ -22,8 +22,19 @@ export interface ObservedCheckRun {
   beforeFirstChange: boolean;
 }
 
+/**
+ * One check of the contract: a check the project states, or a plan criterion's command (`task`), which the
+ * agent proposed and which failed before its change.
+ */
+export interface ContractCheck {
+  kind: CheckKind | "task";
+  command: string;
+  source: string;
+  runs?: string;
+}
+
 export interface ContractCheckResult {
-  check: DiscoveredCheck;
+  check: ContractCheck;
   passed: boolean;
   /** Whose run decided: the agent's own fresh run, or the host's. */
   by: "agent" | "host";
@@ -47,15 +58,15 @@ export function contractChecks(discovered: readonly DiscoveredCheck[]): Discover
 }
 
 export async function evaluateTurnContract(input: {
-  checks: readonly DiscoveredCheck[];
+  checks: readonly ContractCheck[];
   runs: readonly ObservedCheckRun[];
   workspace: string;
   runCheck: ContractCheckRunner;
   timeoutMs: number;
   signal?: AbortSignal;
 }): Promise<ContractCheckResult[]> {
-  const decided = new Map<DiscoveredCheck, ContractCheckResult>();
-  const forHost: DiscoveredCheck[] = [];
+  const decided = new Map<ContractCheck, ContractCheckResult>();
+  const forHost: ContractCheck[] = [];
   for (const check of input.checks) {
     const mine = input.runs.filter((run) => isSameCheck(run.command, check));
     const failedBefore = mine.some((run) => run.beforeFirstChange && !run.passed);

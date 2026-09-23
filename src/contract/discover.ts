@@ -27,7 +27,7 @@ export interface DiscoveredCheck {
 }
 
 /** Whether a command someone ran is this check, exactly: a filtered or partial run is not. */
-export function isSameCheck(command: string, check: DiscoveredCheck): boolean {
+export function isSameCheck(command: string, check: { command: string; runs?: string }): boolean {
   const normalized = normalizeCommand(command);
   return (
     normalized === normalizeCommand(check.command) ||

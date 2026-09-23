@@ -128,6 +128,45 @@ describe("schedule daemon tools", () => {
     ]);
   });
 
+  it("runs each criterion's command before the change, and says when one proves nothing (audit doc 15, 1.3)", async () => {
+    const probe = vi.fn(async (command: string) => ({ passed: command === "bun test already", output: "" }));
+    const tools = createTools(new BashTool("/tmp"), {} as never, "agent", {
+      probeCriterionCommand: probe,
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const result = (await tools.generate_plan.execute(
+      {
+        title: "Slugify",
+        goal: "slugify works",
+        acceptanceCriteria: [
+          { id: "AC1", description: "trims", command: "bun test trims" },
+          { id: "AC2", description: "already true", command: "bun test already" },
+          { id: "AC3", description: "reads well" },
+        ],
+        steps: ["Implement slugify"],
+      },
+      {},
+    )) as { output: string; plan: { acceptanceCriteria: Array<{ command?: string; commandBefore?: string }> } };
+
+    expect(probe.mock.calls.map(([command]) => command)).toEqual(["bun test trims", "bun test already"]);
+    expect(result.plan.acceptanceCriteria.map((criterion) => criterion.commandBefore)).toEqual([
+      "failed",
+      "passed",
+      undefined,
+    ]);
+    expect(result.output).toContain("The command of AC2 already passes before any change");
+
+    const unprobed = createTools(new BashTool("/tmp"), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+    >;
+    const later = (await unprobed.generate_plan.execute(
+      { title: "T", goal: "g", acceptanceCriteria: [{ description: "d", command: "bun test x" }], steps: ["s"] },
+      {},
+    )) as { plan: { acceptanceCriteria: Array<{ commandBefore?: string }> } };
+    expect(later.plan.acceptanceCriteria[0]?.commandBefore).toBe("not_run");
+  });
+
   it("lets canonical file mutations proceed without a published plan", async () => {
     // The plan is guidance the prompt asks for on non-trivial work, not a gate: blocking every
     // edit behind a nested plan schema made mid-tier models fumble the schema and give up

@@ -2,7 +2,12 @@ import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
 import type { ContextPacket } from "../context/types";
-import { type ContractCheckRunner, contractChecks, evaluateTurnContract } from "../contract/contract";
+import {
+  type ContractCheck,
+  type ContractCheckRunner,
+  contractChecks,
+  evaluateTurnContract,
+} from "../contract/contract";
 import { discoverChecks } from "../contract/discover";
 import { executeEventHooks } from "../hooks/index";
 import type {
@@ -42,6 +47,7 @@ import { normalizeModelMessages } from "../providers/messages";
 import { isProviderStreamIdleError } from "../providers/stream";
 import type { ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
+import { destructiveCommandReason } from "../security/destructive";
 import {
   appendCompaction,
   appendMessages,
@@ -174,6 +180,8 @@ const OVERFLOW_RECOVERY_KEPT_TURNS = 2;
 const MAX_VERIFICATION_RETRIES = 3;
 /** How long one of the project's own checks may run when the host runs it on the final code. */
 const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
+/** How long a plan criterion's command may run when the host checks that it fails before the change. */
+const CRITERION_PROBE_TIMEOUT_MS = 2 * 60_000;
 /** Text documents: nothing runs them, so a turn that only wrote these gets one fact-check request. */
 const DOCUMENT_FILE_RE = /\.(?:md|mdx|markdown|txt|rst|adoc|org)$/i;
 /**
@@ -2714,6 +2722,19 @@ export class Agent {
             planState: this.planState,
             toolGroups: loadToolGroupSettings(),
             ...this.destructiveCommandOption(),
+            // A plan criterion's command runs once when the plan is published, to prove it fails before the
+            // change; once the turn has changed anything, "before" is gone and it is not run.
+            probeCriterionCommand: async (command, abortSignal) => {
+              const cwd = this.bash.getCwd();
+              if (!turnStartState || turnMutationEvents > 0) return null;
+              if (changedPaths(turnStartState, captureWorkspaceState(cwd))?.length !== 0) return null;
+              if (destructiveCommandReason(command, cwd)) return null;
+              const result = await this.checkRunner(command, {
+                timeoutMs: CRITERION_PROBE_TIMEOUT_MS,
+                signal: combineAbortSignals(signal, abortSignal),
+              });
+              return { passed: result.passed, output: result.output };
+            },
           });
           let tools: ToolSet = runtime.modelInfo?.supportsClientTools === false ? {} : baseTools;
           if (this.mode === "agent" && runtime.modelInfo?.supportsClientTools !== false) {
@@ -3188,15 +3209,23 @@ export class Agent {
           const documentsOnly =
             mutatedThisTurn && !unverifiedSinceAudit && mutations.every((path) => DOCUMENT_FILE_RE.test(path));
 
-          // The task contract (audit doc 15, Phase 1.3–1.4): when the project states its checks, the host
-          // decides "done" by running them on the final code, instead of accepting any check at all.
-          const contract =
+          // The task contract (audit doc 15, Phase 1.3–1.4): when the project states its checks, or the plan
+          // gave a command that failed before the change, the host decides "done" by running them on the
+          // final code, instead of accepting any check at all.
+          const contract: ContractCheck[] =
             this.mode === "agent" &&
             !this.ablations.has("gate") &&
             !this.ablations.has("contract") &&
             mutatedThisTurn &&
             !documentsOnly
-              ? contractChecks(discoverChecks(cwd))
+              ? [
+                  ...contractChecks(discoverChecks(cwd)),
+                  ...(this.activeAcceptanceCriteria ?? []).flatMap((criterion): ContractCheck[] =>
+                    criterion.command && criterion.commandBefore !== "passed"
+                      ? [{ kind: "task", command: criterion.command, source: `plan ${criterion.id}` }]
+                      : [],
+                  ),
+                ]
               : [];
           if (contract.length > 0) {
             const results = await evaluateTurnContract({
