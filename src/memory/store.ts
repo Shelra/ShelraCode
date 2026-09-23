@@ -464,6 +464,27 @@ export function confirmMemoryEntry(scope: MemoryScope, slug: string, detail?: st
 }
 
 /**
+ * Re-confirms the entries a command that just passed vouches for (audit doc 15, M2 and Phase 4.4): an entry
+ * that names that exact command in backticks is current again, whatever its related files did since, so
+ * staleness is no longer one-way. Only an exact match counts: `bun test` passing says nothing for an entry
+ * that insists on `bun test --preload ./test/setup.ts`, and would rather contradict it.
+ */
+export function reconfirmByPassingCommands(scope: MemoryScope, commands: readonly string[]): string[] {
+  const normalize = (command: string) => command.trim().replace(/\s+/gu, " ");
+  const passed = new Set(commands.map(normalize).filter((command) => command.length > 0));
+  if (passed.size === 0) return [];
+  const confirmed: string[] = [];
+  for (const record of listMemoryRecords(scope)) {
+    const named = [...`${record.index.hook}\n${record.entry.body}`.matchAll(/`([^`\n]+)`/gu)].map((match) =>
+      normalize(match[1] ?? ""),
+    );
+    const command = named.find((candidate) => passed.has(candidate));
+    if (command && confirmMemoryEntry(scope, record.slug, `\`${command}\` passed`)) confirmed.push(record.slug);
+  }
+  return confirmed;
+}
+
+/**
  * Removes one memory entry — the "forget" operation a memory system needs alongside store and
  * retrieve (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §16): a wrong or superseded entry
  * left in place quietly adds noise to every future retrieval. Removes the index line and the

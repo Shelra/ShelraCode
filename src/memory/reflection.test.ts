@@ -125,6 +125,50 @@ describe("automatic memory capture", () => {
     );
   });
 
+  it("learns from a turn that ended unverified, but never above a confirmed fact (audit doc 15, M4)", async () => {
+    const unverified: TurnDigest = {
+      userMessage: "Make the parser accept trailing commas",
+      assistantText:
+        "Changed the tokenizer. [Not verified — `bun run test` fails on the final code, after 3 automatic request(s).]",
+      changedFiles: ["src/tokenizer.ts"],
+      commands: [{ command: "bun run test", success: false, output: "(fail) parser > trailing comma" }],
+      verified: false,
+      endedUnverified: true,
+      toolCalls: 3,
+    };
+    expect(turnQualifiesForReflection(unverified)).toEqual({
+      qualified: true,
+      reason: "a change whose checks still fail",
+    });
+    expect(turnQualifiesForReflection({ ...unverified, endedUnverified: false }).qualified).toBe(false);
+
+    const provider = new JsonProvider(
+      JSON.stringify({
+        memories: [
+          {
+            type: "known-problems",
+            slug: "trailing-comma-tokenizer",
+            title: "Trailing commas break the tokenizer",
+            hook: "the tokenizer rejects trailing commas; changing the comma rule alone did not fix it",
+            description: "d",
+            body: "`bun run test` fails at parser > trailing comma; editing the comma rule in src/tokenizer.ts alone did not fix it.",
+            confidence: 0.9,
+            tags: ["parser"],
+          },
+        ],
+      }),
+    );
+    const scope = projectMemoryScope(workspace);
+    const report = await reflectOnTurn({ scope, provider, modelId: "m", digest: unverified });
+
+    expect(provider.requests[0]?.prompt).toContain("OUTCOME: the turn ended unverified");
+    expect(report.written).toEqual(["trailing-comma-tokenizer"]);
+    expect(readMemoryEntry(scope, "trailing-comma-tokenizer").entry?.frontmatter.metadata).toMatchObject({
+      confidence: 0.4,
+      tags: ["parser", "unverified"],
+    });
+  });
+
   it("parses tolerant JSON and drops malformed items", () => {
     const text =
       'Here you go:\n```json\n{"memories":[{"type":"testing","slug":"Preload Flag","title":"Tests need preload","hook":"bun test needs --preload","description":"d","body":"Run `bun test --preload ./test/setup.ts` or fixtures fail.","confidence":0.9,"relatedFiles":["test/setup.ts"]},{"type":"bogus","body":"x"},{"type":"failure","body":""}]}\n```';

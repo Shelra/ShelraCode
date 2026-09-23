@@ -27,8 +27,13 @@ export interface TurnDigest {
   commands: TurnCommand[];
   /** True when the turn produced verification-shaped evidence (tests, build, real request). */
   verified: boolean;
+  /** The turn ended with the host's `[Not verified]` note: the project's checks still failed on its code. */
+  endedUnverified?: boolean;
   toolCalls: number;
 }
+
+/** What a turn that ended unverified may teach is kept, but it never outranks a confirmed fact. */
+const UNVERIFIED_CONFIDENCE_CAP = 0.4;
 
 export interface ReflectionCandidate extends MemoryWriteInput {}
 
@@ -97,6 +102,10 @@ export function turnQualifiesForReflection(digest: TurnDigest): { qualified: boo
   const succeededAfterFailure =
     failed > 0 && digest.commands.findIndex((command) => !command.success) < digest.commands.length - 1;
   if (digest.changedFiles.length > 0 && digest.verified) return { qualified: true, reason: "verified change" };
+  // The hardest turns end unverified; they teach what fails and what did not work (audit doc 15, M4).
+  if (digest.changedFiles.length > 0 && digest.endedUnverified) {
+    return { qualified: true, reason: "a change whose checks still fail" };
+  }
   if (succeededAfterFailure) return { qualified: true, reason: "a command failed and later work succeeded" };
   if (digest.toolCalls >= 8) return { qualified: true, reason: "substantial investigation" };
   return { qualified: false, reason: "no verified change, failure, or substantial investigation" };
@@ -170,6 +179,11 @@ export function buildReflectionPrompt(
     `FILES CHANGED: ${digest.changedFiles.length > 0 ? digest.changedFiles.join(", ") : "(none)"}`,
     `VERIFIED: ${digest.verified ? "yes" : "no"}`,
   ];
+  if (digest.endedUnverified) {
+    sections.push(
+      "OUTCOME: the turn ended unverified: the project's checks still failed on its code. Keep what the commands showed (what fails, how, and what did not work), never a fix that was not confirmed.",
+    );
+  }
   if (digest.commands.length > 0) {
     sections.push(
       `COMMANDS (last ${Math.min(digest.commands.length, 12)}):\n${digest.commands
@@ -388,6 +402,13 @@ export async function reflectOnTurn(options: ReflectOptions): Promise<Reflection
     }
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
+  }
+  if (options.digest.endedUnverified) {
+    report.candidates = report.candidates.map((candidate) => ({
+      ...candidate,
+      confidence: Math.min(candidate.confidence ?? UNVERIFIED_CONFIDENCE_CAP, UNVERIFIED_CONFIDENCE_CAP),
+      tags: [...new Set([...(candidate.tags ?? []), "unverified"])],
+    }));
   }
   // The mechanically observed trap (a command that failed until something else was done) is
   // recorded unless the model's own candidates already mention the recovering command; twice in

@@ -31,7 +31,13 @@ import { buildMcpToolSet } from "../mcp/runtime";
 import { admitCandidates, extractUserDirectives, reflectOnTurn, type TurnCommand } from "../memory/reflection";
 import type { MemoryContext } from "../memory/retrieval";
 import { promoteProceduresToSkills } from "../memory/skills";
-import { creditMemoryUse, listMemoryRecords, projectMemoryScope, recordMemoryUse } from "../memory/store";
+import {
+  creditMemoryUse,
+  listMemoryRecords,
+  projectMemoryScope,
+  reconfirmByPassingCommands,
+  recordMemoryUse,
+} from "../memory/store";
 import {
   type BudgetLimits,
   type BudgetScope,
@@ -3073,6 +3079,29 @@ export class Agent {
               const verdict = `[Not verified — ${reason}]`;
               this.recordVerdict(verdict);
               yield { type: "content", content: `\n\n${verdict}` };
+              // A turn whose checks still fail teaches too: what fails, and what did not work (audit doc 15, M4).
+              reportStatus("recap", "Updating project memory");
+              await this.learnFromTurn(
+                {
+                  userMessage,
+                  assistantText: `${assistantText}\n\n${verdict}`,
+                  changedFiles: [...mutations],
+                  commands: [
+                    ...turnCommands,
+                    ...failing.map((result) => ({
+                      command: result.check.command,
+                      success: false,
+                      output: result.detail,
+                    })),
+                  ],
+                  verified: false,
+                  endedUnverified: true,
+                  toolCalls: activeToolCalls.length,
+                },
+                runtime.modelId,
+                signal,
+                observer,
+              );
               yield { type: "done" };
               return;
             }
@@ -3201,6 +3230,13 @@ export class Agent {
           this.persistKernelIndex();
           // The memories this turn was given were there when the project's checks passed (audit doc 15, M3).
           if (contractPassed && !this.ablations.has("memory")) creditMemoryUse(memoryScope, memoryContext.expanded, 1);
+          // An entry that names a command which passed in this turn is current again (audit doc 15, M2).
+          if (!this.ablations.has("memory")) {
+            reconfirmByPassingCommands(memoryScope, [
+              ...turnCommands.filter((command) => command.success).map((command) => command.command),
+              ...checkRuns.filter((run) => run.passed).map((run) => run.command),
+            ]);
+          }
           // Learning after acting: a verified change, a failure that was worked through, or a
           // substantial investigation becomes durable project memory through the write gate.
           reportStatus("recap", "Updating project memory");

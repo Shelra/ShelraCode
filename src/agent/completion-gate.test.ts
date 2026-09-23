@@ -1468,3 +1468,96 @@ describe("an attempt that breaks a passing check (audit doc 15, Phase 2.3)", () 
     expect(existsSync(join(dir, "src", "extra.ts"))).toBe(false);
   });
 });
+
+describe("memory from how a turn ended (audit doc 15, M2 and M4)", () => {
+  it("re-confirms an entry whose exact command passed in the turn", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-reconfirm-"));
+    const scope = projectMemoryScope(dir);
+    writeMemoryEntry(scope, {
+      slug: "preload-tests",
+      title: "Tests need the preload script",
+      hook: "bun test needs --preload ./test/setup.ts",
+      type: "testing",
+      description: "d",
+      body: "Run `bun test --preload ./test/setup.ts`; without it fixture imports fail with ENOENT.",
+    });
+    const command = "bun test --preload ./test/setup.ts";
+    const provider: ProviderAdapter = {
+      id: "reconfirm",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: () => ({
+        events: (async function* () {
+          yield toolCallEvent("b1", "bash", { command });
+          yield toolResultEvent("b1", "bash", { success: true, output: "4 pass" }, { command });
+          yield { type: "text-delta", text: "The tests pass with the preload script." };
+        })(),
+        response: Promise.resolve({ messages: [{ role: "assistant", content: "The tests pass." }] }),
+      }),
+      generateText: async (request) => ({ text: '{"memories":[]}', modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir });
+
+    for await (const _chunk of agent.processMessage("Do the tests still need the preload script?")) {
+      // drain
+    }
+
+    const entry = listMemoryRecords(scope).find((record) => record.slug === "preload-tests")?.entry;
+    expect(entry?.frontmatter.metadata.lastConfirmed).toEqual(expect.any(String));
+  });
+
+  it("reflects on a turn whose checks still fail, telling the reflection it ended unverified", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-unverified-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+    const reflections: ProviderTextRequest[] = [];
+    let round = 0;
+    const provider: ProviderAdapter = {
+      id: "unverified",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: () => {
+        round += 1;
+        const id = `w${round}`;
+        return {
+          events: (async function* () {
+            yield toolCallEvent(id, "write_file", { path: "src/slug.ts", content: `// try ${round}` });
+            yield toolResultEvent(id, "write_file", {
+              success: true,
+              output: "Updated src/slug.ts",
+              diff: { filePath: "src/slug.ts", additions: 1, removals: 1, patch: "", isNew: false },
+            });
+            yield { type: "text-delta", text: "Fixed." };
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Fixed." }] }),
+        };
+      },
+      generateText: async (request) => {
+        reflections.push(request);
+        return { text: '{"memories":[]}', modelId: request.modelId };
+      },
+      getToolContext: () => ({}),
+    };
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner: vi.fn<ContractCheckRunner>(async () => ({
+        passed: false,
+        output: " 0 pass\n 1 fail",
+        durationMs: 1,
+      })),
+    });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Make slugify trim")) {
+      chunks.push(chunk as { type: string; content?: string });
+    }
+
+    expect(chunks.some((chunk) => chunk.content?.includes("[Not verified"))).toBe(true);
+    const reflection = reflections.find((request) => request.system?.includes("durable project knowledge"));
+    expect(reflection?.prompt).toContain("OUTCOME: the turn ended unverified");
+    expect(reflection?.prompt).toContain("$ bun run test");
+  });
+});
