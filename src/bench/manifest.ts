@@ -55,9 +55,23 @@ export function parseManifest(value: unknown): BenchmarkManifest {
   if (!Array.isArray(value.tasks)) throw new Error("Benchmark manifest tasks must be an array.");
 
   const ids = new Set<string>();
+  /** Tasks whose directory a later task already continued in, so it no longer holds their result. */
+  const continuedBy = new Map<string, string>();
   const tasks = value.tasks.map((task, index) => {
     const parsedTask = parseTask(task, index);
     if (ids.has(parsedTask.id)) throw new Error(`Benchmark manifest contains duplicate task id "${parsedTask.id}".`);
+    const source = parsedTask.continueIn ?? parsedTask.workspaceFrom;
+    if (source !== undefined && continuedBy.has(source)) {
+      throw new Error(
+        `tasks[${index}] starts from "${source}", but task "${continuedBy.get(source)}" already continued in its directory.`,
+      );
+    }
+    if (parsedTask.continueIn !== undefined) {
+      if (!ids.has(parsedTask.continueIn)) {
+        throw new Error(`tasks[${index}] continues in "${parsedTask.continueIn}", which is not an earlier task.`);
+      }
+      continuedBy.set(parsedTask.continueIn, parsedTask.id);
+    }
     ids.add(parsedTask.id);
     return parsedTask;
   });
@@ -145,6 +159,24 @@ function parseTask(value: unknown, index: number): BenchmarkTaskDefinition {
   }
   if (task.workspaceFrom && task.workspaceTemplate) {
     throw new Error(`tasks[${index}] cannot set both workspaceTemplate and workspaceFrom.`);
+  }
+  if (typeof value.continueIn === "string") task.continueIn = value.continueIn.trim();
+  if (task.continueIn !== undefined && (task.workspaceTemplate || task.workspaceFrom)) {
+    throw new Error(`tasks[${index}] cannot combine continueIn with workspaceTemplate or workspaceFrom.`);
+  }
+  if (value.approveDecisions !== undefined) {
+    const field = `tasks[${index}].approveDecisions`;
+    if (!Array.isArray(value.approveDecisions) || value.approveDecisions.some((item) => typeof item !== "string")) {
+      throw new Error(`${field} must be an array of regular expressions.`);
+    }
+    task.approveDecisions = value.approveDecisions.map((pattern: string) => {
+      try {
+        new RegExp(pattern, "iu");
+      } catch {
+        throw new Error(`${field} holds an invalid regular expression: ${pattern}`);
+      }
+      return pattern;
+    });
   }
   if (typeof value.researchRequired === "boolean") task.researchRequired = value.researchRequired;
   if (typeof value.memoryRequired === "boolean") task.memoryRequired = value.memoryRequired;

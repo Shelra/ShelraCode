@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, statSync } from "node:fs";
-import { dirname, relative, resolve, sep } from "node:path";
+import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   appendBenchmarkEvent,
   createBenchmarkRun,
@@ -221,6 +221,8 @@ export async function runBenchmark(options: BenchmarkRunnerOptions): Promise<Ben
         break;
       }
 
+      // A task that continued in an earlier task's directory changes it: that result is gone.
+      if (task.continueIn) completedWorkspaces.delete(task.continueIn);
       setBenchmarkRunStatus(run.runId, "running", `Running task ${task.id}`);
       startBenchmarkTask({
         runId: run.runId,
@@ -353,6 +355,23 @@ function prepareBenchmarkTaskWorkspace(
   taskRoot?: string,
 ): BenchmarkTaskDefinition {
   const root = resolve(benchmarkRoot);
+  if (task.continueIn) {
+    // A chain of sessions on one repository: the next session opens the directory the last one left, as a
+    // user's project would be. In the clean room that state becomes a commit, so the task's diff and git
+    // status show only its own changes.
+    const workspace = completedWorkspaces.get(task.continueIn);
+    if (!workspace) {
+      throw new Error(
+        `Benchmark task "${task.id}" continues in "${task.continueIn}", which has not completed in this run.`,
+      );
+    }
+    if (taskRoot) commitTaskState(workspace, `Benchmark state before ${task.id}`);
+    return {
+      ...task,
+      workspace,
+      metadata: { ...(task.metadata ?? {}), continueIn: task.continueIn, workspacePrepared: true },
+    };
+  }
   let template: string;
   let wipeMemory = false;
   if (task.workspaceFrom) {
@@ -426,12 +445,29 @@ function prepareBenchmarkTaskWorkspace(
  * this scratch copy; the user's hooks, templates and commit signing belong to their own repositories,
  * so they are left out (a signing prompt or a hook would stall or fail the preparation).
  */
-function initTaskRepository(workspace: string): void {
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-c", "init.defaultBranch=main", ...args], { cwd: workspace, stdio: "ignore" });
-  git("init", "-q", "--template=");
-  git("add", "-A");
-  git(
+function initTaskRepository(workspace: string, message = "Benchmark fixture"): void {
+  taskGit(workspace, "init", "-q", "--template=");
+  commitEverything(workspace, message);
+}
+
+/**
+ * Commits what the previous session of a chain left. An agent may have removed the repository or left it
+ * mid-operation; then a fresh one holds the state, since only the files are graded, never the agent's history.
+ */
+function commitTaskState(workspace: string, message: string): void {
+  try {
+    if (!existsSync(join(workspace, ".git"))) throw new Error("no repository");
+    commitEverything(workspace, message);
+  } catch {
+    rmSync(join(workspace, ".git"), { recursive: true, force: true });
+    initTaskRepository(workspace, message);
+  }
+}
+
+function commitEverything(workspace: string, message: string): void {
+  taskGit(workspace, "add", "-A");
+  taskGit(
+    workspace,
     "-c",
     "user.name=Shelra Bench",
     "-c",
@@ -443,8 +479,12 @@ function initTaskRepository(workspace: string): void {
     "--no-verify",
     "--allow-empty",
     "-m",
-    "Benchmark fixture",
+    message,
   );
+}
+
+function taskGit(workspace: string, ...args: string[]): void {
+  execFileSync("git", ["-c", "init.defaultBranch=main", ...args], { cwd: workspace, stdio: "ignore" });
 }
 
 function withDerivedTaskScores(

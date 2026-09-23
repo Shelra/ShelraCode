@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Agent, type AgentOptions, type ProcessMessageObserver } from "../agent/agent";
+import { Agent, type AgentOptions, type DecisionApproval, type ProcessMessageObserver } from "../agent/agent";
 import { isVerificationCommand } from "../agent/verification-evidence";
 import type { CheckSpec } from "../contract/types";
 import type { BudgetLimits } from "../models/budget";
@@ -49,6 +49,17 @@ export interface AgentBenchmarkExecutorOptions {
 }
 
 export const DEFAULT_TASK_TIMEOUT_MS = 20 * 60_000;
+
+/**
+ * The simulated user of a chain task: it approves a proposed decision that records a rule it stated in
+ * this task (its title or rule matches one of the patterns) and declines any other, as a user who reads
+ * the approval question would.
+ */
+export function simulatedDecisionApproval(patterns: readonly string[]): DecisionApproval {
+  const expressions = patterns.map((pattern) => new RegExp(pattern, "iu"));
+  return async (decision) =>
+    expressions.some((expression) => expression.test(`${decision.title}\n${decision.rule}`)) ? "approve" : "reject";
+}
 
 /** A note the host ends a turn with when the work is not done; a turn that carries one claims nothing. */
 const HOST_END_NOTE_RE = /\[(?:Not verified|Not marked complete|Paused|No response|Cancelled)\b/u;
@@ -106,6 +117,19 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
         ...(options.agentOptions ?? {}),
       });
       controller.signal.addEventListener("abort", () => agent.abort(), { once: true });
+      if (task.approveDecisions) {
+        const answer = simulatedDecisionApproval(task.approveDecisions);
+        agent.setDecisionApproval(async (decision, signal) => {
+          const verdict = await answer(decision, signal);
+          context.emit({
+            type: "note",
+            taskId: task.id,
+            message: `The simulated user answered "${verdict}" to ${decision.id}: ${decision.title}`,
+            payload: { decision: decision.id, verdict },
+          });
+          return verdict;
+        });
+      }
 
       const counters: TurnCounters = {
         toolCalls: 0,

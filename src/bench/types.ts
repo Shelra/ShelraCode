@@ -133,6 +133,18 @@ export interface BenchmarkTaskDefinition {
   workspaceFrom?: string;
   /** With `workspaceFrom`: keep the inherited project memory and promoted skills, or wipe them. */
   memoryPolicy?: "keep" | "wipe";
+  /**
+   * Continue in the very directory an earlier task finished in (a chain of sessions on one repository).
+   * Nothing is copied, so whatever an agent kept there carries over, including memory an agent keys by
+   * the project's path.
+   */
+  continueIn?: string;
+  /**
+   * The simulated user's answer when the agent proposes a decision during this task: approve a proposal
+   * whose title or rule matches one of these patterns (case-insensitive regular expressions), decline the
+   * rest. Without it nobody answers, as in any headless run, and proposals wait in the ledger.
+   */
+  approveDecisions?: string[];
   researchRequired?: boolean;
   memoryRequired?: boolean;
   repairExpected?: boolean;

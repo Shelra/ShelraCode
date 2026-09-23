@@ -44,9 +44,22 @@ vi.mock("../storage/index", () => ({
   SessionStore: class {},
 }));
 
-vi.mock("../hooks/index", () => ({
-  executeEventHooks: executeEventHooksMock,
-}));
+vi.mock("../hooks/index", () => {
+  // Tool hooks fire when a tool really runs (the proposing model below); none is configured.
+  const noToolHooks = async () => ({
+    blocked: false,
+    blockingErrors: [],
+    preventContinuation: false,
+    additionalContexts: [],
+    results: [],
+  });
+  return {
+    executeEventHooks: executeEventHooksMock,
+    executePreToolHooks: noToolHooks,
+    executePostToolHooks: noToolHooks,
+    executePostToolFailureHooks: noToolHooks,
+  };
+});
 
 vi.mock("../exec/browser", () => ({
   observePage: vi.fn(async () => {
@@ -54,6 +67,7 @@ vi.mock("../exec/browser", () => ({
   }),
 }));
 
+import { listDecisions } from "../ledger/store";
 import { createAgentBenchmarkExecutor } from "./agent-executor";
 import type { BenchmarkTaskDefinition } from "./types";
 
@@ -337,6 +351,62 @@ describe("agent benchmark executor", () => {
 
     const tools = Object.keys((provider.lastRequest?.tools as Record<string, unknown> | undefined) ?? {}).sort();
     expect(tools).toEqual(["bash", "delete_file", "edit_file", "grep", "read_file", "write_file"]);
+  });
+
+  it("answers proposed decisions as the chain's simulated user: approves the rule it stated, declines the rest", async () => {
+    /** A model that proposes decisions during its turn, through the real propose_decision tool. */
+    class ProposingProvider extends ScriptedProvider {
+      constructor(private readonly proposals: Array<Record<string, unknown>>) {
+        super([]);
+      }
+      override stream(request: ProviderStreamRequest): ProviderStream {
+        this.rounds += 1;
+        const tools = request.tools as Record<string, { execute: (input: unknown, options: unknown) => unknown }>;
+        const proposals = this.proposals;
+        return {
+          events: (async function* () {
+            request.onStepStart?.(1);
+            for (const proposal of proposals) {
+              await tools.propose_decision?.execute(proposal, { toolCallId: "p", messages: [] });
+            }
+            yield { type: "text-delta", text: "Recorded." } as ProviderEvent;
+            request.onStepFinish?.({ stepNumber: 1, finishReason: "stop", usage: { inputTokens: 1, outputTokens: 1 } });
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Recorded." }] }),
+        };
+      }
+    }
+    const proposals = [
+      { title: "Users are never removed", rule: "Deleting a user sets deleted_at; no code deletes rows." },
+      { title: "Loans last 14 days", rule: "A loan is due 14 days after it is made." },
+    ];
+    const run = async (approveDecisions?: string[]) => {
+      rmSync(join(workspace, "docs"), { recursive: true, force: true });
+      const provider = new ProposingProvider(proposals);
+      const notes: string[] = [];
+      const executor = createAgentBenchmarkExecutor({
+        provider,
+        modelId: "bench-test-model",
+        benchmarkRoot: workspace,
+        persistSession: false,
+      });
+      await executor.executeTask(task({ ...(approveDecisions ? { approveDecisions } : {}) }), {
+        emit: (notice) => notes.push(notice.message),
+      });
+      const statuses = listDecisions(workspace).map((decision) => `${decision.title}: ${decision.status}`);
+      return { statuses, notes: notes.filter((note) => note.includes("simulated user")) };
+    };
+
+    const answered = await run(["never (?:removed|deleted)"]);
+    expect(answered.statuses).toEqual(["Users are never removed: active"]);
+    expect(answered.notes).toEqual([
+      'The simulated user answered "approve" to D-0001: Users are never removed',
+      'The simulated user answered "reject" to D-0002: Loans last 14 days',
+    ]);
+    // Without a simulated user nobody answers, as in any headless run: both proposals wait.
+    const unanswered = await run();
+    expect(unanswered.statuses).toEqual(["Users are never removed: proposed", "Loans last 14 days: proposed"]);
+    expect(unanswered.notes).toEqual([]);
   });
 
   it("reports a task without benchmark-owned checks as not run rather than inventing a grade", async () => {

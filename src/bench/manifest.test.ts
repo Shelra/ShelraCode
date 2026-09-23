@@ -105,6 +105,36 @@ describe("benchmark manifest", () => {
     ).toThrow(/deterministic check/iu);
   });
 
+  it("parses a chain of sessions and the simulated user's approvals, and rejects a chain that forks", () => {
+    const step = (id: string, extra: Record<string, unknown>) => ({
+      id,
+      category: "memory",
+      difficulty: "medium",
+      prompt: "p",
+      ...extra,
+    });
+    const chain = parseManifest({
+      benchmarkVersion: "chain-0.1",
+      suite: "chain",
+      tasks: [
+        step("s1", { workspaceTemplate: "fixture", approveDecisions: [] }),
+        step("s2", { continueIn: "s1", approveDecisions: ["never (?:remove|delete)", "soft"] }),
+      ],
+    });
+    expect(chain.tasks[0]?.approveDecisions).toEqual([]);
+    expect(chain.tasks[1]).toMatchObject({ continueIn: "s1", approveDecisions: ["never (?:remove|delete)", "soft"] });
+
+    const parse = (tasks: unknown[]) => () => parseManifest({ benchmarkVersion: "c", suite: "c", tasks });
+    expect(parse([step("s1", { continueIn: "s0" })])).toThrow(/not an earlier task/iu);
+    expect(parse([step("s1", { workspaceTemplate: "f", continueIn: "s0" })])).toThrow(/cannot combine/iu);
+    expect(parse([step("s1", { approveDecisions: ["("] })])).toThrow(/invalid regular expression/iu);
+    expect(parse([step("s1", { approveDecisions: "soft" })])).toThrow(/array of regular expressions/iu);
+    // Once s2 continued in s1's directory, s1's result is gone: neither a second chain nor a copy can start there.
+    const forked = [step("s1", { workspaceTemplate: "f" }), step("s2", { continueIn: "s1" })];
+    expect(parse([...forked, step("s3", { continueIn: "s1" })])).toThrow(/already continued in its directory/iu);
+    expect(parse([...forked, step("s3", { workspaceFrom: "s1" })])).toThrow(/already continued in its directory/iu);
+  });
+
   it("loads the checked-in task ladder as a strict benchmark", () => {
     const manifest = loadBenchmarkManifest(process.cwd(), "bench/suites/shelra-agent-core-v0.2.json");
     expect(manifest.oracleMode).toBe("benchmark-owned");

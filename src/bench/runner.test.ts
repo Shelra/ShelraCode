@@ -304,4 +304,62 @@ describe("cross-session workspaces", () => {
       "wipe:code": true,
     });
   });
+
+  it("continues a chain in one directory, each session starting from a commit of what the last one left", async () => {
+    const template = join(homeDir, "template");
+    mkdirSync(template, { recursive: true });
+    writeFileSync(join(template, "fixture.txt"), "v1\n");
+    const chain: BenchmarkManifest = {
+      benchmarkVersion: "runner-test-0.1",
+      suite: "chain",
+      tasks: [
+        { id: "one", category: "memory", difficulty: "easy", prompt: "p", workspaceTemplate: "template" },
+        { id: "two", category: "memory", difficulty: "easy", prompt: "p", continueIn: "one" },
+        { id: "three", category: "memory", difficulty: "easy", prompt: "p", continueIn: "two" },
+      ],
+    };
+    const git = (workspace: string, ...args: string[]) =>
+      execFileSync("git", args, { cwd: workspace, encoding: "utf8" }).trim();
+    const taskRoot = mkdtempSync(join(tmpdir(), "shelra-bench-chain-"));
+    const seen: Record<string, unknown> = {};
+    try {
+      await runBenchmark({
+        workspace: homeDir,
+        manifest: chain,
+        runInput: { agentName: "shelra" },
+        taskRoot,
+        createExecutor: () => ({
+          async executeTask(task) {
+            const workspace = task.workspace as string;
+            seen[`${task.id}:workspace`] = workspace;
+            seen[`${task.id}:status`] = git(workspace, "status", "--porcelain");
+            seen[`${task.id}:fixture`] = readFileSync(join(workspace, "fixture.txt"), "utf8");
+            seen[`${task.id}:commits`] = git(workspace, "log", "--format=%s");
+            if (task.id === "one") writeFileSync(join(workspace, "fixture.txt"), "v2\n");
+            // An agent that removed the repository: the next session still starts from a clean commit.
+            if (task.id === "two") {
+              rmSync(join(workspace, ".git"), { recursive: true, force: true });
+              writeFileSync(join(workspace, "fixture.txt"), "v3\n");
+            }
+            return { status: "passed", scores: { coding: 100 } };
+          },
+        }),
+      });
+      expect(seen["two:workspace"]).toBe(seen["one:workspace"]);
+      expect(seen["three:workspace"]).toBe(seen["one:workspace"]);
+      expect(seen).toMatchObject({
+        "one:status": "",
+        "one:fixture": "v1\n",
+        "one:commits": "Benchmark fixture",
+        "two:status": "",
+        "two:fixture": "v2\n",
+        "two:commits": "Benchmark state before two\nBenchmark fixture",
+        "three:status": "",
+        "three:fixture": "v3\n",
+        "three:commits": "Benchmark state before three",
+      });
+    } finally {
+      rmSync(taskRoot, { recursive: true, force: true });
+    }
+  });
 });
