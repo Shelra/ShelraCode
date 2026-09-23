@@ -31,7 +31,15 @@ import {
   computerType,
   computerWait,
 } from "../tools/computer";
-import { deleteFile, editFile, readFile, snapshotForCheckpoint, writeFile } from "../tools/file";
+import {
+  deleteFile,
+  editFile,
+  READ_DEFAULT_LINES,
+  READ_MAX_CHARS,
+  readFile,
+  snapshotForCheckpoint,
+  writeFile,
+} from "../tools/file";
 import { executeGrep } from "../tools/grep";
 import type { ScheduleDaemonStatus, ScheduleManager, StoredSchedule } from "../tools/schedule";
 import type { AgentMode, TaskRequest, ToolResult } from "../types/index";
@@ -196,12 +204,14 @@ export function createTools(
     }),
 
     read_file: tool({
-      description:
-        "Read the contents of a file. Returns numbered lines with a header showing the range and total line count. Use start_line/end_line to read specific sections of large files iteratively.",
+      description: `Read a file as numbered lines, with a header giving the range and the total line count. Without a range it returns the first ${READ_DEFAULT_LINES} lines, and one call returns at most ${READ_MAX_CHARS} characters, saying where to continue. For a large file, grep for what you need and read that range with start_line/end_line.`,
       inputSchema: z.object({
         path: z.string().describe("File path (relative to cwd or absolute)"),
         start_line: z.number().optional().describe("First line to read (1-indexed, default: 1)"),
-        end_line: z.number().optional().describe("Last line to read (inclusive, default: end of file)"),
+        end_line: z
+          .number()
+          .optional()
+          .describe(`Last line to read (inclusive, default: ${READ_DEFAULT_LINES} lines after start_line)`),
       }),
       execute: async ({ path, start_line, end_line }) => {
         return readFile(path, cwd(), start_line, end_line);
