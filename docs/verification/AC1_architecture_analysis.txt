@@ -1,0 +1,19 @@
+=== ARCHITECTURE AUDIT MODULE-BY-MODULE ANALYSIS ===
+Source: docs/AUDIT-2026-09-23.md, Section 1.1 Core Modules Analysis
+
+| Module | Lines | Purpose | Health |
+|--------|-------|---------|--------|
+| src/index.ts | 1,862 | CLI entry point, all commands | Healthy - well-structured |
+| src/agent/agent.ts | 3,702 | Main interactive chat loop | Complex but well-documented |
+| src/agent/kernel.ts | 126 | Lightweight phase machine | Clean, minimal |
+| src/autonomy/kernel.ts | 1,044 | Autonomous objective runner | Rich, separate from chat |
+| src/providers/openrouter.ts | 345 | OpenRouter provider adapter | Mature with quarantine |
+| src/memory/store.ts | 526 | File-based memory system | Well-designed |
+| src/bench/agent-executor.ts | 558 | Benchmark executor (product path) | Good instrumentation |
+| src/ui/app.tsx | 7,148 | Main TUI application | Large but modular |
+
+Additional context from the audit:
+- This analysis covers all major modules in the codebase
+- Each module's purpose and health status is documented
+- The analysis includes architecture strengths and concerns sections
+- Data flow diagram is provided in Section 1.4 showing the complete processing pipeline
