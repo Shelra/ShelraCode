@@ -12,6 +12,8 @@ yarn.lock
 # Build outputs
 dist/
 lib/
+# frontend/src/lib is website source, not build output
+!frontend/src/lib/
 build/
 *.tsbuildinfo
 

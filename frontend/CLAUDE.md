@@ -30,5 +30,10 @@ it alone. Checked against the app on 2026-09-22. -->
   mission simulation). Pages are thin server files in `src/app/dashboard/` rendering client views in
   `src/components/dashboard/views/`; the shell, primitives (`ui.tsx`), charts and terminal log live in
   `src/components/dashboard/`. Wiring a real API means replacing the store's actions and `useDemo()`.
+- The root `.gitignore` ignores `lib/` (CLI build output) and re-includes `frontend/src/lib/`; keep that negation, or
+  the website's content, auth and demo modules silently drop out of commits and the Vercel build fails.
+- Deploying: Vercel with Root Directory `frontend` (Bun is detected from `bun.lock`); env `AUTH_SECRET`, the OAuth
+  ids/secrets and `AUTH_DATABASE_URL`/`AUTH_DATABASE_TOKEN` (Turso) for email sign-in. Without `AUTH_SECRET` the
+  site still serves; `/api/auth/session` answers `null` and the other auth routes 503 with a message.
 - Done means `bunx tsc --noEmit`, `bun run build` and Biome pass, and the page was checked in a real browser
   (Playwright or Chrome) at 1440, 1000 and 390 px wide.

@@ -4,7 +4,15 @@ import type { ReactNode } from "react";
 import { seo } from "@/lib/content";
 import "./globals.css";
 
+// Absolute URLs for the social image: the deployment's own origin on Vercel, localhost otherwise.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: seo.title,
   description: seo.description,
   robots: "max-image-preview:large",
