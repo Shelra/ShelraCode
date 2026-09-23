@@ -188,6 +188,38 @@ function task(overrides: Partial<BenchmarkTaskDefinition> = {}): BenchmarkTaskDe
 }
 
 describe("agent benchmark executor", () => {
+  async function verificationAfter(commands: string[]): Promise<number | undefined> {
+    writeFileSync(join(workspace, "src", "slug.ts"), "export function slugify() {}\n");
+    writeFileSync(
+      join(workspace, "package.json"),
+      JSON.stringify({ scripts: { test: "bun --version", lint: "echo ok" } }),
+    );
+    const provider = new ScriptedProvider([
+      ...commands.flatMap((command, index) => [
+        toolCallEvent(`c${index}`, "bash", { command }),
+        toolResultEvent(`c${index}`, "bash", { success: true, output: "ok" }, { command }),
+      ]),
+      { type: "text-delta", text: "Done." },
+    ]);
+    const executor = createAgentBenchmarkExecutor({
+      provider,
+      modelId: "bench-test-model",
+      benchmarkRoot: workspace,
+      persistSession: false,
+    });
+    const execution = await executor.executeTask(task(), { emit: () => {} });
+    return execution.scores?.verification;
+  }
+
+  it("credits a visible check the agent ran through the project's own script", async () => {
+    // AC-TESTS is `bun --version`; package.json's test script runs exactly that, so `bun run test` ran it.
+    expect(await verificationAfter(["bun run test"])).toBe(100);
+  });
+
+  it("does not credit a different script for the visible check", async () => {
+    expect(await verificationAfter(["bun run lint", "npm run build"])).toBe(0);
+  });
+
   it("drives the real agent turn, then grades the workspace with the benchmark oracle", async () => {
     writeFileSync(join(workspace, "src", "slug.ts"), "export function slugify() {}\n");
     const provider = new ScriptedProvider([

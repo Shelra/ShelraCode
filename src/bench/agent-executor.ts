@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Agent, type AgentOptions, type ProcessMessageObserver } from "../agent/agent";
 import { isVerificationCommand } from "../agent/verification-evidence";
 import type { CheckSpec } from "../contract/types";
@@ -236,7 +238,7 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
       });
       const { acceptance, failedRequired, coding, intent, report } = grade;
       const benchmarkVerified = grade.verified;
-      const verification = verificationScore(task.acceptanceCriteria ?? [], counters);
+      const verification = verificationScore(task.acceptanceCriteria ?? [], counters, packageScripts(workspace));
       const behavior = toBehavior(counters, finalText);
       behavior.falseCompletion =
         grade.requiredCount > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(finalText);
@@ -387,12 +389,14 @@ function summarizeUsage(
  * Did the agent itself run the checks a careful engineer would before claiming done? Scored
  * against the benchmark's own `command_succeeds` criteria that the agent could plausibly have
  * run (the external oracle behind `{{benchmarkRoot}}` is hidden from it by design): a criterion
- * counts when the agent executed that command successfully at least once. When a task has no
- * such criteria, fall back to whether any verification-shaped command ran at all.
+ * counts when the agent executed that command successfully at least once, directly or through the
+ * project's own package.json script that runs it (`bun run test` runs a `test` script of `bun test`).
+ * When a task has no such criteria, fall back to whether any verification-shaped command ran at all.
  */
 function verificationScore(
   criteria: readonly BenchmarkAcceptanceCriterion[],
   counters: TurnCounters,
+  scripts: Readonly<Record<string, string>>,
 ): number | undefined {
   if (criteria.length === 0) return undefined;
   const matchable = criteria
@@ -402,10 +406,36 @@ function verificationScore(
         check?.kind === "command_succeeds" && !check.command.includes("{{benchmarkRoot}}"),
     );
   if (matchable.length === 0) return counters.verificationCommands > 0 ? 100 : 0;
+  const ran = counters.successfulCommands
+    .flatMap((command) => withScriptBodies(command, scripts))
+    .map(normalizeCommand);
   const covered = matchable.filter((check) =>
-    counters.successfulCommands.some((command) => normalizeCommand(command).includes(normalizeCommand(check.command))),
+    ran.some((command) => command.includes(normalizeCommand(check.command))),
   ).length;
   return Math.round((covered / matchable.length) * 1000) / 10;
+}
+
+/** The scripts of the graded workspace's package.json, which `npm test` or `bun run test` run. */
+function packageScripts(workspace: string): Record<string, string> {
+  try {
+    const manifest = JSON.parse(readFileSync(join(workspace, "package.json"), "utf8")) as {
+      scripts?: Record<string, unknown>;
+    };
+    return Object.fromEntries(
+      Object.entries(manifest.scripts ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    );
+  } catch {
+    return {};
+  }
+}
+
+/** A command, and the body of each package script it ran. */
+function withScriptBodies(command: string, scripts: Readonly<Record<string, string>>): string[] {
+  const bodies = [...command.matchAll(/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([\w:.-]+)/gu)].flatMap((match) => {
+    const body = scripts[match[1] ?? ""];
+    return body ? [body] : [];
+  });
+  return [command, ...bodies];
 }
 
 function normalizeCommand(command: string): string {
