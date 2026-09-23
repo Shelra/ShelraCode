@@ -166,7 +166,7 @@ describe("mission views", () => {
     expect(frame).toContain("CHANGES");
     expect(frame).toContain("src/ui/app.tsx");
     expect(frame).toContain("+40");
-    expect(frame).toContain("-12");
+    expect(frame).toContain("−12");
     expect(frame).toContain("src/ui/mission.ts");
     screen.renderer.destroy();
   });

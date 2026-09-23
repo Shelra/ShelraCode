@@ -81,7 +81,7 @@ export function DiffView({ t, diff, maxRows = DEFAULT_MAX_DIFF_ROWS, showHeader 
             <text>
               <span style={{ fg: t.diffHeaderFg }}>{diff.filePath}</span>
               <span style={{ fg: t.textDim }}>{"  "}</span>
-              <span style={{ fg: t.diffRemovedFg }}>{`-${diff.removals}`}</span>
+              <span style={{ fg: t.textMuted }}>{`\u2212${diff.removals}`}</span>
               <span style={{ fg: t.textDim }}> </span>
               <span style={{ fg: t.diffAddedFg }}>{`+${diff.additions}`}</span>
             </text>

@@ -42,7 +42,7 @@ describe("LiveTurn", () => {
         width={90}
       />,
     );
-    expect(frame).toContain("● Running tests bun test");
+    expect(frame).toContain("●   Running tests bun test");
     expect(frame).toContain("42s");
     expect(frame).toContain("Next · Rotate the token on refresh");
   });
@@ -161,7 +161,7 @@ describe("PlanBlock", () => {
     expect(frame).toContain("[ PLAN 2/4 ]");
     expect(frame).toContain("✓ Step 1");
     expect(frame).toContain("● Step 3");
-    expect(frame).toContain("· Step 4");
+    expect(frame).toContain("○ Step 4");
     expect(frame).not.toContain("Do 3");
   });
 
@@ -220,7 +220,7 @@ describe("TurnSummaryLine", () => {
 
   it("says what the turn did in one line", async () => {
     const frame = await frameOf(<TurnSummaryLine t={dark} item={item} />);
-    expect(frame).toContain("─ 2 files +6 -1 · tests ✓ · 42s");
+    expect(frame).toContain("─ 2 files +6 −1 · tests ✓ · 42s");
     expect(frame.split(String.fromCharCode(10)).filter((line) => line.includes("─ 2 files"))).toHaveLength(1);
   });
 

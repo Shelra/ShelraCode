@@ -218,7 +218,7 @@ describe("projectTranscript turn summaries", () => {
     ]);
     expect(summary?.kind === "summary" && summary.checks.map((check) => check.label)).toEqual(["tests"]);
     expect(turnSummaryGroups(summary as never).map((group) => group.map((part) => part.text).join(""))).toEqual([
-      "1 file +4 -1",
+      "1 file +4 −1",
       "tests ✓",
       "42s",
     ]);

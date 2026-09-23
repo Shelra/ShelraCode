@@ -8,6 +8,7 @@ import { PRODUCT_NAME } from "../product/identity";
 import type { LocalRuntimeDiscovery } from "../runtimes/types";
 import type { StartupProgress } from "../startup/types";
 import { loadAppearancePreference } from "../utils/settings";
+import { SectionBadge } from "./components/badge";
 import { resolveTheme, type TerminalThemeMode, type Theme } from "./theme";
 
 interface StartupScreenProps {
@@ -44,17 +45,19 @@ function StartupAction({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: intentional startup mouse action
     <box
-      backgroundColor={highlighted && !disabled ? t.brand : disabled ? t.surfaceMuted : t.background}
-      border={highlighted ? ["top", "bottom", "left", "right"] : undefined}
+      backgroundColor={highlighted && !disabled ? t.brand : t.background}
+      border={highlighted && !disabled ? false : ["top", "bottom", "left", "right"]}
       borderStyle="single"
-      borderColor={highlighted && !disabled ? t.brand : undefined}
-      paddingLeft={1}
-      paddingRight={1}
+      borderColor={t.border}
+      paddingLeft={2}
+      paddingRight={2}
       onMouseUp={(event: MouseEvent) => {
         if (event.button === 0 && !disabled) onPress();
       }}
     >
-      <text fg={disabled ? t.disabled : highlighted ? t.background : t.text}>{label}</text>
+      <text fg={disabled ? t.disabled : highlighted ? t.onAccent : t.brand}>
+        {highlighted && !disabled ? <b>{label}</b> : label}
+      </text>
     </box>
   );
 }
@@ -62,9 +65,7 @@ function StartupAction({
 function Stage({ t, label, complete, active }: { t: Theme; label: string; complete: boolean; active: boolean }) {
   return (
     <box flexDirection="row" height={1}>
-      <text fg={complete ? t.success : active ? t.brand : t.textMuted}>
-        {complete ? "[ok] " : active ? "[..] " : "[  ] "}
-      </text>
+      <text fg={complete || active ? t.brand : t.textMuted}>{complete ? "✓ " : active ? "● " : "○ "}</text>
       <text fg={complete || active ? t.text : t.textMuted}>{label}</text>
     </box>
   );
@@ -81,12 +82,13 @@ function ProgressBar({ t, progress }: { t: Theme; progress: StartupProgress }) {
   return (
     <box flexDirection="column" marginTop={1}>
       <box flexDirection="row">
-        <text fg={t.brand}>{`${"#".repeat(filled)}${"-".repeat(20 - filled)}`}</text>
-        <text fg={t.text}>{`  ${Math.round(percent)}%`}</text>
+        <text>
+          <span style={{ fg: t.brand }}>{"█".repeat(filled)}</span>
+          <span style={{ fg: t.border }}>{"░".repeat(20 - filled)}</span>
+        </text>
+        <text fg={t.brand}>{`  ${Math.round(percent)}%`}</text>
       </box>
-      <text fg={t.textMuted}>
-        {bytes && total ? `${bytes} / ${total}  |  ${speed}  |  ${eta}` : `${speed}  |  ${eta}`}
-      </text>
+      <text fg={t.textMuted}>{bytes && total ? `${bytes} / ${total} · ${speed} · ${eta}` : `${speed} · ${eta}`}</text>
     </box>
   );
 }
@@ -160,13 +162,13 @@ export function StartupScreen({
           <text fg={t.primary}>
             <b>{PRODUCT_NAME}</b>
           </text>
-          <text fg={t.textDim}>PRIVATE BY DEFAULT</text>
+          <SectionBadge t={t} label="Private" />
         </box>
         <text fg={t.textMuted}>A local coding environment that prepares itself</text>
         <box height={1} />
         <box flexDirection="row" gap={3}>
           <box flexDirection="column" width={22}>
-            <text fg={t.textMuted}>STARTUP CHECKLIST</text>
+            <SectionBadge t={t} label="Startup" />
             <box height={1} />
             <Stage
               t={t}
@@ -184,23 +186,23 @@ export function StartupScreen({
             <ProgressBar t={t} progress={progress} />
             <box height={1} />
             <box
-              backgroundColor={t.surfaceRaised}
+              backgroundColor={t.surface}
               paddingLeft={2}
               paddingRight={2}
               paddingTop={1}
               paddingBottom={1}
               flexDirection="column"
             >
-              <text fg={t.textMuted}>THIS COMPUTER</text>
+              <SectionBadge t={t} label="This computer" />
               <text fg={t.text}>{gpu.name}</text>
-              <text fg={t.textMuted}>{`VRAM ${gpu.vram}  |  ${hardware.memoryGb.toFixed(1)} GB RAM`}</text>
+              <text fg={t.textMuted}>{`VRAM ${gpu.vram} · ${hardware.memoryGb.toFixed(1)} GB RAM`}</text>
               <text
                 fg={t.textMuted}
               >{`${discovery.models.length} local model${discovery.models.length === 1 ? "" : "s"} detected`}</text>
             </box>
             {progress.state === "onboarding" && recommendation ? (
               <box marginTop={1} border={["left"]} borderColor={t.brand} paddingLeft={2} flexDirection="column">
-                <text fg={t.textMuted}>RECOMMENDED FOR YOU</text>
+                <SectionBadge t={t} label="Recommended" />
                 <text fg={t.primary}>
                   <b>{recommendation.name}</b>
                 </text>
@@ -219,18 +221,18 @@ export function StartupScreen({
                 t={t}
                 label={
                   canInstall
-                    ? "[ Enter ] Install recommended"
+                    ? "Install recommended · enter"
                     : canBootstrapRuntime
-                      ? "[ Enter ] Prepare engine"
-                      : "[ Enter ] Try again"
+                      ? "Prepare engine · enter"
+                      : "Try again · enter"
                 }
                 onPress={onInstall}
                 disabled={installing}
                 highlighted
               />
             ) : null}
-            <StartupAction t={t} label="[ r ] Scan again" onPress={onRetry} />
-            <StartupAction t={t} label="[ esc ] Exit" onPress={onExit} />
+            <StartupAction t={t} label="Scan again · r" onPress={onRetry} />
+            <StartupAction t={t} label="Exit · esc" onPress={onExit} />
           </box>
         ) : failed ? (
           <box flexDirection="column" marginTop={1}>
@@ -240,15 +242,15 @@ export function StartupScreen({
                 : progress.detail || "Shelra could not prepare a local model."}
             </text>
             <box flexDirection="row" gap={1} marginTop={1}>
-              {!installing ? <StartupAction t={t} label="[ r ] Scan again" onPress={onRetry} /> : null}
-              <StartupAction t={t} label="[ esc ] Exit" onPress={onExit} />
+              {!installing ? <StartupAction t={t} label="Scan again · r" onPress={onRetry} /> : null}
+              <StartupAction t={t} label="Exit · esc" onPress={onExit} />
             </box>
           </box>
         ) : null}
         <box height={1} />
         <text fg={t.textDim}>
           {progress.state === "ready"
-            ? "Local model ready  |  chat opens next"
+            ? "Local model ready · chat opens next"
             : "No account, API key, or remote provider is required"}
         </text>
       </box>
@@ -287,7 +289,7 @@ export function CloudStartupScreen({
           <text fg={t.primary}>
             <b>{PRODUCT_NAME}</b>
           </text>
-          <text fg={t.textDim}>CLOUD FIRST</text>
+          <SectionBadge t={t} label="Cloud" />
         </box>
         <text fg={t.textMuted}>OpenRouter Free is the primary model route.</text>
         <box height={2} />
@@ -301,13 +303,13 @@ export function CloudStartupScreen({
           <box flexDirection="column">
             <text fg={t.danger}>{progress.detail || "OpenRouter could not be prepared."}</text>
             <box flexDirection="row" gap={1} marginTop={1}>
-              <StartupAction t={t} label="[ r ] Retry" onPress={onRetry} highlighted />
-              <StartupAction t={t} label="[ esc ] Exit" onPress={onExit} />
+              <StartupAction t={t} label="Retry · r" onPress={onRetry} highlighted />
+              <StartupAction t={t} label="Exit · esc" onPress={onExit} />
             </box>
           </box>
         ) : (
           <box flexDirection="row" gap={1}>
-            <StartupAction t={t} label="[ esc ] Exit" onPress={onExit} />
+            <StartupAction t={t} label="Exit · esc" onPress={onExit} />
           </box>
         )}
         <box height={1} />

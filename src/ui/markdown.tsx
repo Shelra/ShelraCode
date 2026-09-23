@@ -25,9 +25,10 @@ const TABLE_OPTIONS = {
   wrapMode: "word" as const,
   // 0 keeps rows one line tall; a padding of 1 also adds an empty line above and below every row.
   cellPadding: 0,
-  borders: true,
+  // No rules: the glyph set has no table junctions (┬ ┼ ┴), and aligned columns read cleanly on their own.
+  borders: false,
   outerBorder: true,
-  borderStyle: "rounded" as const,
+  borderStyle: "single" as const,
 };
 
 /* ── Inline ──────────────────────────────────────────────────────── */

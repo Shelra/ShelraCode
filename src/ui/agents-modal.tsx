@@ -3,6 +3,7 @@ import { type RefObject, useEffect, useRef } from "react";
 import type { ModelInfo } from "../types/index";
 import type { CustomSubagentConfig } from "../utils/settings";
 import { formatSubagentName } from "../utils/subagent-display";
+import { SectionBadge } from "./components/badge";
 import { TextArea } from "./components/text-area";
 import { scrollbarStyle, type Theme } from "./theme";
 
@@ -90,9 +91,7 @@ export function SubagentsBrowserModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Custom sub-agents"}</b>
-          </text>
+          <SectionBadge t={t} label="Agents" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>

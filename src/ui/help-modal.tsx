@@ -1,3 +1,4 @@
+import { SectionBadge } from "./components/badge";
 import { SHORTCUT_GROUPS, SHORTCUTS } from "./shortcuts";
 import type { SlashMenuItem } from "./slash-menu";
 import { scrollbarStyle, type Theme } from "./theme";
@@ -10,9 +11,7 @@ function ShortcutColumn({ t }: { t: Theme }) {
     <box flexDirection="column" flexGrow={1} flexShrink={1}>
       {SHORTCUT_GROUPS.map((group, index) => (
         <box key={group} flexDirection="column" paddingTop={index === 0 ? 0 : 1}>
-          <text fg={t.textMuted}>
-            <b>{group}</b>
-          </text>
+          <SectionBadge t={t} label={group} />
           {SHORTCUTS.filter((shortcut) => shortcut.group === group).map((shortcut) => (
             <text key={`${group}:${shortcut.keys}:${shortcut.label}`} wrapMode="none">
               <span style={{ fg: t.text }}>{shortcut.keys.padEnd(KEY_COLUMN)}</span>
@@ -28,9 +27,7 @@ function ShortcutColumn({ t }: { t: Theme }) {
 function CommandColumn({ t, commands, room }: { t: Theme; commands: readonly SlashMenuItem[]; room: number }) {
   return (
     <box flexDirection="column" flexGrow={1} flexShrink={1}>
-      <text fg={t.textMuted}>
-        <b>{"Commands"}</b>
-      </text>
+      <SectionBadge t={t} label="Commands" />
       {commands.map((command) => (
         <text key={command.id} wrapMode="none">
           <span style={{ fg: t.text }}>{`/${command.label}`.padEnd(COMMAND_COLUMN)}</span>
@@ -86,9 +83,7 @@ export function HelpModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" paddingLeft={3} paddingRight={3}>
-          <text fg={t.primary}>
-            <b>{"Keyboard and commands"}</b>
-          </text>
+          <SectionBadge t={t} label="Keys" />
           <box flexGrow={1} />
           <text fg={t.textMuted}>{"esc close"}</text>
         </box>

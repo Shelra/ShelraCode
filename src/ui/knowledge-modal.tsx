@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
+import { SectionBadge } from "./components/badge";
 import type { Knowledge, KnowledgeRow, KnowledgeTab, SkillRow } from "./knowledge";
 import { scrollbarStyle, type Theme } from "./theme";
 
@@ -205,9 +206,7 @@ export function KnowledgeModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" paddingLeft={3} paddingRight={3}>
-          <text fg={t.primary}>
-            <b>{"What Shelra knows"}</b>
-          </text>
+          <SectionBadge t={t} label="Knows" />
           <box flexGrow={1} />
           <text fg={t.textMuted}>{"esc close"}</text>
         </box>

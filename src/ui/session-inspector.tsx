@@ -11,8 +11,9 @@ import type {
   ToolCall,
 } from "../types/index";
 import { formatSubagentName } from "../utils/subagent-display";
+import { SectionBadge } from "./components/badge";
 import { type LoadedContext, loadedContextRows } from "./loaded-context";
-import type { MissionTab } from "./mission";
+import { MISSION_VIEWS, type MissionTab } from "./mission";
 import {
   AGENT_IDLE_COLLAPSE_MS,
   type AgentDisclosureState,
@@ -404,6 +405,7 @@ export function MissionPanel({
 
   return (
     <box flexGrow={1} minHeight={0} flexDirection="column">
+      <MissionTabRow t={t} view={view} width={inner} />
       <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0} contentOptions={{ paddingRight: 1 }}>
         {view === "plan" ? (
           <>
@@ -585,6 +587,40 @@ export function MissionPanel({
   );
 }
 
+const TABS: readonly { id: MissionTab; label: string }[] = [{ id: "log", label: "Log" }, ...MISSION_VIEWS];
+
+/**
+ * The views' tab row. It exists only while a view is open (the log itself has no chrome): the
+ * active tab is an accent block with dark text, the site's selection; esc goes back to the log.
+ */
+function MissionTabRow({ t, view, width }: { t: Theme; view: MissionTab; width: number }) {
+  return (
+    <box flexDirection="column" flexShrink={0}>
+      <box flexDirection="row">
+        <text wrapMode="none">
+          {TABS.map((tab) =>
+            tab.id === view ? (
+              <span key={tab.id} style={{ fg: t.onAccent, bg: t.brand }}>
+                <b>{` ${tab.label} `}</b>
+              </span>
+            ) : (
+              <span key={tab.id} style={{ fg: t.textMuted }}>{` ${tab.label} `}</span>
+            ),
+          )}
+        </text>
+        <box flexGrow={1} />
+        <text wrapMode="none">
+          <span style={{ fg: t.text }}>{"esc "}</span>
+          <span style={{ fg: t.textMuted }}>{"back"}</span>
+        </text>
+      </box>
+      <text fg={t.border} wrapMode="none">
+        {"─".repeat(Math.max(1, width))}
+      </text>
+    </box>
+  );
+}
+
 function RailSection({
   t,
   title,
@@ -600,11 +636,7 @@ function RailSection({
     <box paddingTop={1} flexDirection="column">
       <box flexDirection="row" flexShrink={0}>
         <text wrapMode="none">
-          <span style={{ fg: t.brand }}>{"[ "}</span>
-          <span style={{ fg: t.brand }}>
-            <b>{title}</b>
-          </span>
-          <span style={{ fg: t.brand }}>{" ]"}</span>
+          <span style={{ fg: t.brand }}>{`[ ${title} ]`}</span>
         </text>
         <box flexGrow={1} />
         {meta ? (
@@ -628,6 +660,7 @@ function RailRow({
   metaColor,
   width,
   bold,
+  chip,
 }: {
   t: Theme;
   glyph: string;
@@ -638,12 +671,21 @@ function RailRow({
   metaColor?: string;
   width: number;
   bold?: boolean;
+  /** A step number, drawn as the site's accent chip: ` 01 `. */
+  chip?: number;
 }) {
-  const room = Math.max(6, width - 2 - (meta ? meta.length + 1 : 0));
+  const chipText = chip !== undefined ? ` ${String(chip).padStart(2, "0")} ` : "";
+  const room = Math.max(6, width - 2 - chipText.length - (chip !== undefined ? 1 : 0) - (meta ? meta.length + 1 : 0));
   const shown = truncate(text, room);
   return (
     <box flexDirection="row" flexShrink={0}>
       <text wrapMode="none">
+        {chip !== undefined ? (
+          <>
+            <span style={{ fg: t.onAccent, bg: t.brand }}>{chipText}</span>
+            <span> </span>
+          </>
+        ) : null}
         <span style={{ fg: glyphColor }}>{`${glyph} `}</span>
         {bold ? (
           <b>
@@ -693,6 +735,7 @@ function PlanRail({ t, plan, width, max = 6 }: { t: Theme; plan: Plan; width: nu
           >
             <RailRow
               t={t}
+              chip={start + offset + 1}
               glyph={planStepMark(status)}
               glyphColor={status === "complete" ? t.success : planStepColor(status, t)}
               text={step.title}
@@ -716,7 +759,7 @@ function PlanRail({ t, plan, width, max = 6 }: { t: Theme; plan: Plan; width: nu
 function ChangeRail({ t, change, width }: { t: Theme; change: ChangeSummary; width: number }) {
   const marker = change.kind === "added" ? "A" : change.kind === "deleted" ? "D" : "M";
   const stat =
-    `${change.additions > 0 ? `+${change.additions}` : ""}${change.removals > 0 ? ` -${change.removals}` : ""}`.trim();
+    `${change.additions > 0 ? `+${change.additions}` : ""}${change.removals > 0 ? ` \u2212${change.removals}` : ""}`.trim();
   const room = Math.max(6, width - 2 - stat.length - 1);
   return (
     <box flexDirection="row" flexShrink={0}>
@@ -728,7 +771,7 @@ function ChangeRail({ t, change, width }: { t: Theme; change: ChangeSummary; wid
       <text wrapMode="none">
         {change.additions > 0 ? <span style={{ fg: t.diffAddedFg }}>{`+${change.additions}`}</span> : null}
         {change.removals > 0 ? (
-          <span style={{ fg: t.diffRemovedFg }}>{`${change.additions > 0 ? " " : ""}-${change.removals}`}</span>
+          <span style={{ fg: t.textMuted }}>{`${change.additions > 0 ? " " : ""}\u2212${change.removals}`}</span>
         ) : null}
       </text>
     </box>
@@ -822,24 +865,20 @@ export function SessionInspector({
       <box
         width={panelWidth}
         height={panelHeight}
-        backgroundColor={t.surface}
+        backgroundColor={t.background}
         border={["top", "right", "bottom", "left"]}
         borderStyle="single"
-        borderColor={t.borderStrong}
-        paddingTop={1}
-        paddingBottom={1}
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Session control surface"}</b>
-          </text>
+          <SectionBadge t={t} label="Status" />
           <text fg={t.textMuted}>
-            {compactPanel ? "esc close" : `${sessionId ? `session ${shortId(sessionId)}` : "no session"} | esc close`}
+            {compactPanel ? "esc close" : `${sessionId ? `session ${shortId(sessionId)}` : "no session"} · esc close`}
           </text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
-          <text fg={t.textDim}>{truncate(`${modeLabel} | ${model} | ${cwd}`, Math.max(16, panelWidth - 6))}</text>
+          <text fg={t.textDim}>{truncate(`${modeLabel} · ${model} · ${cwd}`, Math.max(16, panelWidth - 6))}</text>
         </box>
         <box
           flexShrink={0}
@@ -853,8 +892,8 @@ export function SessionInspector({
           {tabs.map((item) => {
             const selected = item.id === tab;
             return (
-              <box key={item.id} backgroundColor={selected ? t.selectedBg : undefined} paddingLeft={1} paddingRight={1}>
-                <text fg={selected ? t.primary : t.textMuted}>
+              <box key={item.id} backgroundColor={selected ? t.brand : undefined} paddingLeft={1} paddingRight={1}>
+                <text fg={selected ? t.onAccent : t.textMuted}>
                   {compactPanel ? (
                     selected ? (
                       <b>{item.key}</b>
@@ -919,7 +958,7 @@ export function SessionInspector({
         </scrollbox>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
           <text fg={t.textDim}>
-            {compactPanel ? "1-5 view | tab cycle | esc close" : "1-5 switch view | tab/shift-tab move | esc close"}
+            {compactPanel ? "1-5 view · tab cycle · esc close" : "1-5 switch view · tab and shift+tab move · esc close"}
           </text>
         </box>
       </box>
@@ -953,7 +992,7 @@ function OverviewTab({
   return (
     <box flexDirection="column" paddingBottom={1}>
       <SectionTitle t={t} title="What Shelra is doing" />
-      <Fact t={t} label="State" value={`${phaseLabel(kernel, status === "active")} | ${completionLabel(status)}`} />
+      <Fact t={t} label="State" value={`${phaseLabel(kernel, status === "active")} · ${completionLabel(status)}`} />
       <Fact t={t} label="Current activity" value={currentActivity} />
       {kernel?.blockedReason ? <Fact t={t} label="Why blocked" value={kernel.blockedReason} tone={t.danger} /> : null}
 

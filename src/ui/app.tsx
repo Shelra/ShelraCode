@@ -79,6 +79,7 @@ import {
   SubagentEditorModal,
   SubagentsBrowserModal,
 } from "./agents-modal";
+import { SectionBadge } from "./components/badge";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
 import { TextArea } from "./components/text-area";
@@ -123,6 +124,7 @@ import {
   type PlanQuestionsState,
   PlanView,
 } from "./plan";
+import { THOUGHT_DWELL_MS, useDwell, usePacedText } from "./reveal";
 import { buildScheduleBrowseRows, ScheduleBrowserModal } from "./schedule-modal";
 import {
   ActiveAgentsStrip,
@@ -275,13 +277,15 @@ function HomeContext({
 
   return (
     <box width={width} flexShrink={0} flexDirection="column">
-      <text wrapMode="none">
-        <span style={{ fg: t.brand }}>{"[ "}</span>
-        <span style={{ fg: t.brand }}>
-          <b>{"PROJECT"}</b>
+      {/* The site's two-tone heading: the first clause in default, the rest in subtle. */}
+      <text wrapMode="word">
+        <span style={{ fg: t.text }}>
+          <b>{"Describe the change."}</b>
         </span>
-        <span style={{ fg: t.brand }}>{" ]"}</span>
+        <span style={{ fg: t.textMuted }}>{" Shelra plans it, makes it and proves it works."}</span>
       </text>
+      <box height={1} />
+      <SectionBadge t={t} label="Project" />
       <text wrapMode="none">
         <span style={{ fg: t.text }}>
           <b>{name}</b>
@@ -289,13 +293,7 @@ function HomeContext({
         <span style={{ fg: t.textDim }}>{`  ${compactCwd(parentOf(cwd), Math.max(12, width - name.length - 6))}`}</span>
       </text>
       <box height={1} />
-      <text wrapMode="none">
-        <span style={{ fg: t.brand }}>{"[ "}</span>
-        <span style={{ fg: t.brand }}>
-          <b>{"KNOWS"}</b>
-        </span>
-        <span style={{ fg: t.brand }}>{" ]"}</span>
-      </text>
+      <SectionBadge t={t} label="Knows" />
       <text fg={t.textMuted} wrapMode="none">
         {chips.join("  ·  ")}
       </text>
@@ -1078,7 +1076,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   }, []);
 
   const openThemePicker = useCallback(() => {
-    setThemePickerIndex(0);
+    setThemePickerIndex(1);
     setShowSlashMenu(false);
     setSlashSearchQuery("");
     setShowThemePicker(true);
@@ -3777,7 +3775,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           return;
         }
         if (key.name === "up") {
-          setThemePickerIndex((index) => Math.max(0, index - 1));
+          setThemePickerIndex((index) => Math.max(1, index - 1));
           return;
         }
         if (key.name === "down") {
@@ -4336,6 +4334,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   );
   // While the agent works on an unfinished plan, the checklist sits under the log where it is always
   // in view; the history keeps the line that created it and folds to `✓ Plan 4/4` when the turn ends.
+  let lastAnswerIndex = -1;
+  for (const item of transcriptItems) {
+    if (item.kind === "message" && item.entry.type === "assistant") lastAnswerIndex = item.sourceIndex;
+  }
+  const liveThought = useDwell(
+    livePhase.kind === "thinking" ? reasoningPreview(streamReasoning) : null,
+    THOUGHT_DWELL_MS,
+    reducedMotion,
+  );
   const showLivePlan =
     isProcessing &&
     inspectorPlan !== null &&
@@ -4460,6 +4467,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                         t={t}
                         modeColor={modeAccent(t, modeInfo)}
                         expandedMessages={expandedMessages}
+                        paced={item.sourceIndex === lastAnswerIndex}
+                        reducedMotion={reducedMotion}
+                        onReveal={scrollToBottom}
                       />
                     );
                   }
@@ -4490,7 +4500,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 {/* Streaming assistant text */}
                 {streamContent && (
                   <box paddingLeft={3} marginTop={1} flexShrink={0}>
-                    <Markdown content={streamContent} t={t} streaming={isProcessing} />
+                    <PacedMarkdown
+                      content={streamContent}
+                      t={t}
+                      streaming={isProcessing}
+                      reduced={reducedMotion}
+                      live
+                      onProgress={scrollToBottom}
+                    />
                   </box>
                 )}
                 {latestMemoryEvent ? (
@@ -4532,7 +4549,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                     t={t}
                     phrase={livePhrase}
                     elapsedMs={liveElapsedMs}
-                    thought={livePhase.kind === "thinking" ? reasoningPreview(streamReasoning) : null}
+                    thought={liveThought}
                     note={liveWaitNote}
                     next={showLivePlan ? null : nextPlanStepLabel(inspectorPlan)}
                     agentLine={
@@ -4945,20 +4962,20 @@ function SessionHeader({
   sessionId: string | null;
   width: number;
 }) {
-  // One line, always: mode, separator, id and padding come off the width before the title gets the rest.
-  const room = Math.max(12, width - 4 - modeInfo.label.length - 5 - (sessionId ? 10 : 0));
+  // One line, always: the mode badge, its gap, the id and padding come off the width before the title.
+  const room = Math.max(12, width - 4 - (modeInfo.label.length + 4) - 2 - (sessionId ? 10 : 0));
   const title = sessionTitle ? truncateLine(sessionTitle, room) : null;
   return (
     <box flexShrink={0} width="100%">
       <box flexDirection="row" width="100%" paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2}>
         <text>
-          <span style={{ fg: modeAccent(t, modeInfo) }}>
-            <b>{modeInfo.label}</b>
-          </span>
+          <span style={{ fg: modeAccent(t, modeInfo) }}>{`[ ${modeInfo.label.toUpperCase()} ]`}</span>
           {title ? (
             <>
-              <span style={{ fg: t.textDim }}>{"  ·  "}</span>
-              <span style={{ fg: t.text }}>{title}</span>
+              <span>{"  "}</span>
+              <span style={{ fg: t.text }}>
+                <b>{title}</b>
+              </span>
             </>
           ) : null}
         </text>
@@ -5121,7 +5138,6 @@ function PromptBox({
           paddingRight={2}
           paddingTop={1}
           paddingBottom={1}
-          backgroundColor={t.backgroundElement}
           flexDirection="row"
           gap={2}
           alignItems="flex-start"
@@ -5134,7 +5150,7 @@ function PromptBox({
               focused={inputFocused}
               placeholder={isProcessing ? "Queue a follow-up..." : placeholder || "Ask Shelra..."}
               textColor={t.text}
-              backgroundColor={t.backgroundElement}
+              backgroundColor={t.background}
               placeholderColor={t.textMuted}
               minHeight={1}
               maxHeight={10}
@@ -5168,7 +5184,7 @@ function HintText({ t, hints, alertFirst }: { t: Theme; hints: readonly Hint[]; 
       {hints.map((hint, index) => (
         <span key={`${hint.key}:${hint.label}`}>
           {index > 0 ? <span style={{ fg: t.textDim }}>{" · "}</span> : null}
-          <span style={{ fg: alertFirst && index === 0 ? t.danger : t.text }}>{`${hint.key} `}</span>
+          <span style={{ fg: t.text }}>{`${hint.key} `}</span>
           <span style={{ fg: t.textMuted }}>{hint.label}</span>
         </span>
       ))}
@@ -5221,14 +5237,13 @@ function ComposerFooter({
       paddingRight={2}
       height={1}
       flexShrink={0}
-      backgroundColor={t.backgroundElement}
     >
       <box flexDirection="row" gap={2} alignItems="center" height={1}>
         <text fg={t.text}>{modelLabel}</text>
         {contextStats ? <ContextMeter t={t} stats={contextStats} wide={inner >= 64} /> : null}
       </box>
       {notice ? (
-        <text fg={t.warning} wrapMode="none">
+        <text fg={t.textMuted} wrapMode="none">
           {notice.length > room && room > 8 ? `${notice.slice(0, room - 1)}…` : notice}
         </text>
       ) : (
@@ -5423,18 +5438,47 @@ function UserMessageContent({ content, t, expanded }: { content: string; t: Them
   );
 }
 
+/** An answer revealed at a reading pace (`reveal.ts`); shown whole under reduced motion. */
+function PacedMarkdown({
+  content,
+  t,
+  streaming = false,
+  reduced,
+  live = false,
+  resume = false,
+  onProgress,
+}: {
+  content: string;
+  t: Theme;
+  streaming?: boolean;
+  reduced: boolean;
+  live?: boolean;
+  resume?: boolean;
+  onProgress?: () => void;
+}) {
+  const visible = usePacedText(content, { reduced, live, resume, onProgress });
+  return <Markdown content={visible} t={t} streaming={streaming || visible.length < content.length} />;
+}
+
 function MessageView({
   entry,
   index,
   t,
   modeColor,
   expandedMessages,
+  paced = false,
+  reducedMotion = false,
+  onReveal,
 }: {
   entry: ChatEntry;
   index: number;
   t: Theme;
   modeColor: string;
   expandedMessages?: Set<number>;
+  /** The newest answer: it continues the reveal the streaming view started. */
+  paced?: boolean;
+  reducedMotion?: boolean;
+  onReveal?: () => void;
 }) {
   const entryColor = resolvedEntryModeColor(t, entry.modeColor, modeColor);
   switch (entry.type) {
@@ -5461,7 +5505,11 @@ function MessageView({
             {entry.sourceLabel ? <span style={{ fg: t.textDim }}>{`  ${entry.sourceLabel}`}</span> : null}
           </text>
           <box flexDirection="column">
-            <Markdown content={entry.content} t={t} />
+            {paced ? (
+              <PacedMarkdown content={entry.content} t={t} reduced={reducedMotion} resume onProgress={onReveal} />
+            ) : (
+              <Markdown content={entry.content} t={t} />
+            )}
           </box>
         </box>
       );
@@ -6075,15 +6123,14 @@ function SlashMenuModal({
       <box
         width={Math.min(64, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Commands"}</b>
-          </text>
+          <SectionBadge t={t} label="Commands" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
@@ -6157,15 +6204,14 @@ function ConnectModal({
       <box
         width={Math.min(56, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Connect"}</b>
-          </text>
+          <SectionBadge t={t} label="Connect" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
@@ -6242,9 +6288,7 @@ function TelegramTokenModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Telegram bot token"}</b>
-          </text>
+          <SectionBadge t={t} label="Telegram" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box paddingLeft={2} paddingRight={2} paddingTop={1}>
@@ -6327,9 +6371,7 @@ function TelegramPairModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Pairing code"}</b>
-          </text>
+          <SectionBadge t={t} label="Pairing" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box paddingLeft={2} paddingRight={2} paddingTop={1}>
@@ -6423,15 +6465,14 @@ function ModelPickerModal({
       <box
         width={Math.min(60, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Select model"}</b>
-          </text>
+          <SectionBadge t={t} label="Models" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
@@ -6541,15 +6582,14 @@ function SandboxPickerModal({
       <box
         width={Math.min(64, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Sandbox settings"}</b>
-          </text>
+          <SectionBadge t={t} label="Sandbox" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0}>
@@ -6573,11 +6613,7 @@ function SandboxPickerModal({
                       {"_"}
                     </text>
                   ) : row.type === "toggle" ? (
-                    <text fg={focused ? t.primary : t.textMuted}>
-                      {"< "}
-                      {display}
-                      {" >"}
-                    </text>
+                    <ToggleValue t={t} value={String(display)} color={focused ? t.primary : t.textMuted} />
                   ) : (
                     <text fg={focused ? t.primary : t.textMuted}>{display}</text>
                   )}
@@ -6628,26 +6664,21 @@ function RecapPickerModal({
       <box
         width={Math.min(64, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Recap settings"}</b>
-          </text>
+          <SectionBadge t={t} label="Recaps" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexGrow={1} minHeight={0}>
           <box backgroundColor={t.selectedBg} paddingLeft={2} paddingRight={2} width="100%">
             <box width="100%" flexDirection="row" justifyContent="space-between">
               <text fg={t.selected}>{"Recaps"}</text>
-              <text fg={t.primary}>
-                {"< "}
-                {display}
-                {" >"}
-              </text>
+              <ToggleValue t={t} value={String(display)} color={t.primary} />
             </box>
           </box>
         </box>
@@ -6676,10 +6707,7 @@ function ThemePickerModal({
 }) {
   const panelHeight = Math.min(10, Math.floor(height * 0.6));
   const top = bottomAlignedModalTop(height, panelHeight);
-  const rows = [
-    { label: "Appearance", value: formatThemePreference(appearance) },
-    { label: "Motion", value: motion === "reduced" ? "Reduced" : "Full" },
-  ];
+  const rows = [{ label: "Motion", value: motion === "reduced" ? "Reduced" : "Full" }];
 
   return (
     <box
@@ -6695,7 +6723,7 @@ function ThemePickerModal({
       <box
         width={Math.min(64, width - 6)}
         height={panelHeight}
-        backgroundColor={t.surface}
+        backgroundColor={t.background}
         border={["top", "right", "bottom", "left"]}
         borderStyle="single"
         borderColor={t.borderStrong}
@@ -6704,9 +6732,7 @@ function ThemePickerModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Appearance"}</b>
-          </text>
+          <SectionBadge t={t} label="Motion" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexGrow={1} minHeight={0} flexDirection="column">
@@ -6716,15 +6742,13 @@ function ThemePickerModal({
               <box key={row.label} backgroundColor={focused ? t.brandSoft : undefined} paddingLeft={2} paddingRight={2}>
                 <box width="100%" flexDirection="row" justifyContent="space-between">
                   <text fg={focused ? t.brand : t.text}>{row.label}</text>
-                  <text fg={focused ? t.brand : t.textSecondary}>{`< ${row.value} >`}</text>
+                  <ToggleValue t={t} value={row.value} color={focused ? t.brand : t.textSecondary} />
                 </box>
               </box>
             );
           })}
           <box paddingLeft={2} paddingRight={2} paddingTop={1}>
-            <text fg={t.textMuted}>
-              {"System follows the terminal when it reports a scheme; otherwise Shelra uses dark."}
-            </text>
+            <text fg={t.textMuted}>{"Reduced motion stops the spinner and the paced text reveal."}</text>
           </box>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
@@ -6733,6 +6757,16 @@ function ThemePickerModal({
       </box>
     </box>
   );
+}
+
+/**
+ * A setting's value. On and off are the site's toggle, `──●` and `○──` in accent; any other value
+ * is shown as a choice to cycle with left and right.
+ */
+function ToggleValue({ t, value, color }: { t: Theme; value: string; color: string }) {
+  if (/^(on|enabled|true|yes)$/i.test(value)) return <text fg={t.brand}>{"──●"}</text>;
+  if (/^(off|disabled|false|no)$/i.test(value)) return <text fg={t.brand}>{"○──"}</text>;
+  return <text fg={color}>{`< ${value} >`}</text>;
 }
 
 function formatThemePreference(preference: ThemePreference): string {
@@ -6772,15 +6806,14 @@ function EffortPickerModal({
       <box
         width={Math.min(64, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Reasoning effort"}</b>
-          </text>
+          <SectionBadge t={t} label="Effort" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexGrow={1} minHeight={0} flexDirection="column">
@@ -6792,11 +6825,7 @@ function EffortPickerModal({
             <box backgroundColor={t.selectedBg} paddingLeft={2} paddingRight={2} width="100%">
               <box width="100%" flexDirection="row" justifyContent="space-between">
                 <text fg={t.selected}>{modelId}</text>
-                <text fg={t.primary}>
-                  {"< "}
-                  {display}
-                  {" >"}
-                </text>
+                <ToggleValue t={t} value={String(display)} color={t.primary} />
               </box>
             </box>
           )}
@@ -6936,15 +6965,14 @@ function WalletPickerModal({
       <box
         width={Math.min(64, width - 6)}
         height={panelHeight}
-        backgroundColor={t.backgroundPanel}
-        paddingTop={1}
-        paddingBottom={1}
+        backgroundColor={t.background}
+        border={["top", "right", "bottom", "left"]}
+        borderStyle="single"
+        borderColor={t.border}
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Wallet & Payments"}</b>
-          </text>
+          <SectionBadge t={t} label="Wallet" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <scrollbox scrollbarOptions={scrollbarStyle(t)} flexGrow={1} minHeight={0}>
@@ -6962,11 +6990,7 @@ function WalletPickerModal({
                 <box width="100%" flexDirection="row" justifyContent="space-between">
                   <text fg={focused ? t.selected : t.text}>{row.label}</text>
                   {row.type === "toggle" ? (
-                    <text fg={focused ? t.primary : t.textMuted}>
-                      {"< "}
-                      {display}
-                      {" >"}
-                    </text>
+                    <ToggleValue t={t} value={String(display)} color={focused ? t.primary : t.textMuted} />
                   ) : (
                     <text fg={focused ? t.primary : t.textMuted}>{display}</text>
                   )}

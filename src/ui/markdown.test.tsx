@@ -55,8 +55,10 @@ describe("Markdown", () => {
 
   it("keeps table rows one line tall", async () => {
     const { frame } = await render(dark, "| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |");
-    const rows = frame.split("\n").filter((line) => line.includes("│"));
+    // Tables have no rules (the glyph set has no junctions): each row is one line of aligned cells.
+    const rows = frame.split("\n").filter((line) => /\b[A13]\b/.test(line));
     expect(rows).toHaveLength(3);
+    expect(frame).not.toMatch(/[┬┼┴╭╮╰╯]/);
   });
 
   it.each([

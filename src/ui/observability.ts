@@ -91,7 +91,7 @@ export function turnSummaryGroups(item: TranscriptSummaryItem): SummarySegment[]
     const files = item.changes.length;
     const group: SummarySegment[] = [{ text: `${files} file${files === 1 ? "" : "s"}`, tone: "neutral" }];
     if (additions > 0) group.push({ text: ` +${additions}`, tone: "added" });
-    if (removals > 0) group.push({ text: ` -${removals}`, tone: "removed" });
+    if (removals > 0) group.push({ text: ` \u2212${removals}`, tone: "removed" });
     groups.push(group);
   }
   for (const check of item.checks.slice(0, 3)) {

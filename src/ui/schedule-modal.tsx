@@ -1,6 +1,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useEffect, useRef } from "react";
 import type { StoredSchedule } from "../tools/schedule";
+import { SectionBadge } from "./components/badge";
 import { scrollbarStyle, type Theme } from "./theme";
 
 export type ScheduleBrowseRow = { kind: "schedule"; schedule: StoredSchedule };
@@ -76,9 +77,7 @@ export function ScheduleBrowserModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"Schedules"}</b>
-          </text>
+          <SectionBadge t={t} label="Schedules" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>

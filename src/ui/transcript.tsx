@@ -63,9 +63,9 @@ function toneGlyph(tone: ActivityTone): string {
 
 /* ── Spinner ─────────────────────────────────────────────────────── */
 
-/** Four frames of one allowed glyph, a corner turning: it reads as motion in every terminal font. */
-const SPINNER_FRAMES = ["┌", "┐", "┘", "└"];
-const SPINNER_INTERVAL_MS = 120;
+/** Four frames of a dot bouncing in three cells, from the allowed glyphs: it reads as work at a glance. */
+const SPINNER_FRAMES = ["▪··", "·▪·", "··▪", "·▪·"];
+const SPINNER_INTERVAL_MS = 140;
 
 /** One animated glyph: proof of life for the current action. Static under reduced motion. */
 export function Spinner({ color, reducedMotion }: { color: string; reducedMotion: boolean }) {
@@ -80,7 +80,7 @@ export function Spinner({ color, reducedMotion }: { color: string; reducedMotion
     return () => clearInterval(interval);
   }, [reducedMotion]);
 
-  return <span style={{ fg: color }}>{reducedMotion ? GLYPH.active : SPINNER_FRAMES[frame]}</span>;
+  return <span style={{ fg: color }}>{reducedMotion ? `${GLYPH.active}  ` : SPINNER_FRAMES[frame]}</span>;
 }
 
 /* ── One line of activity ────────────────────────────────────────── */
@@ -252,15 +252,13 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
   const start = total <= max ? 0 : Math.min(Math.max(0, active - 1), total - max);
   const visible = steps.slice(start, start + max);
   const after = total - (start + visible.length);
-  const room = Math.max(12, width - 4);
+  // Chip, gap, glyph and gap come off the width before the step title.
+  const room = Math.max(12, width - 9);
 
   return (
     <box flexDirection="column" flexShrink={0}>
       <text wrapMode="none">
-        <span style={{ fg: t.brand }}>{"[ "}</span>
-        <span style={{ fg: t.brand }}>
-          <b>{"PLAN"}</b>
-        </span>
+        <span style={{ fg: t.brand }}>{"[ PLAN"}</span>
         <span style={{ fg: t.textMuted }}>{` ${done}/${total}`}</span>
         <span style={{ fg: t.brand }}>{" ]"}</span>
       </text>
@@ -274,7 +272,7 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
               ? GLYPH.failed
               : status === "working"
                 ? GLYPH.active
-                : GLYPH.quiet;
+                : "○";
         const glyphColor =
           status === "complete"
             ? t.success
@@ -296,6 +294,8 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
           // biome-ignore lint/suspicious/noArrayIndexKey: plan steps are ordered and titles may repeat
           <box key={`${start + offset}:${step.title}`} flexDirection="column" flexShrink={0}>
             <text wrapMode="none">
+              <span style={{ fg: t.onAccent, bg: t.brand }}>{` ${String(start + offset + 1).padStart(2, "0")} `}</span>
+              <span> </span>
               <span style={{ fg: glyphColor }}>{`${glyph} `}</span>
               {status === "working" ? (
                 <b>
@@ -322,7 +322,7 @@ export function TurnSummaryLine({ t, item }: { t: Theme; item: TranscriptSummary
   if (groups.length === 0) return null;
   const colorOf = (tone: SummaryTone): string => {
     if (tone === "added") return t.diffAddedFg;
-    if (tone === "removed") return t.diffRemovedFg;
+    if (tone === "removed") return t.textMuted;
     if (tone === "success") return t.success;
     if (tone === "danger") return t.danger;
     if (tone === "warning") return t.warning;
@@ -424,7 +424,7 @@ export function LiveTurn({
 }: LiveTurnProps) {
   const color = failed ? t.danger : t.brand;
   const clock = elapsedMs !== null ? formatClock(elapsedMs) : "";
-  const room = Math.max(12, width - 4 - phrase.verb.length - (clock ? clock.length + 2 : 0));
+  const room = Math.max(12, width - 6 - phrase.verb.length - (clock ? clock.length + 2 : 0));
   const object = phrase.object ? truncateText(phrase.object, room) : "";
 
   return (

@@ -3,6 +3,7 @@ import { type RefObject, useEffect, useRef } from "react";
 import type { McpCatalogEntry } from "../mcp/catalog";
 import { toMcpServerId } from "../mcp/validate";
 import type { McpServerConfig } from "../utils/settings";
+import { SectionBadge } from "./components/badge";
 import { TextArea } from "./components/text-area";
 import type { McpBrowserRow, McpEditorDraft, McpEditorField } from "./mcp-modal-types";
 import { scrollbarStyle, type Theme } from "./theme";
@@ -104,7 +105,7 @@ export function McpBrowserModal({
       <box
         width={Math.min(96, width - 4)}
         height={panelHeight}
-        backgroundColor={t.surface}
+        backgroundColor={t.background}
         border={["top", "right", "bottom", "left"]}
         borderStyle="single"
         borderColor={t.borderStrong}
@@ -113,9 +114,7 @@ export function McpBrowserModal({
         flexDirection="column"
       >
         <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <text fg={t.primary}>
-            <b>{"MCP Servers"}</b>
-          </text>
+          <SectionBadge t={t} label="MCP" />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
         <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
@@ -271,7 +270,7 @@ export function McpEditorModal({
       <box
         width={Math.min(86, width - 6)}
         height={panelHeight}
-        backgroundColor={t.surface}
+        backgroundColor={t.background}
         border={["top", "right", "bottom", "left"]}
         borderStyle="single"
         borderColor={t.borderStrong}
