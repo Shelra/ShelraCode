@@ -1874,6 +1874,18 @@ program
     console.log(options.json === true ? JSON.stringify(objective, null, 2) : formatObjective(objective));
   });
 
+program
+  .command("decisions [action] [id]")
+  .description("List the project's decisions (docs/decisions), or show, approve or reject one by id")
+  .action(async (action: string | undefined, id: string | undefined) => {
+    changeDirectoryOrExit(stringOption(program.opts<CliOptions>().directory));
+    const { runDecisionsCommand } = await import("./ledger/cli");
+    const result = runDecisionsCommand(process.cwd(), action, id);
+    if (result.exitCode === 0) console.log(result.output);
+    else console.error(result.output);
+    process.exitCode = result.exitCode;
+  });
+
 const authCommand = program.command("auth").description("Manage provider credentials in ~/.shelra/auth.json");
 authCommand
   .command("openrouter <apiKey>")
