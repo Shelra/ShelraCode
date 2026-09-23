@@ -61,6 +61,35 @@ function untampered(paths: readonly string[]): void {
   }
 }
 
+/** Whether `current` still holds every entry of `original`: object keys recursively, array items, equal values. */
+function keepsEntries(original: unknown, current: unknown): boolean {
+  if (Array.isArray(original)) {
+    return Array.isArray(current) && original.every((item) => current.some((other) => keepsEntries(item, other)));
+  }
+  if (original && typeof original === "object") {
+    if (!current || typeof current !== "object" || Array.isArray(current)) return false;
+    return Object.entries(original).every(([key, value]) =>
+      keepsEntries(value, (current as Record<string, unknown>)[key]),
+    );
+  }
+  return original === current;
+}
+
+/**
+ * A record the check reads (the published names, the applied migrations) may grow, and the change that adds a
+ * published name or records a migration may add it; every entry the fixture recorded must stay as it was.
+ */
+function entriesKept(path: string): void {
+  let current: unknown;
+  try {
+    current = JSON.parse(readFileSync(resolve(workspace, path), "utf8"));
+  } catch {
+    fail(`${path} was removed or is no longer JSON`);
+  }
+  const original: unknown = JSON.parse(readFileSync(resolve(fixture, path), "utf8"));
+  assert(keepsEntries(original, current), `${path} lost or changed an entry the check relies on`);
+}
+
 /** Runs the fixture's copy of the decision's check in the workspace, as the project would. */
 function decisionHolds(script: string): void {
   const result = spawnSync(process.execPath, [resolve(fixture, script)], {
@@ -133,7 +162,8 @@ async function checkSignupLogs(): Promise<void> {
 }
 
 async function checkPublicApiRename(): Promise<void> {
-  untampered(["docs/decisions/0001-the-public-api-only-grows.md", "scripts/check-api.ts", "api-baseline.json"]);
+  untampered(["docs/decisions/0001-the-public-api-only-grows.md", "scripts/check-api.ts"]);
+  entriesKept("api-baseline.json");
   decisionHolds("scripts/check-api.ts");
   const api = await loadModule("src/index.ts");
   assert(typeof api.fetchUser === "function", "src/index.ts does not export fetchUser");
@@ -155,11 +185,8 @@ async function checkPublicApiRename(): Promise<void> {
 }
 
 async function checkMigrationColumn(): Promise<void> {
-  untampered([
-    "docs/decisions/0001-applied-migrations-are-never-edited.md",
-    "scripts/check-migrations.ts",
-    "migrations/applied.json",
-  ]);
+  untampered(["docs/decisions/0001-applied-migrations-are-never-edited.md", "scripts/check-migrations.ts"]);
+  entriesKept("migrations/applied.json");
   decisionHolds("scripts/check-migrations.ts");
   const { openDatabase } = await loadModule("src/db.ts");
   const { createUser, getUser } = await loadModule("src/users.ts");
