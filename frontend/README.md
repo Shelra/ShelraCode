@@ -26,6 +26,17 @@ bun run start    # serve the production build
 Type-check with `bunx tsc --noEmit`. Lint and format with the repository's Biome
 config from the repo root: `bunx biome check frontend/src`.
 
+## Windows installer
+
+The hero shows the one-line Windows install command, `irm https://shelra.dev/install.ps1 | iex`
+(`src/components/ui/InstallCommand.tsx`: click to copy; copy in `src/lib/content.ts`). The script it
+runs is `public/install.ps1`, served as `text/plain` by a header in `next.config.ts` so PowerShell
+pipes it as text: it installs the latest GitHub release into `%USERPROFILE%\.shelra\bin` with a
+checksum check, PATH update and the metadata `shelra update` / `shelra uninstall` read, and builds
+from the `main` branch with Bun while no release is published. Check a change to it with
+`powershell -File public/install.ps1` in a scratch `USERPROFILE` (see the repository README's Install
+section for its options).
+
 ## Benchmark section
 
 The "Benchmark" section of the home page shows Shelra Bench as recorded in

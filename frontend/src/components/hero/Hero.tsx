@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { TextAppear } from "@/components/motion/TextAppear";
 import { Button } from "@/components/ui/Button";
+import { InstallCommand } from "@/components/ui/InstallCommand";
 import { hero, links } from "@/lib/content";
 import { BandsShader, type ShaderFallbacks } from "./BandsShader";
 import styles from "./Hero.module.css";
@@ -51,6 +52,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "tween", delay: 0.4, duration: 1, ease }}
           >
+            <InstallCommand />
             <Button text={hero.cta} href={links.getStarted} variant="primary-md" showIcon />
           </motion.div>
         </div>

@@ -8,6 +8,20 @@ const nextConfig: NextConfig = {
   },
   // The libSQL client loads a native binding; it must stay out of the server bundle.
   serverExternalPackages: ["@libsql/client", "libsql"],
+  async headers() {
+    return [
+      {
+        // The Windows installer (`irm https://shelra.dev/install.ps1 | iex`): served as text so PowerShell
+        // pipes it as a string, and cached briefly so a new version reaches everyone within minutes.
+        source: "/install.ps1",
+        headers: [
+          { key: "Content-Type", value: "text/plain; charset=utf-8" },
+          { key: "Cache-Control", value: "public, max-age=300, must-revalidate" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
+      },
+    ];
+  },
   async redirects() {
     // Only in a Vercel production build: previews and local builds keep their own addresses.
     if (process.env.VERCEL_ENV !== "production") return [];

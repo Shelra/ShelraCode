@@ -26,6 +26,38 @@ function printBuildLogs(logs: readonly unknown[]): void {
   for (const log of logs) console.error(log);
 }
 
+// playwright-core reads its own package.json and browsers.json through paths built from
+// __dirname, which the bundler freezes to this checkout's node_modules: on any other machine the
+// executable would fail as soon as the module loads. Pointing those requires at the files
+// themselves bundles them, so the executable carries everything it needs.
+let playwrightRequiresRewritten = 0;
+const playwrightSelfRequires: Bun.BunPlugin = {
+  name: "playwright-core-self-requires",
+  setup(build) {
+    build.onLoad(
+      { filter: /[\\/]playwright-core[\\/]lib[\\/](package|serverRegistry|coreBundle)\.js$/ },
+      async (args) => {
+        const source = await Bun.file(args.path).text();
+        const contents = source.replace(
+          /require\(import_path\d*\.default\.join\(packageRoot, "(package|browsers)\.json"\)\)/g,
+          (_match, file: string) => {
+            playwrightRequiresRewritten += 1;
+            return `require("../${file}.json")`;
+          },
+        );
+        return { contents, loader: "js" };
+      },
+    );
+  },
+};
+
+function assertPlaywrightRequiresRewritten(): void {
+  if (playwrightRequiresRewritten > 0) return;
+  throw new Error(
+    "playwright-core's package.json/browsers.json requires were not found: check the playwright-core-self-requires plugin against the installed version.",
+  );
+}
+
 const bundle = await Bun.build({
   entrypoints: [entrypoint],
   outdir: distDirectory,
@@ -33,7 +65,9 @@ const bundle = await Bun.build({
   conditions: ["browser"],
   external: opentuiNativePackages,
   sourcemap: "external",
+  plugins: [playwrightSelfRequires],
 });
+assertPlaywrightRequiresRewritten();
 
 if (!bundle.success) {
   printBuildLogs(bundle.logs);
@@ -95,6 +129,7 @@ const executable = await Bun.build({
   // Standalone binaries cannot depend on the source checkout's node_modules.
   packages: "bundle",
   compile: compileOptions,
+  plugins: [playwrightSelfRequires],
 });
 
 if (!executable.success) {

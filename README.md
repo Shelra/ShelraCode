@@ -16,6 +16,24 @@ Local inference remains available as an explicit private/offline mode with
 
 ## Install
 
+**Windows** (PowerShell 5.1 or later), one line:
+
+```powershell
+irm https://shelra.dev/install.ps1 | iex
+```
+
+It downloads the latest [GitHub release](https://github.com/yosoyjavieruiz/ShelraCode/releases) into
+`%USERPROFILE%\.shelra\bin`, verifies its SHA-256 against the release's `checksums.txt`, adds the folder
+to your user PATH and records the install for `shelra update` and `shelra uninstall`. The release
+binary is self-contained: the Bun runtime, every package and OpenTUI's native library are inside
+`shelra.exe`, so nothing else has to be installed and no administrator rights are needed. While no
+release is published it builds that same executable from the `main` branch with Bun instead
+(installing Bun first when it is missing). Options as environment variables: `SHELRA_VERSION` (a specific release),
+`SHELRA_INSTALL_BIN` (another folder), `SHELRA_NO_MODIFY_PATH=1`, `SHELRA_NO_SOURCE_BUILD=1`. The
+script lives in `frontend/public/install.ps1`; the macOS and Linux equivalent is `install.sh`.
+
+**From a checkout:**
+
 ```bash
 bun install
 ```

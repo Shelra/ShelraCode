@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import type { Browser, Page } from "playwright";
 import type { BrowserObservation, DomAssertion } from "./types";
 
 interface ObservePageOptions {
@@ -21,8 +21,12 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
     viewport: options.viewport,
   };
 
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  let browser: Browser | undefined;
   try {
+    // Playwright is loaded only when a page is observed. Its bundle runs its own package files
+    // through paths fixed at build time, so importing it at startup would tie the standalone
+    // executable to the machine that built it.
+    const { chromium } = await import("playwright");
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: options.viewport });
     const appOrigin = new URL(url).origin;
@@ -77,7 +81,7 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
 }
 
 async function evaluateAssertion(
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof chromium.launch>>["newPage"]>>,
+  page: Page,
   assertion: DomAssertion,
 ): Promise<{ id: string; description: string; passed: boolean; detail: string }> {
   try {

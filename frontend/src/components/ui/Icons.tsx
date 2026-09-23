@@ -52,6 +52,17 @@ export const ArrowRightIcon = makeIcon("Arrow Right", [
   { d: "M 0 0 L 7 7 L 0 14", transform: "translate(12 5)" },
 ]);
 
+export const CopyIcon = makeIcon("Copy", [
+  {
+    d: "M 2 0 L 12 0 C 13.105 0 14 0.895 14 2 L 14 12 C 14 13.105 13.105 14 12 14 L 2 14 C 0.895 14 0 13.105 0 12 L 0 2 C 0 0.895 0.895 0 2 0 Z",
+    transform: "translate(8 8)",
+  },
+  {
+    d: "M 2 14 C 0.895 14 0 13.105 0 12 L 0 2 C 0 0.895 0.895 0 2 0 L 12 0 C 13.105 0 14 0.895 14 2",
+    transform: "translate(2 2)",
+  },
+]);
+
 export const FeatherIcon = makeIcon("Feather", [
   {
     d: "M 7.67 16.813 C 8.201 16.813 8.711 16.601 9.086 16.225 L 15.24 10.053 C 17.584 7.709 17.584 3.907 15.24 1.563 C 12.896 -0.781 9.094 -0.781 6.75 1.563 L 0.586 7.727 C 0.211 8.102 0 8.611 0 9.141 L 0 15.813 C 0 16.365 0.448 16.813 1 16.813 Z",

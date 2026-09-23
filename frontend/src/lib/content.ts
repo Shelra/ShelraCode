@@ -99,6 +99,14 @@ export const hero = {
   },
 };
 
+// The Windows one-line installer (public/install.ps1, served at https://shelra.dev/install.ps1).
+export const install = {
+  label: "Windows · PowerShell",
+  command: "irm https://shelra.dev/install.ps1 | iex",
+  copy: "Copy the install command",
+  copied: "Copied. Paste it in PowerShell.",
+};
+
 /** A wordmark of the logo wall: text set in the site's mono, no image. */
 export type Logo = { name: string; text: string };
 

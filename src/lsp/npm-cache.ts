@@ -1,4 +1,3 @@
-import Arborist from "@npmcli/arborist";
 import { access, mkdir, readdir, readFile, rm } from "fs/promises";
 import os from "os";
 import path from "path";
@@ -55,6 +54,9 @@ export async function lspNpmAdd(pkg: string): Promise<string> {
     const dir = packageDir(pkg);
     await mkdir(dir, { recursive: true });
 
+    // Loaded here, not at startup: npm's tree builder is only needed to fetch a language server,
+    // and the standalone executable must not run its module setup on every launch.
+    const { default: Arborist } = await import("@npmcli/arborist");
     const arborist = new Arborist({
       path: dir,
       binLinks: true,

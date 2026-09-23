@@ -68,8 +68,12 @@
 }
 
 .cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
   flex: none;
-  width: auto;
+  width: 100%;
   height: auto;
   position: relative;
   will-change: transform;

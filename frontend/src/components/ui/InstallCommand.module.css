@@ -1,0 +1,91 @@
+.install {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: auto;
+  max-width: 100%;
+  position: relative;
+}
+
+.label {
+  color: var(--subtle);
+  text-transform: uppercase;
+  transition: color 0.2s ease;
+}
+
+.labelCopied {
+  color: var(--accent);
+  text-transform: none;
+}
+
+.command {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  max-width: 100%;
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--default);
+  background-color: var(--surface);
+  transition: background-color 0.2s ease;
+}
+
+.command::after {
+  transition: border-color 0.2s ease;
+}
+
+.command:hover {
+  --bc: var(--accent-40);
+  background-color: var(--white-8);
+}
+
+.command:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.copied {
+  --bc: var(--accent-40);
+}
+
+.prompt {
+  flex: none;
+  color: var(--accent);
+}
+
+.text {
+  flex: none;
+  color: var(--default);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  flex: none;
+  margin-left: 2px;
+}
+
+@media (max-width: 809.98px) {
+  .prompt {
+    display: none;
+  }
+
+  .command {
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+  }
+
+  .text {
+    font-size: 12px;
+    line-height: 1.3em;
+  }
+}
