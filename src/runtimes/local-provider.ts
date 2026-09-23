@@ -155,6 +155,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
   stream(request: ProviderStreamRequest): ProviderStream {
     let stepCostTicks = 0;
     let stepCostSeen = false;
+    const stepTokens = { input: 0, output: 0, seen: false };
     // The caller's signal still cancels; the watchdog additionally cuts a silent upstream after
     // the idle budget instead of holding the turn open until an outer timeout.
     const watchdog = new AbortController();
@@ -212,6 +213,11 @@ export class LocalProviderAdapter implements ProviderAdapter {
           stepCostTicks += stepUsage.costUsdTicks;
           stepCostSeen = true;
         }
+        if (stepUsage?.inputTokens !== undefined || stepUsage?.outputTokens !== undefined) {
+          stepTokens.input += stepUsage.inputTokens ?? 0;
+          stepTokens.output += stepUsage.outputTokens ?? 0;
+          stepTokens.seen = true;
+        }
         const responseMessages = record(entry?.response)?.messages;
         request.onStepFinish?.({
           stepNumber: stepNumber(event),
@@ -224,7 +230,18 @@ export class LocalProviderAdapter implements ProviderAdapter {
         // OpenRouter reports exact cost per step (`usage.raw.cost`) but not on the aggregated
         // total, so a turn's recorded spend silently fell back to a catalog estimate — or zero —
         // while `--max-cost` trusted it. Sum the per-step figures whenever they exist.
-        const total = usage(event.totalUsage) ?? {};
+        const reported = usage(event.totalUsage) ?? {};
+        // A round cut short (the idle watchdog, a broken stream) finishes without the provider's
+        // total, and was saved with 0 tokens: the steps it completed are counted instead.
+        const total =
+          reported.inputTokens === undefined && reported.outputTokens === undefined && stepTokens.seen
+            ? {
+                ...reported,
+                inputTokens: stepTokens.input,
+                outputTokens: stepTokens.output,
+                totalTokens: stepTokens.input + stepTokens.output,
+              }
+            : reported;
         request.onFinish?.(
           stepCostSeen && total.costUsdTicks === undefined ? { ...total, costUsdTicks: stepCostTicks } : total,
         );

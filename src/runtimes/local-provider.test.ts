@@ -146,6 +146,69 @@ describe("OpenAI-compatible tool protocol", () => {
     expect(JSON.stringify(final.messages)).not.toContain("Cleared from this request");
   });
 
+  it("counts the tokens of the steps a round finished before it was cut short", async () => {
+    // Live 2026-09-23: rounds cut by a stall were saved with 0 tokens, because the provider's
+    // total never arrives; spend limits and the session's counts missed every step they held.
+    const controller = new AbortController();
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      if (!(init?.signal as AbortSignal | undefined)?.aborted && controller.signal.aborted === false) {
+        const body = JSON.parse(String(init?.body)) as { messages: unknown[] };
+        if (body.messages.length <= 2) {
+          return streamResponse([
+            {
+              id: "response-1",
+              model: "test-model",
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    role: "assistant",
+                    tool_calls: [
+                      { index: 0, id: "call-1", function: { name: "read_file", arguments: '{"path":"a.ts"}' } },
+                    ],
+                  },
+                  finish_reason: "tool_calls",
+                },
+              ],
+              usage: { prompt_tokens: 1_000, completion_tokens: 50, total_tokens: 1_050 },
+            },
+          ]);
+        }
+      }
+      // The next step never answers until the round is cut.
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal as AbortSignal | undefined;
+        signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    };
+    const finished: Array<{ inputTokens?: number; outputTokens?: number }> = [];
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: fetchImpl,
+    });
+    const response = provider.stream({
+      modelId: "test-model",
+      system: "Read files when needed.",
+      messages: [{ role: "user", content: "read a.ts" }],
+      tools: {
+        read_file: tool({
+          inputSchema: z.object({ path: z.string() }),
+          execute: async ({ path }: { path: string }) => `${path}: contents`,
+        }),
+      },
+      maxSteps: 5,
+      signal: controller.signal,
+      onStepFinish: () => setTimeout(() => controller.abort(new Error("idle")), 10),
+      onFinish: (usage) => finished.push(usage),
+    });
+    for await (const _event of response.events) {
+      // drain
+    }
+    await response.response.catch(() => undefined);
+
+    expect(finished).toHaveLength(1);
+    expect(finished[0]).toMatchObject({ inputTokens: 1_000, outputTokens: 50 });
+  });
+
   it("sends OpenRouter's nested reasoning.effort body field, not a flat reasoning_effort string", async () => {
     const requests: Array<Record<string, unknown>> = [];
     const fetchImpl: typeof fetch = async (_input, init) => {
