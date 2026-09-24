@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
@@ -30,10 +32,12 @@ import { inScope } from "../ledger/glob";
 import {
   activeDecisions,
   approveDecision,
+  decisionIdOfFile,
   findDecision,
   type LedgerResult,
   proposeDecision,
   rejectDecision,
+  requestNamesDecision,
 } from "../ledger/store";
 import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
@@ -452,8 +456,18 @@ export class Agent {
   private planState: { published: boolean; structured: boolean } = { published: true, structured: false };
   /** Files as they were before each attempt of this turn changed them; read by restore_file. */
   private attemptJournal = new AttemptJournal();
-  /** Ledger files this turn wrote through the ledger itself: the host's record, never work to verify. */
-  private turnLedgerWrites = new Set<string>();
+  /**
+   * Ledger files this turn wrote through the ledger itself, with the text it left (null: it removed the
+   * file): the host's record, never work to verify, as long as nothing else changed them afterwards.
+   */
+  private turnLedgerWrites = new Map<string, string | null>();
+  /**
+   * The decisions in force for this turn: the active ones when it started, plus those the user approved
+   * during it. The gate checks these, never the working tree's copy, which the turn itself can edit.
+   */
+  private turnDecisions: Decision[] = [];
+  /** The host's own end notes of the current turn; see `getTurnEndNotes`. */
+  private turnEndNotes: string[] = [];
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
@@ -531,11 +545,22 @@ export class Agent {
       options.checkRunner ??
       (async (command, { timeoutMs, signal }) => {
         const startedAt = Date.now();
-        const result = await this.bash.execute(command, timeoutMs, signal);
+        // How the process ended goes along, so a decision check that could not run is not read as broken.
+        const run = await this.bash.run(command, timeoutMs, signal);
+        const printed = [run.stdout, run.stderr ? `STDERR: ${run.stderr}` : ""].filter(Boolean).join("\n").trim();
+        const passed = run.state === "completed" && run.exitCode === 0;
+        const fallback =
+          run.state === "timed_out"
+            ? `Command timed out after ${timeoutMs}ms`
+            : run.state === "killed"
+              ? "[Cancelled]"
+              : `Command failed with exit code ${run.exitCode ?? "unknown"}`;
         return {
-          passed: result.success,
-          output: (result.success ? result.output : (result.error ?? result.output)) ?? "",
+          passed,
+          output: printed || (passed ? "Command executed successfully (no output)" : fallback),
           durationMs: Date.now() - startedAt,
+          state: run.state,
+          exitCode: run.exitCode,
         };
       });
 
@@ -711,11 +736,14 @@ export class Agent {
     }
     if (!result.ok) return { success: false, output: result.reason };
     const { decision } = result;
-    this.turnLedgerWrites.add(decision.file);
-    if (decision.supersedes) {
-      const replaced = findDecision(cwd, decision.supersedes);
-      if (replaced) this.turnLedgerWrites.add(replaced.file);
-    }
+    const replaced = decision.supersedes ? findDecision(cwd, decision.supersedes) : undefined;
+    // What the ledger wrote, as it wrote it: the files it touched, now and after the user's answer.
+    const recordLedgerWrites = () => {
+      for (const file of [decision.file, ...(replaced ? [replaced.file] : [])]) {
+        this.turnLedgerWrites.set(file, readTextOrNull(join(cwd, file)));
+      }
+    };
+    recordLedgerWrites();
     const waiting = `Saved as ${decision.id}, a proposal in ${decision.file}. It counts once the user approves it (\`shelra decisions approve ${decision.id}\`); tell the user it is waiting.`;
     const ask = this.askDecisionApproval;
     if (!ask) return { success: true, output: waiting };
@@ -726,6 +754,14 @@ export class Agent {
     try {
       if (answer === "approve") {
         const approved = approveDecision(cwd, decision.id);
+        recordLedgerWrites();
+        // The user's yes puts it in force for the rest of this turn too, in place of what it supersedes.
+        if (approved.ok) {
+          this.turnDecisions = [
+            ...this.turnDecisions.filter((active) => active.id !== approved.decision.supersedes),
+            approved.decision,
+          ];
+        }
         return approved.ok
           ? {
               success: true,
@@ -735,6 +771,7 @@ export class Agent {
       }
       if (answer === "reject") {
         rejectDecision(cwd, decision.id);
+        recordLedgerWrites();
         return {
           success: true,
           output: `The user declined ${decision.id}; it was not recorded. Do not propose it again unless the user asks.`,
@@ -2292,7 +2329,9 @@ export class Agent {
     this.kernel = null;
     this.contextSummary = null;
     this.attemptJournal = new AttemptJournal();
-    this.turnLedgerWrites = new Set();
+    this.turnLedgerWrites = new Map();
+    this.turnEndNotes = [];
+    this.turnDecisions = activeDecisions(this.bash.getCwd());
     this.emitSubagentStatus(null);
     const reportStatus = (stage: ProcessMessageStage, detail: string) => {
       notifyObserver(observer?.onStatus, { stage, detail, timestamp: Date.now() });
@@ -2446,6 +2485,7 @@ export class Agent {
     let turnBlocker: string | null = null;
     /** Existing tests changed without the request asking: the turn is asked once to restore them. */
     let testEditsNudged = false;
+    let decisionEditsNudged = false;
     /**
      * The repair ledger (audit doc 15, Phase 2.2): the last failing contract evaluation, to tell a repeat
      * of the same failures after more changes from progress.
@@ -2992,7 +3032,14 @@ export class Agent {
           const cwd = this.bash.getCwd();
           const endState = turnStartState ? captureWorkspaceState(cwd) : null;
           // The ledger's own files are the host's record of the user's answers, not work to verify.
-          const ledgerWrite = (path: string) => this.turnLedgerWrites.has(path.replaceAll("\\", "/"));
+          // A file the ledger wrote stays exempt only while it still holds what the ledger left there: an edit
+          // after it (a shell command flipping a proposal to active, say) is the turn's own change.
+          const ledgerWrite = (path: string) => {
+            const file = path.replaceAll("\\", "/");
+            return (
+              this.turnLedgerWrites.has(file) && readTextOrNull(join(cwd, file)) === this.turnLedgerWrites.get(file)
+            );
+          };
           const mutations = mergeChangedFiles(
             cwd,
             this.kernel?.snapshot().mutations ?? [],
@@ -3075,6 +3122,42 @@ export class Agent {
             return;
           }
 
+          // Decision records are the user's: only a proposal the user approves changes one (the ledger's own
+          // writes are left out of `mutations`). An edit by the turn, through a file tool or the shell, could
+          // weaken a check or mark a proposal active. The gate ignores it (it checks `turnDecisions`), and
+          // here it is sent back like a change to existing tests, unless the request names the decision.
+          const changedDecisions =
+            this.mode === "agent" && !this.ablations.has("gate") && !this.ablations.has("ledger")
+              ? mutations.filter((path) => {
+                  const id = decisionIdOfFile(path);
+                  return id !== null && !requestNamesDecision(userMessage, id);
+                })
+              : [];
+          if (changedDecisions.length > 0) {
+            if (!decisionEditsNudged) {
+              decisionEditsNudged = true;
+              this.messages.push({
+                role: "user",
+                content: [
+                  `Completion blocked: you changed the project's decision records: ${changedDecisions.join(", ")}.`,
+                  "Only the user changes a decision. Restore those files as they were. If a decision should change, propose the change with propose_decision, naming the decision it supersedes, and let the user approve it.",
+                ].join("\n"),
+              });
+              this.messageSeqs.push(null);
+              this.kernel?.recordObservation(`Decision records changed by the turn (${changedDecisions.join(", ")}).`);
+              this.persistKernelIndex("Decision records were changed");
+              continue;
+            }
+            const reason = `it changed decision records that only the user may change: ${changedDecisions.join(", ")}.`;
+            this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+            this.persistKernelIndex(reason);
+            const verdict = `[Not verified — ${reason}]`;
+            this.recordVerdict(verdict);
+            yield { type: "content", content: `\n\n${verdict}` };
+            yield { type: "done" };
+            return;
+          }
+
           // The task contract (audit doc 15, Phase 1.3–1.4): when the project states its checks, or the plan
           // gave a command that failed before the change, the host decides "done" by running them on the
           // final code, instead of accepting any check at all.
@@ -3088,7 +3171,7 @@ export class Agent {
           // ledger's phase 3), so a change that breaks one cannot be reported as done.
           const governing =
             contractApplies && !this.ablations.has("ledger")
-              ? activeDecisions(cwd).filter(
+              ? this.turnDecisions.filter(
                   (decision) => decision.check !== undefined && mutations.some((path) => inScope(path, decision.scope)),
                 )
               : [];
@@ -3222,16 +3305,24 @@ export class Agent {
                       : result.failedBefore
                         ? " (it already failed before your first change)"
                         : "";
-                  const broken = brokenDecisions(result.check.command);
+                  const governed = brokenDecisions(result.check.command);
+                  const names = governed.map((decision) => `${decision.id} (${decision.title})`).join(", ");
                   const decisionNote =
-                    broken.length > 0
-                      ? ` It enforces ${broken.map((decision) => `${decision.id} (${decision.title})`).join(", ")}, a decision the user approved.`
-                      : "";
+                    governed.length === 0
+                      ? ""
+                      : result.unrunnable
+                        ? ` It is the check of ${names}, and it could not run, so it says nothing about your change.`
+                        : ` It enforces ${names}, a decision the user approved.`;
                   return `- \`${result.check.command}\`${note}:${decisionNote}\n${describeFailures(result.detail)}`;
                 }),
-                ...(failing.some((result) => brokenDecisions(result.check.command).length > 0)
+                ...(failing.some((result) => !result.unrunnable && brokenDecisions(result.check.command).length > 0)
                   ? [
                       "Your change breaks a decision the user approved. Restore what the decision requires; if the decision itself should change, say so and propose a superseding decision with propose_decision. Never weaken or skip its check.",
+                    ]
+                  : []),
+                ...(failing.some((result) => result.unrunnable && brokenDecisions(result.check.command).length > 0)
+                  ? [
+                      "A decision's check could not run (it timed out, or its script, command or tool is missing). Do not revert your change for it: make the check runnable if that is part of the task, or tell the user what is missing.",
                     ]
                   : []),
                 ...(regression && byFileTools.length > 0
@@ -3263,12 +3354,24 @@ export class Agent {
               continue;
             } else {
               const olderThanTurn = failing.every((result) => result.failedBefore);
-              const violated = [...new Set(failing.flatMap((result) => brokenDecisions(result.check.command)))];
+              const decisionsOf = (unrunnable: boolean) => [
+                ...new Set(
+                  failing
+                    .filter((result) => Boolean(result.unrunnable) === unrunnable)
+                    .flatMap((result) => brokenDecisions(result.check.command)),
+                ),
+              ];
+              const violated = decisionsOf(false);
+              const unchecked = decisionsOf(true);
               const reason = `${failing.map((result) => `\`${result.check.command}\``).join(", ")} ${
                 failing.length === 1 ? "fails" : "fail"
               } on the final code${olderThanTurn ? ", as before this turn" : ""}, after ${verificationRetries} automatic request(s).${
                 violated.length > 0
                   ? ` This breaks ${violated.map((decision) => `${decision.id} (${decision.title})`).join(", ")}: revert the change, or approve a decision that supersedes ${violated.length === 1 ? "it" : "them"}.`
+                  : ""
+              }${
+                unchecked.length > 0
+                  ? ` The check of ${unchecked.map((decision) => `${decision.id} (${decision.title})`).join(", ")} could not run, so nothing vouches for ${unchecked.length === 1 ? "that decision" : "those decisions"}.`
                   : ""
               }`;
               this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
@@ -3676,6 +3779,15 @@ export class Agent {
         this.abortController = null;
       }
     }
+  }
+}
+
+/** A text file's content, or null when it does not exist or cannot be read. */
+function readTextOrNull(path: string): string | null {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
   }
 }
 

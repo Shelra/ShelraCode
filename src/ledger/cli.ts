@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { destructiveCommandReason } from "../security/destructive";
 import { BashTool, type CommandRun } from "../tools/bash";
 import { inScope } from "./glob";
+import { checkCouldNotRun } from "./judge";
 import { activeDecisions, approveDecision, findDecision, LEDGER_DIR, listDecisions, rejectDecision } from "./store";
 import type { Decision } from "./types";
 
@@ -102,25 +103,12 @@ const CHECK_TIMEOUT_MS = 10 * 60_000;
 const HOOK_BUDGET_MS = 9 * 60_000;
 const OUTPUT_TAIL = 1_500;
 const GIT_TIMEOUT_MS = 3_000;
-/** Exit codes of a shell whose command does not exist: sh 127 (126: found but not runnable), cmd 9009. */
-const MISSING_COMMAND_EXITS = new Set([126, 127, 9009]);
-/**
- * A runtime that could not start what the check names: the shell's own "command not found", PowerShell's and
- * cmd's "not recognized", a script or module the runtime could not load. A test whose output happens to say
- * "not found" is a failing test, not one of these, so the messages are matched whole.
- */
-const RUNTIME_MISSING_RE =
-  /command not found|is not recognized as (?:an internal|the name of)|Cannot find module|MODULE_NOT_FOUND|error: (?:Module|Script) not found|No module named|can't open file|^(?:bash|sh|zsh|dash|bun|node|python3?|deno)(?:\.exe)?: (?:line \d+: )?[^:\n]+: No such file or directory/imu;
-
 /** What a failed run says about its decision: the rule is broken only when the check itself reached a verdict. */
-function judge(run: CommandRun, seconds: string): { outcome: Outcome; detail: string } {
+function judge(run: CommandRun, seconds: string, command: string): { outcome: Outcome; detail: string } {
   const output = tail([run.stdout, run.stderr].filter(Boolean).join("\n"));
-  const after = output ? `\n${output}` : "";
-  if (run.state === "timed_out") return { outcome: "could not run", detail: `timed out after ${seconds} s${after}` };
-  if (run.state === "killed") return { outcome: "could not run", detail: `was stopped before it finished${after}` };
-  if (run.state === "refused") return { outcome: "could not run", detail: run.stderr || "was refused" };
-  const missing = (run.exitCode !== null && MISSING_COMMAND_EXITS.has(run.exitCode)) || RUNTIME_MISSING_RE.test(output);
-  return { outcome: missing ? "could not run" : "broken", detail: output || `exited with ${run.exitCode}` };
+  const reason = checkCouldNotRun({ state: run.state, exitCode: run.exitCode, output }, command, seconds);
+  if (reason !== null) return { outcome: "could not run", detail: reason };
+  return { outcome: "broken", detail: output || `exited with ${run.exitCode}` };
 }
 
 /**
@@ -148,7 +136,7 @@ function changedFiles(workspace: string): string[] | null {
   const untracked = attempt(() => git("ls-files", "--others", "--exclude-standard", "-z"));
   if (untracked === null) return null;
   const changed =
-    attempt(() => git("diff", "--name-only", "--relative", "-z", "HEAD")) ??
+    attempt(() => git("diff", "--name-only", "--no-renames", "--relative", "-z", "HEAD")) ??
     attempt(() => git("ls-files", "--cached", "-z")) ??
     [];
   return [...new Set([...changed, ...untracked])];
@@ -235,7 +223,7 @@ export async function checkDecisions(
       lines.push(`${decision.id} ${decision.title}: holds (\`${command}\`, ${seconds} s)`);
       continue;
     }
-    const { outcome, detail } = judge(run, seconds);
+    const { outcome, detail } = judge(run, seconds, command);
     failed(decision, command, outcome, detail);
   }
   const count = (outcome: Outcome) => judged.filter((item) => item.outcome === outcome).length;
@@ -289,6 +277,21 @@ export async function checkDecisions(
     return { exitCode: 2, output: guidance.join("\n"), stream: "stderr" };
   }
   return { exitCode: 1, output: lines.join("\n"), stream: "stderr" };
+}
+
+/**
+ * The folder a `decisions` command reads. As a Claude Code hook the project is CLAUDE_PROJECT_DIR (the hook's
+ * own folder may have drifted), but a `-d` given on the command line still wins, read from that project, so a
+ * ledger in a package of a monorepo is the one checked (review round 3, 2026-09-24: `-d` was dropped).
+ */
+export function decisionsWorkspace(input: {
+  hook?: string;
+  projectDir?: string;
+  explicitDirectory?: string;
+  cwd: string;
+}): string {
+  const base = input.hook === "claude-code" && input.projectDir ? input.projectDir : input.cwd;
+  return input.explicitDirectory ? resolve(base, input.explicitDirectory) : base;
 }
 
 export interface DecisionsCliOptions {

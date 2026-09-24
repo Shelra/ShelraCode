@@ -1,4 +1,5 @@
 import type { BrowserObservation, CommandOutcome, HttpProbe } from "../exec/types";
+import { type CheckEnd, checkCouldNotRun } from "../ledger/judge";
 import { destructiveCommandReason } from "../security/destructive";
 import { type CheckKind, type DiscoveredCheck, isSameCheck } from "./discover";
 import { evaluateAcceptance } from "./evaluate";
@@ -45,13 +46,32 @@ export interface ContractCheckResult {
   failedBefore: boolean;
   /** A run before the turn's first change passed: a failure now is a regression the turn caused. */
   passedBefore: boolean;
+  /**
+   * For a decision's check that failed without reaching a verdict (it timed out, or its script, command or
+   * runtime is missing): why. Such a check vouches for nothing, and says nothing against the change either.
+   */
+  unrunnable?: string;
 }
 
 /** Runs one check command in the agent's workspace, the way the agent's own shell would. */
 export type ContractCheckRunner = (
   command: string,
   options: { timeoutMs: number; signal?: AbortSignal },
-) => Promise<{ passed: boolean; output: string; durationMs: number }>;
+) => Promise<ContractRun>;
+
+/** One run of a check: whether it passed and what it printed, and when known, how its process ended. */
+export interface ContractRun {
+  passed: boolean;
+  output: string;
+  durationMs: number;
+  state?: CheckEnd["state"];
+  exitCode?: number | null;
+}
+
+/** Why a failed decision check reached no verdict, or undefined for any other check or a real failure. */
+function unrunnableDecision(check: ContractCheck, end: CheckEnd): string | undefined {
+  return check.kind === "decision" ? (checkCouldNotRun(end, check.command) ?? undefined) : undefined;
+}
 
 /**
  * The checks a coding turn's final code must pass: tests, type-check and lint. Never a build, which
@@ -78,12 +98,17 @@ export async function evaluateTurnContract(input: {
   for (const check of input.checks) {
     const latest = input.runs.filter((run) => isSameCheck(run.command, check)).at(-1);
     if (latest?.fresh) {
+      // Of the agent's own run only the text is known.
+      const unrunnable = latest.passed
+        ? undefined
+        : unrunnableDecision(check, { state: "completed", exitCode: null, output: latest.detail });
       decided.set(check, {
         check,
         passed: latest.passed,
         by: "agent",
         detail: latest.passed ? `\`${check.command}\` passed` : latest.detail,
         ...before(check),
+        ...(unrunnable ? { unrunnable } : {}),
       });
       continue;
     }
@@ -104,7 +129,7 @@ export async function evaluateTurnContract(input: {
 
   if (forHost.length > 0) {
     // The full output of each host run: a repair round reads the failures in it, not a clipped summary.
-    const outputs = new Map<string, string>();
+    const outputs = new Map<string, ContractRun>();
     const criteria: AcceptanceCriterion[] = forHost.map((check, index) => ({
       id: `contract-${index}`,
       description: check.command,
@@ -120,7 +145,7 @@ export async function evaluateTurnContract(input: {
             timeoutMs: options.timeoutMs ?? input.timeoutMs,
             signal: options.signal,
           });
-          outputs.set(command, result.output);
+          outputs.set(command, result);
           return outcome(command, options.cwd, result);
         },
         probeHttp: async (url): Promise<HttpProbe> => ({
@@ -135,14 +160,24 @@ export async function evaluateTurnContract(input: {
     forHost.forEach((check, index) => {
       const result = report.results.find((item) => item.id === `contract-${index}`);
       const passed = result?.passed ?? false;
+      const run = outputs.get(check.command);
+      const unrunnable =
+        passed || !run
+          ? undefined
+          : unrunnableDecision(check, {
+              state: run.state ?? "completed",
+              exitCode: run.exitCode ?? null,
+              output: run.output,
+            });
       decided.set(check, {
         check,
         passed,
         by: "host",
         detail: passed
           ? (result?.detail ?? `\`${check.command}\` passed`)
-          : outputs.get(check.command) || result?.detail || `\`${check.command}\` did not run`,
+          : run?.output || result?.detail || `\`${check.command}\` did not run`,
         ...before(check),
+        ...(unrunnable ? { unrunnable } : {}),
       });
     });
   }
@@ -153,11 +188,7 @@ export async function evaluateTurnContract(input: {
   });
 }
 
-function outcome(
-  command: string,
-  cwd: string,
-  result: { passed: boolean; output: string; durationMs: number },
-): CommandOutcome {
+function outcome(command: string, cwd: string, result: ContractRun): CommandOutcome {
   return {
     command,
     cwd,

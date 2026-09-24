@@ -2038,10 +2038,18 @@ program
   .option("--changed", "check: only the decisions covering a file changed in the working tree")
   .option("--hook <agent>", "check: answer as that agent's stop hook (claude-code)")
   .action(async (action: string | undefined, id: string | undefined, options: { changed?: boolean; hook?: string }) => {
-    changeDirectoryOrExit(stringOption(program.opts<CliOptions>().directory));
-    const { runDecisionsCli } = await import("./ledger/cli");
+    const { decisionsWorkspace, runDecisionsCli } = await import("./ledger/cli");
     // Claude Code runs hooks with the project in CLAUDE_PROJECT_DIR and their input as JSON on stdin.
-    const workspace = (options.hook === "claude-code" && process.env.CLAUDE_PROJECT_DIR) || process.cwd();
+    const workspace = decisionsWorkspace({
+      hook: options.hook,
+      projectDir: process.env.CLAUDE_PROJECT_DIR,
+      explicitDirectory:
+        program.getOptionValueSource("directory") === "cli"
+          ? stringOption(program.opts<CliOptions>().directory)
+          : undefined,
+      cwd: process.cwd(),
+    });
+    changeDirectoryOrExit(workspace);
     const result = await runDecisionsCli(workspace, action, id, {
       changed: options.changed,
       hook: options.hook,

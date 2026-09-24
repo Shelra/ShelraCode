@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { checkDecisions, runDecisionsCli, runDecisionsCommand } from "./cli";
+import { checkDecisions, decisionsWorkspace, runDecisionsCli, runDecisionsCommand } from "./cli";
 import { approveDecision, listDecisions, proposeDecision } from "./store";
 
 let workspace: string;
@@ -148,6 +148,28 @@ describe("shelra decisions check", () => {
     expect(result.output).toContain("Checked 3 decisions: 0 hold, 1 broken, 2 could not run.");
   }, 30_000);
 
+  it("reads a missing import in the code under test as a verdict, and only its own missing script as could not run", async () => {
+    // Review round 3 (2026-09-24): tsc's TS2307 for a dependency the decision forbids read as "could not run",
+    // and the hook told Claude to make the check runnable, which meant installing that dependency.
+    mkdirSync(join(workspace, "scripts"), { recursive: true });
+    writeFileSync(
+      join(workspace, "scripts", "types.ts"),
+      "console.error(\"src/feed.ts(1,19): error TS2307: Cannot find module 'dayjs' or its corresponding type declarations.\");\nprocess.exit(2);\n",
+    );
+    writeFileSync(
+      join(workspace, "scripts", "imports.mjs"),
+      "import { readFileSync } from 'node:fs';\nawait import('left-pad-that-is-not-installed');\n",
+    );
+    decide("No new runtime dependencies", ["**"], "bun scripts/types.ts");
+    decide("Imports resolve", ["**"], "node scripts/imports.mjs");
+    decide("The check exists", ["**"], "node scripts/missing-check.mjs");
+
+    const result = await checkDecisions(workspace, { timeoutMs: 20_000 });
+    expect(result.output).toContain("D-0001 No new runtime dependencies: BROKEN (`bun scripts/types.ts`)");
+    expect(result.output).toContain("D-0002 Imports resolve: BROKEN (`node scripts/imports.mjs`)");
+    expect(result.output).toContain("D-0003 The check exists: COULD NOT RUN (`node scripts/missing-check.mjs`)");
+  }, 30_000);
+
   it("as a hook, stops starting checks when its time budget is spent and says so", async () => {
     mkdirSync(join(workspace, "scripts"), { recursive: true });
     writeFileSync(join(workspace, "scripts", "slow.ts"), "setTimeout(() => {}, 3_000);\n");
@@ -190,6 +212,14 @@ describe("shelra decisions check", () => {
 
     writeFileSync(join(workspace, "migrations", "0001.sql"), "CREATE TABLE users (id INTEGER, phone TEXT);\n");
     expect(await checkDecisions(workspace, { changed: true })).toMatchObject({ exitCode: 1 });
+
+    // Review round 3 (2026-09-24): a staged rename out of the scope listed only its new path.
+    writeFileSync(join(workspace, "migrations", "0001.sql"), "CREATE TABLE users (id INTEGER);\n");
+    mkdirSync(join(workspace, "archive"), { recursive: true });
+    git("mv", "migrations/0001.sql", "archive/0001.sql");
+    const moved = await checkDecisions(workspace, { changed: true });
+    expect(moved).toMatchObject({ exitCode: 1 });
+    expect(moved.output).toContain("D-0002 Migrations are never edited: BROKEN");
   });
 
   it("with changed, counts every file of a repository that has no commit yet", async () => {
@@ -216,6 +246,18 @@ describe("shelra decisions check", () => {
     // Claude Code is already continuing because of a stop hook: no second block, no loop.
     const again = await checkDecisions(workspace, { hook: "claude-code", hookInput: '{"stop_hook_active":true}' });
     expect(again).toMatchObject({ exitCode: 0, stream: "stdout" });
+  });
+
+  it("reads the hook's project, unless -d names a package inside it", () => {
+    const root = join(tmpdir(), "repo");
+    expect(decisionsWorkspace({ hook: "claude-code", projectDir: root, cwd: join(root, "drifted") })).toBe(root);
+    expect(
+      decisionsWorkspace({ hook: "claude-code", projectDir: root, explicitDirectory: "packages/api", cwd: tmpdir() }),
+    ).toBe(join(root, "packages", "api"));
+    expect(decisionsWorkspace({ projectDir: root, explicitDirectory: "pkg", cwd: tmpdir() })).toBe(
+      join(tmpdir(), "pkg"),
+    );
+    expect(decisionsWorkspace({ cwd: root })).toBe(root);
   });
 
   it("routes every action through one entry point and refuses check options elsewhere", async () => {

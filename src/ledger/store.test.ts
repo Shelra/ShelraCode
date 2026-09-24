@@ -5,12 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   activeDecisions,
   approveDecision,
+  decisionIdOfFile,
   formatDecision,
   LEDGER_DIR,
   listDecisions,
   parseDecision,
   proposeDecision,
   rejectDecision,
+  requestNamesDecision,
 } from "./store";
 
 let workspace: string;
@@ -176,5 +178,30 @@ describe("decision ledger", () => {
       "Dates are stored in UTC.",
     ].join("\n");
     expect(parseDecision(text, "0002-dates.md")).toMatchObject({ scope: ["src/**/*.{ts,tsx}", "docs/**"] });
+  });
+});
+
+describe("what makes a decision active", () => {
+  it("reads a record that says active without an approval date as a proposal still waiting", () => {
+    const proposed = proposeDecision(workspace, english, day);
+    if (!proposed.ok) throw new Error(proposed.reason);
+    const path = join(workspace, proposed.decision.file);
+    // What a command that flips the status line, without the user's yes, leaves behind.
+    writeFileSync(path, readFileSync(path, "utf8").replace("status: proposed", "status: active"));
+
+    expect(activeDecisions(workspace)).toEqual([]);
+    expect(listDecisions(workspace)).toEqual([expect.objectContaining({ id: "D-0001", status: "proposed" })]);
+    expect(approveDecision(workspace, "D-0001", day)).toMatchObject({ ok: true, decision: { status: "active" } });
+    expect(activeDecisions(workspace).map((decision) => decision.id)).toEqual(["D-0001"]);
+  });
+
+  it("knows a decision record's id from its path, and a request that names it", () => {
+    expect(decisionIdOfFile("docs/decisions/0003-dates-are-utc.md")).toBe("D-0003");
+    expect(decisionIdOfFile(String.raw`docs\decisions\0012-x.md`)).toBe("D-0012");
+    expect(decisionIdOfFile("docs/decisions/README.md")).toBeNull();
+    expect(decisionIdOfFile("docs/other/0003-x.md")).toBeNull();
+    expect(requestNamesDecision("Fix the typo in D-0003's rule", "D-0003")).toBe(true);
+    expect(requestNamesDecision("reword D-3", "D-0003")).toBe(true);
+    expect(requestNamesDecision("Chart it with d3 and D-0030", "D-0003")).toBe(false);
   });
 });

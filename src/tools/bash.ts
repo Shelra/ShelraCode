@@ -167,8 +167,15 @@ export class BashTool {
         signal: abortSignal,
         log: false,
       });
+      // A process that never started (no shell, a missing executable) is refused, not stopped.
       const state =
-        outcome.state === "completed" ? "completed" : outcome.state === "timed_out" ? "timed_out" : "killed";
+        outcome.state === "spawn_error"
+          ? "refused"
+          : outcome.state === "completed"
+            ? "completed"
+            : outcome.state === "timed_out"
+              ? "timed_out"
+              : "killed";
       return { state, exitCode: outcome.exitCode ?? null, stdout: outcome.stdout ?? "", stderr: outcome.stderr ?? "" };
     } catch (error) {
       return {

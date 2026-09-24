@@ -177,7 +177,9 @@ export function parseDecision(raw: string, file: string): Decision | null {
   return {
     id,
     title: fields.title,
-    status,
+    // Only an approval makes a decision active, and an approval records its date: a file that says
+    // `active` without one (a proposal flipped by hand or by a command) still waits for the user.
+    status: status === "active" && !approved ? "proposed" : status,
     source: source as Decision["source"],
     rule,
     ...(why ? { why } : {}),
@@ -213,6 +215,20 @@ export function listDecisions(workspace: string): Decision[] {
     }
   }
   return decisions.sort((a, b) => a.id.localeCompare(b.id, "en", { numeric: true }));
+}
+
+const DECISION_FILE_RE = new RegExp(`^${LEDGER_DIR}/(\\d{4})-[^/]+\\.md$`, "u");
+
+/** The decision id a workspace-relative path holds (`docs/decisions/0003-x.md` → D-0003), or null for any other file. */
+export function decisionIdOfFile(path: string): string | null {
+  const match = DECISION_FILE_RE.exec(path.replaceAll("\\", "/").replace(/^\.\//u, ""));
+  return match ? `D-${match[1]}` : null;
+}
+
+/** Whether the request names the decision (`D-0003`, `D-3`): the user asking for it is the user's yes to the edit. */
+export function requestNamesDecision(request: string, id: string): boolean {
+  const number = Number(id.slice(2));
+  return [...request.matchAll(/\bD-(\d{1,4})\b/gu)].some((match) => Number(match[1]) === number);
 }
 
 export function activeDecisions(workspace: string): Decision[] {

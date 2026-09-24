@@ -226,6 +226,11 @@ timeout that covers every check, as they run one after another
   }
 }
 ```
+
+As a hook it reads the project Claude Code names in `CLAUDE_PROJECT_DIR`, and
+the checks share nine minutes so the answer arrives before Claude Code's
+ten-minute limit. A ledger in a package of a monorepo is named from there:
+`shelra -d packages/api decisions check --hook claude-code`.
 Autonomous mode begins executing after publishing its plan; use `Ctrl+C` to
 cancel. An explicit `--sandbox` autonomous run is currently refused instead of
 pretending that host execution is sandboxed.
