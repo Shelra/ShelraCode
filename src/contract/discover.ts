@@ -116,7 +116,8 @@ function fromPackageJson(workspace: string): DiscoveredCheck[] {
   if (!text) return [];
   let scripts: Record<string, string> = {};
   try {
-    const manifest = JSON.parse(text) as { scripts?: Record<string, unknown> };
+    // A byte-order mark (Windows PowerShell 5.1 writes one) does not change what npm or bun run.
+    const manifest = JSON.parse(text.replace(/^\uFEFF/u, "")) as { scripts?: Record<string, unknown> };
     scripts = Object.fromEntries(
       Object.entries(manifest.scripts ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
     );

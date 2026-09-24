@@ -5,12 +5,26 @@ import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
 import type { ContextPacket } from "../context/types";
 import {
+  addedCheckSources,
+  type CheckDefinition,
+  changedCheckDefinitions,
+  changeMadeByTurn,
+  checkEditsAllowedBy,
+  checkKindOf,
+  isShortFollowUp,
+  type RecordedFiles,
+  recordDefinitionFiles,
+  runsChangedDefinition,
+  snapshotCheckDefinitions,
+} from "../contract/check-definitions";
+import {
   type ContractCheck,
   type ContractCheckRunner,
   contractChecks,
   evaluateTurnContract,
 } from "../contract/contract";
-import { discoverChecks, isSameCheck } from "../contract/discover";
+import type { CheckKind } from "../contract/discover";
+import { type DiscoveredCheck, discoverChecks, isSameCheck } from "../contract/discover";
 import { describeFailures, failureSignature } from "../contract/failures";
 import { isTestFile, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
@@ -459,10 +473,18 @@ export class Agent {
   /** Files as they were before each attempt of this turn changed them; read by restore_file. */
   private attemptJournal = new AttemptJournal();
   /**
+   * The checks a turn is judged by, carried to the next turn while a change to them is unresolved (audit doc 17,
+   * S10): the turn ended on it, or stopped before its gate. Without it, a check one turn rewrote would be the next
+   * turn's starting point, and "continue" would be judged by it.
+   */
+  private checkBaselineCarry: { workspace: string; checks: CheckDefinition[]; recorded: RecordedFiles } | null = null;
+  /**
    * Models whose endpoints refused the sampling `temperature` (OpenAI's pro reasoning models take none): requests
    * to them leave it out, so the model the user chose answers instead of the turn falling back to another.
    */
   private readonly samplingRejected = new Set<string>();
+  /** The check kinds the previous request allowed to change, which a short follow-up ("yes, go ahead") keeps. */
+  private previousAllowedCheckKinds = new Set<CheckKind>();
   /**
    * Ledger files this turn wrote through the ledger itself, with the text it left (null: it removed the
    * file): the host's record, never work to verify, as long as nothing else changed them afterwards.
@@ -552,10 +574,10 @@ export class Agent {
     // Host checks run the way the agent's own commands do: same shell, same sandbox, same workspace.
     this.checkRunner =
       options.checkRunner ??
-      (async (command, { timeoutMs, signal }) => {
+      (async (command, { timeoutMs, signal, cwd }) => {
         const startedAt = Date.now();
         // How the process ended goes along, so a decision check that could not run is not read as broken.
-        const run = await this.bash.run(command, timeoutMs, signal);
+        const run = await this.bash.run(command, timeoutMs, signal, cwd);
         const printed = [run.stdout, run.stderr ? `STDERR: ${run.stderr}` : ""].filter(Boolean).join("\n").trim();
         const passed = run.state === "completed" && run.exitCode === 0;
         const fallback =
@@ -2371,9 +2393,9 @@ export class Agent {
     this.attemptJournal = new AttemptJournal();
     this.turnLedgerWrites = new Map();
     this.turnEndNotes = [];
-    this.turnDecisions = activeDecisions(this.bash.getCwd());
+    this.turnDecisions = activeDecisions(this.bash.getRootCwd());
     this.turnStartLedger = new Map(
-      listDecisions(this.bash.getCwd()).map((decision) => [foldPath(decision.file), decision]),
+      listDecisions(this.bash.getRootCwd()).map((decision) => [foldPath(decision.file), decision]),
     );
     this.emitSubagentStatus(null);
     const reportStatus = (stage: ProcessMessageStage, detail: string) => {
@@ -2521,13 +2543,50 @@ export class Agent {
     // What the workspace looked like when the turn started and when the last check passed: the gate
     // compares them with the final state, so a change made through the shell counts, and a check that
     // passed before later changes does not vouch for the final code.
-    const turnStartState = this.mode === "agent" ? captureWorkspaceState(this.bash.getCwd()) : null;
+    // The turn is judged in the session's workspace, not in whatever folder a `cd` left the shell in.
+    const turnStartWorkspace = this.bash.getRootCwd();
+    const turnStartState = this.mode === "agent" ? captureWorkspaceState(turnStartWorkspace) : null;
+    // The checks that decide "done", as they stood when the turn started (audit doc 17, S10): a turn is judged by
+    // them, not by a check script or command table it rewrote.
+    // The kinds of check the request asks to change; a short follow-up carries the request it answers.
+    const allowedCheckKinds = checkEditsAllowedBy(userMessage);
+    if (isShortFollowUp(userMessage)) for (const kind of this.previousAllowedCheckKinds) allowedCheckKinds.add(kind);
+    this.previousAllowedCheckKinds = new Set(allowedCheckKinds);
+    const carried = this.checkBaselineCarry?.workspace === turnStartWorkspace ? this.checkBaselineCarry : null;
+    // Reading the project's check definitions must never take down a turn: without them the turn runs unprotected.
+    const readDefinitions = <T>(read: () => T, fallback: T): T => {
+      try {
+        return read();
+      } catch (error) {
+        recordSwallowedError("contract.check-definitions", error);
+        return fallback;
+      }
+    };
+    const turnStartChecks =
+      this.mode === "agent"
+        ? (carried?.checks ?? readDefinitions(() => snapshotCheckDefinitions(turnStartWorkspace), []))
+        : [];
+    // The files that define package scripts, recipes and runner settings as the turn found them (or as the turn
+    // that left a change unresolved found them): a check a turn wrote itself is not evidence about the code.
+    const turnStartDefinitionFiles =
+      this.mode === "agent"
+        ? (carried?.recorded ?? readDefinitions(() => recordDefinitionFiles(turnStartWorkspace), null))
+        : null;
+    // Until this turn's gate finds the checks as they were, a stop before it leaves any change unresolved.
+    if (this.mode === "agent" && turnStartDefinitionFiles) {
+      this.checkBaselineCarry = {
+        workspace: turnStartWorkspace,
+        checks: turnStartChecks,
+        recorded: turnStartDefinitionFiles,
+      };
+    }
     let lastPassingCheck: { state: WorkspaceState; mutationEvents: number; evidence: string } | null = null;
     /** Every check run this turn, the agent's and the host's, with the workspace as it stood then. */
     /** Why the agent said the task cannot be done as asked (report_blocker), if it did. */
     let turnBlocker: string | null = null;
     /** Existing tests changed without the request asking: the turn is asked once to restore them. */
     let testEditsNudged = false;
+    let checkEditsNudged = false;
     let decisionEditsNudged = false;
     /**
      * The repair ledger (audit doc 15, Phase 2.2): the last failing contract evaluation, to tell a repeat
@@ -2546,6 +2605,8 @@ export class Agent {
       detail: string;
       mutationEvents: number;
       state: WorkspaceState | null;
+      /** Where it ran: only a run in the turn's workspace can stand for the project's check. */
+      cwd: string;
       /** A host run of a decision check that reached no verdict keeps that judgment when it is reused. */
       unrunnable?: string;
     }> = [];
@@ -2611,13 +2672,14 @@ export class Agent {
             // A plan criterion's command runs once when the plan is published, to prove it fails before the
             // change; once the turn has changed anything, "before" is gone and it is not run.
             probeCriterionCommand: async (command, abortSignal) => {
-              const cwd = this.bash.getCwd();
+              const cwd = turnStartWorkspace;
               if (!turnStartState || turnMutationEvents > 0) return null;
               if (changedPaths(turnStartState, captureWorkspaceState(cwd))?.length !== 0) return null;
               if (destructiveCommandReason(command, cwd)) return null;
               const result = await this.checkRunner(command, {
                 timeoutMs: CRITERION_PROBE_TIMEOUT_MS,
                 signal: combineAbortSignals(signal, abortSignal),
+                cwd,
               });
               return { passed: result.passed, output: result.output };
             },
@@ -2771,7 +2833,7 @@ export class Agent {
                     this.turnLinkedCriteriaIds.add(id);
                   }
                 }
-                const evidence = !tr.success
+                const described = !tr.success
                   ? null
                   : tc.function.name === "task"
                     ? describeDelegatedEvidence(tr.task?.agent ?? "task", tr.task?.evidence)
@@ -2780,11 +2842,31 @@ export class Agent {
                         tc.function.arguments,
                         this.kernel?.snapshot().mutations ?? [],
                       );
+                // A check that runs a script or recipe this turn created or changed proves only what the turn
+                // wrote into it (audit doc 17, S10), unless the request asked for that change.
+                const ranCommand = pendingCommands.get(tc.id);
+                const ranKind = described !== null && ranCommand ? checkKindOf(ranCommand, turnStartWorkspace) : null;
+                const evidence =
+                  described !== null &&
+                  ranCommand !== undefined &&
+                  turnStartDefinitionFiles !== null &&
+                  !(ranKind !== null && allowedCheckKinds.has(ranKind)) &&
+                  runsChangedDefinition(
+                    ranCommand,
+                    this.bash.getCwd(),
+                    turnStartWorkspace,
+                    turnStartDefinitionFiles,
+                    new Set(
+                      (turnStartState && changedPaths(turnStartState, captureWorkspaceState(turnStartWorkspace))) ?? [],
+                    ),
+                  )
+                    ? null
+                    : described;
                 if (evidence) {
                   this.turnVerificationEvidence.push(evidence);
                   if (turnStartState) {
                     lastPassingCheck = {
-                      state: captureWorkspaceState(this.bash.getCwd()),
+                      state: captureWorkspaceState(turnStartWorkspace),
                       mutationEvents: turnMutationEvents,
                       evidence,
                     };
@@ -2808,7 +2890,8 @@ export class Agent {
                       passed: tr.success,
                       detail: ((tr.success ? tr.output : (tr.error ?? tr.output)) ?? "").slice(-6_000),
                       mutationEvents: turnMutationEvents,
-                      state: captureWorkspaceState(this.bash.getCwd()),
+                      state: captureWorkspaceState(turnStartWorkspace),
+                      cwd: this.bash.getCwd(),
                     });
                   }
                 }
@@ -3074,7 +3157,7 @@ export class Agent {
 
           // Every file the turn changed, by the file tools or any other way (a shell command, a code
           // generator): the workspace is read again and compared with its state at the turn's start.
-          const cwd = this.bash.getCwd();
+          const cwd = turnStartWorkspace;
           const endState = turnStartState ? captureWorkspaceState(cwd) : null;
           // The ledger's own files are the host's record of the user's answers, not work to verify.
           // A file the ledger wrote stays exempt only while it still holds what the ledger left there: an edit
@@ -3158,6 +3241,65 @@ export class Agent {
               continue;
             }
             const reason = `it changed tests that existed before this request and the request did not ask to change: ${changedTests.join(", ")}.`;
+            this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+            this.persistKernelIndex(reason);
+            const verdict = `[Not verified — ${reason}]`;
+            this.recordVerdict(verdict);
+            yield { type: "content", content: `\n\n${verdict}` };
+            yield { type: "done" };
+            return;
+          }
+
+          // The checks that decide "done" are the ones the turn started with (audit doc 17, S10): what a check
+          // runs (its scripts, recipe, tooling and runner settings) may only change when the request asks for it,
+          // or by adding to it. A turn that rewrote one would otherwise be judged by the check it wrote.
+          const checkChanges =
+            this.mode === "agent" && !this.ablations.has("gate") && turnStartChecks.length > 0
+              ? changedCheckDefinitions(turnStartChecks, turnStartWorkspace, allowedCheckKinds)
+              : [];
+          // The carry clears only when the checks are as the turn found them and no new check source appeared (a
+          // command-table row, a script that now takes precedence): those take effect when a request allows them.
+          if (
+            this.mode === "agent" &&
+            checkChanges.length === 0 &&
+            addedCheckSources(turnStartChecks, turnStartWorkspace, allowedCheckKinds).length === 0
+          ) {
+            this.checkBaselineCarry = null;
+          }
+          const changedChecks = mutatedThisTurn ? checkChanges.map((change) => change.description) : [];
+          // Only a change the turn's own file edits made is sent back to it: read from each file as it was before the
+          // turn first wrote it, so a script another session, the user's editor, a merge or a shell command changed is
+          // reported, not undone, even when the turn then wrote the same file for another reason.
+          const journal = this.attemptJournal.beforeTurn();
+          const beforeTurnWrite = (file: string): string | null | undefined => {
+            const entry = journal.find(([path]) => {
+              const folded = foldPath(path);
+              return folded === foldPath(file) || folded.endsWith(`/${foldPath(file)}`);
+            })?.[1];
+            if (!entry) return undefined;
+            return entry.previousExisted ? entry.previousContent : null;
+          };
+          const ownCheckChange =
+            mutatedThisTurn &&
+            checkChanges.some((change) => changeMadeByTurn(change, turnStartWorkspace, beforeTurnWrite));
+          if (changedChecks.length > 0) {
+            if (ownCheckChange && !checkEditsNudged) {
+              checkEditsNudged = true;
+              this.messages.push({
+                role: "user",
+                content: [
+                  `Completion blocked: you changed the checks this project uses to decide "done": ${changedChecks.join("; ")}.`,
+                  "The request does not ask for that. Restore them as they were and make the code pass them. If the request really needs a check changed, stop and say so with report_blocker instead.",
+                ].join("\n"),
+              });
+              this.messageSeqs.push(null);
+              this.kernel?.recordObservation(`The turn changed the project's checks (${changedChecks.join("; ")}).`);
+              this.persistKernelIndex("The project's checks were changed");
+              continue;
+            }
+            const reason = ownCheckChange
+              ? `it changed the checks that decide "done" and the request did not ask to: ${changedChecks.join("; ")}. If the change is intended, say "keep the check changes" in the next request.`
+              : `the checks that decide "done" changed during this turn outside its own file edits: ${changedChecks.join("; ")}. Shelra does not judge the work by a changed check; if the change is intended, say "keep the check changes" in the next request.`;
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
             const verdict = `[Not verified — ${reason}]`;
@@ -3263,9 +3405,17 @@ export class Agent {
             governing.filter(
               (decision) => decision.check !== undefined && isSameCheck(command, { command: decision.check }),
             );
+          // Judged by the checks the turn started with, in the folder it started in (a `cd` or a check source the
+          // turn added does not move them); a kind the request asked to change is judged as it is now.
+          const judgedBy: DiscoveredCheck[] = [
+            ...turnStartChecks
+              .filter((check) => !allowedCheckKinds.has(check.kind))
+              .map(({ kind, command, source, runs }) => ({ kind, command, source, ...(runs ? { runs } : {}) })),
+            ...discoverChecks(turnStartWorkspace).filter((check) => allowedCheckKinds.has(check.kind)),
+          ];
           const baseContract: ContractCheck[] = contractApplies
             ? [
-                ...contractChecks(discoverChecks(cwd)),
+                ...contractChecks(judgedBy),
                 ...(this.activeAcceptanceCriteria ?? []).flatMap((criterion): ContractCheck[] =>
                   criterion.command && criterion.commandBefore !== "passed"
                     ? [{ kind: "task", command: criterion.command, source: `plan ${criterion.id}` }]
@@ -3290,18 +3440,20 @@ export class Agent {
                 passed: run.passed,
                 detail: run.detail,
                 fresh:
+                  foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
                   run.mutationEvents === turnMutationEvents &&
                   run.state !== null &&
                   endState !== null &&
                   changedPaths(run.state, endState)?.length === 0,
                 beforeFirstChange:
+                  foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
                   run.mutationEvents === 0 &&
                   run.state !== null &&
                   turnStartState !== null &&
                   changedPaths(turnStartState, run.state)?.length === 0,
                 ...(run.unrunnable ? { unrunnable: run.unrunnable } : {}),
               })),
-              workspace: cwd,
+              workspace: turnStartWorkspace,
               runCheck: (command, options) => {
                 reportStatus("checks", `Running \`${command}\` on the final code`);
                 return this.checkRunner(command, options);
@@ -3318,6 +3470,7 @@ export class Agent {
                 detail: result.detail,
                 mutationEvents: turnMutationEvents,
                 state: stateAfterChecks,
+                cwd: turnStartWorkspace,
                 ...(result.unrunnable ? { unrunnable: result.unrunnable } : {}),
               });
             }

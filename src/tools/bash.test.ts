@@ -369,6 +369,18 @@ describe("cd stays inside the workspace", () => {
     expect(tool.getCwd()).toBe(root);
     fs.rmSync(root, { recursive: true, force: true });
   });
+
+  it("runs a host check in the folder it names, whatever folder the shell moved to", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bash-root-"));
+    fs.mkdirSync(path.join(root, "src"), { recursive: true });
+    const tool = new BashTool(root);
+    expect((await tool.execute("cd src")).success).toBe(true);
+    const where = 'node -e "console.log(process.cwd())"';
+    expect((await tool.run(where)).stdout.trim()).toBe(fs.realpathSync(path.join(root, "src")));
+    expect((await tool.run(where, 30_000, undefined, tool.getRootCwd())).stdout.trim()).toBe(fs.realpathSync(root));
+    expect(tool.getRootCwd()).toBe(path.resolve(root));
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 });
 
 describe("parseStandaloneCd", () => {

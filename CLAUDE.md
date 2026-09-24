@@ -34,9 +34,14 @@ criteria and working rules (free models only), is `docs/EXECUTION-PLAN.md`: work
   scripts, an AGENTS.md or CLAUDE.md command table, Make/just targets, pyproject/Cargo/go.mod conventions), its
   tests, type-check and lint are the definition of done: the host runs them on the final code (`src/contract/`),
   reusing a run the agent made after its last change, and sends failures back parsed, for a bounded repair; a plan
-  criterion whose command did not pass before the change (it failed, or was not run) joins them. Without stated checks, a real check program must
-  have run after the last change, shell writes included. Tests that existed before the request are protected
-  unless it asks to change them (audit and roadmap: `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md`).
+  criterion whose command did not pass before the change (it failed, or was not run) joins them. Without stated
+  checks, a real check program must have run after the last change, shell writes included. Tests that existed
+  before the request are protected unless it asks to change them, and so are the checks themselves: the host runs
+  them as the turn found them, in the session's workspace, and a turn whose edits change what one runs (a check
+  script, a recipe, the runner's config, the tooling it executes) is sent back once, then reported unverified,
+  unless the request asks for the change (`src/contract/check-definitions.ts`). Audit and roadmap:
+  `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md`; lifecycle audit:
+  `docs/architecture/17-ENGINEERING-LIFECYCLE-AUDIT.md`.
 - **The CLI is the runtime** (Bun, local SQLite, no server framework) and never depends on a server. `backend/` is
   Phase 1 of the account service (Bun API + Supabase Postgres/Auth, not deployed): accounts and device tokens for
   `shelra login`/`whoami`/`logout`, which the agent never calls; boundaries and backlog in

@@ -156,13 +156,13 @@ export class BashTool {
    * Runs a command and reports what happened without formatting it: the state, the exit code and both
    * outputs, so a caller can tell a command that failed from one that never ran or never finished.
    */
-  async run(command: string, timeout = 30_000, abortSignal?: AbortSignal): Promise<CommandRun> {
-    const prepared = this.prepareCommand(command);
+  async run(command: string, timeout = 30_000, abortSignal?: AbortSignal, cwd?: string): Promise<CommandRun> {
+    const prepared = this.prepareCommand(command, cwd);
     if (!prepared.ok) return { state: "refused", exitCode: null, stdout: "", stderr: prepared.error };
     try {
       const outcome = await runCommand({
         command: prepared.command,
-        cwd: this.cwd,
+        cwd: cwd ?? this.cwd,
         timeoutMs: timeout,
         signal: abortSignal,
         log: false,
@@ -385,6 +385,11 @@ export class BashTool {
     return this.cwd;
   }
 
+  /** The session's workspace: the folder a `cd` cannot leave, wherever the shell has moved inside it. */
+  getRootCwd(): string {
+    return this.rootCwd;
+  }
+
   getSandboxMode(): SandboxMode {
     return this.sandboxMode;
   }
@@ -420,7 +425,10 @@ export class BashTool {
     return "Execute a POSIX shell command. Use for find, ls, git, build tools, package managers, running tests, and any other shell command. For content search, prefer the dedicated grep tool. Set background=true for long-running processes like dev servers, watchers, or anything that should keep running while you continue working. For file read/write/edit, prefer the dedicated file tools instead.";
   }
 
-  private prepareCommand(command: string): { ok: true; command: string } | { ok: false; error: string } {
+  private prepareCommand(
+    command: string,
+    cwd = this.cwd,
+  ): { ok: true; command: string } | { ok: false; error: string } {
     if (this.sandboxMode !== "shuru") {
       return { ok: true, command };
     }
@@ -435,7 +443,7 @@ export class BashTool {
     if (blockedReason) {
       return { ok: false, error: blockedReason };
     }
-    return { ok: true, command: wrapCommandForShuru(this.cwd, command, this.sandboxSettings) };
+    return { ok: true, command: wrapCommandForShuru(cwd, command, this.sandboxSettings) };
   }
 
   private formatSandboxRuntimeError(output: string, fallbackMessage: string): string | null {

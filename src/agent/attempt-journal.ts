@@ -46,6 +46,13 @@ export class AttemptJournal {
       .sort();
   }
 
+  /** Every file the file tools changed this turn, with its state before the turn first changed it. */
+  beforeTurn(): Array<[string, JournalEntry]> {
+    return [...this.files].flatMap(([path, entries]) =>
+      entries[0] ? [[path, entries[0]] as [string, JournalEntry]] : [],
+    );
+  }
+
   /**
    * The state a restore returns to: the file before the last evaluated attempt changed it (or before the
    * current one did, when the last attempt left it alone), or before the turn first changed it. Null when

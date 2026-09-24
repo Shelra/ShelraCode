@@ -1561,3 +1561,283 @@ describe("memory from how a turn ended (audit doc 15, M2 and M4)", () => {
     expect(reflection?.prompt).toContain("$ bun run test");
   });
 });
+
+describe("the checks that decide done are the ones the turn started with (audit doc 17, S10)", () => {
+  /** A Bun project whose one test fails until slugify trims and lowercases. */
+  const slugProject = () => {
+    const dir = mkdtempSync(join(tmpdir(), "shelra-check-definitions-"));
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", scripts: { test: "bun test" } }));
+    writeFileSync(
+      join(dir, "src", "slug.ts"),
+      "export function slugify(s: string): string { throw new Error('todo'); }\n",
+    );
+    writeFileSync(
+      join(dir, "src", "slug.test.ts"),
+      "import { expect, test } from 'bun:test';\nimport { slugify } from './slug';\ntest('trims', () => { expect(slugify(' A ')).toBe('a'); });\n",
+    );
+    return dir;
+  };
+
+  type Step = ProviderEvent | { write: { id: string; path: string; content: string } };
+
+  /** A write the scripted model makes, through the agent's own write_file tool. */
+  const write = (id: string, path: string, content: string): Step[] => [{ write: { id, path, content } }];
+
+  /** One scripted round per entry; rounds past the list only say "Done.". */
+  function roundsModel(rounds: Array<() => Step[] | Promise<Step[]>>) {
+    const requests: ProviderStreamRequest[] = [];
+    const provider: ProviderAdapter = {
+      id: "check-definitions",
+      defaultModelId: "check-definitions-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: (request) => {
+        requests.push(request);
+        const round = rounds[requests.length - 1];
+        const tools = request.tools as Record<
+          string,
+          { execute?: (input: unknown, options: unknown) => Promise<unknown> }
+        >;
+        return {
+          events: (async function* () {
+            for (const step of (await round?.()) ?? []) {
+              if (!("write" in step)) {
+                yield step;
+                continue;
+              }
+              const call = step.write;
+              const input = { path: call.path, content: call.content };
+              yield toolCallEvent(call.id, "write_file", input);
+              const output = await tools.write_file?.execute?.(input, { toolCallId: call.id, messages: [] });
+              yield toolResultEvent(call.id, "write_file", output, input);
+            }
+            yield { type: "text-delta", text: "Done." } as ProviderEvent;
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    return { provider, requests };
+  }
+
+  async function run(agent: Agent, request: string): Promise<string> {
+    let text = "";
+    for await (const chunk of agent.processMessage(request)) text += (chunk as { content?: string }).content ?? "";
+    return text;
+  }
+
+  const WRONG_SLUG = "export function slugify(s: string): string { return s; }\n";
+  const NEUTERED = JSON.stringify({ name: "p", scripts: { test: "echo 1 pass" } });
+
+  it("does not report wrong code verified because the turn rewrote its test script", async () => {
+    // Reproduced for doc 17: with the real check runner, this turn used to end "[Checked by Shelra on the final
+    // code: `bun run test` passed]", the command having become `echo 1 pass`.
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const { provider, requests } = roundsModel([
+      () => [...write("w1", "src/slug.ts", WRONG_SLUG), ...write("w2", "package.json", NEUTERED)],
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    const text = await run(agent, "Implement slugify in src/slug.ts so it trims and lowercases.");
+
+    expect(lastUserText(requests[1])).toContain('you changed the checks this project uses to decide "done"');
+    expect(text).toContain('[Not verified — it changed the checks that decide "done"');
+    expect(text).toContain("what `bun run test` runs changed (package.json)");
+    expect(text).not.toContain("Checked by Shelra");
+  }, 60_000);
+
+  it("runs the project's own check once the turn puts it back", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+    const { provider } = roundsModel([
+      () => [...write("w1", "src/slug.ts", WRONG_SLUG), ...write("w2", "package.json", NEUTERED)],
+      () => [
+        ...write("w3", "package.json", JSON.stringify({ name: "p", scripts: { test: "bun test" } })),
+        ...write("w4", "src/slug.ts", "export const slugify = (s: string) => s.trim().toLowerCase();\n"),
+      ],
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner,
+    });
+
+    const text = await run(agent, "Implement slugify in src/slug.ts so it trims and lowercases.");
+
+    expect(checkRunner.mock.calls.map(([command]) => command)).toEqual(["bun run test"]);
+    expect(text).toContain("Checked by Shelra on the final code");
+    expect(text).not.toContain("Not verified");
+  }, 60_000);
+
+  it("lets a request that asks for a new test command change it, and runs the new one", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+    const { provider, requests } = roundsModel([
+      () => write("w1", "package.json", JSON.stringify({ name: "p", scripts: { test: "bun test --bail" } })),
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner,
+    });
+
+    const text = await run(agent, "Change the test script in package.json so bun test stops at the first failure.");
+
+    expect(requests).toHaveLength(1);
+    expect(checkRunner.mock.calls.map(([command]) => command)).toEqual(["bun run test"]);
+    expect(text).not.toContain("Not verified");
+  }, 60_000);
+
+  // The adversarial review of the first fix (2026-09-24) found the cases below; each failed on it.
+
+  it("does not let the next turn start from a check an earlier turn rewrote", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const { provider } = roundsModel([
+      () => [...write("w1", "src/slug.ts", WRONG_SLUG), ...write("w2", "package.json", NEUTERED)],
+      () => [],
+      () => write("w3", "src/slug.ts", `// keep it simple\n${WRONG_SLUG}`),
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    await run(agent, "Implement slugify in src/slug.ts so it trims and lowercases.");
+    const text = await run(agent, "Continue.");
+
+    expect(text).toContain("changed during this turn outside its own file edits: what `bun run test` runs changed");
+    expect(text).not.toContain("Checked by Shelra");
+  }, 60_000);
+
+  it("runs the checks in the folder the turn started in, whatever folder the shell moved to", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    let agent: Agent | undefined;
+    const { provider } = roundsModel([
+      async () => {
+        mkdirSync(join(dir, "tools"), { recursive: true });
+        writeFileSync(join(dir, "tools", "package.json"), NEUTERED);
+        await (agent as unknown as { bash: { execute(command: string): Promise<unknown> } }).bash.execute("cd tools");
+        return write("w1", "src/slug.ts", WRONG_SLUG);
+      },
+    ]);
+    agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    const text = await run(agent, "Implement slugify in src/slug.ts so it trims and lowercases.");
+
+    // The project's own `bun run test`, run in the workspace, fails; neither the check in tools/ nor a comparison
+    // of two different folders (which read every file as changed) decides the turn.
+    expect(text).toContain("`bun run test` fails on the final code");
+    expect(text).not.toContain("changed tests");
+    expect(text).not.toContain("Checked by Shelra");
+  }, 60_000);
+
+  it("does not take a run of a check script the turn wrote as evidence when the project stated none", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "p", scripts: { test: 'echo "Error: no test specified" && exit 1' } }),
+    );
+    const { provider } = roundsModel([
+      () => [
+        ...write("w1", "src/slug.ts", WRONG_SLUG),
+        ...write("w2", "package.json", NEUTERED),
+        toolCallEvent("b1", "bash", { command: "npm test" }),
+        toolResultEvent("b1", "bash", { success: true, output: "1 pass" }, { command: "npm test" }),
+      ],
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    const text = await run(agent, "Implement slugify in src/slug.ts so it trims and lowercases.");
+
+    expect(text).toContain("Not verified");
+    expect(text).not.toContain("Checked by Shelra");
+  }, 60_000);
+
+  it("holds the check when the request forbids changing it", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const { provider, requests } = roundsModel([
+      () => [...write("w1", "src/slug.ts", WRONG_SLUG), ...write("w2", "package.json", NEUTERED)],
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    const text = await run(
+      agent,
+      "Implement slugify in src/slug.ts so it trims and lowercases. Do not change the test script.",
+    );
+
+    expect(lastUserText(requests[1])).toContain('you changed the checks this project uses to decide "done"');
+    expect(text).toContain('[Not verified — it changed the checks that decide "done"');
+  }, 60_000);
+
+  it("lets a follow-up approve the check change the request before it asked for", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", scripts: { test: "jest" } }));
+    writeFileSync(join(dir, "package-lock.json"), "{}");
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+    const { provider, requests } = roundsModel([
+      () => [],
+      () => write("w1", "package.json", JSON.stringify({ name: "p", scripts: { test: "vitest run" } })),
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner,
+    });
+
+    await run(agent, "Migrate the tests from jest to vitest.");
+    const text = await run(agent, "yes, go ahead");
+
+    expect(requests).toHaveLength(2);
+    expect(checkRunner.mock.calls.map(([command]) => command)).toEqual(["npm run test"]);
+    expect(text).not.toContain("Not verified");
+  }, 60_000);
+
+  it("reports a check changed outside the turn's own edits without telling the model to undo it", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const { provider, requests } = roundsModel([
+      () => {
+        // Another session, or the user's editor, changes the check while the turn edits the code.
+        writeFileSync(
+          join(dir, "package.json"),
+          JSON.stringify({ name: "p", scripts: { test: "bun test --coverage" } }),
+        );
+        return write("w1", "src/slug.ts", "export const slugify = (s: string) => s.trim().toLowerCase();\n");
+      },
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    const text = await run(agent, "Implement slugify in src/slug.ts so it trims and lowercases.");
+
+    expect(requests).toHaveLength(1);
+    expect(text).toContain("changed during this turn outside its own file edits");
+  }, 60_000);
+
+  it("does not blame the turn for a script another session changed when the turn then writes the same file", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const coverage = { name: "p", scripts: { test: "bun test --coverage" } };
+    const { provider, requests } = roundsModel([
+      () => {
+        writeFileSync(join(dir, "package.json"), JSON.stringify(coverage));
+        return [
+          ...write("w1", "package.json", JSON.stringify({ ...coverage, dependencies: { zod: "^3.23.0" } })),
+          ...write("w2", "src/slug.ts", "export const slugify = (s: string) => s.trim().toLowerCase();\n"),
+        ];
+      },
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+    const text = await run(agent, "Add zod, and implement slugify in src/slug.ts so it trims and lowercases.");
+
+    expect(requests).toHaveLength(1);
+    expect(text).toContain("changed during this turn outside its own file edits");
+  }, 60_000);
+});

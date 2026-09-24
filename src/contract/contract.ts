@@ -58,7 +58,8 @@ export interface ContractCheckResult {
 /** Runs one check command in the agent's workspace, the way the agent's own shell would. */
 export type ContractCheckRunner = (
   command: string,
-  options: { timeoutMs: number; signal?: AbortSignal },
+  /** `cwd` is the folder the checks belong to, whatever folder the agent's shell has moved to since. */
+  options: { timeoutMs: number; signal?: AbortSignal; cwd?: string },
 ) => Promise<ContractRun>;
 
 /** One run of a check: whether it passed and what it printed, and when known, how its process ended. */
@@ -153,6 +154,7 @@ export async function evaluateTurnContract(input: {
           const result = await input.runCheck(command, {
             timeoutMs: options.timeoutMs ?? input.timeoutMs,
             signal: options.signal,
+            cwd: input.workspace,
           });
           outputs.set(command, result);
           return outcome(command, options.cwd, result);
