@@ -85,6 +85,7 @@ export class SchedulerDaemon {
             instruction: schedule.instruction,
             directory: schedule.directory,
             model: schedule.model,
+            ...(schedule.modelPolicy ? { modelPolicy: schedule.modelPolicy } : {}),
             maxToolRounds: schedule.maxToolRounds,
             logPath: getScheduleRunLogPath(schedule.id),
           });

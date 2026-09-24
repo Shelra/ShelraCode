@@ -115,6 +115,8 @@ interface Round {
   /** When set, `response` rejects with it; otherwise it resolves with `text`. */
   fail?: unknown;
   text?: string;
+  /** The model the provider says answered the round's step (a router's pick, a server-side fallback). */
+  served?: string;
 }
 
 /** Plays one scripted round per model request; the last round repeats. */
@@ -163,6 +165,9 @@ class ScriptedProvider implements ProviderAdapter {
             usage: {},
             responseMessages: round.completedSteps,
           });
+        }
+        if (round.served) {
+          request.onStepFinish?.({ stepNumber: 0, finishReason: "stop", usage: {}, servedModelId: round.served });
         }
         yield* round.events;
       })(),
@@ -324,14 +329,8 @@ describe("a failing model connection never ends the turn", () => {
   it("tells the UI which model answers: the fallback it moved to, and the model a router picked", async () => {
     // Seen live 2026-09-24: the footer kept showing the chosen model while the auto router billed another.
     const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(180_000) }] };
-    const provider = Object.assign(
-      new ScriptedProvider([stall, stall, answer("Routed answer.")], ["openrouter/auto"]),
-      {
-        servedModelId(this: ScriptedProvider): string | null {
-          return this.requests.at(-1)?.modelId === "openrouter/auto" ? "openrouter/vendor-x/picked" : null;
-        },
-      },
-    );
+    const routed = { ...answer("Routed answer."), served: "openrouter/vendor-x/picked" };
+    const provider = new ScriptedProvider([stall, stall, routed], ["openrouter/auto"]);
     const { chunks } = await run(provider);
 
     expect(chunks.filter((chunk) => chunk.type === "model")).toEqual([
@@ -339,6 +338,46 @@ describe("a failing model connection never ends the turn", () => {
       { type: "model", modelId: "openrouter/auto" },
       { type: "model", modelId: "openrouter/auto", servedModelId: "openrouter/vendor-x/picked" },
     ]);
+  });
+
+  it("tells the UI when OpenRouter answered with a model from its own fallback list, not with a dated variant", async () => {
+    const fallback = new ScriptedProvider([{ ...answer("From the second model."), served: "vendor-b/second:free" }]);
+    const { chunks } = await run(fallback);
+    expect(chunks.filter((chunk) => chunk.type === "model").at(-1)).toEqual({
+      type: "model",
+      modelId: "primary-model",
+      servedModelId: "vendor-b/second:free",
+    });
+
+    const dated = new ScriptedProvider([{ ...answer("Same model."), served: "primary-model-2026-09-01" }]);
+    const again = await run(dated);
+    expect(again.chunks.filter((chunk) => chunk.type === "model")).toEqual([
+      { type: "model", modelId: "primary-model" },
+    ]);
+  });
+
+  it("puts an agent built from a key and an OpenRouter URL behind the Free-mode gate, however the URL is written", () => {
+    // Review 2026-09-24: Telegram agents (`new Agent(key, url, model)`) and a ":443" URL reached OpenRouter through a
+    // raw provider that knew nothing of Free mode, and ran a paid model the user had saved.
+    const previous = process.env.SHELRA_MODEL_POLICY;
+    process.env.SHELRA_MODEL_POLICY = "free";
+    try {
+      for (const url of ["https://openrouter.ai/api/v1", "https://openrouter.ai:443/api/v1"]) {
+        const agent = new Agent("sk-fake-key-for-tests", url, "anthropic/claude-sonnet-4.5", undefined, {
+          cwd: testWorkspace,
+          persistSession: false,
+        });
+        expect(agent.getProviderId(), url).toBe("openrouter");
+      }
+      const other = new Agent("fake", "https://api.example.test/v1", "some-model", undefined, {
+        cwd: testWorkspace,
+        persistSession: false,
+      });
+      expect(other.getProviderId()).not.toBe("openrouter");
+    } finally {
+      if (previous === undefined) delete process.env.SHELRA_MODEL_POLICY;
+      else process.env.SHELRA_MODEL_POLICY = previous;
+    }
   });
 
   it("records the turn in the session trace that `shelra trace` reads", async () => {

@@ -79,10 +79,12 @@ import {
   formatUsdMicros,
 } from "../models/budget";
 import { getModelInfo, getSupportedReasoningEfforts, normalizeModelId } from "../models/catalog";
+import { isOpenRouterBaseURL, lastOpenRouterCatalog } from "../models/openrouter";
 import { BASE_URL_ENV, MAX_TOKENS_ENV } from "../product/identity";
 import { generateRecap as genRecap, generateTitle as genTitle, normalizeRecap } from "../providers/auxiliary";
 import type { CredentialFallback, CredentialFallbackSource } from "../providers/credential-fallback";
 import { normalizeModelMessages } from "../providers/messages";
+import { createOpenRouterProvider } from "../providers/openrouter";
 import { isProviderStreamIdleError } from "../providers/stream";
 import type { ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
@@ -145,6 +147,7 @@ import {
   loadValidSubAgents,
   type SandboxMode,
   type SandboxSettings,
+  sessionModelPolicy,
 } from "../utils/settings";
 import { runSideQuestion, type SideQuestionResult } from "../utils/side-question";
 import { buildVerifyDetectPrompt, normalizeVerifyRecipe, prepareVerifySandbox } from "../verify/entrypoint";
@@ -396,6 +399,16 @@ function findCustomSubagent(
     subagents.find((item) => item.name === agent) ??
     subagents.find((item) => item.name.toLowerCase() === agent.toLowerCase())
   );
+}
+
+/**
+ * Whether the model a provider says answered is another model than the one asked for: a router's pick, or a
+ * server-side fallback. A dated variant of the same model ("vendor/model-2026-01-01" for "vendor/model") is not.
+ */
+export function servedByAnother(served: string, requested: string): boolean {
+  const a = served.toLowerCase();
+  const b = requested.toLowerCase();
+  return a !== b && !a.startsWith(`${b}-`) && !a.startsWith(`${b.replace(/:free$/u, "")}-`);
 }
 
 function maxOutputTokensForTurn(runtime: ProviderModelRuntime, configured: number): number {
@@ -858,7 +871,17 @@ export class Agent {
       throw new Error("Remote provider base URL required. Set SHELRA_BASE_URL or pass --base-url.");
     }
     this.baseURL = endpoint;
-    this.provider = createOpenAICompatibleProvider(apiKey, endpoint, this.modelId || getCurrentModel("agent"));
+    const modelId = this.modelId || getCurrentModel("agent");
+    // OpenRouter always goes through its own adapter under the session's model mode, so an agent built from a key and
+    // a URL (a Telegram chat, a host that skipped model routing) never runs a paid model in Free mode.
+    this.provider = isOpenRouterBaseURL(endpoint)
+      ? createOpenRouterProvider(apiKey, {
+          modelId,
+          entries: lastOpenRouterCatalog(),
+          baseURL: endpoint,
+          policy: sessionModelPolicy(),
+        })
+      : createOpenAICompatibleProvider(apiKey, endpoint, modelId);
   }
 
   getCwd(): string {
@@ -1245,6 +1268,11 @@ export class Agent {
 
   getSessionInfo(): SessionInfo | null {
     return this.session;
+  }
+
+  /** The provider the session runs on now ("openrouter", a free provider's id, the local runtime), a fallback included. */
+  getProviderId(): string | null {
+    return this.provider?.id ?? null;
   }
 
   getSessionId(): string | null {
@@ -1860,6 +1888,7 @@ export class Agent {
         let completedSteps: ModelMessage[] = [];
         let interruption: { reason: string; error: unknown } | null = null;
         let attemptText = "";
+        let attemptServed: string | null = null;
         const childStream = provider.stream({
           modelId: attemptModelId,
           system: childSystem,
@@ -1875,9 +1904,12 @@ export class Agent {
             if (event.responseMessages) {
               completedSteps = sanitizeModelMessages(event.responseMessages as ModelMessage[]);
             }
+            if (event.servedModelId && servedByAnother(event.servedModelId, attemptModelId)) {
+              attemptServed = event.servedModelId;
+            }
           },
           onFinish: (usage) => {
-            this.recordUsage(usage, "task", attemptModelId);
+            this.recordUsage(usage, "task", attemptServed ?? attemptModelId);
           },
         });
         // An interrupted attempt never awaits its response; its rejection must not go unhandled.
@@ -2551,15 +2583,13 @@ export class Agent {
       modelInfo = runtime.modelInfo;
       emptyResponseRetries = 0;
     };
-    // The model the UI shows is the one answering: the turn's model when a round starts on it, and for a router
-    // (`openrouter/auto`, `openrouter/free`) the model it picked (seen live 2026-09-24: the footer kept showing the
-    // chosen model while the auto router billed another).
+    // The model the UI shows is the one answering: the turn's model when a round starts on it, and the model the
+    // provider says answered each step when that is another one: a router's pick (`openrouter/auto`), or a model
+    // from OpenRouter's server-side fallback list (seen live 2026-09-24: the footer kept showing the chosen model while
+    // the auto router billed another). Read per request, so a title or a sub-agent's request never replaces it.
     let announcedModel: string | null = null;
     let announcedServed: string | null = null;
-    const servedModelFor = (modelId: string): string => {
-      if (modelId !== "openrouter/auto" && modelId !== "openrouter/free") return modelId;
-      return provider.servedModelId?.() ?? modelId;
-    };
+    let roundServed: string | null = null;
     /** The turn continues on another provider or key (a fallback of either kind), with a fresh attempt budget there. */
     const adoptProvider = (fallback: CredentialFallback) => {
       provider = fallback.provider;
@@ -2763,6 +2793,7 @@ export class Agent {
             announcedServed = null;
             yield { type: "model", modelId: runtime.modelId };
           }
+          roundServed = null;
           reportStatus("model", `Waiting for ${runtime.modelId}`);
           // A repair that keeps failing the same way gets the model's top effort (audit doc 15, Phase 2.4). It stays
           // within the spending policy: the model does not change, and budgets still apply.
@@ -2797,6 +2828,9 @@ export class Agent {
               if (event.responseMessages) {
                 completedStepMessages = sanitizeModelMessages(event.responseMessages as ModelMessage[]);
               }
+              if (event.servedModelId && servedByAnother(event.servedModelId, runtime.modelId)) {
+                roundServed = event.servedModelId;
+              }
               notifyObserver(observer?.onStepFinish, {
                 stepNumber: currentStep,
                 timestamp: Date.now(),
@@ -2805,7 +2839,7 @@ export class Agent {
               });
             },
             onFinish: (usage) => {
-              this.recordUsage(usage, "message", servedModelFor(runtime.modelId));
+              this.recordUsage(usage, "message", roundServed ?? runtime.modelId);
             },
           });
           // An interrupted or cancelled round never awaits its response; its rejection must not
@@ -2818,10 +2852,9 @@ export class Agent {
               yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
               break;
             }
-            const served = servedModelFor(runtime.modelId);
-            if (served !== runtime.modelId && served !== announcedServed) {
-              announcedServed = served;
-              yield { type: "model", modelId: runtime.modelId, servedModelId: served };
+            if (roundServed && roundServed !== announcedServed) {
+              announcedServed = roundServed;
+              yield { type: "model", modelId: runtime.modelId, servedModelId: roundServed };
             }
 
             switch (part.type) {

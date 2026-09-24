@@ -56,6 +56,8 @@ export interface ProviderStreamRequest {
      * later step of the same generation fails.
      */
     responseMessages?: readonly unknown[];
+    /** The model that answered this step, as the provider reported it: a router's pick, a server-side fallback. */
+    servedModelId?: string;
   }) => void;
   onFinish?: (usage: ProviderUsage) => void;
 }
@@ -142,9 +144,4 @@ export interface ProviderAdapter {
    * the caller retries the same model.
    */
   fallbackModelIds?(modelId: string): string[];
-  /**
-   * The model that answered the last request, when the adapter can tell: a router such as `openrouter/auto` picks
-   * one per request. Optional; null when unknown.
-   */
-  servedModelId?(): string | null;
 }

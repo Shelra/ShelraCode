@@ -100,6 +100,7 @@ import { isShuruSupported } from "./tools/bash";
 import { startScheduleDaemon } from "./tools/schedule";
 import type { ModelInfo } from "./types/index";
 import { processAtMentions } from "./utils/at-mentions.js";
+import { recordSwallowedError } from "./utils/diagnostics";
 import { runScriptManagedUninstall } from "./utils/install-manager";
 import {
   getApiKey,
@@ -108,12 +109,15 @@ import {
   getCurrentSandboxSettings,
   listOpenRouterApiKeys,
   loadPaymentSettings,
+  loadProjectSettings,
   loadUserSettings,
+  MODEL_POLICY_ENV,
   mergeSandboxSettings,
   type SandboxMode,
   type SandboxSettings,
   savePaymentSettings,
   saveUserSettings,
+  sessionModelPolicy,
 } from "./utils/settings";
 import { readAll } from "./utils/standard-input";
 import { runUpdate } from "./utils/update-checker";
@@ -169,11 +173,34 @@ interface RemoteModelSetup {
   setPolicy?: (policy: ModelPolicy) => Promise<{ success: boolean; error?: string; modelId?: string }>;
 }
 
-/** The session's model mode: the flag when one is given, else the mode saved from the terminal UI, else Free. */
+/**
+ * The session's model mode: the flag when one is given, else the mode of the session that started this process (a
+ * delegation), else the mode saved from the terminal UI, else Free. A flag that names no mode is an error, never a
+ * silent fallback to another mode.
+ */
 function resolveModelPolicy(flag: unknown): ModelPolicy {
-  const explicit = parseModelPolicy(typeof flag === "string" ? flag : undefined);
-  if (explicit) return explicit;
-  return parseModelPolicy(loadUserSettings().modelMode) ?? "free";
+  if (typeof flag === "string" && flag.trim()) {
+    const explicit = parseModelPolicy(flag);
+    if (!explicit) {
+      throw new Error(
+        `Unknown model mode "${flag}". Use free or mixed (also auto, economy, balanced, quality or max).`,
+      );
+    }
+    return explicit;
+  }
+  return sessionModelPolicy();
+}
+
+/** A model named with -m, saved as the default only once the session accepted it (Free refuses a paid one). */
+let pendingDefaultModel: string | undefined;
+
+/** Saves the mode for the next session; a settings file that cannot be written never fails the switch. */
+function saveModelMode(policy: ModelPolicy): void {
+  try {
+    saveUserSettings({ modelMode: policy === "free" ? "free" : "mixed" });
+  } catch (error) {
+    recordSwallowedError("settings.modelMode", error);
+  }
 }
 
 /** OpenRouter's free router on each OpenRouter key the user configured, as fallbacks. */
@@ -222,6 +249,8 @@ async function configureRemoteProvider(
   policy: ModelPolicy,
   explicitModelSelection = false,
 ): Promise<RemoteModelSetup> {
+  // Every agent and child process of this session reads the mode from here (`sessionModelPolicy`).
+  process.env[MODEL_POLICY_ENV] = policy;
   if (!isOpenRouterBaseURL(baseURL)) {
     agent.setApiKey(apiKey, baseURL);
     // A key this endpoint rejects: continue on OpenRouter Free with a configured OpenRouter key,
@@ -257,7 +286,7 @@ async function configureRemoteProvider(
   // The model the session chose on OpenRouter (at startup or in the picker), paid or not.
   let chosenModelId = "";
 
-  const selectModel = async (modelId: string): Promise<{ success: boolean; error?: string }> => {
+  const selectModel = async (modelId: string | undefined): Promise<{ success: boolean; error?: string }> => {
     try {
       // A model picked in the picker runs in Mixed mode whatever it costs; Free mode refuses a paid one.
       const route = routeCatalogModel(catalog.entries, {
@@ -309,6 +338,10 @@ async function configureRemoteProvider(
   });
   agent.setProvider(provider, route.modelId);
   chosenModelId = route.modelId;
+  if (explicitModelSelection && pendingDefaultModel && requestedModel === pendingDefaultModel) {
+    saveUserSettings({ defaultModel: pendingDefaultModel });
+    pendingDefaultModel = undefined;
+  }
   // Another key keeps the model it is handed only when the session chose that model or it is free here: an
   // id handed over from elsewhere (a model another provider was serving) can name a paid model on
   // OpenRouter, which nobody approved. Otherwise the session's own choice, or the free router under the free
@@ -351,17 +384,33 @@ async function configureRemoteProvider(
   // No OpenRouter model can serve the turn (the day's free quota spent, none answering): continue on
   // another free provider the user configured (Groq, Gemini, Cloudflare), whose notice states its plan.
   agent.setProviderFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())));
-  // Switching the mode: Mixed keeps the current model (nothing is spent until the user picks a paid one or the
-  // turn falls back to the auto router); Free leaves a paid model for the best free one. The choice is saved.
-  // A switch that cannot find a model keeps the mode and the model as they were, so the session never runs a paid
-  // model while it says Free.
+  // Switching the mode starts from the model a restart in that mode would: Mixed runs the model the user picked, or
+  // the auto router when they picked none; Free keeps a free model and otherwise takes the best free ones. A session
+  // already moved to another free provider (the day's OpenRouter quota spent) stays there on a switch to Free. A switch
+  // that fails in any way keeps the mode and the model as they were, so the session never runs a paid model while it
+  // says Free, and it never throws into the terminal UI.
   const setPolicy = async (next: ModelPolicy): Promise<{ success: boolean; error?: string; modelId?: string }> => {
     const previous = activePolicy;
-    activePolicy = next;
-    const result = await selectModel(modelAfterModeChange(catalog.entries, chosenModelId, next));
-    if (!result.success) activePolicy = previous;
-    else saveUserSettings({ modelMode: next === "free" ? "free" : "mixed" });
-    return { ...result, modelId: chosenModelId };
+    try {
+      activePolicy = next;
+      if (next === "free" && agent.getProviderId() !== "openrouter") {
+        process.env[MODEL_POLICY_ENV] = next;
+        saveModelMode(next);
+        return { success: true, modelId: agent.getModel() };
+      }
+      const picked = loadProjectSettings().model ?? loadUserSettings().defaultModel;
+      const result = await selectModel(modelAfterModeChange(catalog.entries, chosenModelId, next, picked));
+      if (!result.success) {
+        activePolicy = previous;
+        return { ...result, modelId: chosenModelId };
+      }
+      process.env[MODEL_POLICY_ENV] = next;
+      saveModelMode(next);
+      return { ...result, modelId: chosenModelId };
+    } catch (error) {
+      activePolicy = previous;
+      return { success: false, error: error instanceof Error ? error.message : String(error), modelId: chosenModelId };
+    }
   };
   return {
     models: catalog.entries.map(catalogEntryToModelInfo),
@@ -578,7 +627,8 @@ async function startInteractive(
         nextApiKey,
         currentBaseURL,
         requestedCloudModel,
-        modelPolicy,
+        // The mode the session runs under now: the user may have switched it since startup.
+        sessionModelPolicy(),
         Boolean(model),
       );
       currentApiKey = nextApiKey;
@@ -1621,8 +1671,12 @@ function resolveConfig(options: CliOptions) {
   const freeProvider = providerOption && isFreeProviderId(providerOption) ? providerOption : undefined;
 
   // A model named for another provider (`--provider`) is that provider's id, not a default for the next session.
+  // A local model is saved now; a cloud model once routing accepts it (`configureRemoteProvider`), so a paid model
+  // Free mode refused never becomes the default another agent starts from.
   if (typeof options.model === "string" && !freeProvider) {
-    saveUserSettings({ defaultModel: normalizeModelId(options.model) });
+    if (options.local === true && options.remote !== true)
+      saveUserSettings({ defaultModel: normalizeModelId(options.model) });
+    else pendingDefaultModel = normalizeModelId(options.model);
   }
 
   return {

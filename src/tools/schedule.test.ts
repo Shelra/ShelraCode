@@ -139,5 +139,17 @@ describe("schedule helpers", () => {
       "--max-tool-rounds",
       "123",
     ]);
+    // A schedule made in Free mode runs in Free mode, whatever mode is saved when it runs.
+    expect(
+      mod
+        .buildHeadlessCliArgs({
+          directory: "/repo",
+          instruction: "x",
+          model: "test-model",
+          modelPolicy: "free",
+          maxToolRounds: 1,
+        })
+        .slice(-2),
+    ).toEqual(["--model-policy", "free"]);
   });
 });

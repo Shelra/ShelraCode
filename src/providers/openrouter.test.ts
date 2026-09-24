@@ -121,7 +121,7 @@ describe("upstream provider quarantine", () => {
     expect((bodies[1]?.provider as { ignore?: string[] }).ignore).toEqual(["Novita"]);
   });
 
-  it("reads which model the auto router picked from the stream", async () => {
+  it("reports, with each step, which model the auto router picked for that request", async () => {
     const meta = `"id":"gen-1","object":"chat.completion.chunk","created":1,"model":"vendor-x/picked-model","provider":"VendorX"`;
     const fakeFetch = async () =>
       sseResponse([
@@ -135,18 +135,19 @@ describe("upstream provider quarantine", () => {
       quarantineStorePath: null,
       policy: "mixed",
     });
-    expect(provider.servedModelId?.()).toBeNull();
+    const served: Array<string | undefined> = [];
     const stream = provider.stream({
       modelId: "openrouter/auto",
       system: "s",
       messages: [{ role: "user", content: "hi" }],
       maxSteps: 1,
+      onStepFinish: (event: { servedModelId?: string }) => served.push(event.servedModelId),
     } as never);
     for await (const _event of stream.events) {
       // drained
     }
     await stream.response;
-    expect(provider.servedModelId?.()).toBe("openrouter/vendor-x/picked-model");
+    expect(served).toEqual(["openrouter/vendor-x/picked-model"]);
   });
 
   it("seeds the in-process quarantine from the durable store", () => {
@@ -236,6 +237,12 @@ describe("OpenRouter fallback models", () => {
     await expect(free.generateText({ modelId: "openrouter/auto", prompt: "hi" } as never)).rejects.toThrow(
       "Free mode uses free models only",
     );
+    // A ":free" id the catalog does not list proves nothing about its price (review, 2026-09-24).
+    for (const unlisted of ["openrouter/anthropic/claude-opus-4.1:free", "openrouter/openrouter/auto:free"]) {
+      await expect(free.generateText({ modelId: unlisted, prompt: "hi" } as never)).rejects.toThrow(
+        "Free mode uses free models only",
+      );
+    }
     expect(calls).toHaveLength(0);
 
     const mixed = createOpenRouterProvider("secret-not-printed", {

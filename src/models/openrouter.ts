@@ -108,10 +108,15 @@ function cost(raw: RawOpenRouterModel): CatalogCost {
   const freeRouter = lowerId === "openrouter/free";
   const autoRouter = lowerId === "openrouter/auto" || lowerId === "openrouter/auto-beta";
   const pricingKnown = freeRouter || (!autoRouter && promptValue !== undefined && completionValue !== undefined);
+  // Free only when nothing is billed: reasoning, images, web search and cache reads have prices of their own.
+  const everyPriceZero = Object.values(pricing ?? {}).every((value) => {
+    const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+    return Number.isNaN(parsed) || parsed === 0;
+  });
   const free =
     freeRouter ||
     id.endsWith(":free") ||
-    (!autoRouter && pricingKnown && prompt === 0 && completion === 0 && request === 0);
+    (!autoRouter && pricingKnown && prompt === 0 && completion === 0 && request === 0 && everyPriceZero);
   return {
     prompt,
     completion,
@@ -257,6 +262,13 @@ function normalizedBaseURL(baseURL = OPENROUTER_BASE_URL): string {
   return baseURL.replace(/\/+$/u, "");
 }
 
+let lastCatalog: readonly CatalogEntry[] = [];
+
+/** The catalog this process loaded last (empty before the first load): what tells a free model from a paid one. */
+export function lastOpenRouterCatalog(): readonly CatalogEntry[] {
+  return lastCatalog;
+}
+
 /** Loads a fresh catalog, refreshing over the network and falling back to stale cache offline. */
 export async function fetchOpenRouterCatalog(options: OpenRouterCatalogOptions = {}): Promise<OpenRouterCatalogResult> {
   const now = options.now ?? Date.now;
@@ -264,6 +276,7 @@ export async function fetchOpenRouterCatalog(options: OpenRouterCatalogOptions =
   const cached = await readCache(cachePath, Boolean(options.apiKey));
   const ttlMs = options.ttlMs ?? OPENROUTER_CATALOG_TTL_MS;
   if (cached && now() - Date.parse(cached.fetchedAt) <= ttlMs) {
+    lastCatalog = cached.entries;
     return { entries: cached.entries, fetchedAt: cached.fetchedAt, source: "cache" };
   }
 
@@ -281,17 +294,24 @@ export async function fetchOpenRouterCatalog(options: OpenRouterCatalogOptions =
     const entries = parseOpenRouterModels(await response.json(), Boolean(options.apiKey), fetchedAt);
     if (entries.length === 0) throw new Error("OpenRouter returned no usable models");
     await writeCache(cachePath, { version: 1, fetchedAt, entries });
+    lastCatalog = entries;
     return { entries, fetchedAt, source: "network" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (cached && cached.entries.length > 0) {
+      lastCatalog = cached.entries;
       return { entries: cached.entries, fetchedAt: cached.fetchedAt, source: "stale-cache", error: message };
     }
     return { entries: [], source: "empty", error: message };
   }
 }
 
+/** Any URL on OpenRouter's host, however it is written (`https://openrouter.ai:443/api/v1`, a trailing slash). */
 export function isOpenRouterBaseURL(baseURL: string): boolean {
-  const normalized = normalizedBaseURL(baseURL).toLowerCase();
-  return normalized === OPENROUTER_BASE_URL || normalized === "https://openrouter.ai/api";
+  try {
+    const url = new URL(baseURL);
+    return url.hostname.toLowerCase().replace(/\.$/u, "") === "openrouter.ai";
+  } catch {
+    return false;
+  }
 }

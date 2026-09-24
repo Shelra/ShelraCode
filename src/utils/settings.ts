@@ -9,6 +9,7 @@ import type {
   NormalizedLspSettings,
 } from "../lsp/types";
 import { DEFAULT_MODEL, getEffectiveReasoningEffort, normalizeModelId } from "../models/catalog";
+import { type ModelPolicy, parseModelPolicy } from "../models/routing";
 import {
   API_KEY_ENV,
   BASE_URL_ENV,
@@ -263,6 +264,18 @@ function writeJson(filePath: string, data: unknown): void {
 
 export function loadUserSettings(): UserSettings {
   return readJson<UserSettings>(userSettingsPath()) || {};
+}
+
+/** Where the session's model mode lives for every agent and child process of this run (`MODEL_POLICY_ENV`). */
+export const MODEL_POLICY_ENV = "SHELRA_MODEL_POLICY";
+
+/**
+ * The model mode this process runs under: the session's (the CLI sets `SHELRA_MODEL_POLICY` when it starts and when
+ * the user switches, and a delegation or Telegram agent it spawns inherits it), else the mode saved in the terminal
+ * UI, else Free.
+ */
+export function sessionModelPolicy(): ModelPolicy {
+  return parseModelPolicy(process.env[MODEL_POLICY_ENV]) ?? parseModelPolicy(loadUserSettings().modelMode) ?? "free";
 }
 
 export function normalizeMotionPreference(value: unknown): "full" | "reduced" {

@@ -3,7 +3,7 @@ import { closeSync, promises as fs, openSync } from "fs";
 import os from "os";
 import path from "path";
 import { getProductUserDir } from "../product/identity";
-import { getCurrentModel } from "../utils/settings";
+import { getCurrentModel, sessionModelPolicy } from "../utils/settings";
 
 const SCHEDULES_DIR = path.join(getProductUserDir(os.homedir()), "schedules");
 const SCHEDULE_DAEMON_PID_PATH = path.join(getProductUserDir(os.homedir()), "daemon.pid");
@@ -14,6 +14,8 @@ export interface StoredSchedule {
   instruction: string;
   cron?: string;
   model: string;
+  /** The model mode of the session that created it; a run uses it, so a schedule made in Free mode stays free. */
+  modelPolicy?: string;
   directory: string;
   enabled: boolean;
   maxToolRounds: number;
@@ -58,6 +60,7 @@ interface HeadlessRunOptions {
   instruction: string;
   directory: string;
   model: string;
+  modelPolicy?: string;
   maxToolRounds: number;
   logPath: string;
   env?: NodeJS.ProcessEnv;
@@ -117,6 +120,7 @@ export class ScheduleManager {
       instruction,
       ...(cron ? { cron } : {}),
       model,
+      modelPolicy: sessionModelPolicy(),
       directory,
       enabled: true,
       maxToolRounds: options.maxToolRounds ?? 400,
@@ -132,6 +136,7 @@ export class ScheduleManager {
         instruction: schedule.instruction,
         directory: schedule.directory,
         model: schedule.model,
+        ...(schedule.modelPolicy ? { modelPolicy: schedule.modelPolicy } : {}),
         maxToolRounds: schedule.maxToolRounds,
         logPath: getScheduleRunLogPath(schedule.id),
       });
@@ -418,6 +423,7 @@ export function buildHeadlessCliArgs(options: Omit<HeadlessRunOptions, "logPath"
     options.model,
     "--max-tool-rounds",
     String(options.maxToolRounds),
+    ...(options.modelPolicy ? ["--model-policy", options.modelPolicy] : []),
   ];
 }
 

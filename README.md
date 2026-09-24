@@ -298,10 +298,13 @@ shelra fix the flaky test in src/foo.test.ts
 ShelraCode is cloud-first by default. `shelra models` discovers and prints the
 OpenRouter catalog first, then shows managed local models as a secondary
 catalog. The default model mode is Free: free models only, and a paid model is
-refused however it is asked for. Mixed (`ctrl+f` or `/free` in the terminal UI,
-`--model-policy mixed` on the command line) runs any model, paid or free, and
-without a pick lets OpenRouter's auto router choose; the terminal UI remembers the
-choice. The older paid tiers (`auto`, `economy`, `balanced`, `quality`, `max`)
+refused however it is asked for, by the terminal UI, headless runs, Telegram
+chats, background delegations and schedules alike. Mixed (`/mixed` in the terminal
+UI, `ctrl+f` to switch between the two between turns, `--model-policy mixed` on the
+command line) runs the model you pick, paid or free, and without a pick lets
+OpenRouter's auto router choose; `/free` goes back. The terminal UI remembers the
+choice, and the footer names the model that actually answered ("… · auto" when
+the auto router chose it). The older paid tiers (`auto`, `economy`, `balanced`, `quality`, `max`)
 remain. Use `--local` to opt into the managed local runtime. Search tools are
 capability-gated, while the built-in web research tools are provider-neutral.
 

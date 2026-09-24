@@ -73,12 +73,21 @@ describe("capability-aware model routing", () => {
     expect(route.modelId).toBe("openrouter/auto");
   });
 
-  it("keeps the model when switching to Mixed, and leaves a paid one for the best free model when switching to Free", () => {
+  it("switches modes as a restart in that mode would start", () => {
     const entries = [entry("paid/coder", false, true), entry("free/coder", true, true)];
-    expect(modelAfterModeChange(entries, "openrouter/paid/coder", "mixed")).toBe("openrouter/paid/coder");
+    // Mixed: the model the user picked, or the auto router (no request) when they picked none.
+    expect(modelAfterModeChange(entries, "openrouter/free/coder", "mixed", "openrouter/paid/coder")).toBe(
+      "openrouter/paid/coder",
+    );
+    expect(modelAfterModeChange(entries, "openrouter/free/coder", "mixed")).toBeUndefined();
+    expect(modelAfterModeChange(entries, "openrouter/free/coder", "mixed", "vendor/gone")).toBeUndefined();
+    // Free: a free model stays; a paid one leaves the choice to the free policy's ranking.
     expect(modelAfterModeChange(entries, "openrouter/free/coder", "free")).toBe("openrouter/free/coder");
-    expect(modelAfterModeChange(entries, "openrouter/paid/coder", "free")).toBe("openrouter/free/coder");
     expect(modelAfterModeChange(entries, "openrouter/free", "free")).toBe("openrouter/free");
+    const next = modelAfterModeChange(entries, "openrouter/paid/coder", "free");
+    expect(routeCatalogModel(entries, { requestedModel: next, policy: "free", requiresTools: true }).modelId).toBe(
+      "openrouter/free/coder",
+    );
   });
 
   it("reads a mode from the command line or settings, with paid as another name for Mixed", () => {

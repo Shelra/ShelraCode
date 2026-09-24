@@ -17,6 +17,15 @@ describe("the model the footer shows", () => {
     ).toBe("qwen3-coder:free · free");
   });
 
+  it("says when OpenRouter answered from its own fallback list", () => {
+    expect(
+      answeringModelLabel(
+        { modelId: "openrouter/vendor-a/best:free", servedModelId: "openrouter/vendor-b/second:free" },
+        "openrouter/vendor-a/best:free",
+      ),
+    ).toBe("second:free · fallback");
+  });
+
   it("names a fallback, and nothing when the chosen model answers", () => {
     expect(answeringModelLabel({ modelId: "openrouter/vendor-x/fallback" }, "openrouter/vendor-z/chosen")).toBe(
       "openrouter/vendor-x/fallback",

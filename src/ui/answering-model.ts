@@ -16,14 +16,14 @@ function shortName(modelId: string): string {
 }
 
 /**
- * The footer's name for the model answering, or null when the chosen model is: a fallback shows its own name, and a
- * router shows the model it picked ("Claude Sonnet 4.5 · auto").
+ * The footer's name for the model answering, or null when the chosen model is: a fallback shows its own name, a
+ * router shows the model it picked ("Claude Sonnet 4.5 · auto"), and a model from OpenRouter's server-side fallback
+ * list says so ("Qwen3 Coder · fallback").
  */
 export function answeringModelLabel(answering: AnsweringModel | null, chosenModelId: string): string | null {
   if (!answering) return null;
   if (answering.servedModelId) {
-    const router = ROUTER_LABELS[answering.modelId] ?? shortName(answering.modelId);
-    return `${shortName(answering.servedModelId)} · ${router}`;
+    return `${shortName(answering.servedModelId)} · ${ROUTER_LABELS[answering.modelId] ?? "fallback"}`;
   }
   if (answering.modelId === chosenModelId) return null;
   return getModelInfo(answering.modelId)?.name ?? answering.modelId;

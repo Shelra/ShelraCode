@@ -219,11 +219,13 @@ export class LocalProviderAdapter implements ProviderAdapter {
           stepTokens.seen = true;
         }
         const responseMessages = record(entry?.response)?.messages;
+        const servedModelId = record(entry?.response)?.modelId;
         request.onStepFinish?.({
           stepNumber: stepNumber(event),
           finishReason: finishReason(event),
           usage: stepUsage ?? {},
           ...(Array.isArray(responseMessages) ? { responseMessages } : {}),
+          ...(typeof servedModelId === "string" && servedModelId ? { servedModelId } : {}),
         });
       },
       onFinish: (event: { totalUsage?: unknown }) => {

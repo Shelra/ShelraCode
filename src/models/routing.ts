@@ -277,21 +277,22 @@ export function startupModelRequest(
 }
 
 /**
- * The model a session runs on after its mode changes: Mixed keeps the current one (nothing is spent until the user
- * picks a paid model or the turn falls back to the auto router); Free keeps it only if it is free, and otherwise moves
- * to the model the free policy would start with.
+ * The model a session asks for after its mode changes, as a restart in that mode would: Mixed runs the model the user
+ * picked (`pickedModelId`, the saved choice), or with no pick leaves it to the auto router (`undefined`); Free keeps
+ * the current model if it is free, and otherwise leaves the choice to the free policy (`undefined`: its best free
+ * models, with the free router last).
  */
 export function modelAfterModeChange(
   entries: readonly CatalogEntry[],
   currentModelId: string,
   next: ModelPolicy,
-): string {
-  if (next !== "free") return currentModelId;
+  pickedModelId?: string,
+): string | undefined {
+  if (next !== "free") {
+    const picked = pickedModelId ? resolveCatalogModel(entries, pickedModelId) : undefined;
+    return picked?.id;
+  }
   const current = resolveCatalogModel(entries, currentModelId);
   if (currentModelId === FREE_ROUTER_ID || (current !== undefined && isGuaranteedFree(current))) return currentModelId;
-  return routeCatalogModel(entries, {
-    requestedModel: startupModelRequest(entries, { policy: "free", explicitModelSelection: false }),
-    policy: "free",
-    requiresTools: true,
-  }).modelId;
+  return startupModelRequest(entries, { policy: "free", explicitModelSelection: false });
 }

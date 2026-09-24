@@ -165,8 +165,6 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   private readonly quarantined = new Set<string>();
   private readonly quarantineStorePath: string | null | undefined;
   private lastUpstreamProvider: string | null = null;
-  /** The model OpenRouter says answered the last request: a router picks one per request. */
-  private lastServedModel: string | null = null;
   private readonly policy: ModelPolicy;
   private readonly strictModel: boolean;
 
@@ -214,7 +212,6 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   private sniffingFetch(inner: FetchFunction | undefined): FetchFunction {
     const base: FetchFunction = inner ?? ((input, init) => fetch(input, init));
     return async (input, init) => {
-      this.lastServedModel = null;
       const response = await base(input, init);
       if (!response.body) return response;
       const [forApp, forSniff] = response.body.tee();
@@ -237,8 +234,6 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
         if (done) return;
         buffer += decoder.decode(value, { stream: true });
         const provider = /"provider"\s*:\s*"([^"]+)"/u.exec(buffer)?.[1];
-        const model = /"model"\s*:\s*"([^"]+)"/u.exec(buffer)?.[1];
-        if (model) this.lastServedModel = canonicalModelId(`openrouter/${model}`);
         if (provider) {
           this.lastUpstreamProvider = provider;
           await reader.cancel();
@@ -266,10 +261,6 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
     }
   }
 
-  servedModelId(): string | null {
-    return this.lastServedModel;
-  }
-
   routingNotes(): string[] {
     return [...this.quarantined].map((provider) => `quarantined upstream provider ${provider} (content-less step)`);
   }
@@ -295,15 +286,15 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   /**
    * Free mode never reaches a paid model, whatever asks for it (owner, 2026-09-24): a model named in the picker or on
    * the command line is refused by routing already; this catches every other way in, such as a fallback id from
-   * SHELRA_FALLBACK_MODELS, a custom sub-agent's or a per-mode model, or a caller that skipped routing. With no
-   * catalog entry only the free router and a ":free" id are known to cost nothing.
+   * SHELRA_FALLBACK_MODELS, a custom sub-agent's or a per-mode model, or a caller that skipped routing. Only the free
+   * router and a model the catalog prices at zero pass: a ":free" id the catalog does not list is not trusted.
    */
   private paidModelRefusal(modelId: string): Error | null {
     if (this.policy !== "free") return null;
     const canonical = canonicalModelId(modelId);
     if (canonical === "openrouter/free") return null;
     const entry = resolveCatalogModel(this.entries, canonical);
-    if (entry ? isGuaranteedFree(entry) : canonical.endsWith(":free")) return null;
+    if (entry && isGuaranteedFree(entry)) return null;
     return new Error(paidModelBlockedMessage(entry?.name ?? canonical));
   }
 
@@ -339,7 +330,12 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
         if (!stepProducedOutput && event.finishReason === "stop" && (event.usage.outputTokens ?? 0) > 0) {
           this.quarantineUpstream(`content-less step with ${event.usage.outputTokens} completion tokens`);
         }
-        request.onStepFinish?.(event);
+        // The model that answered, in Shelra's ids ("openrouter/vendor/model"), for the footer and the usage record.
+        request.onStepFinish?.(
+          event.servedModelId
+            ? { ...event, servedModelId: canonicalModelId(`openrouter/${event.servedModelId}`) }
+            : event,
+        );
       },
     });
     return {

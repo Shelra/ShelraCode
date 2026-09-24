@@ -7,12 +7,8 @@ export interface SlashMenuItem {
 
 export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   { id: "models", label: "models", description: "Choose a model", aliases: ["model", "mode"] },
-  {
-    id: "free",
-    label: "free",
-    description: "Free models only, or Mixed: any model, paid or free (ctrl+f)",
-    aliases: ["mixed", "paid"],
-  },
+  { id: "free", label: "free", description: "Free models only, never a paid one (ctrl+f switches)" },
+  { id: "mixed", label: "mixed", description: "Any model you pick, paid or free (ctrl+f switches)", aliases: ["paid"] },
   { id: "plan", label: "plan", description: "The plan and what is left" },
   { id: "diff", label: "diff", description: "Files changed in this session" },
   { id: "checks", label: "checks", description: "Tests, types and lint results" },

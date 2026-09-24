@@ -2178,32 +2178,48 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   }, []);
 
   /** Free ⇄ Mixed (ctrl+f, /free). Free leaves a paid model for the best free one; Mixed keeps the current model. */
-  const toggleModelMode = useCallback(async () => {
-    if (!modelMode || !startupConfig.onSetModelMode) {
-      showNotice("Free and Mixed apply to OpenRouter models");
-      return;
-    }
-    if (switchingModeRef.current) return;
-    switchingModeRef.current = true;
-    const next: ModelMode = modelMode === "free" ? "mixed" : "free";
-    try {
-      const result = await startupConfig.onSetModelMode(next);
-      recordUiEvent(agent.getSessionId(), "mode", {
-        to: next,
-        ...(result.success ? { model: result.modelId } : { error: result.error }),
-      });
-      if (!result.success) {
-        showNotice(result.error ?? "The model mode could not be changed", 4000);
+  /** Switches to `target`, or to the other mode when none is given (ctrl+f). */
+  const toggleModelMode = useCallback(
+    async (target?: ModelMode) => {
+      if (!modelMode || !startupConfig.onSetModelMode) {
+        showNotice("Free and Mixed apply to OpenRouter models");
         return;
       }
-      setModelMode(next);
-      if (result.modelId) setModel(result.modelId);
-      // Short enough for an 80-column footer next to the badge, which already says Free or Mixed.
-      showNotice(next === "mixed" ? "Paid models on" : "Paid models off", 3200);
-    } finally {
-      switchingModeRef.current = false;
-    }
-  }, [agent, modelMode, showNotice, startupConfig.onSetModelMode]);
+      // A running turn keeps the provider it started with, so a switch now would not reach it: the mode changes
+      // between turns only, and the badge never claims a mode the answering model is not under.
+      if (isProcessingRef.current) {
+        showNotice("Switch modes after this turn (esc stops it)", 3600);
+        return;
+      }
+      const next: ModelMode = target ?? (modelMode === "free" ? "mixed" : "free");
+      if (next === modelMode) {
+        showNotice(next === "mixed" ? "Already Mixed: paid models on" : "Already Free: paid models off", 3200);
+        return;
+      }
+      if (switchingModeRef.current) return;
+      switchingModeRef.current = true;
+      try {
+        const result = await startupConfig.onSetModelMode(next);
+        recordUiEvent(agent.getSessionId(), "mode", {
+          to: next,
+          ...(result.success ? { model: result.modelId } : { error: result.error }),
+        });
+        if (!result.success) {
+          showNotice(result.error ?? "The model mode could not be changed", 4000);
+          return;
+        }
+        setModelMode(next);
+        if (result.modelId) setModel(result.modelId);
+        // Short enough for an 80-column footer next to the badge, which already says Free or Mixed.
+        showNotice(next === "mixed" ? "Paid models on" : "Paid models off", 3200);
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : "The model mode could not be changed", 4000);
+      } finally {
+        switchingModeRef.current = false;
+      }
+    },
+    [agent, modelMode, showNotice, startupConfig.onSetModelMode],
+  );
 
   useEffect(
     () => () => {
@@ -2601,6 +2617,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       const isStale = () => activeRunIdRef.current !== runId;
       isProcessingRef.current = true;
       setIsProcessing(true);
+      // A turn starts on the chosen model; the one that answered the last turn is not what answers this one.
+      setAnsweringModel(null);
       setKernelState(null);
       setPublishedPlan(null);
       setTurnError(null);
@@ -2930,6 +2948,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         openSandboxPicker();
         return true;
       }
+      // Typed commands name the mode they want, so repeating one never switches back.
+      if (c === "/free") {
+        void toggleModelMode("free");
+        return true;
+      }
+      if (c === "/mixed" || c === "/paid") {
+        void toggleModelMode("mixed");
+        return true;
+      }
       if (c === "/recap" || c === "/recaps") {
         openRecapPicker();
         return true;
@@ -3049,6 +3076,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       resetToNewSession,
       runHostVerification,
       subAgents,
+      toggleModelMode,
     ],
   );
 
@@ -3066,7 +3094,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           setModelSearchQuery("");
           break;
         case "free":
-          void toggleModelMode();
+          void toggleModelMode("free");
+          break;
+        case "mixed":
+          void toggleModelMode("mixed");
           break;
         case "sandbox":
           openSandboxPicker();
@@ -5365,7 +5396,12 @@ export function ComposerFooter({
   approvalOpen: boolean | "decision";
 }) {
   const inner = Math.max(20, width - 6);
-  const modelLabel = model.length > 26 ? `${model.slice(0, 25)}…` : model;
+  // A long name is cut, never the " · auto" or " · free" that says a router chose it.
+  const split = model.lastIndexOf(" · ");
+  const modelName = split > 0 ? model.slice(0, split) : model;
+  const modelSuffix = split > 0 ? model.slice(split) : "";
+  const nameRoom = Math.max(8, 26 - modelSuffix.length);
+  const modelLabel = `${modelName.length > nameRoom ? `${modelName.slice(0, nameRoom - 1)}…` : modelName}${modelSuffix}`;
   const meter = contextStats ? contextMeterText(contextStats, inner >= 64) : "";
   const modeLabel = modelMode === "mixed" ? "● Mixed" : modelMode === "free" ? "● Free" : "";
   const leftWidth = (modeLabel ? modeLabel.length + 2 : 0) + modelLabel.length + (meter ? meter.length + 2 : 0);

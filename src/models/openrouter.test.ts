@@ -3,7 +3,12 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchOpenRouterCatalog, normalizeOpenRouterModel, parseOpenRouterModels } from "./openrouter";
+import {
+  fetchOpenRouterCatalog,
+  isOpenRouterBaseURL,
+  normalizeOpenRouterModel,
+  parseOpenRouterModels,
+} from "./openrouter";
 
 const rawModel = {
   id: "qwen/qwen3-coder:free",
@@ -129,5 +134,31 @@ describe("OpenRouter model catalog", () => {
     );
     const result = await fetchOpenRouterCatalog({ cachePath, now: () => 1_700_000_100_000 });
     expect(result.entries[0]?.id).toBe("openrouter/free");
+  });
+});
+
+describe("what counts as free and as OpenRouter (Free-mode review, 2026-09-24)", () => {
+  it("calls a model free only when every price it lists is zero", () => {
+    const zero = { prompt: "0", completion: "0", request: "0" };
+    expect(normalizeOpenRouterModel({ id: "vendor/all-zero", pricing: zero })?.cost.free).toBe(true);
+    for (const priced of [{ internal_reasoning: "0.00001" }, { web_search: "0.004" }, { image: "0.001" }]) {
+      expect(
+        normalizeOpenRouterModel({ id: "vendor/reasoning", pricing: { ...zero, ...priced } })?.cost.free,
+        JSON.stringify(priced),
+      ).toBe(false);
+    }
+  });
+
+  it("recognises OpenRouter's host however the URL is written", () => {
+    for (const url of [
+      "https://openrouter.ai/api/v1",
+      "https://openrouter.ai:443/api/v1",
+      "https://OpenRouter.ai/api/v1/",
+    ]) {
+      expect(isOpenRouterBaseURL(url), url).toBe(true);
+    }
+    for (const url of ["https://api.example.com/v1", "https://openrouter.ai.example.com/v1", "not a url"]) {
+      expect(isOpenRouterBaseURL(url), url).toBe(false);
+    }
   });
 });
