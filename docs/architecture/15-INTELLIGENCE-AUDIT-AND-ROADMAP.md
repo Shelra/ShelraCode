@@ -322,6 +322,32 @@ Shelra's six runs cost $1.23. Claude Code logged e-mail addresses to "tell users
 these results: without it the model followed `AGENTS.md` just as well. What the ledger adds is measured
 by the ledger-only battery against `--ablate ledger`.
 
+On the ten-project battery (`shelra-decision-ledger-native-v0.2`, the same conditions, k = 3), Claude
+Code resolved 7, 8 and 8 of 10: it logged the e-mail in all three runs of the sign-up task and stored a
+local time format in all three runs of the snooze task, both rules written in its `CLAUDE.md`, with 7
+false completions in 30 tasks. Codex resolved 10 of 10 three times. Shelra's arms are measured after F4.
+
+### 6.6 F4: the current code against the morning's baseline
+
+Phase F4 of `docs/EXECUTION-PLAN.md`: the core suite on free Nemotron 3 Ultra, three runs of the current
+code (`e9c776e`) against three of the morning's baseline (`7b433b0` with the audit patch), the isolated
+conditions of §6.1, 2026-09-24:
+
+| Code | Resolved | Tokens per task | False completions |
+| --- | --- | --- | --- |
+| Baseline `7b433b0`* | 8, 7, 8 of 8 (23/24) | 190K | 1 |
+| Current `e9c776e` | 7, 7, 7 of 8 (21/24) | 295K | 3 |
+
+False completions are counted by one rule for both arms (the oracle failed and the turn ended with no host
+note, timeout or turn error); every failure in both arms was one, a hidden requirement missed while the
+visible tests passed. Both arms received the same harness rounds (about fifty interrupted streams and
+one requirement audit per task). The current code made 28% more tool calls: in nearly every task its
+model first searched for the tests (`Get-ChildItem -Recurse -Filter "*.test.ts"`, `find`, `grep` of the
+symbol, 45 more such calls in all), which the baseline's path list had shown it, and as every step
+resends the history, 19% more steps cost 55% more tokens. `01c3432` gives a project of at most 40 files
+its file list and a larger one the tests of the files the request names (3.1, amended); it is re-measured
+on the same suite.
+
 ## 7. Memory audit: does Shelra learn?
 
 **Mechanism** `CODE`. Four writers share one deterministic gate (`memory/gate.ts`): the model's
@@ -1068,7 +1094,7 @@ peripheral features and `--autonomous` wait until Phases 0-2 are measured.
 | 2.3 Rollback | done as decided | `2b31039` | a per-turn journal of each file before each attempt; a check that passed after the previous attempt and fails now is named, with the files the attempt changed, and `restore_file` offered | end-to-end test with real tool execution |
 | 2.4 Escalation | partial, as decided | `55f2a5c` | repeated failures raise reasoning effort to the model's top level | scripted test. The model tier waits for Phase 6 |
 | 2.5 Execution-grounded selection | not started | | | |
-| 3.1 Lean context | done | `3be8333` | the packet is the stated checks, the git state and the files the request names; no path overview, no manifest | the audit probe gets exactly `src/agent/agent.ts`; 211 ms on this repository |
+| 3.1 Lean context | done, amended | `3be8333`, `01c3432` | the packet is the stated checks, the git state and the files the request names; a project of at most 40 files also gets its whole file list, a larger one the tests of the files the request names; never file contents or a manifest | the audit probe gets exactly `src/agent/agent.ts`; 211 ms on this repository. Without any list the core suite cost 55% more tokens (§6.6) |
 | 3.2 Measure discovery and long context | not started | | needs categories 1 and 12 | |
 | 4.1 Evidence writes | partial | `cbe3fea` | a turn that ends unverified reflects too, capped at 0.4 confidence and tagged `unverified` | reflection and agent tests |
 | 4.2 Host-assigned provenance (M1) | done | `4e7c928` | `memory_write` can no longer claim `human` | test |
