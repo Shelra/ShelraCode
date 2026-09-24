@@ -136,10 +136,9 @@ function isDirectory(path: string): boolean {
 function projectFiles(root: string): { files: string[]; complete: boolean } {
   const listed = git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
   if (listed?.ok) {
-    // Tool state and dependencies a project forgot to ignore are still not its own files.
-    const files = listed.stdout
-      .split("\0")
-      .filter((file) => file && !file.split("/").some((part) => IGNORED_DIRS.has(part)));
+    // Tool state and dependencies a project forgot to ignore, at its root, are still not its own files. Deeper
+    // down, git's ignore rules already dropped build output: a tracked `src/commands/build/` is source.
+    const files = listed.stdout.split("\0").filter((file) => file && !IGNORED_DIRS.has(file.split("/")[0] ?? ""));
     return { files: [...new Set(files)].sort(), complete: true };
   }
   const walked = listWorkspaceFiles(root);

@@ -149,6 +149,18 @@ describe("host context compiler", () => {
     expect(packet.promptAppendix).toContain("Files in this project (2):\n- package.json\n- src/index.ts");
     expect(packet.promptAppendix).not.toContain(".shelra");
 
+    // Review round 3 (2026-09-24): a folder named like build output below the root is the project's source.
+    const cli = repository("shelra-context-build-command-", {
+      "package.json": '{"name":"fixture"}',
+      "src/commands/build/index.ts": "export const build = 1;\n",
+      "src/commands/build/index.test.ts": "test('build', () => {});\n",
+      "internal/target/target.go": "package target\n",
+      "build/out.js": "console.log(1);\n",
+    });
+    expect(compileContextPacket(cli, "revisa el proyecto").promptAppendix).toContain(
+      "Files in this project (4):\n- internal/target/target.go\n- package.json\n- src/commands/build/index.test.ts\n- src/commands/build/index.ts",
+    );
+
     // Outside git, a folder deeper than the bounded walk goes means the list would be wrong: none is given.
     const deep = scratch("shelra-context-deep-", {
       "pom.xml": "<project/>",
