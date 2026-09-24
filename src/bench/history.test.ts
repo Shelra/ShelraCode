@@ -66,6 +66,17 @@ describe("cleanText", () => {
     expect(text).toContain("<workspace>/01-a");
     expect(text).toContain("<workspace>/02-b");
   });
+
+  it("reduces the repository and its worktrees to <repo>, even under the home folder", () => {
+    const identities = [
+      { home: "C:\\Users\\alice", user: "alice", host: "ALICE-PC", repo: "C:\\Users\\alice\\src\\shelra" },
+    ];
+    const text = cleanText(
+      "C:\\Users\\alice\\src\\shelra\\.shelra\\bench\\manifest.json is missing; c:/users/alice/src/shelra-measure-wt/bench/x too; ~/src/shelra-other stays",
+      identities,
+    );
+    expect(text).toBe("<repo>\\.shelra\\bench\\manifest.json is missing; <repo>/bench/x too; ~/src/shelra-other stays");
+  });
 });
 
 describe("appendRunsToHistory", () => {

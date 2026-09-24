@@ -51,18 +51,38 @@ export interface Identity {
   home: string;
   user: string;
   host: string;
+  /** The repository the run was made from: it and its sibling worktrees (`<name>-…`) read as `<repo>`. */
+  repo?: string;
 }
 
 /** Who must not appear in the file: this user on this machine, under each home a run may have used. */
-export function historyIdentities(extraHomes: readonly (string | undefined)[] = []): Identity[] {
-  const identity = { home: homedir(), user: userInfo().username, host: hostname() };
+export function historyIdentities(extraHomes: readonly (string | undefined)[] = [], repo?: string): Identity[] {
+  const identity: Identity = {
+    home: homedir(),
+    user: userInfo().username,
+    host: hostname(),
+    ...(repo ? { repo } : {}),
+  };
   const homes = [...new Set(extraHomes.filter((home): home is string => Boolean(home) && home !== identity.home))];
   return [identity, ...homes.map((home) => ({ ...identity, home }))];
 }
 
+/** The repository root in either separator style, with an optional worktree suffix. */
+function repoPattern(repo: string): RegExp {
+  const parts = repo
+    .replace(/[\\/]+$/u, "")
+    .split(/[\\/]+/u)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+  return new RegExp(`${parts.join("[\\\\/]+")}(?:-[\\w.-]+)?`, "giu");
+}
+
 export function cleanText(text: string, identities: readonly Identity[]): string {
   let out = text;
-  for (const item of identities) out = redact(out, item);
+  for (const item of identities) {
+    // The repository may live under the home folder: reduce it before the home is.
+    if (item.repo) out = out.replace(repoPattern(item.repo), "<repo>");
+    out = redact(out, item);
+  }
   // A graded workspace path says nothing about the result; keep only its last folder.
   return out.replace(/(?:[A-Za-z]:)?[\\/][^\s"']*[\\/]tasks[\\/](?:run_[\w-]+[\\/])?([^\\/\s"']+)/gu, "<workspace>/$1");
 }
@@ -277,7 +297,7 @@ export function appendRunsToHistory(input: {
   runIds?: readonly string[];
   extraHomes?: readonly (string | undefined)[];
 }): { historyPath: string; runs: number; added: number; replaced: number; fieldCases: number } {
-  const identities = historyIdentities(input.extraHomes);
+  const identities = historyIdentities(input.extraHomes, input.repositoryRoot);
   const historyPath = join(input.repositoryRoot, "bench", "history", "benchmark-history.json");
   const history = loadHistory(historyPath);
   const counts = mergeRuns(

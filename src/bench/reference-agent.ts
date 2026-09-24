@@ -61,6 +61,8 @@ export function runJsonLinesProcess(
       cwd: options.cwd,
       env: options.env,
       windowsHide: true,
+      // Its own process group on POSIX, so a timeout kills the CLI's children too; Windows uses taskkill /T.
+      detached: process.platform !== "win32",
     });
     const finish = (exitCode: number | null) => {
       if (settled) return;

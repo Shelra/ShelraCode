@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   appendBenchmarkEvent,
@@ -483,10 +483,19 @@ function commitTaskState(workspace: string, message: string): void {
   initTaskRepository(workspace, message);
 }
 
-/** Whether a task workspace lives in this run's clean room, and so was created by the bench. */
+/**
+ * Whether a task workspace lives in this run's clean room, and so was created by the bench. Both paths are
+ * resolved through any link, so a junction inside the room that points outside does not pass.
+ */
 function insideCleanRoom(taskRoot: string, runId: string, workspace: string): boolean {
-  const room = resolve(taskRoot, runId);
-  const rel = relative(room, resolve(workspace));
+  const real = (path: string): string => {
+    try {
+      return realpathSync(path);
+    } catch {
+      return resolve(path);
+    }
+  };
+  const rel = relative(real(resolve(taskRoot, runId)), real(workspace));
   return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
