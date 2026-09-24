@@ -172,3 +172,61 @@ describe("destructiveCommandReason on Windows' default shell and through wrapper
     }
   });
 });
+
+describe("destructiveCommandReason, the review of its own round-3 rewrite", () => {
+  const B = String.fromCharCode(92);
+
+  it("flags removals behind control keywords, blocks, loops, xargs -I, positional powershell and computed variables", () => {
+    for (const command of [
+      `if (Test-Path ..${B}victim) { Remove-Item ..${B}victim -Recurse -Force }`,
+      `try { Remove-Item ..${B}victim -Recurse -Force } catch {}`,
+      `if (Test-Path x) { echo hi } else { Remove-Item ..${B}victim -Recurse -Force }`,
+      "if [ -d ../victim ]; then rm -rf ../victim; fi",
+      'for d in ../victim; do rm -rf "$d"; done',
+      `foreach ($d in '..${B}victim') { Remove-Item $d -Recurse -Force }`,
+      "find .. -name victim | xargs -I {} rm -rf {}",
+      "ls .. | xargs -I% rm -rf %",
+      `powershell "Remove-Item -Recurse -Force ..${B}victim"`,
+      `powershell -NoProfile -ExecutionPolicy Bypass "Remove-Item -Recurse -Force ..${B}victim"`,
+      "$d = Join-Path .. victim; Remove-Item $d -Recurse -Force",
+      `$d = Resolve-Path ..${B}victim; Remove-Item $d -Recurse -Force`,
+      `$d = "$PWD${B}..${B}victim"; Remove-Item $d -Recurse -Force`,
+      "$d = $env:TEMP; Remove-Item $d -Recurse -Force",
+      "$d = $HOME; Remove-Item $d -Recurse -Force",
+      'D=$HOME; rm -rf "$D"',
+      "Get-ChildItem .. | ForEach-Object { if ($_.Name -eq 'victim') { Remove-Item $_.FullName -Recurse -Force } }",
+      "gci .. | ? { $_.Name -eq 'victim' } | % { ri $_ -Recurse }",
+      'cmd /c "cd /d .. && rmdir /s /q shelra"',
+      "find . | xargs rm -rf",
+      "find . -print0 | xargs -0 rm -rf",
+      "find . -name .git | xargs rm -rf",
+      "find . ../other -name x | xargs rm -rf",
+    ]) {
+      expect(reason(command), command).not.toBeNull();
+    }
+  });
+
+  it("leaves ordinary in-project work alone, the forms the rewrite began to refuse included", () => {
+    for (const command of [
+      "if (Test-Path dist) { Remove-Item dist -Recurse -Force }",
+      "if [ -d dist ]; then rm -rf dist; fi",
+      "$d = Join-Path $PWD dist; Remove-Item $d -Recurse -Force",
+      '$d = "dist"; Remove-Item $d -Recurse -Force',
+      "foreach ($d in 'dist','build') { Remove-Item $d -Recurse -Force }",
+      'for d in dist build; do rm -rf "$d"; done',
+      "find src -name '*.pyc' | xargs -I {} rm -rf {}",
+      "find . -name __pycache__ -type d | xargs rm -rf",
+      "find . -type d -name node_modules -prune | xargs rm -rf",
+      "find . -name '*.pyc' -print0 | xargs -0 rm -rf",
+      "find . -name node_modules -prune -exec rm -rf {} +",
+      "Get-ChildItem src | Where-Object { $_.Name -like '*.tmp' } | ForEach-Object { Remove-Item $_.FullName -Recurse }",
+      'cmd /c "cd /d frontend && rmdir /s /q node_modules"',
+      'powershell -NoProfile "Get-ChildItem"',
+      "powershell -File build.ps1",
+      "try { bun test } catch { echo failed }",
+      "rm -rf ./dist",
+    ]) {
+      expect(reason(command), command).toBeNull();
+    }
+  });
+});

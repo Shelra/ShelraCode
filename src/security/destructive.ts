@@ -68,7 +68,7 @@ function variableValue(name: string, variables: Variables): string | undefined {
  * A path as the shell would resolve it from `cwd`, the home folder's spellings and variables included; null
  * when it depends on a variable whose value is not known here, or on a folder the command did not spell out.
  */
-function resolveTarget(bare: string, cwd: string | null, variables: Variables): string | null {
+function resolveTarget(bare: string, cwd: string | null, variables: Variables, depth = 0): string | null {
   if (HOME_TOKENS.has(bare.toLowerCase())) return homedir();
   if (HOME_PREFIX_RE.test(bare)) return resolve(homedir(), bare.replace(/^[^\\/]+[\\/]/u, ""));
   const variable = VARIABLE_PREFIX_RE.exec(bare);
@@ -77,10 +77,10 @@ function resolveTarget(bare: string, cwd: string | null, variables: Variables): 
     const rest = bare.slice(variable[0].length).replace(/^[\\/]/u, "");
     if (name.toLowerCase() === "pwd") return cwd === null ? null : resolve(cwd, rest);
     const value = variableValue(name, variables);
-    if (!value) return null;
-    const base = unquote(value);
-    if (isAbsolute(base)) return resolve(base, rest);
-    return cwd === null ? null : resolve(cwd, base, rest);
+    if (!value || depth >= 4) return null;
+    // The value is itself a path the shell expands (`$d = "$env:TEMP\x"`, `D=$HOME`), not a literal folder name.
+    const base = resolveTarget(unquote(value), cwd, variables, depth + 1);
+    return base === null ? null : resolve(base, rest);
   }
   if (isAbsolute(bare)) return bare;
   return cwd === null ? null : resolve(cwd, bare);
@@ -171,6 +171,18 @@ const FOR_EACH = new Set(["foreach-object", "foreach", "%"]);
 /** `find` tests that narrow what `-delete` removes. */
 const FIND_ACTIONS = new Set(["-delete", "-depth", "-print", "-print0", "-exec", "-execdir", "-ok"]);
 
+/** A `find`'s search roots (the operands before its first test) and whether a test narrows what it lists. */
+function findRoots(rawArgs: readonly string[]): { roots: string[]; narrowed: boolean } {
+  const firstTest = rawArgs.findIndex((arg) => /^[-(!]/u.test(arg));
+  const roots = firstTest < 0 ? [...rawArgs] : rawArgs.slice(0, firstTest);
+  const narrowed = lower(rawArgs.slice(roots.length)).some((arg) => arg.startsWith("-") && !FIND_ACTIONS.has(arg));
+  return { roots, narrowed };
+}
+
+function isWholeProject(outside: string | null): boolean {
+  return outside === "everything in the project" || outside === "the whole project";
+}
+
 function reasonFor(rawTokens: readonly string[], where: Where, piped: readonly string[]): string | null {
   const tokens = rawTokens.filter((token) => !/^\d?>/u.test(token));
   const name = program(tokens[0]);
@@ -234,13 +246,11 @@ function reasonFor(rawTokens: readonly string[], where: Where, piped: readonly s
     name === "find" &&
     (args.includes("-delete") || args.some((arg, index) => arg === "-exec" && program(args[index + 1]) === "rm"))
   ) {
-    const firstTest = rawArgs.findIndex((arg) => /^[-(!]/u.test(arg));
-    const roots = firstTest < 0 ? rawArgs : rawArgs.slice(0, firstTest);
-    const narrowed = args.slice(roots.length).some((arg) => arg.startsWith("-") && !FIND_ACTIONS.has(arg));
+    const { roots, narrowed } = findRoots(rawArgs);
     for (const root of roots.length > 0 ? roots : ["."]) {
       const outside = outsideTarget(root, where);
       if (!outside) continue;
-      if (narrowed && (outside === "everything in the project" || outside === "the whole project")) continue;
+      if (narrowed && isWholeProject(outside)) continue;
       return `deletes files under ${outside}`;
     }
     return null;
@@ -269,8 +279,12 @@ const PREFIX_COMMANDS: Record<string, { valued: RegExp; assignments?: boolean; o
   env: { valued: /^(?:-u|--unset|-C|--chdir|-S)$/u, assignments: true },
   // The first operand is the duration.
   timeout: { valued: /^(?:-s|--signal|-k|--kill-after)$/u, operands: 1 },
-  xargs: { valued: /^-[IdLnPsE]$/u },
+  xargs: { valued: /^-[IJdLnPsE]$/u },
 };
+
+/** powershell.exe options that take a value. */
+const POWERSHELL_VALUED =
+  /^-(?:ex|ep|exec|executionpolicy|w|win|windowstyle|o|of|outputformat|i|if|inputformat|v|version|psconsolefile|config|configurationname)$/u;
 
 /**
  * The command a wrapper runs: `cmd /c …`, `bash -c "…"`, `powershell -Command …` (or its base64
@@ -295,7 +309,15 @@ function unwrap(tokens: readonly string[]): { command: string; fromPipe: boolean
       return { command: Buffer.from(rest[encoded + 1] as string, "base64").toString("utf16le"), fromPipe: false };
     }
     const index = lowered.findIndex((token) => /^-(?:c|command)$/u.test(token));
-    return index >= 0 ? { command: rest.slice(index + 1).join(" "), fromPipe: false } : null;
+    if (index >= 0) return { command: rest.slice(index + 1).join(" "), fromPipe: false };
+    // Windows PowerShell 5.1 reads its first positional argument as -Command (pwsh 7 reads it as -File).
+    if (name !== "powershell") return null;
+    let first = 0;
+    while (first < rest.length && lowered[first]?.startsWith("-")) {
+      if (/^-(?:f|file)$/u.test(lowered[first] as string)) return null;
+      first += POWERSHELL_VALUED.test(lowered[first] as string) ? 2 : 1;
+    }
+    return first < rest.length ? { command: rest.slice(first).join(" "), fromPipe: false } : null;
   }
   if (name === "iex" || name === "invoke-expression") {
     const command = rest.filter((token) => !/^-command$/iu.test(token)).join(" ");
@@ -305,8 +327,12 @@ function unwrap(tokens: readonly string[]): { command: string; fromPipe: boolean
   if (!prefix) return null;
   let index = 0;
   let operands = prefix.operands ?? 0;
+  // xargs -I {} / -J %: the placeholder stands for each piped item.
+  let placeholder: string | null = null;
   while (index < rest.length) {
     const token = rest[index] as string;
+    if (name === "xargs" && /^-[IJ]$/u.test(token)) placeholder = rest[index + 1] ?? null;
+    else if (name === "xargs" && /^-[IJ].+$/u.test(token)) placeholder = token.slice(2);
     if (token.startsWith("-")) index += prefix.valued.test(token) ? 2 : 1;
     else if (prefix.assignments && /^\w+=/u.test(token)) index += 1;
     else if (operands > 0) {
@@ -314,23 +340,113 @@ function unwrap(tokens: readonly string[]): { command: string; fromPipe: boolean
       index += 1;
     } else break;
   }
-  return index < rest.length ? { command: rest.slice(index).join(" "), fromPipe: name === "xargs" } : null;
+  const command = rest.slice(index).map((token) => (placeholder !== null && token === placeholder ? "$_" : token));
+  return index < rest.length ? { command: command.join(" "), fromPipe: name === "xargs" } : null;
 }
 
 /** A variable assignment on its own (`OUT=dist`, `export OUT=dist`, `$out = "dist"`, `set OUT=dist`). */
 function assignment(tokens: readonly string[]): Array<[string, string]> | null {
   const first = tokens[0] ?? "";
   const powershell = /^\$(?:env:)?(\w+)$/iu.exec(first);
-  if (powershell && tokens[1] === "=") return [[powershell[1] as string, unquote(tokens.slice(2).join(" "))]];
+  if (powershell && tokens[1] === "=") return [[powershell[1] as string, assignedValue(tokens.slice(2))]];
   const words = ["export", "set", "declare", "local"].includes(first.toLowerCase()) ? tokens.slice(1) : tokens;
   if (words.length === 0 || !words.every((token) => /^\w+=/u.test(token))) return null;
   return words.map((token) => {
     const at = token.indexOf("=");
-    return [token.slice(0, at), unquote(token.slice(at + 1))];
+    return [token.slice(0, at), assignedValue([token.slice(at + 1)])];
   });
 }
 
+/**
+ * What an assignment stores: a literal path as written, `Join-Path a b` as `a/b`, and "" (a value this
+ * guard cannot know) for any other command or expression (`Resolve-Path ..\x`, `$(dirname "$PWD")`).
+ */
+function assignedValue(words: readonly string[]): string {
+  const [head = "", ...rest] = words;
+  if (head.toLowerCase() === "join-path") {
+    const parts = rest.filter((word) => !word.startsWith("-")).map(unquote);
+    return parts.length === 2 ? `${parts[0]}/${parts[1]}` : "";
+  }
+  if (words.length !== 1 || /^(?:\$?\(|`)/u.test(head)) return "";
+  return unquote(head);
+}
+
+/**
+ * A loop over a list (`foreach ($d in 'dist','build')`, `for d in dist build`): its variable, and the items
+ * when every one is a plain literal; null items when one is computed, so the variable stays unknown.
+ */
+function loopHeader(tokens: readonly string[]): { name: string; items: string[] | null } | null {
+  const keyword = (tokens[0] ?? "").toLowerCase();
+  const powershell = keyword === "foreach" ? /^\(\$(\w+)$/u.exec(tokens[1] ?? "") : null;
+  const posix = keyword === "for" && /^\w+$/u.test(tokens[1] ?? "") ? [tokens[1], tokens[1]] : null;
+  const variable = (powershell ?? posix)?.[1];
+  if (!variable || (tokens[2] ?? "").toLowerCase() !== "in") return null;
+  const items = tokens
+    .slice(3)
+    .join(",")
+    .replace(/^@?\(|\)$/gu, "")
+    .split(",")
+    .map((item) => unquote(item.trim()))
+    .filter(Boolean);
+  const literal = items.length > 0 && items.every((item) => !/[$(`]/u.test(item));
+  return { name: variable, items: literal ? items : null };
+}
+
 const MAX_WRAPPING = 4;
+
+/** Words that open or continue a compound command; the command after them is what runs. */
+const CONTROL_KEYWORDS = new Set([
+  "if",
+  "elif",
+  "elseif",
+  "else",
+  "then",
+  "do",
+  "while",
+  "until",
+  "try",
+  "catch",
+  "finally",
+  "!",
+]);
+
+/**
+ * A simple command's `{ … }` blocks as commands of their own, with leading control keywords dropped:
+ * `if (Test-Path x) { Remove-Item x -Recurse }` → `(Test-Path x)`, `Remove-Item x -Recurse`; `then rm -rf x` →
+ * `rm -rf x`. `${VAR}` and find's `{}` are not blocks.
+ */
+function blockSegments(simple: readonly string[]): Array<{ tokens: string[]; inBlock: boolean }> {
+  const segments: Array<{ tokens: string[]; inBlock: boolean }> = [{ tokens: [], inBlock: false }];
+  const cut = () => segments.push({ tokens: [], inBlock: true });
+  const add = (token: string) => (segments.at(-1) as { tokens: string[] }).tokens.push(token);
+  for (const token of simple) {
+    if (token === "{}" || token.includes("${") || token.startsWith("@{")) {
+      add(token);
+      continue;
+    }
+    let body = token;
+    const open = body.indexOf("{");
+    if (open >= 0) {
+      if (open > 0) add(body.slice(0, open));
+      cut();
+      body = body.slice(open + 1);
+    }
+    let closes = 0;
+    while (body.endsWith("}")) {
+      body = body.slice(0, -1);
+      closes += 1;
+    }
+    if (body) add(body);
+    for (let index = 0; index < closes; index += 1) cut();
+  }
+  return segments
+    .map(({ tokens, inBlock }) => {
+      let start = 0;
+      while (start < tokens.length && CONTROL_KEYWORDS.has((tokens[start] as string).toLowerCase())) start += 1;
+      return { tokens: tokens.slice(start), inBlock };
+    })
+    .filter(({ tokens }) => tokens.length > 0);
+}
 
 function lineReason(command: string, start: Where, depth: number, inherited: readonly string[]): string | null {
   // A `cd` earlier in the same command line moves where later relative paths point.
@@ -338,7 +454,18 @@ function lineReason(command: string, start: Where, depth: number, inherited: rea
   const stack: Array<string | null> = [];
   // What a listing command in the pipeline named, for a removal that takes its targets from the pipe.
   let piped: string[] = [...inherited];
-  for (const simple of splitShellCommands(command)) {
+  // Loop variables bound to a literal list: a use of one stands for every item.
+  const loops = new Map<string, string>();
+  for (const { tokens: written, inBlock } of splitShellCommands(command).flatMap(blockSegments)) {
+    const simple = written.map((token) => {
+      const variable = /^\$\{?(\w+)\}?$/u.exec(token);
+      return (variable && loops.get((variable[1] as string).toLowerCase())) ?? token;
+    });
+    const loop = loopHeader(simple);
+    if (loop) {
+      if (loop.items) loops.set(loop.name.toLowerCase(), loop.items.join(","));
+      continue;
+    }
     const assigned = assignment(simple);
     if (assigned) {
       for (const [key, value] of assigned) where.variables.set(key.toLowerCase(), value);
@@ -350,7 +477,11 @@ function lineReason(command: string, start: Where, depth: number, inherited: rea
     const name = program(tokens[0]);
     if (CHANGE_DIRECTORY.has(name)) {
       // `cd`, `cd ~` and `cd $HOME` go home; `cd -P dir` and `cd -- dir` still go to dir; `cd -` is unknown.
-      const target = tokens.slice(1).find((token) => !token.startsWith("-"));
+      const operands = tokens.slice(1).filter((token) => !token.startsWith("-"));
+      // cmd's `cd /d <dir>` also changes drive: the switch is not the folder (a lone `/d` still is one).
+      const cmdDrive =
+        (name === "cd" || name === "chdir") && operands.length > 1 && operands[0]?.toLowerCase() === "/d";
+      const target = cmdDrive ? operands[1] : operands[0];
       if (name === "pushd" || name === "push-location") stack.push(where.cwd);
       if (target !== undefined) where.cwd = resolveTarget(unquote(target), where.cwd, where.variables);
       else if (tokens.slice(1).includes("-")) where.cwd = null;
@@ -386,9 +517,20 @@ function lineReason(command: string, start: Where, depth: number, inherited: rea
     }
     const reason = reasonFor(tokens, where, piped);
     if (reason) return reason;
+    // A block's body runs on what the pipe handed its head (`? { … }`, `% { … }`); it does not replace it.
+    if (inBlock) continue;
     if (LISTING_COMMANDS.has(name)) {
       const named = tokens.slice(1).filter((token) => !token.startsWith("-") && !token.startsWith("/"));
       piped = named.length > 0 ? named : ["."];
+      if (name === "find") {
+        // `find . -name X | xargs rm -rf` removes what the tests matched, not the project: a narrowed find
+        // hands on its other roots and its test values (`.git` stays guarded), never the project itself.
+        const { roots, narrowed } = findRoots(tokens.slice(1));
+        if (narrowed) {
+          const whole = new Set(roots.filter((root) => isWholeProject(outsideTarget(root, where))));
+          piped = named.filter((token) => !whole.has(token));
+        }
+      }
     } else if (!PASS_THROUGH_COMMANDS.has(name)) {
       piped = [];
     }
