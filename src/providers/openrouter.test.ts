@@ -229,6 +229,49 @@ describe("OpenRouter fallback models", () => {
     expect(calls.length).toBeGreaterThan(0);
   });
 
+  it("never lets OpenRouter fall back to a paid model on its own side in Free mode", async () => {
+    // A key fallback after a switch from Mixed to Free can carry the Mixed route's candidates.
+    const bodies: Array<{ models?: string[] }> = [];
+    const fakeFetch = async (_input: unknown, init?: { body?: unknown }) => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ error: { message: "bad request" } }), { status: 400 });
+    };
+    const paid: CatalogEntry = {
+      ...entry,
+      id: "openrouter/openai/gpt-6-luna-pro",
+      cost: { prompt: 0.0000001, completion: 0.0000005, free: false },
+      state: { kind: "cloud", providerModelId: "openai/gpt-6-luna-pro", apiKeyConfigured: true, notes: [] },
+    };
+    const send = async (policy: "free" | "mixed") => {
+      const provider = createOpenRouterProvider("secret-not-printed", {
+        entries: [entry, paid],
+        modelId: entry.id,
+        fallbackModels: [paid.id, "openrouter/free"],
+        fetch: fakeFetch as never,
+        quarantineStorePath: null,
+        policy,
+      });
+      const stream = provider.stream({
+        modelId: entry.id,
+        system: "s",
+        messages: [{ role: "user", content: "hi" }],
+        maxSteps: 1,
+      } as never);
+      try {
+        for await (const _event of stream.events) {
+          // drained
+        }
+        await stream.response;
+      } catch {
+        // The fake endpoint answers 400; only the body that left matters here.
+      }
+      return bodies.at(-1)?.models;
+    };
+
+    expect(await send("free")).toEqual(["openrouter/free"]);
+    expect(await send("mixed")).toEqual(["openai/gpt-6-luna-pro", "openrouter/free"]);
+  });
+
   it("bounds the auto router by the policy's cost tier", () => {
     expect(buildOpenRouterRequestBody({ model: "openrouter/auto" }, { policy: "economy" })).toMatchObject({
       plugins: [{ id: "auto-router", cost_tier: "low" }],

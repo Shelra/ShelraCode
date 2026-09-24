@@ -200,6 +200,8 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
         transformRequestBody: (body) =>
           buildOpenRouterRequestBody(body, {
             ...options,
+            // OpenRouter moves to these ids on its own side, past the check on the requested model.
+            fallbackModels: options.fallbackModels?.filter((id) => this.paidModelRefusal(id) === null),
             ignoreProviders: [...(options.ignoreProviders ?? []), ...this.quarantined],
           }),
       },

@@ -353,10 +353,14 @@ async function configureRemoteProvider(
   agent.setProviderFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())));
   // Switching the mode: Mixed keeps the current model (nothing is spent until the user picks a paid one or the
   // turn falls back to the auto router); Free leaves a paid model for the best free one. The choice is saved.
+  // A switch that cannot find a model keeps the mode and the model as they were, so the session never runs a paid
+  // model while it says Free.
   const setPolicy = async (next: ModelPolicy): Promise<{ success: boolean; error?: string; modelId?: string }> => {
+    const previous = activePolicy;
     activePolicy = next;
-    saveUserSettings({ modelMode: next === "free" ? "free" : "mixed" });
     const result = await selectModel(modelAfterModeChange(catalog.entries, chosenModelId, next));
+    if (!result.success) activePolicy = previous;
+    else saveUserSettings({ modelMode: next === "free" ? "free" : "mixed" });
     return { ...result, modelId: chosenModelId };
   };
   return {
