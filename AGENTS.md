@@ -105,7 +105,11 @@ idle budget after which a silent model stream is aborted and the step retried. O
 keeps them whole; the plan and sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
 What the resilience rule swallows (a failing memory write, checkpoint, index update, recap or hook) is appended to
 `~/.shelra/logs/swallowed-errors.jsonl` (`src/utils/diagnostics.ts`; `SHELRA_DIAGNOSTICS_LOG` names another file
-or `off`; Vitest runs with it off).
+or `off`; Vitest runs with it off). Every turn, in the terminal UI or headless, is recorded in
+`~/.shelra/logs/sessions/<session>.jsonl`: the request, the model that answered (a fallback, the model a router
+picked), host notes, tool calls and results, text and the verdict, with keys redacted, kept 14 days
+(`src/utils/session-trace.ts`; `SHELRA_TRACE` names another folder or `off`; off under test runners).
+`shelra trace` prints the latest session (`--follow` live, `--list`, `--full`, `--json`, `--last <n>`).
 
 ## Repository layout notes
 

@@ -133,6 +133,7 @@ import type {
   WorkspaceInfo,
 } from "../types/index";
 import { recordSwallowedError } from "../utils/diagnostics";
+import { startTurnTrace } from "../utils/session-trace";
 import {
   type CustomSubagentConfig,
   getCurrentModel,
@@ -177,6 +178,7 @@ import {
 } from "./prompts";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
 import { extractRequirements, isRequirementDense } from "./requirements";
+import { isOutsideProject } from "./scratch";
 import {
   describeDelegatedEvidence,
   describeVerificationEvidence,
@@ -2382,7 +2384,34 @@ export class Agent {
     });
   }
 
+  /** One turn, recorded in the session's local trace (`shelra trace`, `src/utils/session-trace.ts`). */
   async *processMessage(
+    userMessage: string,
+    observer?: ProcessMessageObserver,
+  ): AsyncGenerator<StreamChunk, void, unknown> {
+    const cwd = this.bash.getRootCwd();
+    const trace = startTurnTrace({
+      sessionId: this.session?.id ?? null,
+      cwd,
+      model: this.modelId,
+      mode: this.mode,
+      request: userMessage,
+      outsideProject: isOutsideProject(cwd),
+    });
+    try {
+      for await (const chunk of this.runTurn(userMessage, observer)) {
+        trace.chunk(chunk);
+        yield chunk;
+      }
+    } catch (error) {
+      trace.error(error);
+      throw error;
+    } finally {
+      trace.end();
+    }
+  }
+
+  private async *runTurn(
     userMessage: string,
     observer?: ProcessMessageObserver,
   ): AsyncGenerator<StreamChunk, void, unknown> {

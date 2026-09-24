@@ -126,6 +126,8 @@ command and its result. Anything you could not check is reported as not verified
 - Behavior that needs a real model: a headless run (`bun run src/index.ts -p "…" --format json`) in a temp directory
   outside the repo, with `HOME`/`USERPROFILE` pointed at a scratch directory if settings or memory could change. Real
   runs spend the owner's OpenRouter quota: keep them few and say how many you ran. Never run two benchmarks at once.
+- What the owner saw in their own session: read its trace (`bun run src/index.ts trace`, `--list`, `--follow`,
+  `--full`) before asking them to paste it; the session database (`~/.shelra/shelra.db`) holds the transcript.
 
 ## Gotchas
 

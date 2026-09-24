@@ -2082,6 +2082,62 @@ program
     process.exitCode = result.exitCode;
   });
 
+program
+  .command("trace [session]")
+  .description(
+    "Show what a session did, turn by turn, from its local trace (~/.shelra/logs/sessions): the latest session by default",
+  )
+  .option("--list", "list the recorded sessions, newest first")
+  .option("--follow", "keep printing new events as the session goes on")
+  .option("--full", "print whole fields instead of one line each")
+  .option("--json", "print the raw events")
+  .option("--last <n>", "print only the last n events")
+  .action(
+    async (
+      session: string | undefined,
+      options: { list?: boolean; follow?: boolean; full?: boolean; json?: boolean; last?: string },
+    ) => {
+      const { formatTraceEvent, listTraces, readTrace, traceDir } = await import("./utils/session-trace");
+      const traces = listTraces();
+      if (options.list) {
+        for (const trace of traces.slice(0, 30)) {
+          const events = readTrace(trace.path);
+          const first = events.find((event) => event.kind === "turn");
+          const turns = events.filter((event) => event.kind === "turn").length;
+          console.log(
+            `${trace.updatedAt.toISOString().slice(0, 19).replace("T", " ")}  ${trace.session}  ${turns} turn(s)  ${String(first?.cwd ?? "")}`,
+          );
+        }
+        if (traces.length === 0) console.log(`No traces in ${traceDir() ?? "(tracing is off: SHELRA_TRACE=off)"}.`);
+        return;
+      }
+      const trace = session ? traces.find((entry) => entry.session.startsWith(session)) : traces[0];
+      if (!trace) {
+        console.error(
+          session ? `No trace for session ${session}.` : `No traces in ${traceDir() ?? "(tracing is off)"}.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const print = (events: ReturnType<typeof readTrace>) => {
+        for (const event of events)
+          console.log(options.json ? JSON.stringify(event) : formatTraceEvent(event, options.full === true));
+      };
+      let events = readTrace(trace.path);
+      const last = options.last ? Number.parseInt(options.last, 10) : undefined;
+      if (!options.json) console.log(`Session ${trace.session} · ${trace.path}`);
+      print(last && last > 0 ? events.slice(-last) : events);
+      if (!options.follow) return;
+      let seen = events.length;
+      for (;;) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+        events = readTrace(trace.path);
+        if (events.length > seen) print(events.slice(seen));
+        seen = events.length;
+      }
+    },
+  );
+
 const authCommand = program.command("auth").description("Manage provider credentials in ~/.shelra/auth.json");
 authCommand
   .command("openrouter <apiKey>")

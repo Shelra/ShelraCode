@@ -341,6 +341,32 @@ describe("a failing model connection never ends the turn", () => {
     ]);
   });
 
+  it("records the turn in the session trace that `shelra trace` reads", async () => {
+    const previousTrace = process.env.SHELRA_TRACE;
+    const dir = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-trace-"));
+    process.env.SHELRA_TRACE = dir;
+    try {
+      const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(180_000) }] };
+      const provider = new ScriptedProvider([stall, stall, answer("Answered by the fallback.")], ["fallback-model"]);
+      await run(provider, "Explain the project");
+
+      const { listTraces, readTrace } = await import("../utils/session-trace");
+      const events = readTrace(listTraces(dir)[0]?.path ?? "");
+      expect(events[0]).toMatchObject({ kind: "turn", request: "Explain the project", model: "primary-model" });
+      expect(events.filter((event) => event.kind === "model").map((event) => event.model)).toEqual([
+        "primary-model",
+        "fallback-model",
+      ]);
+      expect(events.some((event) => event.kind === "notice" && String(event.text).includes("continuing with"))).toBe(
+        true,
+      );
+      expect(events.at(-1)?.kind).toBe("end");
+    } finally {
+      if (previousTrace === undefined) delete process.env.SHELRA_TRACE;
+      else process.env.SHELRA_TRACE = previousTrace;
+    }
+  });
+
   it("says what a paid fallback costs when it switches to one", async () => {
     const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(180_000) }] };
     const provider = new ScriptedProvider([stall, stall, answer("Paid answer.")], ["paid-model"]);
