@@ -252,8 +252,11 @@ export interface PaymentPrecheck {
 }
 
 export interface StreamChunk {
-  type: "content" | "tool_calls" | "tool_result" | "tool_approval_request" | "done" | "error" | "reasoning";
+  type: "content" | "tool_calls" | "tool_result" | "tool_approval_request" | "done" | "error" | "reasoning" | "model";
   content?: string;
+  /** `model`: the model the turn now runs on, and, for a router, the model that answered. */
+  modelId?: string;
+  servedModelId?: string;
   toolCalls?: ToolCall[];
   toolCall?: ToolCall;
   toolResult?: ToolResult;

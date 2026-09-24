@@ -121,6 +121,34 @@ describe("upstream provider quarantine", () => {
     expect((bodies[1]?.provider as { ignore?: string[] }).ignore).toEqual(["Novita"]);
   });
 
+  it("reads which model the auto router picked from the stream", async () => {
+    const meta = `"id":"gen-1","object":"chat.completion.chunk","created":1,"model":"vendor-x/picked-model","provider":"VendorX"`;
+    const fakeFetch = async () =>
+      sseResponse([
+        `{${meta},"choices":[{"index":0,"delta":{"content":"hi","role":"assistant"},"finish_reason":null}]}`,
+        `{${meta},"choices":[{"index":0,"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`,
+      ]);
+    const provider = createOpenRouterProvider("secret-not-printed", {
+      entries: [entry],
+      modelId: "openrouter/auto",
+      fetch: fakeFetch as never,
+      quarantineStorePath: null,
+      policy: "mixed",
+    });
+    expect(provider.servedModelId?.()).toBeNull();
+    const stream = provider.stream({
+      modelId: "openrouter/auto",
+      system: "s",
+      messages: [{ role: "user", content: "hi" }],
+      maxSteps: 1,
+    } as never);
+    for await (const _event of stream.events) {
+      // drained
+    }
+    await stream.response;
+    expect(provider.servedModelId?.()).toBe("openrouter/vendor-x/picked-model");
+  });
+
   it("seeds the in-process quarantine from the durable store", () => {
     const dir = mkdtempSync(join(tmpdir(), "shelra-or-quarantine-"));
     const path = join(dir, "provider-quarantine.json");

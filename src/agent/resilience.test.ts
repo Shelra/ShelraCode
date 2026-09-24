@@ -321,6 +321,26 @@ describe("a failing model connection never ends the turn", () => {
     expect(text).toContain("Answered by the fallback.");
   });
 
+  it("tells the UI which model answers: the fallback it moved to, and the model a router picked", async () => {
+    // Seen live 2026-09-24: the footer kept showing the chosen model while the auto router billed another.
+    const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(180_000) }] };
+    const provider = Object.assign(
+      new ScriptedProvider([stall, stall, answer("Routed answer.")], ["openrouter/auto"]),
+      {
+        servedModelId(this: ScriptedProvider): string | null {
+          return this.requests.at(-1)?.modelId === "openrouter/auto" ? "openrouter/vendor-x/picked" : null;
+        },
+      },
+    );
+    const { chunks } = await run(provider);
+
+    expect(chunks.filter((chunk) => chunk.type === "model")).toEqual([
+      { type: "model", modelId: "primary-model" },
+      { type: "model", modelId: "openrouter/auto" },
+      { type: "model", modelId: "openrouter/auto", servedModelId: "openrouter/vendor-x/picked" },
+    ]);
+  });
+
   it("says what a paid fallback costs when it switches to one", async () => {
     const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(180_000) }] };
     const provider = new ScriptedProvider([stall, stall, answer("Paid answer.")], ["paid-model"]);

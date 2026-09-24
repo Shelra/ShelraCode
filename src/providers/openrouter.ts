@@ -165,6 +165,8 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   private readonly quarantined = new Set<string>();
   private readonly quarantineStorePath: string | null | undefined;
   private lastUpstreamProvider: string | null = null;
+  /** The model OpenRouter says answered the last request: a router picks one per request. */
+  private lastServedModel: string | null = null;
   private readonly policy: ModelPolicy;
   private readonly strictModel: boolean;
 
@@ -212,6 +214,7 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   private sniffingFetch(inner: FetchFunction | undefined): FetchFunction {
     const base: FetchFunction = inner ?? ((input, init) => fetch(input, init));
     return async (input, init) => {
+      this.lastServedModel = null;
       const response = await base(input, init);
       if (!response.body) return response;
       const [forApp, forSniff] = response.body.tee();
@@ -233,9 +236,11 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
         const { done, value } = await reader.read();
         if (done) return;
         buffer += decoder.decode(value, { stream: true });
-        const match = /"provider"\s*:\s*"([^"]+)"/u.exec(buffer);
-        if (match?.[1]) {
-          this.lastUpstreamProvider = match[1];
+        const provider = /"provider"\s*:\s*"([^"]+)"/u.exec(buffer)?.[1];
+        const model = /"model"\s*:\s*"([^"]+)"/u.exec(buffer)?.[1];
+        if (model) this.lastServedModel = canonicalModelId(`openrouter/${model}`);
+        if (provider) {
+          this.lastUpstreamProvider = provider;
           await reader.cancel();
           return;
         }
@@ -259,6 +264,10 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
     if (process.env.SHELRA_DEBUG_STREAM) {
       process.stderr.write(`[openrouter] quarantined upstream provider ${provider}: ${reason}\n`);
     }
+  }
+
+  servedModelId(): string | null {
+    return this.lastServedModel;
   }
 
   routingNotes(): string[] {

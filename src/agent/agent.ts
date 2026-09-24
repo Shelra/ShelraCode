@@ -2522,6 +2522,15 @@ export class Agent {
       modelInfo = runtime.modelInfo;
       emptyResponseRetries = 0;
     };
+    // The model the UI shows is the one answering: the turn's model when a round starts on it, and for a router
+    // (`openrouter/auto`, `openrouter/free`) the model it picked (seen live 2026-09-24: the footer kept showing the
+    // chosen model while the auto router billed another).
+    let announcedModel: string | null = null;
+    let announcedServed: string | null = null;
+    const servedModelFor = (modelId: string): string => {
+      if (modelId !== "openrouter/auto" && modelId !== "openrouter/free") return modelId;
+      return provider.servedModelId?.() ?? modelId;
+    };
     /** The turn continues on another provider or key (a fallback of either kind), with a fresh attempt budget there. */
     const adoptProvider = (fallback: CredentialFallback) => {
       provider = fallback.provider;
@@ -2720,6 +2729,11 @@ export class Agent {
             "request",
           );
 
+          if (runtime.modelId !== announcedModel) {
+            announcedModel = runtime.modelId;
+            announcedServed = null;
+            yield { type: "model", modelId: runtime.modelId };
+          }
           reportStatus("model", `Waiting for ${runtime.modelId}`);
           // A repair that keeps failing the same way gets the model's top effort (audit doc 15, Phase 2.4). It stays
           // within the spending policy: the model does not change, and budgets still apply.
@@ -2762,7 +2776,7 @@ export class Agent {
               });
             },
             onFinish: (usage) => {
-              this.recordUsage(usage, "message", runtime.modelId);
+              this.recordUsage(usage, "message", servedModelFor(runtime.modelId));
             },
           });
           // An interrupted or cancelled round never awaits its response; its rejection must not
@@ -2774,6 +2788,11 @@ export class Agent {
             if (signal.aborted) {
               yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
               break;
+            }
+            const served = servedModelFor(runtime.modelId);
+            if (served !== runtime.modelId && served !== announcedServed) {
+              announcedServed = served;
+              yield { type: "model", modelId: runtime.modelId, servedModelId: served };
             }
 
             switch (part.type) {

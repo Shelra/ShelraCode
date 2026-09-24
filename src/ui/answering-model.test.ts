@@ -1,0 +1,34 @@
+import { describe, expect, it } from "vitest";
+import { answeringModelLabel, isFreeModelId } from "./answering-model";
+
+describe("the model the footer shows", () => {
+  it("names the model a router picked, with the router", () => {
+    expect(
+      answeringModelLabel(
+        { modelId: "openrouter/auto", servedModelId: "openrouter/vendor-x/model-y" },
+        "openrouter/vendor-z/chosen",
+      ),
+    ).toBe("model-y · auto");
+    expect(
+      answeringModelLabel(
+        { modelId: "openrouter/free", servedModelId: "openrouter/qwen/qwen3-coder:free" },
+        "openrouter/free",
+      ),
+    ).toBe("qwen3-coder:free · free");
+  });
+
+  it("names a fallback, and nothing when the chosen model answers", () => {
+    expect(answeringModelLabel({ modelId: "openrouter/vendor-x/fallback" }, "openrouter/vendor-z/chosen")).toBe(
+      "openrouter/vendor-x/fallback",
+    );
+    expect(answeringModelLabel({ modelId: "openrouter/vendor-z/chosen" }, "openrouter/vendor-z/chosen")).toBeNull();
+    expect(answeringModelLabel(null, "openrouter/vendor-z/chosen")).toBeNull();
+  });
+
+  it("says free models can queue only for a free model", () => {
+    expect(isFreeModelId("openrouter/free")).toBe(true);
+    expect(isFreeModelId("openrouter/qwen/qwen3-coder:free")).toBe(true);
+    expect(isFreeModelId("openrouter/auto")).toBe(false);
+    expect(isFreeModelId("openrouter/vendor-x/unknown-paid")).toBe(false);
+  });
+});

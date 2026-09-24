@@ -79,6 +79,7 @@ import {
   SubagentEditorModal,
   SubagentsBrowserModal,
 } from "./agents-modal";
+import { type AnsweringModel, answeringModelLabel, isFreeModelId } from "./answering-model";
 import { SectionBadge } from "./components/badge";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
@@ -640,6 +641,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [isProcessing, setIsProcessing] = useState(false);
   const [liveTurnSourceLabel, setLiveTurnSourceLabel] = useState<string | null>(null);
   const [model, setModel] = useState(agent.getModel());
+  // The model answering the running or last turn, when it is not the chosen one: a fallback, or the model a router
+  // picked. Cleared when the user chooses another model.
+  const [answeringModel, setAnsweringModel] = useState<AnsweringModel | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new choice of model replaces what answered before it
+  useEffect(() => setAnsweringModel(null), [model]);
   const [modelMode, setModelMode] = useState<ModelMode | undefined>(startupConfig.modelMode);
   const switchingModeRef = useRef(false);
   const [sandboxMode, setSandboxModeState] = useState<SandboxMode>(agent.getSandboxMode());
@@ -2627,6 +2633,12 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
               case "reasoning":
                 noteReasoning(chunk.content || "");
                 break;
+              case "model":
+                if (chunk.modelId) {
+                  const { modelId, servedModelId } = chunk;
+                  setAnsweringModel({ modelId, ...(servedModelId ? { servedModelId } : {}) });
+                }
+                break;
               case "tool_calls":
                 if (chunk.toolCalls) {
                   closeReasoning();
@@ -4503,7 +4515,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   );
   const liveWaitNote =
     !activePresentationTool && livePhase.kind === "waiting" && !liveStatus && liveElapsedMs >= 12_000
-      ? "No response yet. Free models can queue; esc stops the request."
+      ? isFreeModelId(answeringModel?.modelId ?? model)
+        ? "No response yet. Free models can queue; esc stops the request."
+        : "No response yet; esc stops the request."
       : null;
   const hasMessages = messages.length > 0 || streamContent.length > 0 || isProcessing;
   const chatWidth = width;
@@ -4735,6 +4749,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   modeInfo={modeInfo}
                   model={model}
                   modelInfo={modelInfo}
+                  answeringLabel={answeringModelLabel(answeringModel, model)}
                   modelMode={modelMode}
                   contextStats={contextStats}
                   queuedCount={queuedMessages.length}
@@ -4800,6 +4815,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 modeInfo={modeInfo}
                 model={model}
                 modelInfo={modelInfo}
+                answeringLabel={answeringModelLabel(answeringModel, model)}
                 modelMode={modelMode}
                 contextStats={contextStats}
                 placeholder={"What are we building?"}
@@ -5147,6 +5163,7 @@ function PromptBox({
   modeInfo,
   model,
   modelInfo,
+  answeringLabel,
   modelMode,
   contextStats,
   placeholder,
@@ -5175,6 +5192,8 @@ function PromptBox({
   modeInfo: (typeof MODES)[number];
   model: string;
   modelInfo: ReturnType<typeof getModelInfo>;
+  /** The model answering the turn when it is not the chosen one (a fallback, or a router's pick). */
+  answeringLabel?: string | null;
   modelMode?: ModelMode;
   contextStats?: ContextStats | null;
   placeholder?: string;
@@ -5275,7 +5294,7 @@ function PromptBox({
       <ComposerFooter
         t={t}
         width={width ?? 80}
-        model={modelInfo?.name || model}
+        model={answeringLabel ?? (modelInfo?.name || model)}
         modelMode={modelMode}
         contextStats={contextStats}
         isProcessing={isProcessing}

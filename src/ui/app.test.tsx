@@ -175,6 +175,29 @@ describe("ComposerFooter", () => {
     expect(find(mixed.spans, "● Mixed")?.fg.equals(RGBA.fromHex(dark.warning))).toBe(true);
   });
 
+  it("fits the model a router picked next to the mode, at 80 and 120 columns", async () => {
+    for (const width of [80, 120]) {
+      const { frame } = await render(
+        <ComposerFooter
+          t={dark}
+          width={width}
+          model="Claude Sonnet 4.5 · auto"
+          modelMode="mixed"
+          isProcessing
+          showSuggestions={false}
+          queuedCount={0}
+          hasViews={false}
+          viewOpen={false}
+          approvalOpen={false}
+        />,
+        width,
+        1,
+      );
+      expect(frame).toContain("● Mixed  Claude Sonnet 4.5 · auto");
+      expect(frame).toContain("esc stop");
+    }
+  });
+
   it("shows no mode where modes do not apply", async () => {
     const { frame } = await render(
       <ComposerFooter

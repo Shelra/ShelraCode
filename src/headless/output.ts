@@ -27,6 +27,14 @@ export type HeadlessJsonEvent =
       supportsReasoning: boolean;
     }
   | {
+      /** The model the turn now runs on (a fallback), and for a router the model that answered. */
+      type: "model";
+      sessionID?: string;
+      modelId: string;
+      servedModelId?: string;
+      timestamp: number;
+    }
+  | {
       type: "step_start";
       sessionID?: string;
       stepNumber: number;
@@ -161,6 +169,11 @@ export function renderHeadlessChunk(chunk: StreamChunk): HeadlessWrites {
         : undefined;
       return { ...(planOutput ? { stdout: planOutput } : {}), stderr: `${stderr}\n` };
     }
+
+    case "model":
+      return chunk.servedModelId && chunk.modelId
+        ? { stderr: `\x1b[2m${chunk.modelId} answered with ${chunk.servedModelId}\x1b[0m\n` }
+        : {};
 
     case "error":
       return chunk.content ? { stderr: `\x1b[31m${chunk.content}\x1b[0m\n` } : {};
@@ -357,6 +370,19 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
             timestamp: Date.now(),
           }) as HeadlessJsonEvent,
         );
+        break;
+
+      case "model":
+        if (chunk.modelId) {
+          stdout += jsonLine(
+            withSession({
+              type: "model",
+              modelId: chunk.modelId,
+              ...(chunk.servedModelId ? { servedModelId: chunk.servedModelId } : {}),
+              timestamp: Date.now(),
+            }) as HeadlessJsonEvent,
+          );
+        }
         break;
 
       case "reasoning":

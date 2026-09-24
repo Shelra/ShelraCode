@@ -142,4 +142,9 @@ export interface ProviderAdapter {
    * the caller retries the same model.
    */
   fallbackModelIds?(modelId: string): string[];
+  /**
+   * The model that answered the last request, when the adapter can tell: a router such as `openrouter/auto` picks
+   * one per request. Optional; null when unknown.
+   */
+  servedModelId?(): string | null;
 }
