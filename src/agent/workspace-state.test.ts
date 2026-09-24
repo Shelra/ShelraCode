@@ -96,6 +96,24 @@ describe.skipIf(!hasGit)("workspace state in a git repository", () => {
     writeFileSync(join(root, "a.ts"), "export const a = 333;\n");
     expect(changedPaths(dirty, captureWorkspaceState(root))).toEqual(["a.ts"]);
   });
+
+  it("counts only the session's folder when it works inside a larger repository", async () => {
+    // Seen live 2026-09-24: a session started in a subfolder of this repository asked what BIM is; another
+    // session's edits under src/ read as its own changes, and the gate sent it off to check and fix them.
+    const root = repo();
+    const folder = join(root, "games", "mario");
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, "index.html"), "<p>1</p>\n");
+    const before = captureWorkspaceState(folder);
+
+    await later();
+    writeFileSync(join(root, "a.ts"), "export const a = 2;\n");
+    writeFileSync(join(root, "elsewhere.ts"), "export {};\n");
+    expect(changedPaths(before, captureWorkspaceState(folder))).toEqual([]);
+
+    writeFileSync(join(folder, "index.html"), "<p>2</p>\n");
+    expect(changedPaths(before, captureWorkspaceState(folder))).toEqual(["index.html"]);
+  });
 });
 
 describe("mergeChangedFiles", () => {

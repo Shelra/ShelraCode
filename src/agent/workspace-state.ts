@@ -81,6 +81,10 @@ function captureGit(cwd: string, gitRoot: string): WorkspaceState | null {
     if (status.includes("R") || status.includes("C")) index += 1;
     const full = join(gitRoot, path);
     const relativePath = relative(cwd, full).replace(/\\/g, "/");
+    // `git status` covers the whole repository; a session working in one folder of it did not make the changes
+    // elsewhere (another session's work, the user's editor). Counting them sent a question asked in a
+    // subfolder off to verify and "fix" code it never touched (seen live 2026-09-24).
+    if (relativePath === ".." || relativePath.startsWith("../") || isAbsolute(relativePath)) continue;
     if (ignored(relativePath)) continue;
     files.set(relativePath, signature(full));
   }
