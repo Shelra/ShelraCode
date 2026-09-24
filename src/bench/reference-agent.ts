@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { killProcessTree } from "../exec/shell";
 import { describeFailures, type WorkspaceGrade } from "./grading";
 import type { BenchmarkTaskExecution } from "./runner";
 import type { BenchmarkJsonObject } from "./types";
@@ -71,9 +72,9 @@ export function runJsonLinesProcess(
     };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      void killProcessTree(child.pid, 500);
     }, options.timeoutMs);
-    const onAbort = () => child.kill();
+    const onAbort = () => void killProcessTree(child.pid, 500);
     options.signal?.addEventListener("abort", onAbort, { once: true });
     child.stdout?.on("data", (chunk: Buffer) => {
       buffer += chunk.toString("utf8");

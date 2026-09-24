@@ -316,6 +316,7 @@ describe("cross-session workspaces", () => {
         { id: "one", category: "memory", difficulty: "easy", prompt: "p", workspaceTemplate: "template" },
         { id: "two", category: "memory", difficulty: "easy", prompt: "p", continueIn: "one" },
         { id: "three", category: "memory", difficulty: "easy", prompt: "p", continueIn: "two" },
+        { id: "four", category: "memory", difficulty: "easy", prompt: "p", continueIn: "three" },
       ],
     };
     const git = (workspace: string, ...args: string[]) =>
@@ -336,17 +337,21 @@ describe("cross-session workspaces", () => {
             seen[`${task.id}:fixture`] = readFileSync(join(workspace, "fixture.txt"), "utf8");
             seen[`${task.id}:commits`] = git(workspace, "log", "--format=%s");
             if (task.id === "one") writeFileSync(join(workspace, "fixture.txt"), "v2\n");
-            // An agent that removed the repository: the next session still starts from a clean commit.
+            // A lock a finished process left behind: the history stays.
             if (task.id === "two") {
-              rmSync(join(workspace, ".git"), { recursive: true, force: true });
+              writeFileSync(join(workspace, ".git", "index.lock"), "");
               writeFileSync(join(workspace, "fixture.txt"), "v3\n");
+            }
+            // An agent that removed the repository: the next session still starts from a clean commit.
+            if (task.id === "three") {
+              rmSync(join(workspace, ".git"), { recursive: true, force: true });
+              writeFileSync(join(workspace, "fixture.txt"), "v4\n");
             }
             return { status: "passed", scores: { coding: 100 } };
           },
         }),
       });
-      expect(seen["two:workspace"]).toBe(seen["one:workspace"]);
-      expect(seen["three:workspace"]).toBe(seen["one:workspace"]);
+      for (const id of ["two", "three", "four"]) expect(seen[`${id}:workspace`]).toBe(seen["one:workspace"]);
       expect(seen).toMatchObject({
         "one:status": "",
         "one:fixture": "v1\n",
@@ -356,8 +361,59 @@ describe("cross-session workspaces", () => {
         "two:commits": "Benchmark state before two\nBenchmark fixture",
         "three:status": "",
         "three:fixture": "v3\n",
-        "three:commits": "Benchmark state before three",
+        "three:commits": "Benchmark state before three\nBenchmark state before two\nBenchmark fixture",
+        "four:status": "",
+        "four:fixture": "v4\n",
+        "four:commits": "Benchmark state before four",
       });
+    } finally {
+      rmSync(taskRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("never commits in, or re-creates, a repository the manifest named outside the clean room", async () => {
+    // A user's project: one commit and uncommitted work.
+    const project = join(homeDir, "project");
+    mkdirSync(project, { recursive: true });
+    writeFileSync(join(project, "app.ts"), "export const v = 1;\n");
+    const git = (...args: string[]) =>
+      execFileSync("git", ["-c", "user.name=Owner", "-c", "user.email=owner@example.invalid", ...args], {
+        cwd: project,
+        encoding: "utf8",
+      }).trim();
+    git("init", "-q", "--template=");
+    git("add", "-A");
+    git("-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "The owner's commit");
+    writeFileSync(join(project, "app.ts"), "export const v = 2;\n");
+    writeFileSync(join(project, ".git", "index.lock"), "");
+    const chain: BenchmarkManifest = {
+      benchmarkVersion: "runner-test-0.1",
+      suite: "chain",
+      tasks: [
+        { id: "a", category: "memory", difficulty: "easy", prompt: "p", workspace: project },
+        { id: "b", category: "memory", difficulty: "easy", prompt: "p", continueIn: "a" },
+      ],
+    };
+    const taskRoot = mkdtempSync(join(tmpdir(), "shelra-bench-outside-"));
+    const workspaces: string[] = [];
+    try {
+      const result = await runBenchmark({
+        workspace: homeDir,
+        manifest: chain,
+        runInput: { agentName: "shelra" },
+        taskRoot,
+        createExecutor: () => ({
+          async executeTask(task) {
+            workspaces.push(task.workspace as string);
+            return { status: "passed", scores: { coding: 100 } };
+          },
+        }),
+      });
+      expect(result.status).toBe("completed");
+      expect(workspaces).toEqual([project, project]);
+      rmSync(join(project, ".git", "index.lock"), { force: true });
+      expect(git("log", "--format=%s")).toBe("The owner's commit");
+      expect(git("status", "--porcelain")).toBe("M app.ts");
     } finally {
       rmSync(taskRoot, { recursive: true, force: true });
     }

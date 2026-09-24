@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   appendBenchmarkEvent,
   createBenchmarkRun,
@@ -365,7 +365,11 @@ function prepareBenchmarkTaskWorkspace(
         `Benchmark task "${task.id}" continues in "${task.continueIn}", which has not completed in this run.`,
       );
     }
-    if (taskRoot) commitTaskState(workspace, `Benchmark state before ${task.id}`);
+    // Only a repository the clean room created is ours to commit in or re-create: a task run in a
+    // directory the manifest named (a user's project) keeps its git state untouched.
+    if (taskRoot && insideCleanRoom(taskRoot, runId, workspace)) {
+      commitTaskState(workspace, `Benchmark state before ${task.id}`);
+    }
     return {
       ...task,
       workspace,
@@ -455,13 +459,35 @@ function initTaskRepository(workspace: string, message = "Benchmark fixture"): v
  * mid-operation; then a fresh one holds the state, since only the files are graded, never the agent's history.
  */
 function commitTaskState(workspace: string, message: string): void {
-  try {
+  const attempt = (): void => {
     if (!existsSync(join(workspace, ".git"))) throw new Error("no repository");
     commitEverything(workspace, message);
+  };
+  try {
+    attempt();
+    return;
   } catch {
-    rmSync(join(workspace, ".git"), { recursive: true, force: true });
-    initTaskRepository(workspace, message);
+    // A lock a finished process left behind is not a broken repository.
+    const lock = join(workspace, ".git", "index.lock");
+    if (existsSync(lock)) {
+      rmSync(lock, { force: true });
+      try {
+        attempt();
+        return;
+      } catch {
+        // Fall through to a fresh repository.
+      }
+    }
   }
+  rmSync(join(workspace, ".git"), { recursive: true, force: true });
+  initTaskRepository(workspace, message);
+}
+
+/** Whether a task workspace lives in this run's clean room, and so was created by the bench. */
+function insideCleanRoom(taskRoot: string, runId: string, workspace: string): boolean {
+  const room = resolve(taskRoot, runId);
+  const rel = relative(room, resolve(workspace));
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 function commitEverything(workspace: string, message: string): void {
@@ -483,8 +509,27 @@ function commitEverything(workspace: string, message: string): void {
   );
 }
 
+const GIT_TIMEOUT_MS = 60_000;
+
+/**
+ * Git in a task repository the previous session may have configured: its hooks and file monitor are
+ * left out (`--no-verify` skips only some hooks), and a hung command ends after a minute.
+ */
 function taskGit(workspace: string, ...args: string[]): void {
-  execFileSync("git", ["-c", "init.defaultBranch=main", ...args], { cwd: workspace, stdio: "ignore" });
+  execFileSync(
+    "git",
+    [
+      "--no-optional-locks",
+      "-c",
+      "init.defaultBranch=main",
+      "-c",
+      "core.hooksPath=.git/hooks-disabled",
+      "-c",
+      "core.fsmonitor=false",
+      ...args,
+    ],
+    { cwd: workspace, stdio: "ignore", timeout: GIT_TIMEOUT_MS, windowsHide: true },
+  );
 }
 
 function withDerivedTaskScores(
