@@ -21,6 +21,8 @@ export interface ObservedCheckRun {
   fresh: boolean;
   /** The run happened before the turn changed anything. */
   beforeFirstChange: boolean;
+  /** For the host's own run of a decision check that reached no verdict: why (see `ContractCheckResult`). */
+  unrunnable?: string;
 }
 
 /**
@@ -98,10 +100,14 @@ export async function evaluateTurnContract(input: {
   for (const check of input.checks) {
     const latest = input.runs.filter((run) => isSameCheck(run.command, check)).at(-1);
     if (latest?.fresh) {
-      // Of the agent's own run only the text is known.
+      // A host run keeps the verdict it got from how its process ended; of the agent's own run only the text
+      // is known.
       const unrunnable = latest.passed
         ? undefined
-        : unrunnableDecision(check, { state: "completed", exitCode: null, output: latest.detail });
+        : check.kind === "decision"
+          ? (latest.unrunnable ??
+            unrunnableDecision(check, { state: "completed", exitCode: null, output: latest.detail }))
+          : undefined;
       decided.set(check, {
         check,
         passed: latest.passed,
@@ -115,12 +121,15 @@ export async function evaluateTurnContract(input: {
     const destructive = destructiveCommandReason(check.command, input.workspace);
     if (destructive) {
       // A command table in a repository is data: a check that would do damage is never run for it.
+      const detail = `not run: \`${check.command}\` ${destructive}`;
       decided.set(check, {
         check,
         passed: false,
         by: "host",
-        detail: `not run: \`${check.command}\` ${destructive}`,
+        detail,
         ...before(check),
+        // A decision check that would do damage vouches for nothing either way, as `shelra decisions check` says.
+        ...(check.kind === "decision" ? { unrunnable: detail } : {}),
       });
       continue;
     }

@@ -217,7 +217,8 @@ export function listDecisions(workspace: string): Decision[] {
   return decisions.sort((a, b) => a.id.localeCompare(b.id, "en", { numeric: true }));
 }
 
-const DECISION_FILE_RE = new RegExp(`^${LEDGER_DIR}/(\\d{4})-[^/]+\\.md$`, "u");
+/** A ledger file's name, in any case: a model may spell a path `Docs/Decisions/…` on a filesystem that folds case. */
+const DECISION_FILE_RE = new RegExp(`^${LEDGER_DIR}/(\\d{4})-[^/]+\\.md$`, "iu");
 
 /** The decision id a workspace-relative path holds (`docs/decisions/0003-x.md` → D-0003), or null for any other file. */
 export function decisionIdOfFile(path: string): string | null {
@@ -225,10 +226,19 @@ export function decisionIdOfFile(path: string): string | null {
   return match ? `D-${match[1]}` : null;
 }
 
-/** Whether the request names the decision (`D-0003`, `D-3`): the user asking for it is the user's yes to the edit. */
-export function requestNamesDecision(request: string, id: string): boolean {
+/** Whether a workspace-relative path lies in the ledger's folder, in any case. */
+export function inLedgerDir(path: string): boolean {
+  return path.replaceAll("\\", "/").replace(/^\.\//u, "").toLowerCase().startsWith(`${LEDGER_DIR.toLowerCase()}/`);
+}
+
+/**
+ * Whether the request names the decision (`D-0003`, `d-3`) or its file (`docs/decisions/0003-x.md`,
+ * `0003-x.md`): the user asking for it is the user's yes to the edit.
+ */
+export function requestNamesDecision(request: string, id: string, file?: string): boolean {
   const number = Number(id.slice(2));
-  return [...request.matchAll(/\bD-(\d{1,4})\b/gu)].some((match) => Number(match[1]) === number);
+  if ([...request.matchAll(/\bD-(\d{1,4})\b/giu)].some((match) => Number(match[1]) === number)) return true;
+  return file !== undefined && request.replaceAll("\\", "/").toLowerCase().includes(basename(file).toLowerCase());
 }
 
 export function activeDecisions(workspace: string): Decision[] {

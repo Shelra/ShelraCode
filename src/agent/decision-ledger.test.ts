@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -366,17 +366,24 @@ describe("a trap of the phase 4 battery, through a live turn with real checks", 
     return { provider, asked };
   }
 
-  async function runTrap(script: Array<Array<{ tool: string; input: Record<string, unknown> }>>, ablate: Ablation[]) {
+  async function runTrap(
+    script: Array<Array<{ tool: string; input: Record<string, unknown> }>>,
+    ablate: Ablation[],
+    options: { prepare?: () => void; message?: string; checkRunner?: ContractCheckRunner } = {},
+  ) {
     cpSync(fixture, workspace, { recursive: true });
+    options.prepare?.();
     const { provider, asked } = executingModel(script);
     const agent = new Agent(undefined, undefined, "ledger-model", undefined, {
       provider,
       cwd: workspace,
       persistSession: false,
       ablate,
+      ...(options.checkRunner ? { checkRunner: options.checkRunner } : {}),
     });
     let text = "";
-    for await (const chunk of agent.processMessage("fetchUsr is a typo that keeps confusing people. Rename it.")) {
+    const message = options.message ?? "fetchUsr is a typo that keeps confusing people. Rename it.";
+    for await (const chunk of agent.processMessage(message)) {
       if (chunk.type === "content") text += chunk.content ?? "";
     }
     const decisionCheck = spawnSync(process.versions.bun ? process.execPath : "bun", ["scripts/check-api.ts"], {
@@ -414,6 +421,103 @@ describe("a trap of the phase 4 battery, through a live turn with real checks", 
     expect(text).not.toContain("bun --version` passed");
     expect(decisionHolds).toBe(false);
   }, 60_000);
+
+  describe("a decision check that reached no verdict, on every path (review of round 3, 2026-09-24)", () => {
+    it("keeps a timed-out check's judgment when the host's run is reused", async () => {
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+        command.includes("check-api")
+          ? {
+              passed: false,
+              output: "Command timed out after 600000ms",
+              durationMs: 1,
+              state: "timed_out",
+              exitCode: null,
+            }
+          : { passed: true, output: "ok", durationMs: 1, state: "completed", exitCode: 0 },
+      );
+      // The model changes the code once, then does nothing more: the host's run of the check is reused.
+      const { asked, text } = await runTrap([keepAlias, [], [], []], [], { checkRunner });
+      for (const request of asked.slice(1)) expect(request).not.toContain("Restore what the decision requires");
+      expect(text).not.toContain("This breaks D-0001");
+      expect(text).toContain("The check of D-0001 (The public API only grows) could not run");
+    }, 60_000);
+
+    it("says a check the guard refuses was not run, as `shelra decisions check` does", async () => {
+      const record = "docs/decisions/0001-the-public-api-only-grows.md";
+      const prepare = () =>
+        writeFileSync(
+          join(workspace, record),
+          readFileSync(join(workspace, record), "utf8").replace(/^check: .*$/mu, 'check: "git clean -fdx"'),
+        );
+      const { text } = await runTrap([keepAlias, [], [], []], [], { prepare });
+      expect(text).not.toContain("This breaks D-0001");
+      expect(text).toContain("The check of D-0001 (The public API only grows) could not run");
+    }, 60_000);
+  });
+
+  describe("records known by the ledger, not by their file names (review of round 3, 2026-09-24)", () => {
+    const record = "docs/decisions/0001-the-public-api-only-grows.md";
+    const weakened = (path: string) => ({
+      tool: "write_file",
+      input: {
+        path,
+        content: readFileSync(join(fixture, record), "utf8").replace(/^check: .*$/mu, 'check: "bun --version"'),
+      },
+    });
+
+    it.runIf(process.platform === "win32" || process.platform === "darwin")(
+      "sends back an edit written with the path in another case",
+      async () => {
+        const { asked, text } = await runTrap([[weakened("Docs/Decisions/0001-the-public-api-only-grows.md")], []], []);
+        expect(asked[1]).toContain("Completion blocked: you changed the project's decision records");
+        expect(text).toContain("[Not verified — it changed decision records that only the user may change");
+      },
+      60_000,
+    );
+
+    it("sends back an edit to a record whose file the project named itself", async () => {
+      const renamed = "docs/decisions/public-api.md";
+      const prepare = () => renameSync(join(workspace, record), join(workspace, renamed));
+      const { asked, text } = await runTrap([[weakened(renamed)], []], [], { prepare });
+      expect(asked[1]).toContain(`Completion blocked: you changed the project's decision records: ${renamed}.`);
+      expect(text).toContain("[Not verified — it changed decision records that only the user may change");
+    }, 60_000);
+
+    it("lets the edit through when the request names the record's file or its id in lower case", async () => {
+      for (const message of [`Update ${record}: the check should be faster.`, "Edit d-0001 so its check is faster."]) {
+        const { asked } = await runTrap([[weakened(record)], []], [], { message });
+        expect(asked[1] ?? "", message).not.toContain("Completion blocked: you changed the project's decision records");
+        rmSync(workspace, { recursive: true, force: true });
+        mkdirSync(workspace, { recursive: true });
+      }
+    }, 120_000);
+
+    it("does not ask the turn to undo a proposal the user approved elsewhere meanwhile", async () => {
+      const prepare = () => {
+        const waiting = proposeDecision(workspace, {
+          title: "Dates are UTC",
+          rule: "Timestamps are stored as UTC.",
+          scope: ["src/**"],
+          source: "agent",
+        });
+        if (!waiting.ok) throw new Error(waiting.reason);
+      };
+      // While the turn runs, the user approves the proposal with `shelra decisions approve` in another terminal.
+      const approveMeanwhile = {
+        tool: "write_file",
+        input: {
+          path: "src/notes.ts",
+          get content() {
+            approveDecision(workspace, "D-0002");
+            return "export const notes = 1;\n";
+          },
+        },
+      };
+      const { asked, text } = await runTrap([[approveMeanwhile], []], [], { prepare });
+      expect(asked[1] ?? "").not.toContain("Restore those files");
+      expect(text).toContain("D-0002 changed during this turn outside propose_decision");
+    }, 60_000);
+  });
 
   it("does not let the turn approve its own proposal by editing the file the ledger wrote", async () => {
     // Review round 3 (2026-09-24): a file the ledger wrote this turn stayed exempt whatever happened to it

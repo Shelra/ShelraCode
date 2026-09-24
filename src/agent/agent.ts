@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
@@ -28,13 +28,16 @@ import type {
   TaskCreatedHookInput,
   UserPromptSubmitHookInput,
 } from "../hooks/types";
-import { inScope } from "../ledger/glob";
+import { foldPath, inScope } from "../ledger/glob";
 import {
   activeDecisions,
   approveDecision,
   decisionIdOfFile,
   findDecision,
+  inLedgerDir,
   type LedgerResult,
+  listDecisions,
+  parseDecision,
   proposeDecision,
   rejectDecision,
   requestNamesDecision,
@@ -466,6 +469,8 @@ export class Agent {
    * during it. The gate checks these, never the working tree's copy, which the turn itself can edit.
    */
   private turnDecisions: Decision[] = [];
+  /** Every record of the ledger when the turn began, any status, by its path as the filesystem compares it. */
+  private turnStartLedger = new Map<string, Decision>();
   /** The host's own end notes of the current turn; see `getTurnEndNotes`. */
   private turnEndNotes: string[] = [];
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
@@ -2347,6 +2352,9 @@ export class Agent {
     this.turnLedgerWrites = new Map();
     this.turnEndNotes = [];
     this.turnDecisions = activeDecisions(this.bash.getCwd());
+    this.turnStartLedger = new Map(
+      listDecisions(this.bash.getCwd()).map((decision) => [foldPath(decision.file), decision]),
+    );
     this.emitSubagentStatus(null);
     const reportStatus = (stage: ProcessMessageStage, detail: string) => {
       notifyObserver(observer?.onStatus, { stage, detail, timestamp: Date.now() });
@@ -2518,6 +2526,8 @@ export class Agent {
       detail: string;
       mutationEvents: number;
       state: WorkspaceState | null;
+      /** A host run of a decision check that reached no verdict keeps that judgment when it is reused. */
+      unrunnable?: string;
     }> = [];
 
     try {
@@ -3138,16 +3148,55 @@ export class Agent {
           }
 
           // Decision records are the user's: only a proposal the user approves changes one (the ledger's own
-          // writes are left out of `mutations`). An edit by the turn, through a file tool or the shell, could
-          // weaken a check or mark a proposal active. The gate ignores it (it checks `turnDecisions`), and
-          // here it is sent back like a change to existing tests, unless the request names the decision.
-          const changedDecisions =
-            this.mode === "agent" && !this.ablations.has("gate") && !this.ablations.has("ledger")
-              ? mutations.filter((path) => {
-                  const id = decisionIdOfFile(path);
-                  return id !== null && !requestNamesDecision(userMessage, id);
-                })
-              : [];
+          // writes are left out). An edit by the turn, through a file tool or the shell, could weaken a check or
+          // mark a proposal active. The gate ignores it (it checks `turnDecisions`), and here it is sent back
+          // like a change to existing tests, unless the request names the decision. A record is known by the
+          // ledger (whatever its file is called, in whatever case the path was written), and read from the
+          // workspace as it is now, so a record the turn put back as it was no longer counts.
+          const guardsLedger = this.mode === "agent" && !this.ablations.has("gate") && !this.ablations.has("ledger");
+          const onDisk =
+            (turnStartState && endState && changedPaths(turnStartState, endState))?.filter(
+              (path) => !ledgerWrite(path),
+            ) ?? mutations;
+          const writtenByTools = new Set((this.kernel?.snapshot().mutations ?? []).map((path) => foldPath(path)));
+          const recordIdOf = (path: string): string | null => {
+            const before = this.turnStartLedger.get(foldPath(path));
+            if (before) return before.id;
+            if (!inLedgerDir(path) || !/\.md$/iu.test(path)) return null;
+            return parseDecision(readTextOrNull(join(cwd, path)) ?? "", basename(path))?.id ?? decisionIdOfFile(path);
+          };
+          // A proposal that became active (or was removed) with nothing else changed, and not through a file
+          // tool: most likely the user's `shelra decisions approve` in another terminal, which the turn must
+          // not be told to undo.
+          const approvedElsewhere = (path: string): boolean => {
+            const before = this.turnStartLedger.get(foldPath(path));
+            if (!before || before.status !== "proposed" || writtenByTools.has(foldPath(path))) return false;
+            const text = readTextOrNull(join(cwd, path));
+            if (text === null) return true;
+            const now = parseDecision(text, basename(path));
+            return now !== null && now.status === "active" && sameDecisionContent(before, now);
+          };
+          const touchedRecords = guardsLedger
+            ? onDisk.flatMap((path) => {
+                const id = recordIdOf(path);
+                return id !== null && !requestNamesDecision(userMessage, id, path) ? [{ path, id }] : [];
+              })
+            : [];
+          const changedDecisions = touchedRecords
+            .filter((record) => !approvedElsewhere(record.path))
+            .map((record) => record.path);
+          const decidedElsewhere = touchedRecords.filter((record) => approvedElsewhere(record.path));
+          if (changedDecisions.length === 0 && decidedElsewhere.length > 0) {
+            const ids = decidedElsewhere.map((record) => record.id).join(", ");
+            const reason = `${ids} changed during this turn outside propose_decision, so Shelra did not hold this turn to ${decidedElsewhere.length === 1 ? "it" : "them"}; if you did not approve that, check \`shelra decisions list\`.`;
+            this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+            this.persistKernelIndex(reason);
+            const verdict = `[Not verified — ${reason}]`;
+            this.recordVerdict(verdict);
+            yield { type: "content", content: `\n\n${verdict}` };
+            yield { type: "done" };
+            return;
+          }
           if (changedDecisions.length > 0) {
             if (!decisionEditsNudged) {
               decisionEditsNudged = true;
@@ -3230,6 +3279,7 @@ export class Agent {
                   run.state !== null &&
                   turnStartState !== null &&
                   changedPaths(turnStartState, run.state)?.length === 0,
+                ...(run.unrunnable ? { unrunnable: run.unrunnable } : {}),
               })),
               workspace: cwd,
               runCheck: (command, options) => {
@@ -3248,6 +3298,7 @@ export class Agent {
                 detail: result.detail,
                 mutationEvents: turnMutationEvents,
                 state: stateAfterChecks,
+                ...(result.unrunnable ? { unrunnable: result.unrunnable } : {}),
               });
             }
             const failing = results.filter((result) => !result.passed);
@@ -3795,6 +3846,18 @@ export class Agent {
       }
     }
   }
+}
+
+/** Whether two readings of a decision record say the same thing, whatever their status. */
+function sameDecisionContent(a: Decision, b: Decision): boolean {
+  return (
+    a.id === b.id &&
+    a.title === b.title &&
+    a.rule === b.rule &&
+    a.scope.join("\n") === b.scope.join("\n") &&
+    a.check === b.check &&
+    a.supersedes === b.supersedes
+  );
 }
 
 /** A text file's content, or null when it does not exist or cannot be read. */
