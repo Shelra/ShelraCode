@@ -54,23 +54,32 @@ export const DEFAULT_TASK_TIMEOUT_MS = 20 * 60_000;
  * The simulated user of a chain task: it approves a proposed decision that records a rule it stated in
  * this task (its title or rule matches one of the approve patterns) and declines any other, as a user who
  * reads the approval question would. A decline pattern is its veto: a proposal that inverts the rule or
- * replaces it with another is declined even when an approve pattern matches it.
+ * replaces it with another is declined even when an approve pattern matches it. So is a proposal that
+ * supersedes a decision the task's user did not agree to replace (`replaceable`): the approval question
+ * says which decision it replaces, and approving it would retire that one.
  */
 export function simulatedDecisionApproval(
   patterns: readonly string[],
   declines: readonly string[] = [],
+  replaceable: readonly string[] = [],
 ): DecisionApproval {
   const approve = patterns.map((pattern) => new RegExp(pattern, "iu"));
   const decline = declines.map((pattern) => new RegExp(pattern, "iu"));
+  const agreed = new Set(replaceable.map((id) => id.toUpperCase()));
   return async (decision) => {
+    if (decision.supersedes && !agreed.has(decision.supersedes.toUpperCase())) return "reject";
     const text = `${decision.title}\n${decision.rule}`;
     if (decline.some((expression) => expression.test(text))) return "reject";
     return approve.some((expression) => expression.test(text)) ? "approve" : "reject";
   };
 }
 
-/** A note the host ends a turn with when the work is not done; a turn that carries one claims nothing. */
-const HOST_END_NOTE_RE = /\[(?:Not verified|Not marked complete|Paused|No response|Cancelled|Stopped)\b/u;
+/**
+ * A note the host ends a turn with when the work is not done; a turn that carries one claims nothing. Read
+ * from the agent's own record of its end notes, never from the streamed text, where the model can write the
+ * same words (review round 3, 2026-09-24).
+ */
+const HOST_END_NOTE_RE = /^\[(?:Not verified|Not marked complete|Paused|No response|Cancelled|Stopped)\b/mu;
 
 const MUTATION_TOOLS = new Set(["write_file", "edit_file", "delete_file"]);
 const RESEARCH_TOOLS = new Set(["search_web", "open_web"]);
@@ -126,7 +135,11 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
       });
       controller.signal.addEventListener("abort", () => agent.abort(), { once: true });
       if (task.approveDecisions || task.declineDecisions) {
-        const answer = simulatedDecisionApproval(task.approveDecisions ?? [], task.declineDecisions);
+        const answer = simulatedDecisionApproval(
+          task.approveDecisions ?? [],
+          task.declineDecisions,
+          task.supersedeDecisions,
+        );
         agent.setDecisionApproval(async (decision, signal) => {
           const verdict = await answer(decision, signal);
           context.emit({
@@ -255,7 +268,7 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
           toolDurationMs: toolDurationMs || null,
           tokens: usage.tokens,
           cost: usage.cost,
-          behavior: toBehavior(counters, finalText),
+          behavior: toBehavior(counters, agent.getTurnEndNotes().join("\n")),
           failureReason: "Benchmark run was interrupted during the agent turn.",
           evidence: sessionEvidence(workspace),
           finalResult: { sessionId, harness: "agent-chat", interrupted: true },
@@ -271,9 +284,10 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
       const { acceptance, failedRequired, coding, intent, report } = grade;
       const benchmarkVerified = grade.verified;
       const verification = verificationScore(task.acceptanceCriteria ?? [], counters, packageScripts(workspace));
-      const behavior = toBehavior(counters, finalText);
+      const hostNotes = agent.getTurnEndNotes().join("\n");
+      const behavior = toBehavior(counters, hostNotes);
       behavior.falseCompletion =
-        grade.requiredCount > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(finalText);
+        grade.requiredCount > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(hostNotes);
       const failureType = classifyFailure({ benchmarkVerified, timedOut, turnError, failedRequired, counters });
 
       return {
@@ -478,8 +492,9 @@ function normalizeCommand(command: string): string {
     .toLowerCase();
 }
 
-function toBehavior(counters: TurnCounters, finalText: string): BenchmarkBehavior {
-  const completionBlocked = /\[Not (?:verified|marked complete)/u.test(finalText);
+/** The turn's counters as benchmark behavior; `hostNotes` are the host's own end notes, one per line. */
+function toBehavior(counters: TurnCounters, hostNotes: string): BenchmarkBehavior {
+  const completionBlocked = /^\[Not (?:verified|marked complete)/mu.test(hostNotes);
   return {
     planCreated: counters.planCreated,
     researchPerformed: counters.researchCalls > 0,

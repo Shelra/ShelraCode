@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDatabase, getDatabasePath } from "../storage/db";
-import { appendRunsToHistory, cleanText, type History, saveHistory } from "./history";
+import { appendRunsToHistory, cleanText, decisionsKept, type History, saveHistory } from "./history";
 import { runBenchmark } from "./runner";
 import type { BenchmarkManifest } from "./types";
 
@@ -114,5 +114,20 @@ describe("saveHistory", () => {
 
     expect(readFileSync(path, "utf8")).toBe(`${JSON.stringify(history, null, 2)}\n`);
     expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ schemaVersion: 1, runs: [] });
+  });
+});
+
+describe("decisionsKept", () => {
+  it("counts the kept decisions only at steps whose request was done", () => {
+    const step = (request: string, ...keeps: string[]) => ({
+      acceptance: [
+        { id: "AC-REQUEST", status: request },
+        ...keeps.map((status, index) => ({ id: `AC-KEEP-${index}`, status })),
+      ],
+    });
+    expect(
+      decisionsKept([step("passed", "passed", "failed"), step("failed", "failed"), step("passed", "passed")]),
+    ).toEqual({ kept: 2, judged: 3 });
+    expect(decisionsKept([{ acceptance: [{ id: "AC-REQUEST", status: "passed" }] }])).toBeNull();
   });
 });

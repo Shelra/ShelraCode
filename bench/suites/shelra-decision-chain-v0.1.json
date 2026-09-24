@@ -11,7 +11,7 @@
     "oracle": "external_deterministic_oracle",
     "leaderboardEligible": true,
     "minimumTaskCount": 10,
-    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision whose title or rule matches the rule it stated in that session (its topic with the negation the user gave, or its idiom, such as soft delete) and declines any other; its veto list (declineDecisions) declines a proposal that inverts the rule or replaces it with another even when it also matches. Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
+    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision whose title or rule matches the rule it stated in that session (its topic with the negation the user gave, or its idiom, such as soft delete) and declines any other; its veto list (declineDecisions) declines a proposal that inverts the rule or replaces it with another even when it also matches, and it declines a proposal that supersedes any decision but the one the user agreed to replace in that session (supersedeDecisions: D-0002 at step 5 only). Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
   },
   "scorePolicy": {
     "id": "shelra-agent-core-provisional",
@@ -275,6 +275,7 @@
         "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:use|uses|keep|keeps|stay|stays|remain|remains|speak|speaks|answer|answers|accept|accepts)[^\\w\\n]+(?:(?:the|in|with|only|all|every|its)[^\\w\\n]+)?snake",
         "(?:no|not|never|stop|avoid|drop|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,1}camel"
       ],
+      "supersedeDecisions": ["D-0002"],
       "acceptanceCriteria": [
         {
           "id": "AC-REQUEST",

@@ -170,6 +170,13 @@ function parseTask(value: unknown, index: number): BenchmarkTaskDefinition {
   if (value.declineDecisions !== undefined) {
     task.declineDecisions = parsePatternList(value.declineDecisions, `tasks[${index}].declineDecisions`);
   }
+  if (value.supersedeDecisions !== undefined) {
+    const ids = value.supersedeDecisions;
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !/^D-\d{4}$/u.test(id))) {
+      throw new Error(`tasks[${index}].supersedeDecisions must be an array of decision ids such as "D-0002".`);
+    }
+    task.supersedeDecisions = ids as string[];
+  }
   if (typeof value.researchRequired === "boolean") task.researchRequired = value.researchRequired;
   if (typeof value.memoryRequired === "boolean") task.memoryRequired = value.memoryRequired;
   if (typeof value.repairExpected === "boolean") task.repairExpected = value.repairExpected;

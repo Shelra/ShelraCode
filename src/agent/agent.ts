@@ -841,6 +841,14 @@ export class Agent {
     return this.lastMemoryContext;
   }
 
+  /**
+   * The notes the host ended the most recent turn with ("[Not verified — …]", "[Paused — …]", "[Checked by
+   * Shelra …]"), never the model's own words: a model that writes "[Stopped" in its reply ended nothing.
+   */
+  getTurnEndNotes(): readonly string[] {
+    return this.turnEndNotes;
+  }
+
   getContextSummary(): AgentContextSummary | null {
     if (!this.contextSummary) return null;
     return {
@@ -1331,8 +1339,14 @@ export class Agent {
     this.kernel?.transition("blocked");
     this.persistKernelIndex(message);
     notifyObserver(observer?.onError, { message, timestamp: Date.now() });
-    yield { type: "content", content: `\n\n[Paused — ${message}]` };
+    yield { type: "content", content: `\n\n${this.endNote(`[Paused — ${message}]`)}` };
     yield { type: "done" };
+  }
+
+  /** A note the host ends the turn with, kept apart from what the model wrote (see `getTurnEndNotes`). */
+  private endNote(note: string): string {
+    this.turnEndNotes.push(note);
+    return note;
   }
 
   /**
@@ -1431,6 +1445,7 @@ export class Agent {
    * as a separate system message, which some open models' chat templates reject mid-conversation.
    */
   private recordVerdict(verdict: string): void {
+    this.endNote(verdict);
     try {
       let index = this.messages.length - 1;
       while (index >= 0 && this.messages[index]?.role !== "assistant") index -= 1;
@@ -2665,7 +2680,7 @@ export class Agent {
 
           for await (const part of stream.events) {
             if (signal.aborted) {
-              yield { type: "content", content: "\n\n[Cancelled]" };
+              yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
               break;
             }
 
@@ -2860,7 +2875,7 @@ export class Agent {
               }
 
               case "abort":
-                if (signal.aborted) yield { type: "content", content: "\n\n[Cancelled]" };
+                if (signal.aborted) yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
                 // Not the user: an SDK chunk, step or total timeout aborted the generation.
                 else interruption ??= { reason: "no response within the time limit", error: null };
                 break;
@@ -3021,7 +3036,7 @@ export class Agent {
             this.persistKernelIndex(reason);
             yield {
               type: "content",
-              content: `\n\n[No response — ${reason} Try again, or switch models with /models.]`,
+              content: `\n\n${this.endNote(`[No response — ${reason} Try again, or switch models with /models.]`)}`,
             };
             yield { type: "done" };
             return;
@@ -3562,7 +3577,7 @@ export class Agent {
             this.kernel?.cancel();
             this.persistKernelIndex();
             this.discardAbortedTurn(userModelMessage);
-            yield { type: "content", content: "\n\n[Cancelled]" };
+            yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
             yield { type: "done" };
             return;
           }

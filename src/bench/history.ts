@@ -29,7 +29,14 @@ export interface HistoryRun {
   createdAt: string;
   finishedAt: string | null;
   durationMs: number | null;
-  tasks: { total: number; completed: number; resolved: number; resolvedRate: number | null };
+  tasks: {
+    total: number;
+    completed: number;
+    resolved: number;
+    resolvedRate: number | null;
+    /** For a suite that judges kept decisions (`AC-KEEP-*`): see `decisionsKept`. */
+    decisionsKept?: { kept: number; judged: number };
+  };
   scores: Json;
   tokens: Json;
   costMicros: number | null;
@@ -241,6 +248,27 @@ export function readRunsFromDatabase(
   }
 }
 
+/**
+ * Decisions kept (the decision chain's metric, F6 of the execution plan): `AC-KEEP-*` criteria passed over
+ * those judged at steps whose request (`AC-REQUEST`) was done. Null for a run whose suite judges none. Computed
+ * here, not by hand: the plan once reported the steps passed under this name (review round 3, 2026-09-24).
+ */
+export function decisionsKept(taskResults: readonly Json[]): { kept: number; judged: number } | null {
+  let kept = 0;
+  let judged = 0;
+  let judgesDecisions = false;
+  for (const task of taskResults) {
+    const acceptance = (task as { acceptance?: Array<{ id?: unknown; status?: unknown }> } | null)?.acceptance ?? [];
+    const decisions = acceptance.filter((criterion) => String(criterion.id).startsWith("AC-KEEP"));
+    if (decisions.length > 0) judgesDecisions = true;
+    const request = acceptance.find((criterion) => criterion.id === "AC-REQUEST");
+    if (request?.status !== "passed") continue;
+    judged += decisions.length;
+    kept += decisions.filter((criterion) => criterion.status === "passed").length;
+  }
+  return judgesDecisions ? { kept, judged } : null;
+}
+
 export function readFieldCases(casesDir: string, identities: readonly Identity[]): Json[] {
   if (!existsSync(casesDir)) return [];
   return readdirSync(casesDir)
@@ -308,6 +336,11 @@ export function appendRunsToHistory(input: {
     }),
   );
   history.fieldCases = readFieldCases(join(input.repositoryRoot, "bench", "field", "cases"), identities);
+  // Every run's, the ones already on record too.
+  for (const run of history.runs) {
+    const kept = decisionsKept(run.taskResults);
+    if (kept) run.tasks.decisionsKept = kept;
+  }
   saveHistory(historyPath, history);
   return { historyPath, runs: history.runs.length, ...counts, fieldCases: history.fieldCases.length };
 }

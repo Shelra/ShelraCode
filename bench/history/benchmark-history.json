@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Every Shelra Bench run and field case, with the agent, model, harness commit and per-task results. Runs are merged by id and never dropped.",
-  "updatedAt": "2026-09-24T06:46:34.129Z",
+  "updatedAt": "2026-09-24T17:29:57.762Z",
   "runs": [
     {
       "id": "run_20260914095310_c25c9c54",
@@ -29509,7 +29509,11 @@
         "total": 10,
         "completed": 10,
         "resolved": 6,
-        "resolvedRate": 60
+        "resolvedRate": 60,
+        "decisionsKept": {
+          "kept": 33,
+          "judged": 38
+        }
       },
       "scores": {
         "overall": 93.9,
@@ -30413,7 +30417,11 @@
         "total": 10,
         "completed": 10,
         "resolved": 10,
-        "resolvedRate": 100
+        "resolvedRate": 100,
+        "decisionsKept": {
+          "kept": 38,
+          "judged": 38
+        }
       },
       "scores": {
         "overall": 80,
@@ -31327,7 +31335,11 @@
         "total": 10,
         "completed": 10,
         "resolved": 6,
-        "resolvedRate": 60
+        "resolvedRate": 60,
+        "decisionsKept": {
+          "kept": 34,
+          "judged": 38
+        }
       },
       "scores": {
         "overall": 95,
@@ -32231,7 +32243,11 @@
         "total": 10,
         "completed": 10,
         "resolved": 10,
-        "resolvedRate": 100
+        "resolvedRate": 100,
+        "decisionsKept": {
+          "kept": 38,
+          "judged": 38
+        }
       },
       "scores": {
         "overall": 80,
@@ -33145,7 +33161,11 @@
         "total": 10,
         "completed": 10,
         "resolved": 6,
-        "resolvedRate": 60
+        "resolvedRate": 60,
+        "decisionsKept": {
+          "kept": 34,
+          "judged": 38
+        }
       },
       "scores": {
         "overall": 95,
@@ -34049,7 +34069,11 @@
         "total": 10,
         "completed": 10,
         "resolved": 6,
-        "resolvedRate": 60
+        "resolvedRate": 60,
+        "decisionsKept": {
+          "kept": 33,
+          "judged": 38
+        }
       },
       "scores": {
         "overall": 75.9,

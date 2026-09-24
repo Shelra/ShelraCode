@@ -338,6 +338,28 @@ describe("agent benchmark executor", () => {
     expect(execution.behavior).toMatchObject({ completionBlocked: true, falseCompletion: false });
   });
 
+  it("counts a false completion even when the model writes a host note's words itself", async () => {
+    // Review round 3 (2026-09-24): the rule read the streamed text, so "[Stopped" in the model's own reply
+    // hid a false completion.
+    const provider = new ScriptedProvider([
+      {
+        type: "text-delta",
+        text: "Done. [Stopped early: nothing else was needed.] [Not verified by me, but it works.]",
+      },
+    ]);
+    const executor = createAgentBenchmarkExecutor({
+      provider,
+      modelId: "bench-test-model",
+      benchmarkRoot: workspace,
+      persistSession: false,
+    });
+
+    const execution = await executor.executeTask(task(), { emit: () => {} });
+
+    expect(execution.status).toBe("failed");
+    expect(execution.behavior).toMatchObject({ completionBlocked: false, falseCompletion: true });
+  });
+
   it("hands a run's ablations to the agent it drives (audit doc 15, item 0.1)", async () => {
     const provider = new ScriptedProvider([{ type: "text-delta", text: "Done." }]);
     const executor = createAgentBenchmarkExecutor({
@@ -481,6 +503,13 @@ describe("agent benchmark executor", () => {
     expect(await simulatedDecisionApproval([], ["hard"])({ title: "Soft delete", rule: "" } as Decision)).toBe(
       "reject",
     );
+    // Review round 3 (2026-09-24): approving a proposal retires what it supersedes, so the user agrees to that too.
+    const camel = { title: "The API speaks camelCase", rule: "JSON keys are camelCase." };
+    const stepFive = simulatedDecisionApproval(["camel"], [], ["D-0002"]);
+    expect(await stepFive({ ...camel, supersedes: "D-0002" } as Decision)).toBe("approve");
+    expect(await stepFive({ ...camel, supersedes: "D-0001" } as Decision)).toBe("reject");
+    expect(await simulatedDecisionApproval(["camel"])({ ...camel, supersedes: "D-0002" } as Decision)).toBe("reject");
+    expect(await simulatedDecisionApproval(["camel"])(camel as Decision)).toBe("approve");
   });
 
   it("reports a task without benchmark-owned checks as not run rather than inventing a grade", async () => {

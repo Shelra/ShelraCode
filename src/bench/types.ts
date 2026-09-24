@@ -151,6 +151,12 @@ export interface BenchmarkTaskDefinition {
    * A proposal is approved only when an approve pattern matches and no decline pattern does.
    */
   declineDecisions?: string[];
+  /**
+   * The decisions this task's user agreed to replace (`D-0002`). A proposal that supersedes any other
+   * decision is declined, as a user who reads "replaces D-0001" in the approval question would; without
+   * the list, every proposal that supersedes something is declined.
+   */
+  supersedeDecisions?: string[];
   researchRequired?: boolean;
   memoryRequired?: boolean;
   repairExpected?: boolean;
