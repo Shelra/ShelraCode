@@ -6,6 +6,7 @@ import {
   FREE_PROVIDERS,
   freeProviderCliError,
   freeProviderFallbackSources,
+  requireFreeProvider,
   resolveFreeProvider,
 } from "./free-providers";
 
@@ -67,6 +68,13 @@ describe("free providers, review round 3 (2026-09-24)", () => {
   it("enrolls Gemini only for a key named for it, never for any GOOGLE_API_KEY", () => {
     expect(resolveFreeProvider("gemini", { GOOGLE_API_KEY: "google-key" }, noStored)).toBeNull();
     expect(resolveFreeProvider("gemini", { GEMINI_API_KEY: "gemini-key" }, noStored)?.source).toBe("GEMINI_API_KEY");
+  });
+
+  it("says which variables configure a provider: alternatives with or, an account id with and", () => {
+    expect(() => requireFreeProvider("groq", {}, noStored)).toThrow("set GROQ_API_KEY or KEY_GROQ or run");
+    expect(() => requireFreeProvider("cloudflare", {}, noStored)).toThrow(
+      "set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID or run",
+    );
   });
 
   it("refuses --provider outside a headless prompt instead of dropping it", () => {

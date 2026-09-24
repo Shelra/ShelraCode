@@ -213,16 +213,13 @@ async function configureRemoteProvider(
     agent.setApiKey(apiKey, baseURL);
     // A key this endpoint rejects: continue on OpenRouter Free with a configured OpenRouter key,
     // then on an installed local model. Free, so no spend is started without the user.
-    agent.setCredentialFallback(
-      credentialFallbackChain([...openRouterFreeFallbackSources(), installedLocalModelFallback]),
-    );
     // No model of this endpoint can serve the turn: continue on a free provider the user configured, as an
-    // OpenRouter session does, then on OpenRouter Free.
+    // OpenRouter session does, then on OpenRouter Free. One OpenRouter Free chain serves both failures, so it
+    // is tried once per session whichever reaches it first.
+    const openRouterFree = credentialFallbackChain(openRouterFreeFallbackSources());
+    agent.setCredentialFallback(thenFallback(openRouterFree, installedLocalModelFallback));
     agent.setProviderFallback(
-      credentialFallbackChain([
-        ...freeProviderFallbackSources(configuredFreeProviders()),
-        ...openRouterFreeFallbackSources(),
-      ]),
+      thenFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())), openRouterFree),
     );
     return {
       models: [],

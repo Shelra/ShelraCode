@@ -42,6 +42,17 @@ describe("credentialFallbackChain", () => {
     expect((await onRejectedKey(request()))?.label).toBe("local model");
   });
 
+  it("tries a chain shared by both failures once, whichever failure reaches it first", async () => {
+    // Review of round 3: a custom endpoint built OpenRouter Free into both chains, so it was tried twice.
+    const openRouterFree = credentialFallbackChain([async () => fallback("openrouter free")]);
+    const onRejectedKey = thenFallback(openRouterFree, async () => fallback("local model"));
+    const onNoModel = thenFallback(credentialFallbackChain([async () => fallback("groq")]), openRouterFree);
+    expect((await onRejectedKey(request()))?.label).toBe("openrouter free");
+    expect((await onNoModel(request()))?.label).toBe("groq");
+    expect(await onNoModel(request())).toBeNull();
+    expect((await onRejectedKey(request()))?.label).toBe("local model");
+  });
+
   it("tries nothing once the turn is cancelled", async () => {
     const source = vi.fn(async () => fallback("key"));
     const controller = new AbortController();

@@ -1408,7 +1408,7 @@ export class Agent {
     const reason = describeInterruption(args.error);
     yield {
       type: "content",
-      content: `\n\n[The provider rejected the API key (${reason}); looking for another configured key or an installed local model.]\n\n`,
+      content: `\n\n[The provider rejected the API key (${reason}); looking for another configured key, provider or installed local model.]\n\n`,
     };
     const attempt = async (source: CredentialFallbackSource | null, modelId: string) => {
       if (!source || args.signal.aborted) return null;

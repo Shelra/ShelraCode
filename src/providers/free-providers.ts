@@ -115,12 +115,18 @@ export function resolveFreeProvider(
 }
 
 /** The provider a session or a benchmark was told to use, or an error that says how to configure it. */
-export function requireFreeProvider(id: FreeProviderId): ConfiguredFreeProvider {
-  const configured = resolveFreeProvider(id);
+export function requireFreeProvider(
+  id: FreeProviderId,
+  env: NodeJS.ProcessEnv = process.env,
+  stored: (id: string) => ProviderCredential | undefined = getStoredProviderCredential,
+): ConfiguredFreeProvider {
+  const configured = resolveFreeProvider(id, env, stored);
   if (configured) return configured;
   const preset = FREE_PROVIDERS[id];
-  const names = [...preset.keyEnv, ...(preset.accountEnv ?? [])];
-  throw new Error(`No ${preset.name} credentials: set ${names.join(" and ")} or run \`shelra auth ${id}\`.`);
+  // Key variables are alternatives; an account id is needed as well.
+  const key = preset.keyEnv.join(" or ");
+  const needed = preset.accountEnv ? `${key} and ${preset.accountEnv.join(" or ")}` : key;
+  throw new Error(`No ${preset.name} credentials: set ${needed} or run \`shelra auth ${id}\`.`);
 }
 
 /** Every free provider the user can reach, in the order of FREE_PROVIDER_IDS. */

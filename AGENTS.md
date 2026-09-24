@@ -150,9 +150,13 @@ turn at once. Everything else is recovered:
   progress, ten in all), and then returns a failed task the parent routes around.
 - A key the provider rejects moves the session, with its completed steps, to a fallback the user
   already has: another configured OpenRouter key, OpenRouter Free when another endpoint rejects
-  its key, then a local model that is already installed (nothing is downloaded). The notice names
-  the fallback and its cost. Only when there is none does the turn end with the key error
-  (`setCredentialFallback`, wired in `src/index.ts`).
+  its key, then a local model that is already installed (nothing is downloaded). On a session
+  started with `--provider`, or one already moved to another free provider, the next configured
+  free provider comes first, then OpenRouter Free (each tried once per session, shared with the
+  provider fallback), then the local model; the notice states that provider's plan and, for
+  Gemini's free tier, that Google may use the prompts. The notice names the fallback and its cost.
+  Only when there is none does the turn end with the key error (`setCredentialFallback`, wired in
+  `src/index.ts`).
 - A tool that throws (a missing binary, an unreachable service, an MCP server that fails) returns
   a failed result the model routes around (`hardenToolSet` in `src/toolset/tools.ts`).
 - New code must follow the same rule: degrade and report, never throw out of the turn loop.
