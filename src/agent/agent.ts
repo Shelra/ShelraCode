@@ -286,6 +286,25 @@ interface InterruptionState {
   /** The last failure and the provider it came from: a used-up free allowance ends the turn "Limited". */
   lastError?: unknown;
   lastProvider?: string;
+  /** Rounds cut because the model sent nothing for too long: each one gives the next round more patience. */
+  silences?: number;
+}
+
+/**
+ * The timeout for a round after `silences` rounds were cut for sending nothing. Some providers deliver a large tool
+ * call only once it is complete, so a model writing a long file sends nothing for minutes (seen live 2026-09-24: a free
+ * model writing a game's modules was cut at 90 s on every attempt and lost the file each time). The wait doubles after
+ * each cut, up to a step's own limit, so a dead connection still ends and a long write can finish.
+ */
+export function patienceAfterSilences(timeout: ProviderTimeout, silences: number): ProviderTimeout {
+  if (!timeout.chunkMs || silences <= 0) return timeout;
+  const cap = timeout.stepMs ?? timeout.totalMs ?? timeout.chunkMs * 4;
+  return { ...timeout, chunkMs: Math.min(cap, timeout.chunkMs * 2 ** silences) };
+}
+
+/** An interruption in which the model sent nothing for too long, as `describeInterruption` words it. */
+function isSilence(reason: string): boolean {
+  return reason === "no response within the time limit" || reason.startsWith("no output for ");
 }
 
 type InterruptionOutcome =
@@ -1347,6 +1366,7 @@ export class Agent {
     const { reason, state } = args;
     state.lastError = args.error;
     state.lastProvider = args.provider.id;
+    if (isSilence(reason)) state.silences = (state.silences ?? 0) + 1;
     // Only a completed step is progress. Text streamed before a stall (a preamble such as "Let me
     // write the file now.") is not: counting it kept a stalling model from ever being replaced and
     // filled the transcript with fragments; the retried round regenerates it.
@@ -1921,7 +1941,7 @@ export class Agent {
           messages: conversation,
           tools: runtime.modelInfo?.supportsClientTools === false ? {} : childTools,
           maxSteps: Math.min(this.maxToolRounds, isExplore || isPlan ? 60 : 120),
-          timeout: this.modelTimeout,
+          timeout: patienceAfterSilences(this.modelTimeout, attempts.silences ?? 0),
           signal: withAbortTimeout(signal, this.modelTimeout.totalMs),
           temperature: this.samplingTemperature(attemptModelId, runtime.modelInfo, isExplore || isPlan ? 0.2 : 0.5),
           ...(childMaxOutputTokens === undefined ? {} : { maxOutputTokens: childMaxOutputTokens }),
@@ -2004,6 +2024,7 @@ export class Agent {
         attempts.withoutProgress += 1;
         attempts.onModel += 1;
         attempts.total += 1;
+        if (isSilence(interruption.reason)) attempts.silences = (attempts.silences ?? 0) + 1;
 
         let stopped: string | null = null;
         if (
@@ -2833,7 +2854,7 @@ export class Agent {
             messages: requestMessages,
             tools,
             maxSteps: this.maxToolRounds,
-            timeout: this.modelTimeout,
+            timeout: patienceAfterSilences(this.modelTimeout, interruptions.silences ?? 0),
             signal: modelSignal,
             temperature: this.samplingTemperature(runtime.modelId, runtime.modelInfo, 0.7),
             ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),

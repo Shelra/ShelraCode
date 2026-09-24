@@ -95,7 +95,7 @@ vi.mock("../hooks/index", () => ({
   executeEventHooks: executeEventHooksMock,
 }));
 
-import { Agent } from "./agent";
+import { Agent, patienceAfterSilences } from "./agent";
 
 /** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
 const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
@@ -310,6 +310,22 @@ describe("a failing model connection never ends the turn", () => {
     );
     expect(toolIndex).toBeGreaterThan(0);
     expect(nudgeIndex).toBeGreaterThan(toolIndex);
+  });
+
+  it("gives the next round more patience after a model sent nothing for too long", async () => {
+    // Seen live 2026-09-24: a free model writing a large module sent nothing for 90 s (its provider delivers a tool
+    // call only once complete) and was cut on every attempt, losing the file each time.
+    expect(patienceAfterSilences({ totalMs: 900_000, stepMs: 300_000, chunkMs: 90_000 }, 0).chunkMs).toBe(90_000);
+    expect(patienceAfterSilences({ totalMs: 900_000, stepMs: 300_000, chunkMs: 90_000 }, 1).chunkMs).toBe(180_000);
+    expect(patienceAfterSilences({ totalMs: 900_000, stepMs: 300_000, chunkMs: 90_000 }, 2).chunkMs).toBe(300_000);
+
+    const stall = { events: [{ type: "error" as const, error: new ProviderStreamIdleError(90_000) }] };
+    const provider = new ScriptedProvider([stall, answer("Written.")]);
+    const { text } = await run(provider);
+
+    expect(text).toContain("Written.");
+    const chunkTimeouts = provider.requests.map((request) => request.timeout?.chunkMs);
+    expect(chunkTimeouts[1]).toBe((chunkTimeouts[0] ?? 0) * 2);
   });
 
   it("moves to the provider's fallback model after two failures in a row", async () => {

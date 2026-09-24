@@ -83,6 +83,12 @@ function tracingFetch(inner: FetchFunction | undefined): FetchFunction | undefin
   };
 }
 
+/** The stream's idle budget: SHELRA_STREAM_IDLE_MS (0 disables it), never tighter than the caller's chunk timeout. */
+function idleBudget(chunkMs: number | undefined): number {
+  const idle = streamIdleTimeoutMs();
+  return idle === 0 ? 0 : Math.max(idle, chunkMs ?? 0);
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -252,7 +258,8 @@ export class LocalProviderAdapter implements ProviderAdapter {
 
     return {
       events: normalizeProviderEvents(
-        withIdleWatchdog(result.fullStream as AsyncIterable<unknown>, streamIdleTimeoutMs(), watchdog),
+        // Never tighter than the patience the caller asked for (a round retried after a silence waits longer).
+        withIdleWatchdog(result.fullStream as AsyncIterable<unknown>, idleBudget(request.timeout?.chunkMs), watchdog),
       ),
       response: Promise.resolve(result.response).then((response) => ({
         messages: response.messages as readonly unknown[],
