@@ -132,13 +132,35 @@ function isDirectory(path: string): boolean {
   }
 }
 
+/**
+ * Folders that are never a project's own source at any depth: dependencies, caches and tool state, which a
+ * project without a .gitignore leaves for git to list (git has no built-in rule for them).
+ */
+const TOOL_STATE_DIRS: ReadonlySet<string> = new Set([
+  "node_modules",
+  ".git",
+  "__pycache__",
+  ".venv",
+  "venv",
+  ".shelra",
+  ".cache",
+  ".turbo",
+  ".next",
+  ".nuxt",
+  ".svelte-kit",
+]);
+
 /** The project's own files: from git (tracked and unignored), or a bounded walk outside a repository. */
 function projectFiles(root: string): { files: string[]; complete: boolean } {
   const listed = git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
   if (listed?.ok) {
-    // Tool state and dependencies a project forgot to ignore, at its root, are still not its own files. Deeper
-    // down, git's ignore rules already dropped build output: a tracked `src/commands/build/` is source.
-    const files = listed.stdout.split("\0").filter((file) => file && !IGNORED_DIRS.has(file.split("/")[0] ?? ""));
+    // Tool state and dependencies are never the project's own files. Folders named like build output (build,
+    // dist, target, vendor) are left out only at the root: a tracked `src/commands/build/` is source.
+    const files = listed.stdout.split("\0").filter((file) => {
+      if (!file) return false;
+      const parts = file.split("/");
+      return !IGNORED_DIRS.has(parts[0] ?? "") && !parts.some((part) => TOOL_STATE_DIRS.has(part));
+    });
     return { files: [...new Set(files)].sort(), complete: true };
   }
   const walked = listWorkspaceFiles(root);

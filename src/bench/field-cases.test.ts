@@ -56,6 +56,12 @@ describe("redact", () => {
     expect(redact("users_ana_x", identity)).toBe("users_<user>_x");
     expect(redact("banana and Anastasia", identity)).toBe("banana and Anastasia");
   });
+
+  it("leaves identifiers alone when the account is a system one that names nobody", () => {
+    expect(redact("rm -rf node_modules in /home/node/app", { home: "/home/node", user: "node", host: "" })).toBe(
+      "rm -rf node_modules in ~/app",
+    );
+  });
 });
 
 describe("renderScoreboard", () => {

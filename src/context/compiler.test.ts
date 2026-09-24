@@ -161,6 +161,17 @@ describe("host context compiler", () => {
       "Files in this project (4):\n- internal/target/target.go\n- package.json\n- src/commands/build/index.test.ts\n- src/commands/build/index.ts",
     );
 
+    // A project with no .gitignore: git lists bytecode and dependencies at any depth, the packet does not.
+    const script = repository("shelra-context-no-gitignore-", {
+      "app/calc.py": "def add(a, b):\n    return a + b\n",
+      "app/__pycache__/calc.cpython-312.pyc": "x",
+      "web/node_modules/dep/index.js": "module.exports = 1;\n",
+    });
+    const listed = compileContextPacket(script, "revisa el proyecto").promptAppendix;
+    expect(listed).toContain("Files in this project (1):\n- app/calc.py");
+    expect(listed).not.toContain("__pycache__");
+    expect(listed).not.toContain("node_modules");
+
     // Outside git, a folder deeper than the bounded walk goes means the list would be wrong: none is given.
     const deep = scratch("shelra-context-deep-", {
       "pom.xml": "<project/>",

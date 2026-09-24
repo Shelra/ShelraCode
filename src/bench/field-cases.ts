@@ -108,6 +108,24 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
+/** Account names that identify no person. */
+const GENERIC_ACCOUNTS: ReadonlySet<string> = new Set([
+  "root",
+  "node",
+  "user",
+  "admin",
+  "administrator",
+  "dev",
+  "runner",
+  "ubuntu",
+  "vscode",
+  "codespace",
+  "codespaces",
+  "ec2-user",
+  "debian",
+  "pi",
+]);
+
 /**
  * Removes what identifies the user's machine before a record is committed to the public
  * repository: the home folder in either slash style, the user name and the machine name.
@@ -126,6 +144,9 @@ export function redact(text: string, identity: { home: string; user: string; hos
     [identity.host, "<host>"],
     [identity.user, "<user>"],
   ] as const) {
+    // A system account (a container's `node`, a CI `runner`) names nobody; as a word it would rewrite
+    // `node_modules` and `user_id`. Its home folder is still redacted above.
+    if (placeholder === "<user>" && GENERIC_ACCOUNTS.has(value.toLowerCase())) continue;
     // Also the slug form memory entries are named with ("John Doe" → "john-doe"), and between underscores,
     // which `\b` does not treat as a boundary.
     const slug = value
