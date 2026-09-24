@@ -41,7 +41,9 @@ export const FREE_PROVIDERS: Readonly<Record<FreeProviderId, FreeProviderPreset>
   gemini: {
     id: "gemini",
     name: "Google Gemini",
-    keyEnv: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+    // Only a key named for Gemini: a GOOGLE_API_KEY set for another Google service would otherwise send
+    // the session's prompts to Gemini's free tier, whose terms let Google read them.
+    keyEnv: ["GEMINI_API_KEY"],
     baseURL: () => "https://generativelanguage.googleapis.com/v1beta/openai",
     models: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
     plan: "free tier, limits unpublished; a key on a billed project is charged by Google",
@@ -60,6 +62,21 @@ export const FREE_PROVIDERS: Readonly<Record<FreeProviderId, FreeProviderPreset>
 
 export function isFreeProviderId(value: string): value is FreeProviderId {
   return (FREE_PROVIDER_IDS as readonly string[]).includes(value);
+}
+
+/**
+ * Why `--provider` cannot apply to this invocation, or null. It runs a headless prompt (`-p`) or a benchmark;
+ * elsewhere it was dropped without a word, and the `-m` meant for that provider then chose a model on
+ * OpenRouter, where the same id can be a paid one (review round 3, 2026-09-24).
+ */
+export function freeProviderCliError(input: {
+  provider?: string;
+  prompt: boolean;
+  autonomous: boolean;
+  verify: boolean;
+}): string | null {
+  if (!input.provider || (input.prompt && !input.autonomous && !input.verify)) return null;
+  return `--provider ${input.provider} runs a headless prompt: pass -p "..." (or use \`shelra bench --provider ${input.provider}\`).`;
 }
 
 /** A provider the user can reach: its key (and account) from the environment or `shelra auth`. */
@@ -95,6 +112,15 @@ export function resolveFreeProvider(
     credential: { apiKey, ...(accountId ? { accountId } : {}) },
     source: key ? key.name : `\`shelra auth ${id}\``,
   };
+}
+
+/** The provider a session or a benchmark was told to use, or an error that says how to configure it. */
+export function requireFreeProvider(id: FreeProviderId): ConfiguredFreeProvider {
+  const configured = resolveFreeProvider(id);
+  if (configured) return configured;
+  const preset = FREE_PROVIDERS[id];
+  const names = [...preset.keyEnv, ...(preset.accountEnv ?? [])];
+  throw new Error(`No ${preset.name} credentials: set ${names.join(" and ")} or run \`shelra auth ${id}\`.`);
 }
 
 /** Every free provider the user can reach, in the order of FREE_PROVIDER_IDS. */

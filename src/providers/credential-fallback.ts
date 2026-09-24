@@ -24,6 +24,18 @@ export interface CredentialFallbackRequest {
 export type CredentialFallbackSource = (request: CredentialFallbackRequest) => Promise<CredentialFallback | null>;
 
 /**
+ * A chain shared with another failure (a provider fallback), then `last` once the chain is spent. Nesting the
+ * chain inside another chain would drop it after its first answer, so a second rejected key would skip the
+ * rest of it.
+ */
+export function thenFallback(
+  chain: CredentialFallbackSource,
+  last: CredentialFallbackSource,
+): CredentialFallbackSource {
+  return async (request) => (await chain(request)) ?? last(request);
+}
+
+/**
  * The sources in order, each tried at most once per session: when a fallback's key is rejected
  * too, the next call moves on to the next source. A source that is unavailable or throws is skipped.
  */

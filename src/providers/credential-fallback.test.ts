@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type CredentialFallback, credentialFallbackChain } from "./credential-fallback";
+import { type CredentialFallback, credentialFallbackChain, thenFallback } from "./credential-fallback";
 import type { ProviderAdapter } from "./types";
 
 const { storedKey } = vi.hoisted(() => ({ storedKey: { value: undefined as string | undefined } }));
@@ -30,6 +30,16 @@ describe("credentialFallbackChain", () => {
       async () => fallback("local model"),
     ]);
     expect((await next(request()))?.label).toBe("local model");
+  });
+
+  it("shares a chain with another failure and ends on the last source only once the chain is spent", async () => {
+    // Review round 3 (2026-09-24): a chain nested in another chain was dropped after its first answer, so a
+    // second rejected key skipped OpenRouter Free and went straight to the local model.
+    const shared = credentialFallbackChain([async () => fallback("gemini"), async () => fallback("openrouter free")]);
+    const onRejectedKey = thenFallback(shared, async () => fallback("local model"));
+    expect((await onRejectedKey(request()))?.label).toBe("gemini");
+    expect((await onRejectedKey(request()))?.label).toBe("openrouter free");
+    expect((await onRejectedKey(request()))?.label).toBe("local model");
   });
 
   it("tries nothing once the turn is cancelled", async () => {

@@ -474,6 +474,12 @@ export class Agent {
   private credentialFallback: CredentialFallbackSource | null = null;
   /** Where a turn continues when no model of this provider can serve it; see `setProviderFallback`. */
   private providerFallback: CredentialFallbackSource | null = null;
+  /**
+   * The model the session was serving before a provider fallback moved it to another provider; null while
+   * it is on its own provider. A key the other provider rejects must not hand that provider's model id to
+   * the first provider's key fallback, where the same id can name a paid model.
+   */
+  private modelBeforeProviderFallback: string | null = null;
   /** The fallback serving this session after a rejected key, released on cleanup. */
   private activeCredentialFallback: CredentialFallback | null = null;
   private readonly budget: BudgetLimits;
@@ -752,6 +758,7 @@ export class Agent {
     const fallback = this.activeCredentialFallback;
     if (fallback && fallback.provider !== provider) {
       this.activeCredentialFallback = null;
+      this.modelBeforeProviderFallback = null;
       void fallback.dispose?.().catch(() => undefined);
     }
   }
@@ -1314,8 +1321,10 @@ export class Agent {
       return null;
     }
     const previous = this.activeCredentialFallback;
+    const homeModel = this.modelBeforeProviderFallback ?? args.modelId;
     this.activeCredentialFallback = fallback;
     this.setProvider(fallback.provider, fallback.modelId);
+    this.modelBeforeProviderFallback = homeModel;
     await previous?.dispose?.().catch(() => undefined);
     const notice = `${args.cause} Continuing with ${fallback.label}, model ${fallback.modelId}, for the rest of this session.`;
     this.kernel?.recordObservation(notice);
@@ -1336,19 +1345,28 @@ export class Agent {
     completedSteps: ModelMessage[];
     signal: AbortSignal;
   }): AsyncGenerator<StreamChunk, CredentialFallback | null, unknown> {
-    if (!this.credentialFallback) return null;
+    // On a provider the session moved to, the rejected key is that provider's: the next provider of the
+    // same chain comes first, and the first provider's key fallback continues on the model it was serving.
+    const onMovedProvider = this.modelBeforeProviderFallback !== null && this.providerFallback !== null;
+    if (!this.credentialFallback && !onMovedProvider) return null;
     const reason = describeInterruption(args.error);
     yield {
       type: "content",
       content: `\n\n[The provider rejected the API key (${reason}); looking for another configured key or an installed local model.]\n\n`,
     };
-    let fallback: CredentialFallback | null = null;
-    try {
-      fallback = await this.credentialFallback({ modelId: args.modelId, signal: args.signal });
-    } catch {
-      fallback = null;
-    }
+    const attempt = async (source: CredentialFallbackSource | null, modelId: string) => {
+      if (!source || args.signal.aborted) return null;
+      try {
+        return await source({ modelId, signal: args.signal });
+      } catch {
+        return null;
+      }
+    };
+    let fallback = onMovedProvider ? await attempt(this.providerFallback, args.modelId) : null;
+    const movedAgain = fallback !== null;
+    if (!fallback) fallback = await attempt(this.credentialFallback, this.modelBeforeProviderFallback ?? args.modelId);
     if (!fallback) return null;
+    if (!movedAgain) this.modelBeforeProviderFallback = null;
     if (args.signal.aborted) {
       await fallback.dispose?.().catch(() => undefined);
       return null;
@@ -2400,7 +2418,7 @@ export class Agent {
       modelInfo = runtime.modelInfo;
       emptyResponseRetries = 0;
     };
-    /** The turn continues on another provider (a provider fallback), with a fresh attempt budget there. */
+    /** The turn continues on another provider or key (a fallback of either kind), with a fresh attempt budget there. */
     const adoptProvider = (fallback: CredentialFallback) => {
       provider = fallback.provider;
       interruptions.onModel = 0;
@@ -3495,11 +3513,7 @@ export class Agent {
               signal,
             });
             if (fallback) {
-              provider = fallback.provider;
-              interruptions.onModel = 0;
-              interruptions.triedModels.clear();
-              interruptions.triedModels.add(fallback.modelId);
-              switchModel(fallback.modelId);
+              adoptProvider(fallback);
               continue;
             }
           }

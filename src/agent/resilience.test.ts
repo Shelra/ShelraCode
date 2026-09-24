@@ -498,6 +498,38 @@ describe("a provider that cannot serve the turn hands it to another free provide
     expect(openrouter.requests).toHaveLength(1);
     expect(text).toContain("[Paused");
   });
+
+  it("answers a key the moved-to provider rejects with its next provider, then the first provider's own model", async () => {
+    // Review round 3 (2026-09-24): Groq's model id reached the OpenRouter key fallback, where
+    // `openai/gpt-oss-120b` is a paid model, under the free policy.
+    const openrouter = new ScriptedProvider([{ events: [], fail: quotaSpent() }]);
+    const groq = new ScriptedProvider([{ events: [], fail: apiError(401, "Invalid API Key") }]);
+    const gemini = new ScriptedProvider([{ events: [], fail: apiError(401, "API key not valid") }]);
+    const secondKey = new ScriptedProvider([answer("Answered on the other OpenRouter key.")]);
+    const keyFallbackModels: string[] = [];
+    const { text } = await run(openrouter, "Explain the project", (agent) => {
+      agent.setProviderFallback(
+        credentialFallbackChain([
+          async () => ({ provider: groq, modelId: "openai/gpt-oss-120b", label: "Groq" }),
+          async () => ({ provider: gemini, modelId: "gemini-2.5-flash", label: "Google Gemini" }),
+        ]),
+      );
+      agent.setCredentialFallback(
+        credentialFallbackChain([
+          async ({ modelId }) => {
+            keyFallbackModels.push(modelId);
+            return { provider: secondKey, modelId, label: "the OpenRouter key from KEY_OPENROUTER" };
+          },
+        ]),
+      );
+    });
+
+    expect(groq.requests).toHaveLength(1);
+    expect(gemini.requests).toHaveLength(1);
+    expect(keyFallbackModels).toEqual(["primary-model"]);
+    expect(secondKey.requests.map((request) => request.modelId)).toEqual(["primary-model"]);
+    expect(text).toContain("Answered on the other OpenRouter key.");
+  });
 });
 
 describe("a rejected API key moves the session to a fallback the user already has", () => {

@@ -41,7 +41,13 @@ import { normalizeModelId, primeCatalog } from "./models/catalog";
 import { installLocalModel } from "./models/manager";
 import { fetchOpenRouterCatalog, isOpenRouterBaseURL } from "./models/openrouter";
 import type { ModelRecommendation } from "./models/recommendation";
-import { type ModelPolicy, routeCatalogModel, startupModelRequest } from "./models/routing";
+import {
+  isGuaranteedFree,
+  type ModelPolicy,
+  resolveCatalogModel,
+  routeCatalogModel,
+  startupModelRequest,
+} from "./models/routing";
 import type { CatalogEntry } from "./models/types";
 import { catalogEntryToModelInfo } from "./models/types";
 import {
@@ -53,23 +59,29 @@ import {
   OPENROUTER_BASE_URL,
   PRODUCT_NAME,
 } from "./product/identity";
-import { type CredentialFallbackSource, credentialFallbackChain } from "./providers/credential-fallback";
+import { type CredentialFallbackSource, credentialFallbackChain, thenFallback } from "./providers/credential-fallback";
 import {
   configuredFreeProviders,
   createFreeProvider,
   FREE_PROVIDER_IDS,
   FREE_PROVIDERS,
   type FreeProviderId,
+  freeProviderCliError,
   freeProviderFallbackSources,
   isFreeProviderId,
-  resolveFreeProvider,
+  requireFreeProvider,
 } from "./providers/free-providers";
 import { createOpenRouterProvider } from "./providers/openrouter";
 import { selectLocalRoute } from "./router/local-first";
 import { installManagedRuntime, resolveRuntimeInstallPlan } from "./runtimes/bootstrap";
 import { discoverLocalRuntimes, disposeLocalRuntimes } from "./runtimes/discovery";
 import type { LocalModelCandidate, LocalRuntimeDiscovery } from "./runtimes/types";
-import { saveOpenRouterApiKey, saveProviderCredential } from "./security/credentials";
+import {
+  clearOpenRouterApiKey,
+  clearProviderCredential,
+  saveOpenRouterApiKey,
+  saveProviderCredential,
+} from "./security/credentials";
 import { runOnboarding } from "./setup/onboarding";
 import { startInstalledLocalModel } from "./startup/local-fallback";
 import { probeLocalModel, runStartup } from "./startup/orchestrator";
@@ -178,16 +190,15 @@ function openRouterFreeFallbackSources(): CredentialFallbackSource[] {
  */
 function configureFreeProviderSession(agent: Agent, id: FreeProviderId, model: string | undefined): void {
   const preset = FREE_PROVIDERS[id];
-  const configured = resolveFreeProvider(id);
-  if (!configured) {
-    throw new Error(`No ${preset.name} credentials: set ${preset.keyEnv[0]} or run \`shelra auth ${id}\`.`);
-  }
+  const configured = requireFreeProvider(id);
   const modelId = model?.trim() || (preset.models[0] as string);
   agent.setProvider(createFreeProvider(configured, modelId), modelId);
   const others = configuredFreeProviders().filter((provider) => provider.preset.id !== id);
-  agent.setProviderFallback(
-    credentialFallbackChain([...freeProviderFallbackSources(others), ...openRouterFreeFallbackSources()]),
-  );
+  // One chain for both failures, so each provider is tried once per session whichever way it is reached;
+  // a rejected key ends on an installed local model only once that chain is spent.
+  const next = credentialFallbackChain([...freeProviderFallbackSources(others), ...openRouterFreeFallbackSources()]);
+  agent.setProviderFallback(next);
+  agent.setCredentialFallback(thenFallback(next, installedLocalModelFallback));
 }
 
 async function configureRemoteProvider(
@@ -204,6 +215,14 @@ async function configureRemoteProvider(
     // then on an installed local model. Free, so no spend is started without the user.
     agent.setCredentialFallback(
       credentialFallbackChain([...openRouterFreeFallbackSources(), installedLocalModelFallback]),
+    );
+    // No model of this endpoint can serve the turn: continue on a free provider the user configured, as an
+    // OpenRouter session does, then on OpenRouter Free.
+    agent.setProviderFallback(
+      credentialFallbackChain([
+        ...freeProviderFallbackSources(configuredFreeProviders()),
+        ...openRouterFreeFallbackSources(),
+      ]),
     );
     return {
       models: [],
@@ -222,6 +241,8 @@ async function configureRemoteProvider(
   primeCatalog(catalog.entries);
   // The key the session runs on; a rejected key's fallback replaces it, and the model picker follows.
   let activeApiKey = apiKey;
+  // The model the session chose on OpenRouter (at startup or in the picker), paid or not.
+  let chosenModelId = "";
 
   const selectModel = async (modelId: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -243,6 +264,7 @@ async function configureRemoteProvider(
         policy,
       });
       agent.setProvider(provider, route.modelId);
+      chosenModelId = route.modelId;
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -277,6 +299,17 @@ async function configureRemoteProvider(
     policy,
   });
   agent.setProvider(provider, route.modelId);
+  chosenModelId = route.modelId;
+  // Another key keeps the model it is handed only when the session chose that model or it is free here: an
+  // id handed over from elsewhere (a model another provider was serving) can name a paid model on
+  // OpenRouter, which nobody approved. Otherwise the session's own choice, or the free router under the free
+  // policy.
+  const fallbackModel = (modelId: string): string => {
+    const entry = resolveCatalogModel(catalog.entries, modelId);
+    if (modelId === chosenModelId || modelId === "openrouter/free" || (entry && isGuaranteedFree(entry)))
+      return modelId;
+    return policy === "free" && !explicitModelSelection ? "openrouter/free" : chosenModelId;
+  };
   // A key OpenRouter rejects: continue with another OpenRouter key the user configured (a stale
   // environment variable next to a newer saved key), on the same model and policy, then on an
   // installed local model.
@@ -286,8 +319,9 @@ async function configureRemoteProvider(
         .filter((entry) => entry.key !== apiKey)
         .map(
           ({ key, source }): CredentialFallbackSource =>
-            async ({ modelId }) => {
+            async (request) => {
               activeApiKey = key;
+              const modelId = fallbackModel(request.modelId);
               return {
                 provider: createOpenRouterProvider(key, {
                   modelId,
@@ -1287,12 +1321,7 @@ async function runBenchCommand(options: {
             }
             if (agentName !== "shelra") throw new Error("--provider runs the product path, `--agent shelra`.");
             const preset = FREE_PROVIDERS[providerOption];
-            const configured = resolveFreeProvider(providerOption);
-            if (!configured) {
-              throw new Error(
-                `No ${preset.name} credentials: set ${preset.keyEnv[0]} or run \`shelra auth ${providerOption}\`.`,
-              );
-            }
+            const configured = requireFreeProvider(providerOption);
             const modelId = options.model?.trim() || (preset.models[0] as string);
             updateBenchmarkRunMetadata(run.runId, { model: `${preset.id}/${modelId}`, modelProvider: preset.name });
             emit({
@@ -1667,6 +1696,16 @@ program
     }
 
     const config = resolveConfig(options);
+    const providerError = freeProviderCliError({
+      provider: config.freeProvider,
+      prompt: Boolean(options.prompt),
+      autonomous: options.autonomous === true,
+      verify: options.verify === true,
+    });
+    if (providerError) {
+      console.error(providerError);
+      process.exit(1);
+    }
 
     if (options.autonomous) {
       if (options.verify) {
@@ -2041,6 +2080,26 @@ authCommand
   .action((accountId: string, apiToken: string) => {
     saveProviderCredential("cloudflare", { apiKey: apiToken, accountId });
     console.log("Cloudflare Workers AI credentials saved. Key material is never printed or logged.");
+  });
+// A stored free provider is a fallback of every session: removing its key is how a person opts out.
+authCommand
+  .command("remove <provider>")
+  .description(`Remove a stored key: openrouter, ${FREE_PROVIDER_IDS.join(", ")}`)
+  .action((provider: string) => {
+    const id = provider.trim().toLowerCase();
+    if (id === "openrouter") clearOpenRouterApiKey();
+    else if (isFreeProviderId(id)) clearProviderCredential(id);
+    else {
+      console.error(`Unknown provider "${provider}". Use openrouter or one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
+      process.exitCode = 1;
+      return;
+    }
+    const name = id === "openrouter" ? "OpenRouter" : FREE_PROVIDERS[id as FreeProviderId].name;
+    const envNames =
+      id === "openrouter" ? ["OPENROUTER_API_KEY", "KEY_OPENROUTER"] : FREE_PROVIDERS[id as FreeProviderId].keyEnv;
+    const stillSet = envNames.filter((name) => process.env[name]?.trim());
+    console.log(`Removed the stored ${name} key.`);
+    if (stillSet.length > 0) console.log(`${stillSet.join(", ")} is still set in the environment and still wins.`);
   });
 
 // The ShelraCode account (backend/). Only these commands reach the account service; the agent never does.

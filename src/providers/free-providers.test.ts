@@ -4,6 +4,7 @@ import {
   configuredFreeProviders,
   createFreeProvider,
   FREE_PROVIDERS,
+  freeProviderCliError,
   freeProviderFallbackSources,
   resolveFreeProvider,
 } from "./free-providers";
@@ -59,5 +60,24 @@ describe("free providers", () => {
       "Groq (free plan: 30 requests a minute and 1,000 a day; a key on a paid plan is billed by Groq), with the key from GROQ_API_KEY",
     );
     expect(gemini?.label).toContain("Google may use prompts and outputs to improve its products");
+  });
+});
+
+describe("free providers, review round 3 (2026-09-24)", () => {
+  it("enrolls Gemini only for a key named for it, never for any GOOGLE_API_KEY", () => {
+    expect(resolveFreeProvider("gemini", { GOOGLE_API_KEY: "google-key" }, noStored)).toBeNull();
+    expect(resolveFreeProvider("gemini", { GEMINI_API_KEY: "gemini-key" }, noStored)?.source).toBe("GEMINI_API_KEY");
+  });
+
+  it("refuses --provider outside a headless prompt instead of dropping it", () => {
+    expect(freeProviderCliError({ provider: "groq", prompt: true, autonomous: false, verify: false })).toBeNull();
+    expect(freeProviderCliError({ prompt: false, autonomous: false, verify: false })).toBeNull();
+    for (const mode of [
+      { prompt: false, autonomous: false, verify: false },
+      { prompt: true, autonomous: true, verify: false },
+      { prompt: false, autonomous: false, verify: true },
+    ]) {
+      expect(freeProviderCliError({ provider: "groq", ...mode })).toContain("--provider groq runs a headless prompt");
+    }
   });
 });
