@@ -188,6 +188,11 @@ export interface ToolGroupSettings {
 export interface UserSettings {
   apiKey?: string;
   defaultModel?: string;
+  /**
+   * The model mode chosen in the terminal UI: "free" (the default) runs free models only; "mixed" runs any model,
+   * paid or free. A `--model-policy` flag overrides it for one run.
+   */
+  modelMode?: "free" | "mixed";
   /** Last validated local selection; the runtime is still rediscovered on boot. */
   localRuntimeId?: string;
   lastLocalHealthCheck?: string;

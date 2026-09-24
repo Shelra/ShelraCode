@@ -136,8 +136,9 @@ turn at once. Everything else is recovered:
   pause, and moves to the provider's next fallback model after two failures in a row, or at once
   when retrying cannot help (`fallbackModelIds`, `SHELRA_FALLBACK_MODELS`). On OpenRouter the
   fallback is its own router for the spending policy, never a hand-picked model: `openrouter/free`
-  under the free policy or a hand-chosen model, `openrouter/auto` (paid, within the policy's cost
-  tier) then `openrouter/free` under a paid policy. A fallback is not always free: the switch
+  in Free mode (the default, which never runs a paid model, not even one the user names) or for a
+  model chosen with the `custom` policy, `openrouter/auto` (paid, within the policy's cost tier) then
+  `openrouter/free` in Mixed mode (`ctrl+f` in the terminal UI, `--model-policy mixed`) or a paid tier. A fallback is not always free: the switch
   notice states its cost, and spend limits still apply. A strict (benchmark) model is never
   replaced. When no model of the provider can serve the turn (the day's free quota spent, none
   answering), the session continues on another free provider the user configured (Groq, Gemini,

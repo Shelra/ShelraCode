@@ -44,6 +44,8 @@ import type { ModelRecommendation } from "./models/recommendation";
 import {
   isGuaranteedFree,
   type ModelPolicy,
+  modelAfterModeChange,
+  parseModelPolicy,
   resolveCatalogModel,
   routeCatalogModel,
   startupModelRequest,
@@ -106,6 +108,7 @@ import {
   getCurrentSandboxSettings,
   listOpenRouterApiKeys,
   loadPaymentSettings,
+  loadUserSettings,
   mergeSandboxSettings,
   type SandboxMode,
   type SandboxSettings,
@@ -161,6 +164,16 @@ interface RemoteModelSetup {
   catalog: CatalogEntry[];
   modelId: string;
   selectModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
+  /** The session's model mode, and a way to switch it (Free runs free models only; Mixed any model). */
+  policy: ModelPolicy;
+  setPolicy?: (policy: ModelPolicy) => Promise<{ success: boolean; error?: string; modelId?: string }>;
+}
+
+/** The session's model mode: the flag when one is given, else the mode saved from the terminal UI, else Free. */
+function resolveModelPolicy(flag: unknown): ModelPolicy {
+  const explicit = parseModelPolicy(typeof flag === "string" ? flag : undefined);
+  if (explicit) return explicit;
+  return parseModelPolicy(loadUserSettings().modelMode) ?? "free";
 }
 
 /** OpenRouter's free router on each OpenRouter key the user configured, as fallbacks. */
@@ -226,10 +239,13 @@ async function configureRemoteProvider(
       catalog: [],
       modelId: agent.getModel(),
       selectModel: async () => ({ success: false, error: "Model selection is unavailable for this endpoint." }),
+      policy,
     };
   }
 
   const catalog = await fetchOpenRouterCatalog({ apiKey, baseURL });
+  // The mode can change during the session (ctrl+f or /mode in the terminal UI); every route reads it here.
+  let activePolicy = policy;
   const canUseFreeRouterWithoutCatalog =
     policy === "free" && (!explicitModelSelection || requestedModel === "openrouter/free");
   if (catalog.entries.length === 0 && !canUseFreeRouterWithoutCatalog) {
@@ -243,11 +259,10 @@ async function configureRemoteProvider(
 
   const selectModel = async (modelId: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      // A model picked in the picker runs in Mixed mode whatever it costs; Free mode refuses a paid one.
       const route = routeCatalogModel(catalog.entries, {
         requestedModel: modelId,
-        policy,
-        // Choosing a concrete model in the picker is an explicit opt-in, including a paid model.
-        allowPaid: true,
+        policy: activePolicy,
         requiresTools: true,
       });
       const provider = createOpenRouterProvider(activeApiKey, {
@@ -258,7 +273,7 @@ async function configureRemoteProvider(
         // server-side fallback array.
         fallbackModels: route.candidates.map((entry) => entry.id).slice(0, 3),
         requireParameters: true,
-        policy,
+        policy: activePolicy,
       });
       agent.setProvider(provider, route.modelId);
       chosenModelId = route.modelId;
@@ -282,9 +297,6 @@ async function configureRemoteProvider(
     // approval and must not block the cloud-first startup.
     requestedModel: effectiveRequestedModel,
     policy,
-    // A persisted model is a preference, not a fresh spending approval. Only
-    // a model supplied in this invocation may override strict Free policy.
-    allowPaid: explicitModelSelection,
     requiresTools: true,
   });
   const provider = createOpenRouterProvider(apiKey, {
@@ -305,7 +317,7 @@ async function configureRemoteProvider(
     const entry = resolveCatalogModel(catalog.entries, modelId);
     if (modelId === chosenModelId || modelId === "openrouter/free" || (entry && isGuaranteedFree(entry)))
       return modelId;
-    return policy === "free" && !explicitModelSelection ? "openrouter/free" : chosenModelId;
+    return activePolicy === "free" && !explicitModelSelection ? "openrouter/free" : chosenModelId;
   };
   // A key OpenRouter rejects: continue with another OpenRouter key the user configured (a stale
   // environment variable next to a newer saved key), on the same model and policy, then on an
@@ -326,7 +338,7 @@ async function configureRemoteProvider(
                   baseURL,
                   fallbackModels: route.candidates.map((entry) => entry.id).slice(0, 3),
                   requireParameters: true,
-                  policy,
+                  policy: activePolicy,
                 }),
                 modelId,
                 label: `the OpenRouter key from ${source}`,
@@ -339,11 +351,21 @@ async function configureRemoteProvider(
   // No OpenRouter model can serve the turn (the day's free quota spent, none answering): continue on
   // another free provider the user configured (Groq, Gemini, Cloudflare), whose notice states its plan.
   agent.setProviderFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())));
+  // Switching the mode: Mixed keeps the current model (nothing is spent until the user picks a paid one or the
+  // turn falls back to the auto router); Free leaves a paid model for the best free one. The choice is saved.
+  const setPolicy = async (next: ModelPolicy): Promise<{ success: boolean; error?: string; modelId?: string }> => {
+    activePolicy = next;
+    saveUserSettings({ modelMode: next === "free" ? "free" : "mixed" });
+    const result = await selectModel(modelAfterModeChange(catalog.entries, chosenModelId, next));
+    return { ...result, modelId: chosenModelId };
+  };
   return {
     models: catalog.entries.map(catalogEntryToModelInfo),
     catalog: catalog.entries,
     modelId: route.modelId,
     selectModel,
+    policy,
+    setPolicy,
   };
 }
 
@@ -509,7 +531,16 @@ async function startInteractive(
     localModels: LocalModelCandidate[],
     cloudModels: ModelInfo[] = [],
     onSelectModel?: (modelId: string) => Promise<{ success: boolean; error?: string }>,
+    remote?: RemoteModelSetup,
   ) => {
+    // Free and Mixed apply where Shelra routes OpenRouter models itself; a paid tier shows as Mixed (it can spend).
+    const setPolicy = remote?.setPolicy;
+    const modes = setPolicy
+      ? {
+          modelMode: (remote.policy === "free" ? "free" : "mixed") as "free" | "mixed",
+          onSetModelMode: (mode: "free" | "mixed") => setPolicy(mode === "free" ? "free" : "mixed"),
+        }
+      : {};
     if (startupKeyHandler) {
       renderer.keyInput.off("keypress", startupKeyHandler);
       startupKeyHandler = undefined;
@@ -524,6 +555,7 @@ async function startInteractive(
           localModels: [...(preferLocal ? localModels.map(toModelInfo) : []), ...cloudModels],
           onSelectLocalModel: onSelectModel ?? (preferLocal ? prepareLocalModel : undefined),
           onApiKey: !preferLocal ? configureRemoteApiKey : undefined,
+          ...modes,
           maxToolRounds,
           sandboxMode,
           sandboxSettings,
@@ -547,7 +579,7 @@ async function startInteractive(
       );
       currentApiKey = nextApiKey;
       saveOpenRouterApiKey(nextApiKey);
-      renderApp([], remote.models, remote.selectModel);
+      renderApp([], remote.models, remote.selectModel, remote);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -717,7 +749,7 @@ async function startInteractive(
           modelPolicy,
           Boolean(model),
         );
-        renderApp([], remote.models, remote.selectModel);
+        renderApp([], remote.models, remote.selectModel, remote);
       } catch (error) {
         renderCloudStartup({
           state: "recoverable-error",
@@ -1157,12 +1189,10 @@ async function runBenchCommand(options: {
     return;
   }
   const requestedModel = options.model ? normalizeModelId(options.model) : undefined;
-  const rawPolicy = (options.modelPolicy || "free").trim().toLowerCase();
-  const supportedPolicies: ModelPolicy[] = ["free", "auto", "economy", "balanced", "quality", "max", "custom"];
-  const modelPolicy: ModelPolicy = supportedPolicies.includes(rawPolicy as ModelPolicy)
-    ? (rawPolicy as ModelPolicy)
-    : "free";
-  const effectiveModelPolicy = requestedModel && modelPolicy === "free" ? "custom" : modelPolicy;
+  // A benchmark states its policy explicitly (never the mode saved from the terminal UI), and Free never runs a
+  // paid model under test either.
+  const modelPolicy: ModelPolicy = parseModelPolicy(options.modelPolicy) ?? "free";
+  const effectiveModelPolicy = modelPolicy;
   const apiKey = options.apiKey?.trim() || getApiKey();
   const baseURL = options.baseUrl?.trim() || getBaseURL() || OPENROUTER_BASE_URL;
   const budget = resolveBudget(options as CliOptions);
@@ -1352,7 +1382,6 @@ async function runBenchCommand(options: {
           const route = routeCatalogModel(catalog.entries, {
             requestedModel: requestedModel ?? (catalog.entries.length === 0 ? "openrouter/free" : undefined),
             policy: effectiveModelPolicy,
-            allowPaid: Boolean(requestedModel),
             requiresTools: true,
           });
           updateBenchmarkRunMetadata(run.runId, {
@@ -1515,12 +1544,7 @@ async function runBackgroundDelegation(jobPath: string, options: CliOptions) {
     const sandboxMode = resolveCliSandboxMode(options.sandbox) || delegation.sandboxMode || getCurrentSandboxMode();
     const sandboxSettings = mergeSandboxSettings(getCurrentSandboxSettings(), delegation.sandboxSettings);
     const preferLocal = options.local === true && options.remote !== true;
-    const rawPolicy = stringOption(options.modelPolicy)?.toLowerCase() || "free";
-    const modelPolicy: ModelPolicy = ["free", "auto", "economy", "balanced", "quality", "max", "custom"].includes(
-      rawPolicy,
-    )
-      ? (rawPolicy as ModelPolicy)
-      : "free";
+    const modelPolicy = resolveModelPolicy(options.modelPolicy);
     const budget = resolveBudget(options);
     agent = new Agent(preferLocal ? undefined : apiKey, preferLocal ? undefined : baseURL, model, maxToolRounds, {
       persistSession: false,
@@ -1584,12 +1608,7 @@ function resolveConfig(options: CliOptions) {
     cliOverrides.ports = portValue as string[];
   }
   const sandboxSettings = mergeSandboxSettings(getCurrentSandboxSettings(), cliOverrides);
-  const rawPolicy = stringOption(options.modelPolicy)?.toLowerCase() || "free";
-  const modelPolicy: ModelPolicy = ["free", "auto", "economy", "balanced", "quality", "max", "custom"].includes(
-    rawPolicy,
-  )
-    ? (rawPolicy as ModelPolicy)
-    : "free";
+  const modelPolicy = resolveModelPolicy(options.modelPolicy);
   const budget = resolveBudget(options);
   const providerOption = stringOption(options.provider)?.toLowerCase();
   if (providerOption && !isFreeProviderId(providerOption)) {
@@ -1660,7 +1679,10 @@ program
     "--provider <id>",
     `Run a headless prompt (-p) on another free provider with its own key: ${FREE_PROVIDER_IDS.join(", ")}`,
   )
-  .option("--model-policy <policy>", "OpenRouter routing policy: free, auto, economy, balanced, quality or max", "free")
+  .option(
+    "--model-policy <policy>",
+    "Model mode: free (free models only, the default) or mixed (any model, paid or free; OpenRouter's auto router when none is picked). Also auto, economy, balanced, quality or max. Without it, the mode saved in the terminal UI",
+  )
   .option("--max-cost <usd>", "Maximum cumulative session spend in USD (0 is strict free-only)")
   .option("--max-request-cost <usd>", "Maximum conservative spend for one model request in USD")
   .option("-d, --directory <dir>", "Working directory", process.cwd())
@@ -1815,7 +1837,7 @@ program
     "shelra",
   )
   .option("-m, --model <model>", "Model under test; keep this fixed when measuring harness changes")
-  .option("--model-policy <policy>", "Routing policy: free, auto, economy, balanced, quality, max or custom", "free")
+  .option("--model-policy <policy>", "Routing policy: free, mixed, auto, economy, balanced, quality or max", "free")
   .option("-k, --api-key <key>", "OpenRouter API key")
   .option("-u, --base-url <url>", "OpenRouter API base URL")
   .option("--max-cost <usd>", "Maximum cumulative spend for the benchmark run")
@@ -1979,7 +2001,6 @@ modelsCommand
     const remote = await fetchOpenRouterCatalog({ apiKey: getApiKey(), baseURL: getBaseURL() || undefined, ttlMs: 0 });
     const route = routeCatalogModel(remote.entries, {
       requestedModel: model,
-      allowPaid: true,
       requiresTools: true,
       policy: "custom",
     });

@@ -36,12 +36,15 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { group: "Review", keys: "/status", label: "Plan, activity and evidence" },
   { group: "Review", keys: "ctrl+y", label: "Copy the selected text" },
   { group: "Session", keys: "/new", label: "Start a new session" },
+  { group: "Session", keys: "ctrl+f", label: "Models: Free only, or Mixed (any model, paid or free)" },
   { group: "Session", keys: "ctrl+c", label: "Clear the prompt; twice to exit" },
 ];
 
 /** Priority order: the composer keeps as many as fit, dropping from the end. */
 export const IDLE_HINTS: readonly Hint[] = [
   { key: "?", label: "shortcuts" },
+  // The model mode is the one setting the footer shows, so the key that changes it comes right after help.
+  { key: "ctrl+f", label: "free/mixed" },
   { key: "ctrl+o", label: "details" },
   { key: "tab", label: "mode" },
   { key: "@", label: "files" },

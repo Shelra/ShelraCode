@@ -297,9 +297,12 @@ shelra fix the flaky test in src/foo.test.ts
 
 ShelraCode is cloud-first by default. `shelra models` discovers and prints the
 OpenRouter catalog first, then shows managed local models as a secondary
-catalog. The default routing policy is Free; use `--model-policy auto` (or a
-paid policy) only when paid routing is allowed by the configured budget. Use
-`--local` to opt into the managed local runtime. Search tools are
+catalog. The default model mode is Free: free models only, and a paid model is
+refused however it is asked for. Mixed (`ctrl+f` or `/free` in the terminal UI,
+`--model-policy mixed` on the command line) runs any model, paid or free, and
+without a pick lets OpenRouter's auto router choose; the terminal UI remembers the
+choice. The older paid tiers (`auto`, `economy`, `balanced`, `quality`, `max`)
+remain. Use `--local` to opt into the managed local runtime. Search tools are
 capability-gated, while the built-in web research tools are provider-neutral.
 
 ### Capabilities
@@ -443,9 +446,9 @@ shelra -k your_openrouter_key_here
 ```
 
 For OpenRouter, Shelra uses `https://openrouter.ai/api/v1` automatically when
-`OPENROUTER_API_KEY` is configured. Use `--model-policy auto` or
-`--model-policy economy` to permit paid routing; the default `free` policy
-never selects a paid model silently. `shelra models` reads the live catalog
+`OPENROUTER_API_KEY` is configured. Use `--model-policy mixed` (or `ctrl+f` in
+the terminal UI) to permit paid models; the default `free` mode never runs a paid
+model, not even one you name. `shelra models` reads the live catalog
 with a six-hour cache, and `shelra models use openrouter/provider/model` saves
 an explicit selection.
 

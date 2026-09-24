@@ -109,6 +109,9 @@ createRoot(renderer).render(
       model: MODEL.id,
       localModels: [MODEL, ...OTHER_MODELS],
       onSelectLocalModel: async () => ({ success: true }),
+      // Free and Mixed switch with ctrl+f or /free; the demo only records the choice.
+      modelMode: "free",
+      onSetModelMode: async () => ({ success: true }),
       maxToolRounds: 24,
       sandboxMode: getCurrentSandboxMode(),
       sandboxSettings: getCurrentSandboxSettings(),

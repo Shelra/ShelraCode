@@ -4237,7 +4237,7 @@ function isModelUnavailableError(error: unknown): boolean {
   if (isUpstreamProviderFailure(error)) return false;
   if (APICallError.isInstance(error) && [402, 403, 404].includes(error.statusCode ?? 0)) return true;
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return /blocked by budget|insufficient (credits|balance|funds)|more credits|no endpoints found|model .*not (found|available)|not a valid model|does not support tool|free-models-per-day|quota/i.test(
+  return /blocked by budget|insufficient (credits|balance|funds)|more credits|no endpoints found|model .*not (found|available)|not a valid model|does not support tool|free-models-per-day|quota|free mode uses free models only/i.test(
     message,
   );
 }

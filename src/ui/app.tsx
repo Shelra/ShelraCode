@@ -598,7 +598,15 @@ export interface AppStartupConfig {
   localModels?: ModelInfo[];
   onSelectLocalModel?: (modelId: string) => Promise<{ success: boolean; error?: string }>;
   onApiKey?: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * The model mode (owner, 2026-09-24): Free runs free models only and blocks paid ones; Mixed runs any model, paid
+   * or free. Undefined where modes do not apply (the local model, another endpoint).
+   */
+  modelMode?: ModelMode;
+  onSetModelMode?: (mode: ModelMode) => Promise<{ success: boolean; error?: string; modelId?: string }>;
 }
+
+export type ModelMode = "free" | "mixed";
 
 interface AppProps {
   agent: Agent;
@@ -632,6 +640,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [isProcessing, setIsProcessing] = useState(false);
   const [liveTurnSourceLabel, setLiveTurnSourceLabel] = useState<string | null>(null);
   const [model, setModel] = useState(agent.getModel());
+  const [modelMode, setModelMode] = useState<ModelMode | undefined>(startupConfig.modelMode);
+  const switchingModeRef = useRef(false);
   const [sandboxMode, setSandboxModeState] = useState<SandboxMode>(agent.getSandboxMode());
   const [mode, setModeState] = useState<AgentMode>(agent.getMode());
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -2159,6 +2169,30 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     noticeTimerRef.current = setTimeout(() => setNotice(null), durationMs);
   }, []);
 
+  /** Free ⇄ Mixed (ctrl+f, /free). Free leaves a paid model for the best free one; Mixed keeps the current model. */
+  const toggleModelMode = useCallback(async () => {
+    if (!modelMode || !startupConfig.onSetModelMode) {
+      showNotice("Free and Mixed apply to OpenRouter models");
+      return;
+    }
+    if (switchingModeRef.current) return;
+    switchingModeRef.current = true;
+    const next: ModelMode = modelMode === "free" ? "mixed" : "free";
+    try {
+      const result = await startupConfig.onSetModelMode(next);
+      if (!result.success) {
+        showNotice(result.error ?? "The model mode could not be changed", 4000);
+        return;
+      }
+      setModelMode(next);
+      if (result.modelId) setModel(result.modelId);
+      // Short enough for an 80-column footer next to the badge, which already says Free or Mixed.
+      showNotice(next === "mixed" ? "Paid models on" : "Paid models off", 3200);
+    } finally {
+      switchingModeRef.current = false;
+    }
+  }, [modelMode, showNotice, startupConfig.onSetModelMode]);
+
   useEffect(
     () => () => {
       if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
@@ -3010,6 +3044,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           setModelPickerIndex(0);
           setModelSearchQuery("");
           break;
+        case "free":
+          void toggleModelMode();
+          break;
         case "sandbox":
           openSandboxPicker();
           break;
@@ -3106,6 +3143,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       resetToNewSession,
       runHostVerification,
       startupConfig.version,
+      toggleModelMode,
       openKnowledge,
     ],
   );
@@ -4081,6 +4119,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
       }
 
+      if (key.name === "f" && key.ctrl) {
+        void toggleModelMode();
+        return;
+      }
       if (key.name === "o" && key.ctrl) {
         const next = !showDetails;
         setShowDetails(next);
@@ -4266,6 +4308,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       missionTab,
       showHelp,
       showNotice,
+      toggleModelMode,
       knowledge,
       knowledgeIndex,
       knowledgePendingDelete,
@@ -4692,6 +4735,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   modeInfo={modeInfo}
                   model={model}
                   modelInfo={modelInfo}
+                  modelMode={modelMode}
                   contextStats={contextStats}
                   queuedCount={queuedMessages.length}
                   queuedMessages={queuedMessages}
@@ -4756,6 +4800,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 modeInfo={modeInfo}
                 model={model}
                 modelInfo={modelInfo}
+                modelMode={modelMode}
                 contextStats={contextStats}
                 placeholder={"What are we building?"}
                 typeahead={typeahead}
@@ -5102,6 +5147,7 @@ function PromptBox({
   modeInfo,
   model,
   modelInfo,
+  modelMode,
   contextStats,
   placeholder,
   queuedCount,
@@ -5129,6 +5175,7 @@ function PromptBox({
   modeInfo: (typeof MODES)[number];
   model: string;
   modelInfo: ReturnType<typeof getModelInfo>;
+  modelMode?: ModelMode;
   contextStats?: ContextStats | null;
   placeholder?: string;
   queuedCount?: number;
@@ -5229,6 +5276,7 @@ function PromptBox({
         t={t}
         width={width ?? 80}
         model={modelInfo?.name || model}
+        modelMode={modelMode}
         contextStats={contextStats}
         isProcessing={isProcessing}
         showSuggestions={showSuggestions}
@@ -5264,6 +5312,7 @@ export function ComposerFooter({
   t,
   width,
   model,
+  modelMode,
   contextStats,
   isProcessing,
   showSuggestions,
@@ -5276,6 +5325,8 @@ export function ComposerFooter({
   t: Theme;
   width: number;
   model: string;
+  /** Free or Mixed, shown before the model; absent where modes do not apply. */
+  modelMode?: ModelMode;
   contextStats?: ContextStats | null;
   isProcessing: boolean;
   showSuggestions: boolean;
@@ -5288,7 +5339,8 @@ export function ComposerFooter({
   const inner = Math.max(20, width - 6);
   const modelLabel = model.length > 26 ? `${model.slice(0, 25)}…` : model;
   const meter = contextStats ? contextMeterText(contextStats, inner >= 64) : "";
-  const leftWidth = modelLabel.length + (meter ? meter.length + 2 : 0);
+  const modeLabel = modelMode === "mixed" ? "● Mixed" : modelMode === "free" ? "● Free" : "";
+  const leftWidth = (modeLabel ? modeLabel.length + 2 : 0) + modelLabel.length + (meter ? meter.length + 2 : 0);
   const room = Math.max(0, inner - leftWidth - 3);
   const base = approvalOpen
     ? approvalOpen === "decision"
@@ -5317,6 +5369,12 @@ export function ComposerFooter({
       flexShrink={0}
     >
       <box flexDirection="row" gap={2} alignItems="center" height={1}>
+        {modeLabel ? (
+          // Mixed may spend: warning colour. Free cannot: accent. The word carries it, not the colour alone.
+          <text fg={modelMode === "mixed" ? t.warning : t.accent} wrapMode="none">
+            {modeLabel}
+          </text>
+        ) : null}
         <text fg={t.text}>{modelLabel}</text>
         {contextStats ? <ContextMeter t={t} stats={contextStats} wide={inner >= 64} /> : null}
       </box>

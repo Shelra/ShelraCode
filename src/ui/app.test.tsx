@@ -147,4 +147,51 @@ describe("ComposerFooter", () => {
     expect(frame).toContain("esc not now");
     expect(frame).not.toContain("esc don't run");
   });
+
+  it("shows the model mode before the model: Free in accent, Mixed in the warning colour, and how to switch", async () => {
+    const footer = (modelMode: "free" | "mixed") =>
+      render(
+        <ComposerFooter
+          t={dark}
+          width={120}
+          model="NVIDIA: Nemotron 3 Ultra"
+          modelMode={modelMode}
+          isProcessing={false}
+          showSuggestions={false}
+          queuedCount={0}
+          hasViews={false}
+          viewOpen={false}
+          approvalOpen={false}
+        />,
+        120,
+        1,
+      );
+    const free = await footer("free");
+    expect(free.frame).toContain("● Free  NVIDIA: Nemotron 3 Ultra");
+    expect(free.frame).toContain("ctrl+f free/mixed");
+    expect(find(free.spans, "● Free")?.fg.equals(RGBA.fromHex(dark.accent))).toBe(true);
+    const mixed = await footer("mixed");
+    expect(mixed.frame).toContain("● Mixed  NVIDIA: Nemotron 3 Ultra");
+    expect(find(mixed.spans, "● Mixed")?.fg.equals(RGBA.fromHex(dark.warning))).toBe(true);
+  });
+
+  it("shows no mode where modes do not apply", async () => {
+    const { frame } = await render(
+      <ComposerFooter
+        t={dark}
+        width={80}
+        model="Local Qwen"
+        isProcessing={false}
+        showSuggestions={false}
+        queuedCount={0}
+        hasViews={false}
+        viewOpen={false}
+        approvalOpen={false}
+      />,
+      80,
+      1,
+    );
+    expect(frame).not.toContain("● Free");
+    expect(frame).not.toContain("● Mixed");
+  });
 });

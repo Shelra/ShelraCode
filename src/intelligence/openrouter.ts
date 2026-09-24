@@ -342,7 +342,6 @@ export class OpenRouterIntelligenceProvider implements IntelligenceProvider {
           // tool calls, tool support is the strongest catalog signal that a
           // model is suitable for coding-agent work.
           requiresTools: true,
-          allowPaid: this.policy !== "free",
           requiresStructuredOutput: Boolean(request.schema),
           minimumContext,
         });

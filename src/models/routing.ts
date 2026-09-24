@@ -1,6 +1,26 @@
 import type { CatalogEntry } from "./types";
 
-export type ModelPolicy = "free" | "auto" | "economy" | "balanced" | "quality" | "max" | "custom";
+/**
+ * How a session may spend on models (owner, 2026-09-24). `free`, the default, runs free models only and refuses a paid
+ * one however it is asked for. `mixed` runs any model the user picks, paid or free, and without a pick lets
+ * OpenRouter's auto router choose. `auto` … `max` are the older paid tiers, and `custom` a hand-picked model.
+ */
+export type ModelPolicy = "free" | "mixed" | "auto" | "economy" | "balanced" | "quality" | "max" | "custom";
+
+const POLICIES: readonly ModelPolicy[] = ["free", "mixed", "auto", "economy", "balanced", "quality", "max", "custom"];
+
+/** A policy from the command line or settings; "paid" is another name for Mixed. Unknown text is null. */
+export function parseModelPolicy(raw: string | undefined | null): ModelPolicy | null {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return null;
+  if (value === "paid") return "mixed";
+  return POLICIES.includes(value as ModelPolicy) ? (value as ModelPolicy) : null;
+}
+
+/** What the user is told when Free mode refuses a paid model. */
+export function paidModelBlockedMessage(name: string): string {
+  return `Model "${name}" is paid, and Free mode uses free models only. Switch to Mixed to use it: ctrl+f or /free in the terminal UI, --model-policy mixed on the command line.`;
+}
 
 export interface ModelCapabilityRequirements {
   requiresTools?: boolean;
@@ -13,7 +33,6 @@ export interface ModelCapabilityRequirements {
 export interface ModelRouteRequest extends ModelCapabilityRequirements {
   requestedModel?: string;
   policy?: ModelPolicy;
-  allowPaid?: boolean;
   now?: number;
 }
 
@@ -86,6 +105,7 @@ function eligible(entries: readonly CatalogEntry[], request: ModelRouteRequest):
 }
 
 const FREE_ROUTER_ID = "openrouter/free";
+const AUTO_ROUTER_ID = "openrouter/auto";
 
 /** OpenRouter's free router: a real endpoint that picks a model per request, so it is a fallback, not a candidate. */
 export function isFreeRouter(entry: CatalogEntry): boolean {
@@ -167,11 +187,9 @@ export function routeCatalogModel(
     }
     const entry = resolveCatalogModel(entries, requested);
     if (!entry) throw new Error(`Model "${requested}" was not found in the current OpenRouter catalog.`);
-    if (policy === "free" && !request.allowPaid && !isGuaranteedFree(entry)) {
-      throw new Error(
-        `Model "${entry.name}" is paid and Free policy is active; choose --model-policy auto/economy explicitly.`,
-      );
-    }
+    // Free mode never runs a paid model, however it is asked for: an explicit pick is no exception (owner,
+    // 2026-09-24: "si la opción free está activa, nunca usar jamás modelos de pago").
+    if (policy === "free" && !isGuaranteedFree(entry)) throw new Error(paidModelBlockedMessage(entry.name));
     const eligibleEntry = eligible([entry], request)[0];
     if (!eligibleEntry) throw new Error(`Model "${entry.name}" cannot satisfy this task's capability requirements.`);
     return {
@@ -185,6 +203,17 @@ export function routeCatalogModel(
     };
   }
 
+  // Mixed mode without a pick: OpenRouter's auto router chooses the model for the task, paid or free.
+  if (policy === "mixed") {
+    const autoEntry = resolveCatalogModel(entries, AUTO_ROUTER_ID);
+    const freeEntry = resolveCatalogModel(entries, FREE_ROUTER_ID);
+    return {
+      modelId: autoEntry?.id ?? AUTO_ROUTER_ID,
+      ...(autoEntry ? { entry: autoEntry } : {}),
+      candidates: [autoEntry, freeEntry].filter((item): item is CatalogEntry => item !== undefined),
+      reasons: ["Mixed mode: OpenRouter's auto router picks the model", "the free router is the last fallback"],
+    };
+  }
   const pool = eligible(entries, request).filter((entry) => policy !== "free" || isGuaranteedFree(entry));
   const router = policy === "free" ? pool.find(isFreeRouter) : undefined;
   const ranked = rank(router ? pool.filter((entry) => entry !== router) : pool, policy);
@@ -245,4 +274,24 @@ export function startupModelRequest(
     (entry) => isGuaranteedFree(entry) && !isFreeRouter(entry),
   );
   return hasRankedFree ? undefined : FREE_ROUTER_ID;
+}
+
+/**
+ * The model a session runs on after its mode changes: Mixed keeps the current one (nothing is spent until the user
+ * picks a paid model or the turn falls back to the auto router); Free keeps it only if it is free, and otherwise moves
+ * to the model the free policy would start with.
+ */
+export function modelAfterModeChange(
+  entries: readonly CatalogEntry[],
+  currentModelId: string,
+  next: ModelPolicy,
+): string {
+  if (next !== "free") return currentModelId;
+  const current = resolveCatalogModel(entries, currentModelId);
+  if (currentModelId === FREE_ROUTER_ID || (current !== undefined && isGuaranteedFree(current))) return currentModelId;
+  return routeCatalogModel(entries, {
+    requestedModel: startupModelRequest(entries, { policy: "free", explicitModelSelection: false }),
+    policy: "free",
+    requiresTools: true,
+  }).modelId;
 }

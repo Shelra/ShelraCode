@@ -165,16 +165,68 @@ describe("OpenRouter fallback models", () => {
     expect(provider.fallbackModelIds?.(entry.id)).toEqual([]);
   });
 
-  it("uses SHELRA_FALLBACK_MODELS when set, paid models included", () => {
+  it("uses SHELRA_FALLBACK_MODELS when set: paid models in Mixed mode, never in Free mode", () => {
     const previous = process.env.SHELRA_FALLBACK_MODELS;
-    process.env.SHELRA_FALLBACK_MODELS = "openrouter/anthropic/paid, openrouter/google/gemma-3:free";
+    process.env.SHELRA_FALLBACK_MODELS = "openrouter/anthropic/paid, openrouter/free, openrouter/google/gemma-3:free";
     try {
-      const provider = createOpenRouterProvider("secret-not-printed", options);
-      expect(provider.fallbackModelIds?.(entry.id)).toEqual(["openrouter/anthropic/paid"]);
+      const mixed = createOpenRouterProvider("secret-not-printed", { ...options, policy: "mixed" });
+      expect(mixed.fallbackModelIds?.(entry.id)).toEqual(["openrouter/anthropic/paid", "openrouter/free"]);
+      const free = createOpenRouterProvider("secret-not-printed", options);
+      expect(free.fallbackModelIds?.(entry.id)).toEqual(["openrouter/free"]);
     } finally {
       if (previous === undefined) delete process.env.SHELRA_FALLBACK_MODELS;
       else process.env.SHELRA_FALLBACK_MODELS = previous;
     }
+  });
+
+  it("refuses a paid model in Free mode before any request leaves, however the turn reached it", async () => {
+    // Owner, 2026-09-24: with Free active, never a paid model. A custom sub-agent's model, a per-mode model or a
+    // fallback id reaches the provider without routing; the provider refuses it without calling the network.
+    const calls: unknown[] = [];
+    const fakeFetch = async (...args: unknown[]) => {
+      calls.push(args);
+      return new Response(JSON.stringify({ error: { message: "bad request" } }), { status: 400 });
+    };
+    const paid: CatalogEntry = {
+      ...entry,
+      id: "openrouter/openai/gpt-6-luna-pro",
+      name: "OpenAI: GPT-6 Luna Pro",
+      cost: { prompt: 0.0000001, completion: 0.0000005, free: false },
+      state: { kind: "cloud", providerModelId: "openai/gpt-6-luna-pro", apiKeyConfigured: true, notes: [] },
+    };
+    const request = { modelId: paid.id, system: "s", messages: [{ role: "user", content: "hi" }], maxSteps: 1 };
+    const free = createOpenRouterProvider("secret-not-printed", {
+      entries: [entry, paid],
+      modelId: entry.id,
+      fetch: fakeFetch as never,
+      quarantineStorePath: null,
+    });
+    await expect(free.stream(request as never).response).rejects.toThrow("Free mode uses free models only");
+    await expect(free.generateText({ modelId: paid.id, prompt: "hi" } as never)).rejects.toThrow(
+      "Free mode uses free models only",
+    );
+    await expect(free.generateText({ modelId: "openrouter/auto", prompt: "hi" } as never)).rejects.toThrow(
+      "Free mode uses free models only",
+    );
+    expect(calls).toHaveLength(0);
+
+    const mixed = createOpenRouterProvider("secret-not-printed", {
+      entries: [entry, paid],
+      modelId: paid.id,
+      fetch: fakeFetch as never,
+      quarantineStorePath: null,
+      policy: "mixed",
+    });
+    const stream = mixed.stream(request as never);
+    try {
+      for await (const _event of stream.events) {
+        // drained
+      }
+      await stream.response;
+    } catch {
+      // The fake endpoint answers 400; only that the request left matters here.
+    }
+    expect(calls.length).toBeGreaterThan(0);
   });
 
   it("bounds the auto router by the policy's cost tier", () => {

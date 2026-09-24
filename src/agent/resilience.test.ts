@@ -436,6 +436,22 @@ describe("a failing model connection never ends the turn", () => {
     expect(text).not.toContain("continuing with openrouter/free");
   });
 
+  it("moves at once to the free router when Free mode refuses a paid model that reached the provider", async () => {
+    // A per-mode model or a custom sub-agent's model can name a paid model; in Free mode the provider refuses it,
+    // and asking the same model again cannot help.
+    const refused = new Error(
+      'Model "OpenAI: GPT-6 Luna Pro" is paid, and Free mode uses free models only. Switch to Mixed to use it.',
+    );
+    const provider = new ScriptedProvider(
+      [{ events: [], fail: refused }, answer("Answered for free.")],
+      ["openrouter/free"],
+    );
+    const { text } = await run(provider);
+
+    expect(provider.requests.map((request) => request.modelId)).toEqual(["primary-model", "openrouter/free"]);
+    expect(text).toContain("Answered for free.");
+  });
+
   it("sends no temperature to a model whose catalog entry says it takes none", async () => {
     class NoTemperature extends ScriptedProvider {
       override resolveModelRuntime(modelId: string): ProviderModelRuntime {

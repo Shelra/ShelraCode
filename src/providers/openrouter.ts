@@ -1,6 +1,12 @@
 import type { FetchFunction } from "@ai-sdk/provider-utils";
 import { OPENROUTER_BASE_URL } from "../models/openrouter";
-import { catalogModelId, type ModelPolicy, resolveCatalogModel } from "../models/routing";
+import {
+  catalogModelId,
+  isGuaranteedFree,
+  type ModelPolicy,
+  paidModelBlockedMessage,
+  resolveCatalogModel,
+} from "../models/routing";
 import { type CatalogEntry, catalogEntryToModelInfo } from "../models/types";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { loadQuarantinedProviders, recordQuarantinedProvider } from "./provider-quarantine";
@@ -271,7 +277,23 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
       .filter(Boolean)
       .map(canonicalModelId);
     const chosen = configured.length > 0 ? configured : fallbackRoutersForPolicy(this.policy);
-    return chosen.filter((id) => id !== current);
+    // In Free mode a paid id in SHELRA_FALLBACK_MODELS is never tried.
+    return chosen.filter((id) => id !== current && this.paidModelRefusal(id) === null);
+  }
+
+  /**
+   * Free mode never reaches a paid model, whatever asks for it (owner, 2026-09-24): a model named in the picker or on
+   * the command line is refused by routing already; this catches every other way in, such as a fallback id from
+   * SHELRA_FALLBACK_MODELS, a custom sub-agent's or a per-mode model, or a caller that skipped routing. With no
+   * catalog entry only the free router and a ":free" id are known to cost nothing.
+   */
+  private paidModelRefusal(modelId: string): Error | null {
+    if (this.policy !== "free") return null;
+    const canonical = canonicalModelId(modelId);
+    if (canonical === "openrouter/free") return null;
+    const entry = resolveCatalogModel(this.entries, canonical);
+    if (entry ? isGuaranteedFree(entry) : canonical.endsWith(":free")) return null;
+    return new Error(paidModelBlockedMessage(entry?.name ?? canonical));
   }
 
   resolveModelRuntime(modelId: string): ProviderModelRuntime {
@@ -285,6 +307,13 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   }
 
   stream(request: ProviderStreamRequest): ProviderStream {
+    const refusal = this.paidModelRefusal(request.modelId);
+    if (refusal) {
+      return {
+        events: (async function* () {})(),
+        response: Promise.reject(refusal),
+      };
+    }
     let stepProducedOutput = false;
     const inner = this.transport.stream({
       ...request,
@@ -314,6 +343,8 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   }
 
   generateText(request: ProviderTextRequest): Promise<ProviderTextResult> {
+    const refusal = this.paidModelRefusal(request.modelId);
+    if (refusal) return Promise.reject(refusal);
     return this.transport
       .generateText({ ...request, modelId: openRouterWireModelId(request.modelId) })
       .then((result) => ({
@@ -326,6 +357,8 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
     if (!this.transport.generateStructured) {
       return Promise.reject(new Error("The OpenRouter transport does not support structured output."));
     }
+    const refusal = this.paidModelRefusal(request.modelId);
+    if (refusal) return Promise.reject(refusal);
     return this.transport
       .generateStructured({ ...request, modelId: openRouterWireModelId(request.modelId) })
       .then((result) => ({
