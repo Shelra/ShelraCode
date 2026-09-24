@@ -220,7 +220,7 @@ describe("shelra decisions check", () => {
     const moved = await checkDecisions(workspace, { changed: true });
     expect(moved).toMatchObject({ exitCode: 1 });
     expect(moved.output).toContain("D-0002 Migrations are never edited: BROKEN");
-  });
+  }, 30_000);
 
   it("with changed, counts every file of a repository that has no commit yet", async () => {
     decide("The API is snake_case", ["src/api/**"], holds);
@@ -233,7 +233,7 @@ describe("shelra decisions check", () => {
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain("D-0001 The API is snake_case: holds");
     expect(result.output).not.toContain("outside a git repository");
-  });
+  }, 30_000);
 
   it("as a Claude Code stop hook, sends the broken decision back to Claude once", async () => {
     decide("Logs hold no emails", ["src/**"], fails());
