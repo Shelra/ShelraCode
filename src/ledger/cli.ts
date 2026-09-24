@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { destructiveCommandReason } from "../security/destructive";
 import { BashTool } from "../tools/bash";
 import { inScope } from "./glob";
 import { activeDecisions, approveDecision, findDecision, LEDGER_DIR, listDecisions, rejectDecision } from "./store";
@@ -62,10 +63,10 @@ export function runDecisionsCommand(
 }
 
 export interface CheckDecisionsOptions {
-  /** Only the decisions whose scope covers a file changed in the working tree, as the task contract does. */
+  /** Only the decisions whose scope covers a file changed in the working tree against HEAD, as before a commit. */
   changed?: boolean;
   /**
-   * Answer as a Claude Code Stop hook: when a decision is broken, exit 2 with the guidance on stderr, which
+   * Answer as a Claude Code Stop hook: when a decision does not hold, exit 2 with the guidance on stderr, which
    * Claude Code feeds back to Claude so it keeps working; never twice in a row (`stop_hook_active`).
    */
   hook?: "claude-code";
@@ -81,23 +82,53 @@ export interface CheckDecisionsResult {
   stream: "stdout" | "stderr";
 }
 
+/**
+ * What a check said about its decision. A check that could not run (its script or tool is missing, it
+ * timed out) or was not run (it would do damage) vouches for nothing, and is never reported as a broken rule.
+ */
+type Outcome = "holds" | "broken" | "could not run" | "not run";
+
+interface Judged {
+  decision: Decision;
+  outcome: Outcome;
+  detail: string;
+}
+
 const CHECK_TIMEOUT_MS = 10 * 60_000;
 const OUTPUT_TAIL = 1_500;
+const GIT_TIMEOUT_MS = 3_000;
+/** A failure of the environment rather than of the code: the command, its script or its runtime is missing. */
+const ENVIRONMENT_FAILURE_RE = /timed out|not recognized|not found|ENOENT|no such file|cannot find|command not found/iu;
 
-/** Workspace-relative files changed against HEAD, new files included; null outside a git repository. */
+/**
+ * Workspace-relative files changed in the working tree: against HEAD, or every tracked file in a repository
+ * with no commit yet, new files included either way. Null outside a git repository.
+ */
 function changedFiles(workspace: string): string[] | null {
   const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: workspace, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+    execFileSync("git", ["--no-optional-locks", ...args], {
+      cwd: workspace,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: GIT_TIMEOUT_MS,
+      windowsHide: true,
+    })
       .split("\0")
       .filter(Boolean);
-  try {
-    return [
-      ...git("diff", "--name-only", "--relative", "-z", "HEAD"),
-      ...git("ls-files", "--others", "--exclude-standard", "-z"),
-    ];
-  } catch {
-    return null;
-  }
+  const attempt = (run: () => string[]): string[] | null => {
+    try {
+      return run();
+    } catch {
+      return null;
+    }
+  };
+  const untracked = attempt(() => git("ls-files", "--others", "--exclude-standard", "-z"));
+  if (untracked === null) return null;
+  const changed =
+    attempt(() => git("diff", "--name-only", "--relative", "-z", "HEAD")) ??
+    attempt(() => git("ls-files", "--cached", "-z")) ??
+    [];
+  return [...new Set([...changed, ...untracked])];
 }
 
 function tail(text: string): string {
@@ -105,10 +136,15 @@ function tail(text: string): string {
   return trimmed.length > OUTPUT_TAIL ? `…${trimmed.slice(-OUTPUT_TAIL)}` : trimmed;
 }
 
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 /**
  * `shelra decisions check`: runs the check of every active decision (or, with `changed`, of those covering a
- * changed file) the way the agent runs its own commands, and fails when one is broken. For CI, a git hook,
- * or another agent's stop hook: the ledger holds whoever changed the code.
+ * changed file) the way the agent runs its own commands, with the same refusal of a check that would do
+ * damage (a decision file is data, whoever committed it), and fails unless every check held. For CI, a git
+ * hook, or another agent's stop hook: the ledger holds whoever changed the code.
  */
 export async function checkDecisions(
   workspace: string,
@@ -128,7 +164,7 @@ export async function checkDecisions(
   let scopeNote = "";
   if (options.changed) {
     const files = changedFiles(workspace);
-    if (files === null) scopeNote = " (not a git repository, so every decision with a check)";
+    if (files === null) scopeNote = " (outside a git repository, so every decision with a check)";
     else governing = governing.filter((decision) => files.some((file) => inScope(file, decision.scope)));
   }
   if (governing.length === 0) {
@@ -140,44 +176,110 @@ export async function checkDecisions(
 
   const bash = new BashTool(workspace);
   const lines: string[] = [];
-  const broken: Array<{ decision: Decision; detail: string }> = [];
+  const judged: Judged[] = [];
   for (const decision of governing) {
     const command = decision.check as string;
+    const danger = destructiveCommandReason(command, workspace);
+    if (danger) {
+      judged.push({ decision, outcome: "not run", detail: `the check ${danger}` });
+      lines.push(`${decision.id} ${decision.title}: NOT RUN (\`${command}\` ${danger})`);
+      continue;
+    }
     const startedAt = Date.now();
     const result = await bash.execute(command, options.timeoutMs ?? CHECK_TIMEOUT_MS);
     const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
     if (result.success) {
+      judged.push({ decision, outcome: "holds", detail: "" });
       lines.push(`${decision.id} ${decision.title}: holds (\`${command}\`, ${seconds} s)`);
-    } else {
-      const detail = tail(result.error ?? result.output ?? "");
-      broken.push({ decision, detail });
-      lines.push(
-        `${decision.id} ${decision.title}: BROKEN (\`${command}\`)`,
-        ...detail.split("\n").map((row) => `  ${row}`),
-      );
+      continue;
     }
+    const detail = tail(result.error ?? result.output ?? "");
+    const outcome: Outcome = ENVIRONMENT_FAILURE_RE.test(detail) ? "could not run" : "broken";
+    judged.push({ decision, outcome, detail });
+    lines.push(
+      `${decision.id} ${decision.title}: ${outcome === "broken" ? "BROKEN" : "COULD NOT RUN"} (\`${command}\`)`,
+      ...detail.split("\n").map((row) => `  ${row}`),
+    );
   }
-  const held = governing.length - broken.length;
+  const count = (outcome: Outcome) => judged.filter((item) => item.outcome === outcome).length;
+  const parts = [
+    `${count("holds")} ${count("holds") === 1 ? "holds" : "hold"}`,
+    `${count("broken")} broken`,
+    ...(count("could not run") > 0 ? [`${count("could not run")} could not run`] : []),
+    ...(count("not run") > 0 ? [`${count("not run")} not run`] : []),
+  ];
   lines.push(
     "",
-    `Checked ${governing.length} decision${governing.length === 1 ? "" : "s"}${scopeNote}: ${held} ${held === 1 ? "holds" : "hold"}, ${broken.length} broken.` +
-      (unchecked > 0 ? ` ${unchecked} active decision${unchecked === 1 ? " has" : "s have"} no check.` : ""),
+    `Checked ${plural(governing.length, "decision")}${scopeNote}: ${parts.join(", ")}.` +
+      (unchecked > 0 ? ` ${plural(unchecked, "active decision")} ${unchecked === 1 ? "has" : "have"} no check.` : ""),
   );
-  if (broken.length === 0) return { exitCode: 0, output: lines.join("\n"), stream: "stdout" };
+  if (judged.every((item) => item.outcome === "holds"))
+    return { exitCode: 0, output: lines.join("\n"), stream: "stdout" };
 
   if (options.hook === "claude-code") {
     // Claude Code already continued once because of a stop hook: report, but do not hold it in a loop.
     if (hookInput.stop_hook_active === true) return { exitCode: 0, output: lines.join("\n"), stream: "stdout" };
-    const guidance = [
-      "The change breaks a decision this project recorded with the user's approval:",
-      ...broken.flatMap(({ decision, detail }) => [
-        `- ${decision.id} ${decision.title} (${decision.file}): ${decision.rule}`,
-        `  Its check \`${decision.check}\` fails:`,
-        ...detail.split("\n").map((row) => `    ${row}`),
-      ]),
-      "Restore what the decision requires. If the decision itself should change, stop and say so to the user instead of working around it.",
+    const item = ({ decision, detail }: Judged, verb: string) => [
+      `- ${decision.id} ${decision.title} (${decision.file}): ${decision.rule}`,
+      `  Its check \`${decision.check}\` ${verb}:`,
+      ...detail.split("\n").map((row) => `    ${row}`),
     ];
+    const guidance: string[] = [];
+    const broken = judged.filter((entry) => entry.outcome === "broken");
+    if (broken.length > 0) {
+      guidance.push(
+        "The change breaks a decision this project recorded with the user's approval:",
+        ...broken.flatMap((entry) => item(entry, "fails")),
+        "Restore what the decision requires. If the decision itself should change, stop and say so to the user instead of working around it.",
+      );
+    }
+    const unrunnable = judged.filter((entry) => entry.outcome === "could not run");
+    if (unrunnable.length > 0) {
+      guidance.push(
+        "The check of a decision this project recorded could not run, so nothing vouches for the code:",
+        ...unrunnable.flatMap((entry) => item(entry, "could not run")),
+        "Make the check runnable (its script, its command, the tool it needs), or tell the user what is missing.",
+      );
+    }
+    const refused = judged.filter((entry) => entry.outcome === "not run");
+    if (refused.length > 0) {
+      guidance.push(
+        "The check of a decision this project recorded would do damage and was not run:",
+        ...refused.flatMap((entry) => item(entry, "was refused because")),
+        "Tell the user: the decision needs a check that only reads and tests.",
+      );
+    }
     return { exitCode: 2, output: guidance.join("\n"), stream: "stderr" };
   }
   return { exitCode: 1, output: lines.join("\n"), stream: "stderr" };
+}
+
+export interface DecisionsCliOptions {
+  changed?: boolean;
+  hook?: string;
+  /** Reads the hook's input when a hook is answered; absent when nothing is piped. */
+  readHookInput?: () => Promise<string | undefined>;
+}
+
+/** The `shelra decisions` command: every action, with its options checked, and where its output goes. */
+export async function runDecisionsCli(
+  workspace: string,
+  action = "list",
+  id?: string,
+  options: DecisionsCliOptions = {},
+): Promise<CheckDecisionsResult> {
+  const verb = action.toLowerCase();
+  if (verb !== "check" && (options.changed || options.hook !== undefined)) {
+    return { exitCode: 1, output: "--changed and --hook go with `shelra decisions check`.", stream: "stderr" };
+  }
+  if (verb === "check") {
+    if (options.hook !== undefined && options.hook !== "claude-code") {
+      return { exitCode: 1, output: `Unknown hook "${options.hook}". Use --hook claude-code.`, stream: "stderr" };
+    }
+    const hook = options.hook === "claude-code" ? "claude-code" : undefined;
+    const hookInput = hook ? await options.readHookInput?.() : undefined;
+    return checkDecisions(workspace, { changed: options.changed === true, hook, hookInput });
+  }
+  const result = runDecisionsCommand(workspace, verb, id);
+  return { ...result, stream: result.exitCode === 0 ? "stdout" : "stderr" };
 }

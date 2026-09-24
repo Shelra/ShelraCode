@@ -1458,11 +1458,34 @@ function changeDirectoryOrExit(directory: string | undefined) {
 
 type CliOptions = Record<string, string | boolean | undefined>;
 
-/** Everything piped to the process, such as the JSON input an agent's hook receives. */
-async function readStandardInput(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return Buffer.concat(chunks).toString("utf8");
+/**
+ * Everything piped to the process, such as the JSON input an agent's hook receives. A pipe that stays open
+ * without sending anything (a terminal emulator that is not a TTY, a CI runner) yields what arrived once it
+ * has been silent for `idleMs`, so a read never hangs.
+ */
+function readStandardInput(idleMs = 2_000): Promise<string> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      process.stdin.removeListener("data", onData);
+      process.stdin.pause();
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    };
+    const onData = (chunk: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      clearTimeout(timer);
+      timer = setTimeout(done, idleMs);
+    };
+    timer = setTimeout(done, idleMs);
+    process.stdin.on("data", onData);
+    process.stdin.once("end", done);
+    process.stdin.once("error", done);
+  });
 }
 
 function stringOption(value: string | boolean | undefined): string | undefined {
@@ -2006,25 +2029,15 @@ program
   .option("--hook <agent>", "check: answer as that agent's stop hook (claude-code)")
   .action(async (action: string | undefined, id: string | undefined, options: { changed?: boolean; hook?: string }) => {
     changeDirectoryOrExit(stringOption(program.opts<CliOptions>().directory));
-    const { checkDecisions, runDecisionsCommand } = await import("./ledger/cli");
-    if (action?.toLowerCase() === "check") {
-      if (options.hook !== undefined && options.hook !== "claude-code") {
-        console.error(`Unknown hook "${options.hook}". Use --hook claude-code.`);
-        process.exitCode = 1;
-        return;
-      }
-      const hook = options.hook === "claude-code" ? "claude-code" : undefined;
-      // Claude Code runs hooks with the project in CLAUDE_PROJECT_DIR and their input as JSON on stdin.
-      const workspace = (hook && process.env.CLAUDE_PROJECT_DIR) || process.cwd();
-      const hookInput = hook && !process.stdin.isTTY ? await readStandardInput() : undefined;
-      const result = await checkDecisions(workspace, { changed: options.changed === true, hook, hookInput });
-      if (result.stream === "stdout") console.log(result.output);
-      else console.error(result.output);
-      process.exitCode = result.exitCode;
-      return;
-    }
-    const result = runDecisionsCommand(process.cwd(), action, id);
-    if (result.exitCode === 0) console.log(result.output);
+    const { runDecisionsCli } = await import("./ledger/cli");
+    // Claude Code runs hooks with the project in CLAUDE_PROJECT_DIR and their input as JSON on stdin.
+    const workspace = (options.hook === "claude-code" && process.env.CLAUDE_PROJECT_DIR) || process.cwd();
+    const result = await runDecisionsCli(workspace, action, id, {
+      changed: options.changed,
+      hook: options.hook,
+      readHookInput: () => (process.stdin.isTTY ? Promise.resolve(undefined) : readStandardInput()),
+    });
+    if (result.stream === "stdout") console.log(result.output);
     else console.error(result.output);
     process.exitCode = result.exitCode;
   });

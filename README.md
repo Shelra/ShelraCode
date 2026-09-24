@@ -206,19 +206,21 @@ it; the old one stays on record as superseded. Files in the folder without a
 ledger id, such as a project's own ADRs, are left alone.
 
 The same checks guard changes Shelra did not make. `shelra decisions check` runs
-the check of every active decision and exits 1 when one is broken, for CI or a
-git hook; `--changed` limits it to the decisions covering files changed in the
-working tree. As a Claude Code Stop hook it sends a broken decision back to
-Claude, once, so Claude repairs it before it stops (`.claude/settings.json`):
+the check of every active decision, refusing one that would do damage as the
+agent's own contract does, and exits 1 unless every check held, for CI or a git
+hook. `--changed` limits it to the decisions covering files changed in the
+working tree against HEAD, which suits a pre-commit hook but not a stop hook,
+since a commit empties it. As a Claude Code Stop hook it sends a broken decision
+back to Claude, once, so Claude repairs it before it stops; give the hook a
+timeout that covers every check, as they run one after another
+(`.claude/settings.json`):
 
 ```json
 {
   "hooks": {
     "Stop": [
       {
-        "hooks": [
-          { "type": "command", "command": "shelra decisions check --changed --hook claude-code", "timeout": 600 }
-        ]
+        "hooks": [{ "type": "command", "command": "shelra decisions check --hook claude-code", "timeout": 600 }]
       }
     ]
   }
