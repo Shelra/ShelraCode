@@ -79,14 +79,13 @@ interface CreateToolsOptions {
     reason: "pre-write" | "pre-edit" | "pre-delete";
   }) => void;
   /**
-   * Shared plan-gate state for this turn, by reference. `createTools` is called fresh on every
-   * round of the turn loop (including verification-nudge and overflow-recovery retries, not just
-   * once per user message) — without this, each fresh call started a brand-new `planPublished =
-   * false` closure, so a nudge asking the model to fix/verify its own already-planned work forced
-   * a redundant `generate_plan` call before it could touch a file again. Passing the SAME object
-   * across every `createTools` call within one turn (the caller resets it only at the true start
-   * of a new turn) lets a plan published earlier in the turn stay published for the rest of it.
-   * Omit for one-shot tool sets (e.g. a delegated sub-agent's single call) where this doesn't apply.
+   * Shared plan state for this turn, by reference. `createTools` is called fresh on every round of
+   * the turn loop (including verification-nudge and overflow-recovery retries, not just once per user
+   * message); passing the SAME object across those calls (the caller resets it only at the true start
+   * of a new turn) keeps a structured plan published earlier in the turn available to
+   * `update_plan_step`. `published` belonged to the removed plan gate (doc 14 §23.3) and is no longer
+   * read: no file tool requires a plan first. Omit for one-shot tool sets (e.g. a delegated
+   * sub-agent's single call) where this doesn't apply.
    */
   planState?: { published: boolean; structured: boolean };
   /**

@@ -449,12 +449,11 @@ export class Agent {
    */
   private turnLinkedCriteriaIds: Set<string> = new Set();
   /**
-   * Plan-gate state shared across every `createTools` call within one turn — the turn loop calls
+   * Plan state shared across every `createTools` call within one turn — the turn loop calls
    * `createTools` fresh on every round (initial + verification-nudge + overflow-recovery retries),
-   * so without a stable object reference each round got its own `planPublished = false` closure,
-   * forcing a redundant `generate_plan` call whenever a nudge asked the model to keep working on
-   * already-planned work. Reset only at the true start of a turn (`processMessage`), not per
-   * round. See docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §15.
+   * so a structured plan published in one round is still there for `update_plan_step` in the next.
+   * `published` fed the plan gate, which was removed (doc 14 §23.3): nothing requires a plan before a
+   * write, and nothing reads `published` now. Reset only at the true start of a turn (`processMessage`).
    */
   private planState: { published: boolean; structured: boolean } = { published: true, structured: false };
   /** Files as they were before each attempt of this turn changed them; read by restore_file. */
@@ -3034,8 +3033,8 @@ export class Agent {
           }
 
           // Completion/verification gate (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9):
-          // a coding turn that mutated a file under acceptance criteria (write_file/edit_file/
-          // delete_file already require generate_plan first) but never made any verification-
+          // a coding turn that mutated a file (a plan is optional: no file tool requires
+          // generate_plan first) but never made any verification-
           // shaped tool call is not evidence of a working result — it is the model's own
           // unverified claim. Reproduced live 2026-09-13: a headless clock task wrote files,
           // re-read its own source, stopped the dev server it had started, and reported "Done."

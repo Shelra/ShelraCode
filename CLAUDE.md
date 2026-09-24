@@ -28,12 +28,13 @@ criteria and working rules (free models only), is `docs/EXECUTION-PLAN.md`: work
 - **What the harness enforces:** verification before "done" (after a change with no real check the gate asks up to
   three times, then reports `[Not verified …]`; a check piped into another command does not count, and a turn that
   only wrote documents is asked once to check its facts, then always reported unverified), a requirement audit when
-  a request lists many behaviors, blocking Stop hooks, and the resilience rule in AGENTS.md. Specs and plans
+  a request lists many behaviors, Stop hooks that can refuse completion (the turn then ends `[Not marked
+  complete …]`; the reason is not sent back to the model), and the resilience rule in AGENTS.md. Specs and plans
   (`generate_plan` acceptance criteria) are model-driven. When the project states its checks (package.json
   scripts, an AGENTS.md or CLAUDE.md command table, Make/just targets, pyproject/Cargo/go.mod conventions), its
   tests, type-check and lint are the definition of done: the host runs them on the final code (`src/contract/`),
   reusing a run the agent made after its last change, and sends failures back parsed, for a bounded repair; a plan
-  criterion whose command failed before the change joins them. Without stated checks, a real check program must
+  criterion whose command did not pass before the change (it failed, or was not run) joins them. Without stated checks, a real check program must
   have run after the last change, shell writes included. Tests that existed before the request are protected
   unless it asks to change them (audit and roadmap: `docs/architecture/15-INTELLIGENCE-AUDIT-AND-ROADMAP.md`).
 - **The CLI is the runtime** (Bun, local SQLite, no server framework) and never depends on a server. `backend/` is

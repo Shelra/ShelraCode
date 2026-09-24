@@ -169,10 +169,12 @@ Shelra must not behave like a stateless agent. `src/memory/` implements project 
 `.shelra/memory/` (index + topic files + `history.jsonl` timeline + `reflections.jsonl` audit):
 retrieval ranks entries against every request and sub-agent brief (lexical, no embeddings) and
 injects the relevant bodies; after a turn that changed and verified files, worked through a
-failure, or investigated substantially, one bounded reflection call proposes durable facts and a
+failure, or investigated substantially (a turn stopped by test protection, a decision-record edit,
+missing evidence, a Stop hook or `report_blocker` does not reflect), one bounded reflection call proposes durable facts and a
 deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text,
 no inference overwriting a human statement, no near-duplicates). Explicit standing rules from the
-user ("always …", "never …") are captured without a model call. An entry gains credit when the
-project's checks pass with it in context and loses it when they fail; a procedure that was part of
+user ("always …", "never …") are captured without a model call. A project entry gains credit when the
+host runs the checks a project states and they pass with it in context, and loses it when they fail (a
+project that states no checks gives no credit); a procedure that was part of
 two passing turns is promoted to `.agents/skills/<slug>/SKILL.md`. Design and evidence: `docs/design/shelra-memory-engine.md`;
 proof suite: `bench/suites/shelra-memory-v0.1.json`.

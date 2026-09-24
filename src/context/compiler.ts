@@ -256,8 +256,8 @@ function namedFiles(root: string, prompt: string): { lines: string[]; files: str
  * whole file list, and a larger one the tests of the files the request names: without either, F4 of the
  * execution plan measured a free model searching for the tests in nearly every task and spending 55%
  * more tokens. A generated overview of a large repository stays out, where it was noise and reading
- * files on demand beat an injected map. Project instructions (AGENTS.md, CLAUDE.md) are merged into the
- * system prompt separately.
+ * files on demand beat an injected map. Project instructions (the AGENTS.md chain; CLAUDE.md is read only for
+ * its command table, by check discovery) reach the system prompt separately.
  */
 export function compileContextPacket(root: string, prompt: string, maxChars = MAX_CONTEXT_CHARS): ContextPacket {
   const classification = classifyTurn(prompt);

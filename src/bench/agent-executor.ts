@@ -20,7 +20,7 @@ import type {
  * Benchmark executor for Shelra's real product path.
  *
  * `--agent shelra` drives every task through `Agent.processMessage()` — the same turn loop,
- * tool set, plan gate, completion gate, checkpoints, hooks and memory that an interactive or
+ * tool set, completion gate, checkpoints, hooks and memory that an interactive or
  * `--prompt` session uses. The older `shelra-executor.ts` drives `AutonomyKernel` instead, a
  * separate engine that shares none of that hardening, so its scores never described what a
  * user actually gets (research/lanes/15-shelracode-forensic-audit.md, section 5.1). This
