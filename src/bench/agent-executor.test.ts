@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -68,7 +68,8 @@ vi.mock("../exec/browser", () => ({
 }));
 
 import { listDecisions } from "../ledger/store";
-import { createAgentBenchmarkExecutor } from "./agent-executor";
+import type { Decision } from "../ledger/types";
+import { createAgentBenchmarkExecutor, simulatedDecisionApproval } from "./agent-executor";
 import type { BenchmarkTaskDefinition } from "./types";
 
 const emptyHookResult: AggregatedHookResult = {
@@ -407,6 +408,79 @@ describe("agent benchmark executor", () => {
     const unanswered = await run();
     expect(unanswered.statuses).toEqual(["Users are never removed: proposed", "Loans last 14 days: proposed"]);
     expect(unanswered.notes).toEqual([]);
+  });
+
+  it("vetoes, with the chain suite's own patterns, a proposal that inverts or replaces the rule the user stated", async () => {
+    const suite = JSON.parse(readFileSync("bench/suites/shelra-decision-chain-v0.1.json", "utf8")) as {
+      tasks: Array<{ id: string; approveDecisions?: string[]; declineDecisions?: string[] }>;
+    };
+    const verdict = (id: string, title: string, rule: string) => {
+      const step = suite.tasks.find((candidate) => candidate.id === id);
+      expect(step?.declineDecisions?.length, `${id} has a veto list`).toBeGreaterThan(0);
+      return simulatedDecisionApproval(
+        step?.approveDecisions ?? [],
+        step?.declineDecisions,
+      )({ title, rule } as Decision);
+    };
+    const cases: Array<[string, string, string, "approve" | "reject"]> = [
+      [
+        "02-delete-user",
+        "Users are soft-deleted",
+        "Deleting a user sets deleted_at; rows are never removed.",
+        "approve",
+      ],
+      ["02-delete-user", "Users are soft-deleted", "Deleting a user sets deleted_at; no code deletes rows.", "approve"],
+      ["02-delete-user", "Rows are never removed", "Never hard-delete a user: DELETE sets deleted_at.", "approve"],
+      ["02-delete-user", "Hard delete users", "DELETE /users/:id removes the row; there is no soft delete.", "reject"],
+      [
+        "02-delete-user",
+        "Remove user rows on delete",
+        "Deleting a user removes its row and drops the deleted_at column.",
+        "reject",
+      ],
+      ["02-delete-user", "Inactive users are deleted", "Users who are not active for two years are deleted.", "reject"],
+      ["04-isbn", "No dependencies", "package.json lists no dependencies and no code imports a package.", "approve"],
+      ["04-isbn", "Dependency-free", "Dependencies are not allowed; no package may be added.", "approve"],
+      ["04-isbn", "Dependencies are allowed", "Dependencies are allowed when they are not part of Bun.", "reject"],
+      ["04-isbn", "Small packages are fine", "A package may be added when its dependency tree is not large.", "reject"],
+      [
+        "04-isbn",
+        "Hand-written ISBN validation",
+        "ISBN validation is written by hand, not taken from a package.",
+        "reject",
+      ],
+      [
+        "05-camel-case",
+        "API JSON uses camelCase",
+        "Every key the API accepts or answers is camelCase; snake_case is retired.",
+        "approve",
+      ],
+      ["05-camel-case", "Keep snake_case", "The API keeps snake_case keys, not camelCase.", "reject"],
+      ["09-loan-logs", "Logs never hold email addresses", "No log line contains an email address.", "approve"],
+      ["09-loan-logs", "No emails in logs", "Log lines identify users by id and never by email.", "approve"],
+      ["09-loan-logs", "Emails are logged", "Emails are logged, never hidden, so support can find the user.", "reject"],
+      [
+        "09-loan-logs",
+        "Log the email on changes",
+        "The change log includes the old and new email; nothing is redacted.",
+        "reject",
+      ],
+      [
+        "09-loan-logs",
+        "Loans are logged with ids",
+        "Every loan and return is logged with the loan, book and user ids.",
+        "reject",
+      ],
+    ];
+    for (const [id, title, rule, expected] of cases) {
+      expect(await verdict(id, title, rule), `${id}: "${title}" / "${rule}"`).toBe(expected);
+    }
+    // A veto outranks an approval, and without an approve pattern nothing is approved.
+    const veto = simulatedDecisionApproval(["soft"], ["hard"]);
+    expect(await veto({ title: "Soft delete, then hard delete after a year", rule: "" } as Decision)).toBe("reject");
+    expect(await simulatedDecisionApproval([], ["hard"])({ title: "Soft delete", rule: "" } as Decision)).toBe(
+      "reject",
+    );
   });
 
   it("reports a task without benchmark-owned checks as not run rather than inventing a grade", async () => {

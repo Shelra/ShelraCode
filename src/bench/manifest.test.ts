@@ -118,17 +118,28 @@ describe("benchmark manifest", () => {
       suite: "chain",
       tasks: [
         step("s1", { workspaceTemplate: "fixture", approveDecisions: [] }),
-        step("s2", { continueIn: "s1", approveDecisions: ["never (?:remove|delete)", "soft"] }),
+        step("s2", {
+          continueIn: "s1",
+          approveDecisions: ["never (?:remove|delete)", "soft"],
+          declineDecisions: ["hard[- ]?delet"],
+        }),
       ],
     });
     expect(chain.tasks[0]?.approveDecisions).toEqual([]);
-    expect(chain.tasks[1]).toMatchObject({ continueIn: "s1", approveDecisions: ["never (?:remove|delete)", "soft"] });
+    expect(chain.tasks[0]?.declineDecisions).toBeUndefined();
+    expect(chain.tasks[1]).toMatchObject({
+      continueIn: "s1",
+      approveDecisions: ["never (?:remove|delete)", "soft"],
+      declineDecisions: ["hard[- ]?delet"],
+    });
 
     const parse = (tasks: unknown[]) => () => parseManifest({ benchmarkVersion: "c", suite: "c", tasks });
     expect(parse([step("s1", { continueIn: "s0" })])).toThrow(/not an earlier task/iu);
     expect(parse([step("s1", { workspaceTemplate: "f", continueIn: "s0" })])).toThrow(/cannot combine/iu);
     expect(parse([step("s1", { approveDecisions: ["("] })])).toThrow(/invalid regular expression/iu);
     expect(parse([step("s1", { approveDecisions: "soft" })])).toThrow(/array of regular expressions/iu);
+    expect(parse([step("s1", { declineDecisions: ["("] })])).toThrow(/declineDecisions holds an invalid/iu);
+    expect(parse([step("s1", { declineDecisions: [1] })])).toThrow(/declineDecisions must be an array/iu);
     // Once s2 continued in s1's directory, s1's result is gone: neither a second chain nor a copy can start there.
     const forked = [step("s1", { workspaceTemplate: "f" }), step("s2", { continueIn: "s1" })];
     expect(parse([...forked, step("s3", { continueIn: "s1" })])).toThrow(/already continued in its directory/iu);

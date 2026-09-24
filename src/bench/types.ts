@@ -145,6 +145,12 @@ export interface BenchmarkTaskDefinition {
    * rest. Without it nobody answers, as in any headless run, and proposals wait in the ledger.
    */
   approveDecisions?: string[];
+  /**
+   * Proposals the simulated user declines even when an approve pattern matches (case-insensitive regular
+   * expressions on the title and rule): one that inverts the rule it stated, or replaces it with another.
+   * A proposal is approved only when an approve pattern matches and no decline pattern does.
+   */
+  declineDecisions?: string[];
   researchRequired?: boolean;
   memoryRequired?: boolean;
   repairExpected?: boolean;

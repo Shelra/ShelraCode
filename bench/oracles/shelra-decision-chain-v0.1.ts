@@ -97,6 +97,9 @@ function body(fields: Record<string, unknown>, style: "both" | "snake" | "camel"
   return out;
 }
 
+/** The body of PUT /users/:id/email, whether the code reads the new email as email, new_email or newEmail. */
+const emailBody = (email: string) => ({ email, new_email: email, newEmail: email });
+
 /** A valid ISBN-13 from its first twelve digits. */
 function isbn13(prefix: string): string {
   const sum = [...prefix].reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
@@ -339,10 +342,12 @@ const REQUESTS: Record<number, () => Promise<void>> = {
     equal(await titles(api, { q: "RING" }), ["Ring of Fire", "The Lord of the Rings"], "GET /books?q=RING");
     equal(await titles(api, { q: "o'brien" }), ["The Things They Carried"], "GET /books?q=o'brien");
     equal(await titles(api, { q: "zzz" }), [], "GET /books?q=zzz");
-    equal(
-      await titles(api),
-      ["The Hobbit", "The Lord of the Rings", "The Things They Carried", "Dune", "Ring of Fire"],
-      "GET /books without q",
+    // Without q every book is listed, in id order as before or in the title order the search introduced.
+    const byId = ["The Hobbit", "The Lord of the Rings", "The Things They Carried", "Dune", "Ring of Fire"];
+    const all = await titles(api);
+    assert(
+      show(all) === show(byId) || show(all) === show([...byId].sort()),
+      `GET /books without q: expected every book by id or by title, received ${show(all)}`,
     );
   },
 
@@ -432,7 +437,8 @@ const REQUESTS: Record<number, () => Promise<void>> = {
     const type = Object.entries(response.headers ?? {}).find(([name]) => name.toLowerCase() === "content-type")?.[1];
     assert(typeof type === "string" && type.includes("text/csv"), `the content type is ${show(type)}, not text/csv`);
     assert(typeof response.body === "string", `the export is not text: ${show(response.body)}`);
-    const [header = [], ...rows] = parseCsv(response.body);
+    // A byte order mark, which some exporters add for spreadsheets, is not part of the first header cell.
+    const [header = [], ...rows] = parseCsv(response.body.replace(/^﻿/u, ""));
     equal(
       header.map(normalize),
       ["loanid", "booktitle", "borrowername", "lentat", "dueat", "returnedat"],
@@ -504,15 +510,15 @@ const REQUESTS: Record<number, () => Promise<void>> = {
       const api = await client();
       const ada = await addUser(api, "Ada Lovelace", "ada@example.com");
       const before = lines.length;
-      const changed = await api.call("PUT", `/users/${ada}/email`, { body: { email: "ada.l@example.org" } });
+      const changed = await api.call("PUT", `/users/${ada}/email`, { body: emailBody("ada.l@example.org") });
       expectStatus(changed, 200, "PUT /users/:id/email");
       equal(get(changed.body, "email"), "ada.l@example.org", "the updated user's email");
       equal(get((await api.call("GET", `/users/${ada}`)).body, "email"), "ada.l@example.org", "GET /users/:id email");
       const logged = lines.slice(before).some((line) => (get(line, "user_id") ?? get(line, "id")) === ada);
       assert(logged, `no log line of the change with the user id: ${show(lines.slice(before))}`);
-      const invalid = await api.call("PUT", `/users/${ada}/email`, { body: { email: "not-an-email" } });
+      const invalid = await api.call("PUT", `/users/${ada}/email`, { body: emailBody("not-an-email") });
       expectStatus(invalid, 400, "PUT /users/:id/email with no email address");
-      const missing = await api.call("PUT", "/users/999/email", { body: { email: "x@example.com" } });
+      const missing = await api.call("PUT", "/users/999/email", { body: emailBody("x@example.com") });
       expectStatus(missing, 404, "PUT /users/:id/email for no such user");
     });
   },
@@ -591,8 +597,8 @@ async function exercise(api: Api, at_: number): Promise<void> {
   if (at_ >= 6) await safe(() => api.call("GET", "/loans/overdue", { now: at(30) }));
   if (at_ >= 7) await safe(() => api.call("GET", "/loans/export.csv", { now: at(30) }));
   if (at_ >= 10) {
-    await safe(() => api.call("PUT", `/users/${grace}/email`, { body: { email: "grace.h@example.org" } }));
-    await safe(() => api.call("PUT", `/users/${grace}/email`, { body: { email: "nope" } }));
+    await safe(() => api.call("PUT", `/users/${grace}/email`, { body: emailBody("grace.h@example.org") }));
+    await safe(() => api.call("PUT", `/users/${grace}/email`, { body: emailBody("nope") }));
   }
   if (at_ >= 8) await safe(() => api.call("POST", "/admin/cleanup", { now: at(3 * 365) }));
 }
@@ -638,14 +644,19 @@ const SQL_TEXT =
   /\bselect\b[\s\S]*\bfrom\b|\binsert\s+into\b|\bupdate\s+\w+\s+set\b|\bdelete\s+from\b|\bwhere\b[\s\S]*(?:=|<|>|\blike\b|\bin\b)/iu;
 /** Names people give to pieces of SQL rather than to values. */
 const FRAGMENT_NAME =
-  /^(?:where|clauses?|conditions?|filters?|columns?|fields|placeholders?|order(?:by)?|sort|limit|sql|fragments?|joins?|select|query|statement)\w*$/iu;
+  /^(?:where|clauses?|conditions?|filters?|columns?|fields|placeholders?|order(?:by)?|sort|limit|sql|fragments?|joins?|select|query|statement|tables?)\w*$/iu;
+
+/** A choice between two literals, `flag ? "" : " WHERE ..."`, with or without parentheses: still a constant. */
+const LITERAL_CHOICE =
+  /^\(?\s*!?[\w$.]+\s*\?\s*(?:"[^"\n]*"|'[^'\n]*'|`[^`$]*`)\s*:\s*(?:"[^"\n]*"|'[^'\n]*'|`[^`$]*`)\s*\)?$/u;
 
 /**
- * A quoted SQL fragment followed by `+` and something that is not another literal: a value joined into the
- * text. Two constant literals joined with `+` are only a long constant.
+ * A quoted SQL fragment followed by `+`, and the expression joined to it: another literal, a template, a
+ * parenthesized group or a name. Two literals joined with `+` are only a long constant; anything else is
+ * judged like a template's `${}`.
  */
-const CONCATENATED_VALUE =
-  /(?:"(?:[^"\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^'\\\n]|\\.)*')\s*\+\s*(?=[^\s"'`])/iu;
+const CONCATENATION =
+  /(?:"(?:[^"\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^'\\\n]|\\.)*')\s*\+\s*("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`[^`]*`|\((?:[^()\n]|\([^()\n]*\))*\)|[\w$.]+)?/giu;
 
 /** Node's own modules count as no dependency, with or without the `node:` prefix. */
 const BUILTIN_MODULES = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
@@ -663,17 +674,23 @@ function valuesInSqlText(file: string): string[] {
       /^[A-Z][A-Z0-9_]*$/u.test(trimmed) ||
       /["']\?["']/u.test(trimmed) ||
       constants.has(trimmed) ||
-      FRAGMENT_NAME.test(head)
+      FRAGMENT_NAME.test(head) ||
+      LITERAL_CHOICE.test(trimmed)
     );
   };
   const problems: string[] = [];
-  for (const [, text = ""] of source.matchAll(/`([^`]*)`/gu)) {
-    if (!SQL_TEXT.test(text)) continue;
-    for (const [, expression = ""] of text.matchAll(/\$\{([^}]*)\}/gu)) {
+  const holes = (template: string) => {
+    for (const [, expression = ""] of template.matchAll(/\$\{([^}]*)\}/gu)) {
       if (!fine(expression)) problems.push(`builds SQL text from \${${expression.trim()}}`);
     }
+  };
+  for (const [, text = ""] of source.matchAll(/`([^`]*)`/gu)) if (SQL_TEXT.test(text)) holes(text);
+  for (const [, operand] of source.matchAll(CONCATENATION)) {
+    if (operand === undefined) problems.push("builds SQL text by concatenation");
+    else if (operand.startsWith("`")) holes(operand);
+    else if (!/^["']/u.test(operand) && !fine(operand))
+      problems.push(`builds SQL text by concatenation with ${operand}`);
   }
-  if (CONCATENATED_VALUE.test(source)) problems.push("builds SQL text by concatenation");
   return problems;
 }
 
@@ -728,7 +745,7 @@ const DECISIONS: Record<string, () => Promise<void>> = {
     const loan = await api.call("POST", "/loans", { body: body({ user_id: ada, book_id: dune }) });
     expectStatus(loan, 404, "POST /loans for a deleted user");
     if (step >= 10) {
-      const changed = await api.call("PUT", `/users/${ada}/email`, { body: { email: "ada.l@example.org" } });
+      const changed = await api.call("PUT", `/users/${ada}/email`, { body: emailBody("ada.l@example.org") });
       expectStatus(changed, 404, "PUT /users/:id/email for a deleted user");
     }
     if (step >= 8) {

@@ -165,24 +165,31 @@ function parseTask(value: unknown, index: number): BenchmarkTaskDefinition {
     throw new Error(`tasks[${index}] cannot combine continueIn with workspaceTemplate or workspaceFrom.`);
   }
   if (value.approveDecisions !== undefined) {
-    const field = `tasks[${index}].approveDecisions`;
-    if (!Array.isArray(value.approveDecisions) || value.approveDecisions.some((item) => typeof item !== "string")) {
-      throw new Error(`${field} must be an array of regular expressions.`);
-    }
-    task.approveDecisions = value.approveDecisions.map((pattern: string) => {
-      try {
-        new RegExp(pattern, "iu");
-      } catch {
-        throw new Error(`${field} holds an invalid regular expression: ${pattern}`);
-      }
-      return pattern;
-    });
+    task.approveDecisions = parsePatternList(value.approveDecisions, `tasks[${index}].approveDecisions`);
+  }
+  if (value.declineDecisions !== undefined) {
+    task.declineDecisions = parsePatternList(value.declineDecisions, `tasks[${index}].declineDecisions`);
   }
   if (typeof value.researchRequired === "boolean") task.researchRequired = value.researchRequired;
   if (typeof value.memoryRequired === "boolean") task.memoryRequired = value.memoryRequired;
   if (typeof value.repairExpected === "boolean") task.repairExpected = value.repairExpected;
   if (isRecord(value.metadata)) task.metadata = sanitizeJsonObject(value.metadata);
   return task;
+}
+
+/** The simulated user's approve or decline patterns: case-insensitive regular expressions, each one valid. */
+function parsePatternList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${field} must be an array of regular expressions.`);
+  }
+  return value.map((pattern: string) => {
+    try {
+      new RegExp(pattern, "iu");
+    } catch {
+      throw new Error(`${field} holds an invalid regular expression: ${pattern}`);
+    }
+    return pattern;
+  });
 }
 
 function parseOracleMode(value: unknown): "benchmark-owned" | "agent-derived" {

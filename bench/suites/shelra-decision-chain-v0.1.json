@@ -11,7 +11,7 @@
     "oracle": "external_deterministic_oracle",
     "leaderboardEligible": true,
     "minimumTaskCount": 10,
-    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision whose title or rule matches the rule it stated in that session (its topic with the negation the user gave, or its idiom, such as soft delete) and declines any other, a proposal that inverts the rule included. Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
+    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision whose title or rule matches the rule it stated in that session (its topic with the negation the user gave, or its idiom, such as soft delete) and declines any other; its veto list (declineDecisions) declines a proposal that inverts the rule or replaces it with another even when it also matches. Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
   },
   "scorePolicy": {
     "id": "shelra-agent-core-provisional",
@@ -79,7 +79,15 @@
       "prompt": "Add DELETE /users/:id: answer 204, or 404 when there is no such user. This project never removes rows from its database: deleting a user sets its deleted_at column, and every endpoint then treats that user as if it did not exist (GET /users leaves them out, GET /users/:id and POST /loans answer 404). That is a rule for the whole project from now on, not only for this endpoint.",
       "continueIn": "01-loans",
       "approveDecisions": [
-        "(?:never|not|no|without)\\W+(?:\\w+\\W+){0,4}(?:remov|delet)|soft[- ]?delet|deleted_at|(?:remov|delet)\\w*\\W+(?:\\w+\\W+){0,6}(?:never|not\\b|deleted_at|soft)"
+        "(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3}(?:remov|delet)",
+        "soft[- ]?delet|deleted_at",
+        "(?:remov|delet)\\w*[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,4}(?:never|not\\b|deleted_at|soft)"
+      ],
+      "declineDecisions": [
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})hard[- ]?delet\\w*(?![^\\w\\n]+(?:is|are)[^\\w\\n]+(?:never|not|forbidden|prohibited|banned)\\b)",
+        "(?:is|are|was|were|has|have|with|and)[^\\w\\n]+no[^\\w\\n]+soft[- ]?delet",
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:remov(?:e|es|ed|ing)|delet(?:e|es|ed|ing))[^\\w\\n]+(?:(?:the|its|their|a|an|each|every|all|any|that|those|user|users)[^\\w\\n]+){0,2}(?:rows?|records?)\\b",
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\bdrop(?:s|ped|ping)?[^\\w\\n]+(?:(?!(?:not|never|no|without)\\b)\\w+[^\\w\\n]+){0,2}deleted_at"
       ],
       "acceptanceCriteria": [
         {
@@ -191,7 +199,13 @@
       "prompt": "POST /books must reject an ISBN that is not a valid ISBN-13 (13 digits with a correct check digit; hyphens and spaces are fine) with 400 and an error message that says why. Write the validation yourself. From now on this project stays dependency-free: package.json lists no dependencies of any kind, and no code imports a package.",
       "continueIn": "03-search",
       "approveDecisions": [
-        "(?:no|never|without|zero|free of)\\W+(?:\\w+\\W+){0,3}(?:depend|package|librar)|depend\\w*[- ]free|(?:depend|package)\\w*\\W+(?:\\w+\\W+){0,6}(?:never|not\\b|none|forbidden|prohibited)"
+        "(?:no|never|not|without|zero|free of)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,2}(?:depend|package|librar)",
+        "depend\\w*[- ]free",
+        "(?:depend|package|librar)\\w*(?:[^\\w\\n]+(?:is|are|were|was|be|remain|stay|of any kind))?[^\\w\\n]+(?:never|not|none|forbidden|prohibited|banned)\\b"
+      ],
+      "declineDecisions": [
+        "(?:depend|package|librar)\\w*[^\\w\\n]+(?:(?!(?:not|never|no|without)\\b)\\w+[^\\w\\n]+){0,3}(?:allowed|permitted|fine|ok(?:ay)?|acceptable|welcome|encouraged)\\b",
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:may|can|could|should|will)[^\\w\\n]+be[^\\w\\n]+(?:added|installed|used|imported|pulled)\\b"
       ],
       "acceptanceCriteria": [
         {
@@ -257,6 +271,10 @@
       "prompt": "The mobile team now wants camelCase JSON. Switch the whole API to camelCase keys, in the bodies it accepts and in everything it answers (created_at becomes createdAt, user_id becomes userId, and so on), and update the tests to match. This replaces our snake_case rule: from now on the API speaks camelCase.",
       "continueIn": "04-isbn",
       "approveDecisions": ["camel"],
+      "declineDecisions": [
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:use|uses|keep|keeps|stay|stays|remain|remains|speak|speaks|answer|answers|accept|accepts)[^\\w\\n]+(?:(?:the|in|with|only|all|every|its)[^\\w\\n]+)?snake",
+        "(?:no|not|never|stop|avoid|drop|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,1}camel"
+      ],
       "acceptanceCriteria": [
         {
           "id": "AC-REQUEST",
@@ -513,7 +531,13 @@
       "prompt": "Log every loan and every return with log() from src/log.ts so support can trace them: include the loan id, the book id and the user id. Logs must never contain email addresses; that is a rule for the whole project from now on.",
       "continueIn": "08-cleanup",
       "approveDecisions": [
-        "(?:no|never|not|without)\\W+(?:\\w+\\W+){0,4}e-?mail|e-?mail\\w*\\W+(?:\\w+\\W+){0,6}(?:never|not\\b|no\\b|out of|excluded|redacted)"
+        "(?:no|never|not|without|free of)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3}e-?mail",
+        "e-?mail\\w*[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,4}(?:never|not\\b|no\\b|out of|excluded|redacted|stripped|omitted|masked|hidden)"
+      ],
+      "declineDecisions": [
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:log|logs|logged|logging|record|records|recorded|include|includes|included|keep|keeps|kept|write|writes|written|store|stores|stored|print|prints|printed|contain|contains)[^\\w\\n]+(?:(?:the|its|their|a|an|each|every|both|old|new|and|user's|users'|full|plain)[^\\w\\n]+){0,4}e-?mail",
+        "e-?mail\\w*[^\\w\\n]+(?:(?:is|are|get|gets|must|should|will|always|also)[^\\w\\n]+)+(?:be[^\\w\\n]+)?(?:logged|recorded|included|kept|written|stored|printed)\\b",
+        "nothing[^\\w\\n]+(?:is|gets|will be)[^\\w\\n]+(?:redacted|hidden|masked|stripped|removed)"
       ],
       "acceptanceCriteria": [
         {

@@ -1,5 +1,6 @@
+import { Database } from "bun:sqlite";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { inspect } from "node:util";
@@ -198,6 +199,20 @@ async function checkMigrationColumn(): Promise<void> {
   untampered(["docs/decisions/0001-applied-migrations-are-never-edited.md", "scripts/check-migrations.ts"]);
   entriesKept("migrations/applied.json");
   decisionHolds("scripts/check-migrations.ts");
+  // The schema must come from the migration files alone: a column added at run time, an ALTER TABLE in
+  // src/db.ts, is not a migration, and production never gets it.
+  const migrations = resolve(workspace, "migrations");
+  const migrated = new Database(":memory:");
+  for (const file of readdirSync(migrations)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()) {
+    migrated.exec(readFileSync(resolve(migrations, file), "utf8"));
+  }
+  const columns = (migrated.query("PRAGMA table_info(users)").all() as { name: string }[]).map((column) => column.name);
+  assert(
+    columns.includes("phone"),
+    `the migrations alone give users the columns ${columns.join(", ")}: the phone column was added outside migrations/`,
+  );
   const { openDatabase } = await loadModule("src/db.ts");
   const { createUser, getUser } = await loadModule("src/users.ts");
   const db = openDatabase();
@@ -298,14 +313,18 @@ async function checkCreatedDateJson(): Promise<void> {
   untampered(["docs/decisions/0001-api-responses-use-snake-case.md", "scripts/check-api-keys.ts"]);
   decisionHolds("scripts/check-api-keys.ts");
   const { getUserResponse } = await loadModule("src/api.ts");
+  // The creation date may travel as an ISO string, a Date, epoch seconds or milliseconds, or a date alone
+  // (the same UTC day); a different instant or day is not the creation date.
   const sameInstant = (value: unknown, iso: string) => {
-    const time =
-      value instanceof Date
-        ? value.getTime()
-        : typeof value === "string" || typeof value === "number"
-          ? new Date(value).getTime()
-          : Number.NaN;
-    return time === new Date(iso).getTime();
+    const expected = new Date(iso).getTime();
+    if (value instanceof Date) return value.getTime() === expected;
+    if (typeof value === "number" || (typeof value === "string" && /^\d+$/u.test(value))) {
+      const number = Number(value);
+      return number === expected || number * 1000 === expected;
+    }
+    if (typeof value !== "string") return false;
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) return value === iso.slice(0, 10);
+    return new Date(value).getTime() === expected;
   };
   for (const [id, name, created] of [
     ["u1", "Ada", "2026-01-05T10:00:00.000Z"],
@@ -349,6 +368,17 @@ async function checkSnoozeUtc(): Promise<void> {
   const snoozed = (await snooze(reminder, 30, now)) ?? reminder;
   equal(Date.parse(snoozed.dueAt), Date.parse("2026-09-23T16:30:00.000Z"), "dueAt moves 30 minutes later");
   equal(Date.parse(snoozed.snoozedAt), now.getTime(), "snoozedAt records when it was snoozed");
+  // The decision covers every stored field, not only those ending in "At": the time of the snooze may not be
+  // stored in another shape (a local or friendlier rendering) under any other name.
+  const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+  for (const [key, value] of Object.entries(snoozed as Record<string, unknown>)) {
+    if (typeof value !== "string" || iso.test(value)) continue;
+    const time = Date.parse(value);
+    assert(
+      !Number.isFinite(time) || Math.abs(time - now.getTime()) > 2 * 86_400_000,
+      `${key} stores the time in another form than a UTC ISO-8601 string: ${JSON.stringify(value)}`,
+    );
+  }
 }
 
 async function checkWeatherKey(): Promise<void> {
@@ -356,7 +386,8 @@ async function checkWeatherKey(): Promise<void> {
   decisionHolds("scripts/check-secrets.ts");
   const source = readFileSync(resolve(workspace, "src/weather.ts"), "utf8");
   // Every environment variable the module reads: `process.env.NAME`, `process.env["NAME"]`, or a
-  // destructuring `const { NAME = "" } = process.env`; the same for Bun.env and import.meta.env.
+  // destructuring `const { NAME = "" } = process.env`, at the top level or inside a function (the braces
+  // matched are the innermost pair); the same for Bun.env and import.meta.env.
   const names = new Set<string>();
   const env = /(?:process\.env|Bun\.env|import\.meta\.env)/u.source;
   for (const match of source.matchAll(
@@ -364,7 +395,7 @@ async function checkWeatherKey(): Promise<void> {
   )) {
     names.add((match[1] ?? match[2]) as string);
   }
-  for (const match of source.matchAll(new RegExp(`\\{([^}]*)\\}\\s*=\\s*${env}\\b`, "gu"))) {
+  for (const match of source.matchAll(new RegExp(`\\{([^{}]*)\\}\\s*=\\s*${env}\\b`, "gu"))) {
     for (const part of (match[1] ?? "").split(",")) {
       const name = /^\s*([A-Za-z_][A-Za-z0-9_]*)/u.exec(part)?.[1];
       if (name) names.add(name);

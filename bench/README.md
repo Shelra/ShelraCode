@@ -269,18 +269,25 @@ decision is judged three ways: SQL text built from anything but a constant, a fr
 placeholders; the SQL the code actually ran, which must hold no value the oracle sent and no date;
 and injection through the search. The simulated user of each task (`approveDecisions`) approves a
 proposed decision whose title or rule matches the rule it stated in that session (its topic with the
-negation the user gave, or its idiom, such as soft delete) and declines any other, one that inverts the
-rule included; without it, as in any headless run, proposals wait.
+negation the user gave, or its idiom, such as soft delete) and declines any other. Its veto list
+(`declineDecisions`) declines a proposal that inverts the rule or replaces it with another even when
+an approve pattern matches it too ("hard delete users", "dependencies are allowed", "emails are
+logged, never hidden"), so no such proposal becomes an active decision; without either list, as in
+any headless run, proposals wait.
 
 Decisions kept = `AC-KEEP-*` passed over those judged at steps whose `AC-REQUEST` passed (38 when
 every request is done). Report it with the steps passed. Validation, with a reference solution
-and naive variants kept out of the repository: the reference path passes all ten steps and all 38
-decisions; no request passes on the state the previous step left; each of thirteen naive
-variants fails the decision it breaks (a search that interpolates the text, one that escapes
-quotes and still interpolates, one that hides the value in a `where` fragment, a date in the
-overdue query, snake_case keys after the switch, a declared or an imported dependency, a hard
-delete in the cleanup, an email in a log line, a deleted user who can still change their email)
-and no other.
+and 28 variants kept out of the repository: the reference path passes all ten steps and all 38
+decisions; no request passes on the state the previous step left; each of the fifteen variants
+that break a decision fails exactly that decision (a search that interpolates the text, one that
+escapes quotes and still interpolates or concatenates, one that hides the value in a `where`
+fragment, a date in the overdue query, camelCase keys before the switch or snake_case keys after
+it, a declared or an imported dependency, a hard delete in the cleanup, an email in a log line, a
+deleted user who can still change their email) and no other; and each of the thirteen correct but
+unusual ones passes everything (a constant fragment, an UPPER_CASE constant, a ternary of two
+literals or a split literal joined into SQL, a table name in a template, a bare or `node:` builtin
+import, SQLite's clock in the cleanup, a BOM before the CSV, every book listed by title, the new
+email read as `newEmail`).
 
 ~~~text
 bun run src/index.ts bench --manifest bench/suites/shelra-decision-chain-v0.1.json --model <open-model> --repeat 3

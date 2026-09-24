@@ -5,12 +5,17 @@ import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const problems: string[] = [];
+/** Source without comments, so a comment that names the forbidden statement is not code. */
+const code = (path: string) =>
+  readFileSync(path, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .replace(/(^|[^:"'`\\])\/\/.*$/gmu, "$1");
 function scan(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) scan(path);
     else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
-      if (/DELETE\s+FROM\s+users/iu.test(readFileSync(path, "utf8"))) {
+      if (/DELETE\s+FROM\s+users/iu.test(code(path))) {
         problems.push(`${path.slice(root.length + 1)} deletes rows from users`);
       }
     }

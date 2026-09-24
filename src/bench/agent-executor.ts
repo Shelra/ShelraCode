@@ -52,17 +52,25 @@ export const DEFAULT_TASK_TIMEOUT_MS = 20 * 60_000;
 
 /**
  * The simulated user of a chain task: it approves a proposed decision that records a rule it stated in
- * this task (its title or rule matches one of the patterns) and declines any other, as a user who reads
- * the approval question would.
+ * this task (its title or rule matches one of the approve patterns) and declines any other, as a user who
+ * reads the approval question would. A decline pattern is its veto: a proposal that inverts the rule or
+ * replaces it with another is declined even when an approve pattern matches it.
  */
-export function simulatedDecisionApproval(patterns: readonly string[]): DecisionApproval {
-  const expressions = patterns.map((pattern) => new RegExp(pattern, "iu"));
-  return async (decision) =>
-    expressions.some((expression) => expression.test(`${decision.title}\n${decision.rule}`)) ? "approve" : "reject";
+export function simulatedDecisionApproval(
+  patterns: readonly string[],
+  declines: readonly string[] = [],
+): DecisionApproval {
+  const approve = patterns.map((pattern) => new RegExp(pattern, "iu"));
+  const decline = declines.map((pattern) => new RegExp(pattern, "iu"));
+  return async (decision) => {
+    const text = `${decision.title}\n${decision.rule}`;
+    if (decline.some((expression) => expression.test(text))) return "reject";
+    return approve.some((expression) => expression.test(text)) ? "approve" : "reject";
+  };
 }
 
 /** A note the host ends a turn with when the work is not done; a turn that carries one claims nothing. */
-const HOST_END_NOTE_RE = /\[(?:Not verified|Not marked complete|Paused|No response|Cancelled)\b/u;
+const HOST_END_NOTE_RE = /\[(?:Not verified|Not marked complete|Paused|No response|Cancelled|Stopped)\b/u;
 
 const MUTATION_TOOLS = new Set(["write_file", "edit_file", "delete_file"]);
 const RESEARCH_TOOLS = new Set(["search_web", "open_web"]);
@@ -117,8 +125,8 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
         ...(options.agentOptions ?? {}),
       });
       controller.signal.addEventListener("abort", () => agent.abort(), { once: true });
-      if (task.approveDecisions) {
-        const answer = simulatedDecisionApproval(task.approveDecisions);
+      if (task.approveDecisions || task.declineDecisions) {
+        const answer = simulatedDecisionApproval(task.approveDecisions ?? [], task.declineDecisions);
         agent.setDecisionApproval(async (decision, signal) => {
           const verdict = await answer(decision, signal);
           context.emit({
