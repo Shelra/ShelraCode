@@ -1,11 +1,11 @@
 // Excluded from the default Vitest run because it reads the native bun:sqlite database the runner
 // writes. Run with `bun test src/bench/history.test.ts`.
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { closeDatabase, getDatabasePath } from "../storage/db";
-import { appendRunsToHistory, cleanText, type History } from "./history";
+import { appendRunsToHistory, cleanText, type History, saveHistory } from "./history";
 import { runBenchmark } from "./runner";
 import type { BenchmarkManifest } from "./types";
 
@@ -90,5 +90,18 @@ describe("appendRunsToHistory", () => {
 
     const both = appendRunsToHistory({ repositoryRoot, databasePath, source: "test", runIds: [first, second] });
     expect(both).toMatchObject({ runs: 2, added: 1, replaced: 1 });
+  });
+});
+
+describe("saveHistory", () => {
+  it("replaces a longer file entirely and reads back exactly what it wrote", () => {
+    const path = join(repositoryRoot, "bench", "history", "benchmark-history.json");
+    writeFileSync(path, `${"x".repeat(50_000)}\n`);
+    const history: History = { schemaVersion: 1, description: "d", updatedAt: "", runs: [], fieldCases: [] };
+
+    saveHistory(path, history, repositoryRoot);
+
+    expect(readFileSync(path, "utf8")).toBe(`${JSON.stringify(history, null, 2)}\n`);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ schemaVersion: 1, runs: [] });
   });
 });

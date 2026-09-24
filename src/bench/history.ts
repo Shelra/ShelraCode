@@ -1,5 +1,4 @@
 import { Database } from "bun:sqlite";
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname, userInfo } from "node:os";
 import { dirname, join } from "node:path";
@@ -261,19 +260,18 @@ export function mergeRuns(history: History, runs: readonly HistoryRun[]): { adde
  * import leaves no formatting diff. The formatter is optional: without Bun on PATH the file is still
  * valid JSON.
  */
-export function saveHistory(historyPath: string, history: History, repositoryRoot: string): void {
+/**
+ * Writes the history as formatted JSON and reads it back. No formatter runs here: one spawned after each save
+ * could still be writing when the next save began, and a shorter save then kept the tail of the formatter's
+ * longer write, which left the file unreadable (2026-09-24, importing six runs one after another). The
+ * pre-commit hook formats the file when it is committed.
+ */
+export function saveHistory(historyPath: string, history: History, _repositoryRoot?: string): void {
   history.updatedAt = new Date().toISOString();
   mkdirSync(dirname(historyPath), { recursive: true });
-  writeFileSync(historyPath, `${JSON.stringify(history, null, 2)}\n`);
-  try {
-    spawnSync("bun", ["x", "biome", "format", "--write", historyPath], {
-      cwd: repositoryRoot,
-      stdio: "ignore",
-      windowsHide: true,
-    });
-  } catch {
-    // Formatting is a convenience; the history itself is written.
-  }
+  const text = `${JSON.stringify(history, null, 2)}\n`;
+  writeFileSync(historyPath, text);
+  if (readFileSync(historyPath, "utf8") !== text) throw new Error(`${historyPath} did not save cleanly.`);
 }
 
 /** Adds runs from a database to the history file of a repository, with its field cases refreshed. */
