@@ -222,7 +222,7 @@ export function createTools(
           return bash.startBackground(command);
         }
 
-        const result = await bash.execute(command, timeout, abortSignal);
+        const result = await bash.execute(command, commandTimeoutMs(timeout), abortSignal);
         return {
           success: result.success,
           output: result.success
@@ -1400,6 +1400,16 @@ type ToolExecute = (input: unknown, options: { abortSignal?: AbortSignal }) => u
 export interface ToolHookContext {
   cwd: () => string;
   sessionId?: string;
+}
+
+/**
+ * A bash timeout as the model meant it. Models often give seconds where the tool takes milliseconds (seen live
+ * 2026-09-24: `"timeout": 10` killed `ls` after 10 ms), and no command is meant to get less than a second, so a value
+ * under 1000 is read as seconds.
+ */
+export function commandTimeoutMs(timeout: number | undefined): number | undefined {
+  if (timeout === undefined || !Number.isFinite(timeout) || timeout <= 0) return undefined;
+  return timeout < 1_000 ? timeout * 1_000 : timeout;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

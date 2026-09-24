@@ -5,7 +5,7 @@ import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { listMemoryRecords, projectMemoryScope } from "../memory/store";
 import { BashTool } from "../tools/bash";
-import { createTools, hardenToolSet } from "./tools";
+import { commandTimeoutMs, createTools, hardenToolSet } from "./tools";
 
 /**
  * A temporary folder holding its own empty repository: git looks for `.git` in parent folders, so a
@@ -783,6 +783,29 @@ describe("memory tools", () => {
     const result = (await tools.memory_delete.execute({ slug: "to-remove" }, {})) as { success: boolean };
     expect(result.success).toBe(true);
     await rm(cwd, { recursive: true, force: true });
+  });
+});
+
+describe("bash timeout", () => {
+  it("reads a timeout under a second as seconds, the unit models most often mean", async () => {
+    // Seen live 2026-09-24: `"timeout": 10` killed `ls` after 10 ms.
+    expect(commandTimeoutMs(10)).toBe(10_000);
+    expect(commandTimeoutMs(999)).toBe(999_000);
+    expect(commandTimeoutMs(1_000)).toBe(1_000);
+    expect(commandTimeoutMs(120_000)).toBe(120_000);
+    expect(commandTimeoutMs(undefined)).toBeUndefined();
+    expect(commandTimeoutMs(0)).toBeUndefined();
+
+    const tools = createTools(new BashTool(os.tmpdir()), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, options: unknown) => Promise<{ success: boolean; output: string }> }
+    >;
+    const result = await tools.bash?.execute(
+      { command: 'node -e "setTimeout(() => process.stdout.write(String(6 * 7)), 300)"', timeout: 10 },
+      { toolCallId: "t", messages: [] },
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.output).toContain("42");
   });
 });
 
