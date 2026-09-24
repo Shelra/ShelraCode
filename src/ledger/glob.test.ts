@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { globToRegExp, inScope } from "./glob";
+import { globProblem, globToRegExp, inScope, normalizeGlob } from "./glob";
 
 describe("decision scope globs", () => {
   it("crosses folders with ** and stays in one segment with * and ?", () => {
@@ -32,5 +32,23 @@ describe("decision scope globs", () => {
     expect(inScope("anything/at/all.md", [])).toBe(true);
     expect(inScope("src\\agent\\agent.ts", ["./src/agent/**"])).toBe(true);
     expect(inScope("frontend/src/app.tsx", ["src/**"])).toBe(false);
+  });
+});
+
+describe("pathological globs", () => {
+  it("collapses runs of ** before compiling, so a deep path is matched at once", () => {
+    expect(normalizeGlob("**/**/**/x")).toBe("**/x");
+    expect(normalizeGlob("src/**/**")).toBe("src/**");
+    expect(normalizeGlob("a/***/b")).toBe("a/**/b");
+    const deep = `${Array.from({ length: 24 }, (_, index) => `d${index}`).join("/")}/leaf.ts`;
+    const started = performance.now();
+    expect(inScope(deep, [`${"**/".repeat(12)}other.ts`])).toBe(false);
+    expect(inScope(deep, [`${"**/".repeat(12)}leaf.ts`])).toBe(true);
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+
+  it("names a scope that keeps too many ** after collapsing", () => {
+    expect(globProblem("**/**/**/src/**")).toBeNull();
+    expect(globProblem("**/a/**/b/**/c/**/d")).toBe('**/a/**/b/**/c/**/d holds more than 3 "**"');
   });
 });

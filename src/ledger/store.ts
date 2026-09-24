@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
+import { globProblem } from "./glob";
 import { DECISION_SOURCES, type Decision, type DecisionProposal, type DecisionStatus } from "./types";
 
 /**
@@ -262,6 +263,8 @@ export function proposeDecision(workspace: string, proposal: DecisionProposal, n
     (item) => isAbsolute(item) || /^[A-Za-z]:/u.test(item) || item.split(/[\\/]/u).includes(".."),
   );
   if (outside) return { ok: false, reason: `Scope globs are relative to the project, inside it: ${outside}` };
+  const unsafe = scope.map(globProblem).find((problem) => problem !== null);
+  if (unsafe) return { ok: false, reason: `A scope glob must stay simple: ${unsafe}.` };
   const existing = listDecisions(workspace);
   if (proposal.supersedes) {
     const replaced = existing.find((decision) => decision.id === proposal.supersedes);

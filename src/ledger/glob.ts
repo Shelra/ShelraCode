@@ -19,8 +19,34 @@ function balancedBraces(pattern: string): boolean {
   return depth === 0;
 }
 
+/** How many `**` one pattern may hold: each one is a backtracking point against a deep path. */
+export const MAX_GLOBSTARS = 3;
+
+/**
+ * A run of globstars (star-star-slash repeated) means what one globstar means, but compiled naively it
+ * backtracks exponentially against a deep path (a 12-fold pattern took over a minute); runs of stars
+ * collapse before anything is compiled.
+ */
+export function normalizeGlob(pattern: string): string {
+  return pattern
+    .replaceAll("\\", "/")
+    .replace(/^\.\//u, "")
+    .replace(/\/+$/u, "")
+    .replace(/\*{3,}/gu, "**")
+    .replace(/(?:\*\*\/)+\*\*/gu, "**")
+    .replace(/(?:\*\*\/)+/gu, "**/");
+}
+
+/** Why a scope glob cannot be compiled safely, or null when it can. */
+export function globProblem(pattern: string): string | null {
+  const normalized = normalizeGlob(pattern);
+  const globstars = normalized.match(/\*\*/gu)?.length ?? 0;
+  if (globstars > MAX_GLOBSTARS) return `${pattern} holds more than ${MAX_GLOBSTARS} "**"`;
+  return null;
+}
+
 export function globToRegExp(pattern: string): RegExp {
-  const normalized = pattern.replaceAll("\\", "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  const normalized = normalizeGlob(pattern);
   const alternatives = balancedBraces(normalized);
   let source = "";
   let depth = 0;
