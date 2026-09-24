@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { destructiveCommandReason } from "../security/destructive";
-import { BashTool } from "../tools/bash";
+import { BashTool, type CommandRun } from "../tools/bash";
 import { inScope } from "./glob";
 import { activeDecisions, approveDecision, findDecision, LEDGER_DIR, listDecisions, rejectDecision } from "./store";
 import type { Decision } from "./types";
@@ -72,7 +72,10 @@ export interface CheckDecisionsOptions {
   hook?: "claude-code";
   /** The hook's JSON input, which Claude Code sends on stdin. */
   hookInput?: string;
+  /** How long one check may run. */
   timeoutMs?: number;
+  /** How long all the checks of a hook may take together, so the hook answers before its host cancels it. */
+  budgetMs?: number;
 }
 
 export interface CheckDecisionsResult {
@@ -95,10 +98,30 @@ interface Judged {
 }
 
 const CHECK_TIMEOUT_MS = 10 * 60_000;
+/** Claude Code cancels a hook command after ten minutes unless configured otherwise; the checks share nine. */
+const HOOK_BUDGET_MS = 9 * 60_000;
 const OUTPUT_TAIL = 1_500;
 const GIT_TIMEOUT_MS = 3_000;
-/** A failure of the environment rather than of the code: the command, its script or its runtime is missing. */
-const ENVIRONMENT_FAILURE_RE = /timed out|not recognized|not found|ENOENT|no such file|cannot find|command not found/iu;
+/** Exit codes of a shell whose command does not exist: sh 127 (126: found but not runnable), cmd 9009. */
+const MISSING_COMMAND_EXITS = new Set([126, 127, 9009]);
+/**
+ * A runtime that could not start what the check names: the shell's own "command not found", PowerShell's and
+ * cmd's "not recognized", a script or module the runtime could not load. A test whose output happens to say
+ * "not found" is a failing test, not one of these, so the messages are matched whole.
+ */
+const RUNTIME_MISSING_RE =
+  /command not found|is not recognized as (?:an internal|the name of)|Cannot find module|MODULE_NOT_FOUND|error: (?:Module|Script) not found|No module named|can't open file|^(?:bash|sh|zsh|dash|bun|node|python3?|deno)(?:\.exe)?: (?:line \d+: )?[^:\n]+: No such file or directory/imu;
+
+/** What a failed run says about its decision: the rule is broken only when the check itself reached a verdict. */
+function judge(run: CommandRun, seconds: string): { outcome: Outcome; detail: string } {
+  const output = tail([run.stdout, run.stderr].filter(Boolean).join("\n"));
+  const after = output ? `\n${output}` : "";
+  if (run.state === "timed_out") return { outcome: "could not run", detail: `timed out after ${seconds} s${after}` };
+  if (run.state === "killed") return { outcome: "could not run", detail: `was stopped before it finished${after}` };
+  if (run.state === "refused") return { outcome: "could not run", detail: run.stderr || "was refused" };
+  const missing = (run.exitCode !== null && MISSING_COMMAND_EXITS.has(run.exitCode)) || RUNTIME_MISSING_RE.test(output);
+  return { outcome: missing ? "could not run" : "broken", detail: output || `exited with ${run.exitCode}` };
+}
 
 /**
  * Workspace-relative files changed in the working tree: against HEAD, or every tracked file in a repository
@@ -175,8 +198,17 @@ export async function checkDecisions(
   }
 
   const bash = new BashTool(workspace);
+  const checkTimeout = options.timeoutMs ?? CHECK_TIMEOUT_MS;
+  const deadline = options.hook ? Date.now() + (options.budgetMs ?? HOOK_BUDGET_MS) : Number.POSITIVE_INFINITY;
   const lines: string[] = [];
   const judged: Judged[] = [];
+  const failed = (decision: Decision, command: string, outcome: Outcome, detail: string) => {
+    judged.push({ decision, outcome, detail });
+    lines.push(
+      `${decision.id} ${decision.title}: ${outcome === "broken" ? "BROKEN" : "COULD NOT RUN"} (\`${command}\`)`,
+      ...detail.split("\n").map((row) => `  ${row}`),
+    );
+  };
   for (const decision of governing) {
     const command = decision.check as string;
     const danger = destructiveCommandReason(command, workspace);
@@ -185,21 +217,26 @@ export async function checkDecisions(
       lines.push(`${decision.id} ${decision.title}: NOT RUN (\`${command}\` ${danger})`);
       continue;
     }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      failed(
+        decision,
+        command,
+        "could not run",
+        "not started: the hook's time budget ran out; run `shelra decisions check` yourself",
+      );
+      continue;
+    }
     const startedAt = Date.now();
-    const result = await bash.execute(command, options.timeoutMs ?? CHECK_TIMEOUT_MS);
+    const run = await bash.run(command, Math.min(checkTimeout, remaining));
     const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-    if (result.success) {
+    if (run.state === "completed" && run.exitCode === 0) {
       judged.push({ decision, outcome: "holds", detail: "" });
       lines.push(`${decision.id} ${decision.title}: holds (\`${command}\`, ${seconds} s)`);
       continue;
     }
-    const detail = tail(result.error ?? result.output ?? "");
-    const outcome: Outcome = ENVIRONMENT_FAILURE_RE.test(detail) ? "could not run" : "broken";
-    judged.push({ decision, outcome, detail });
-    lines.push(
-      `${decision.id} ${decision.title}: ${outcome === "broken" ? "BROKEN" : "COULD NOT RUN"} (\`${command}\`)`,
-      ...detail.split("\n").map((row) => `  ${row}`),
-    );
+    const { outcome, detail } = judge(run, seconds);
+    failed(decision, command, outcome, detail);
   }
   const count = (outcome: Outcome) => judged.filter((item) => item.outcome === outcome).length;
   const parts = [

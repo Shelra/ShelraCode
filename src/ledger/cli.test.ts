@@ -13,7 +13,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(workspace, { recursive: true, force: true });
+  // A check killed for its timeout may still hold the folder for a moment.
+  rmSync(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 const propose = (title: string) =>
@@ -123,6 +124,43 @@ describe("shelra decisions check", () => {
     expect(hook.output).toContain("would do damage and was not run");
     expect(hook.output).not.toContain("Restore what the decision requires");
   });
+
+  it("judges by how the check ended, not by words in its output", async () => {
+    mkdirSync(join(workspace, "scripts"), { recursive: true });
+    writeFileSync(
+      join(workspace, "scripts", "not-found.ts"),
+      'console.error("export fetchUser not found in src/index.ts; Cannot find name phone");\nprocess.exit(1);\n',
+    );
+    writeFileSync(
+      join(workspace, "scripts", "hangs.ts"),
+      'console.log("checking...");\nsetTimeout(() => {}, 3_000);\n',
+    );
+    decide("Exports keep their names", ["**"], "bun scripts/not-found.ts");
+    decide("Tools exist", ["**"], "shelra-no-such-tool-xyz --version");
+    decide("Checks end", ["**"], "bun scripts/hangs.ts");
+
+    const result = await checkDecisions(workspace, { timeoutMs: 1_500 });
+    expect(result).toMatchObject({ exitCode: 1, stream: "stderr" });
+    expect(result.output).toContain("D-0001 Exports keep their names: BROKEN (`bun scripts/not-found.ts`)");
+    expect(result.output).toContain("D-0002 Tools exist: COULD NOT RUN (`shelra-no-such-tool-xyz --version`)");
+    expect(result.output).toContain("D-0003 Checks end: COULD NOT RUN (`bun scripts/hangs.ts`)");
+    expect(result.output).toMatch(/timed out after [\d.]+ s\n\s+checking\.\.\./u);
+    expect(result.output).toContain("Checked 3 decisions: 0 hold, 1 broken, 2 could not run.");
+  }, 30_000);
+
+  it("as a hook, stops starting checks when its time budget is spent and says so", async () => {
+    mkdirSync(join(workspace, "scripts"), { recursive: true });
+    writeFileSync(join(workspace, "scripts", "slow.ts"), "setTimeout(() => {}, 3_000);\n");
+    decide("First", ["**"], "bun scripts/slow.ts");
+    decide("Second", ["**"], holds);
+
+    const result = await checkDecisions(workspace, { hook: "claude-code", timeoutMs: 5_000, budgetMs: 400 });
+    expect(result).toMatchObject({ exitCode: 2, stream: "stderr" });
+    expect(result.output).toContain("Its check `bun scripts/slow.ts` could not run:");
+    expect(result.output).toContain("timed out after");
+    expect(result.output).toContain("not started: the hook's time budget ran out");
+    expect(result.output).not.toContain("Restore what the decision requires");
+  }, 30_000);
 
   it("with changed, checks only the decisions that cover a changed file", async () => {
     decide("The API is snake_case", ["src/api/**"], holds);

@@ -30,6 +30,15 @@ interface BashToolOptions {
   sandboxSettings?: SandboxSettings;
 }
 
+/** What running a command came to, unformatted. */
+export interface CommandRun {
+  /** `refused`: the sandbox or the preparation would not run it, and `stderr` says why. */
+  state: "completed" | "timed_out" | "killed" | "refused";
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+}
+
 let nextBgId = 1;
 
 export class BashTool {
@@ -140,6 +149,34 @@ export class BashTool {
       }
       const msg = err instanceof Error ? err.message : String(err);
       return { success: false, error: `Command failed: ${msg}` };
+    }
+  }
+
+  /**
+   * Runs a command and reports what happened without formatting it: the state, the exit code and both
+   * outputs, so a caller can tell a command that failed from one that never ran or never finished.
+   */
+  async run(command: string, timeout = 30_000, abortSignal?: AbortSignal): Promise<CommandRun> {
+    const prepared = this.prepareCommand(command);
+    if (!prepared.ok) return { state: "refused", exitCode: null, stdout: "", stderr: prepared.error };
+    try {
+      const outcome = await runCommand({
+        command: prepared.command,
+        cwd: this.cwd,
+        timeoutMs: timeout,
+        signal: abortSignal,
+        log: false,
+      });
+      const state =
+        outcome.state === "completed" ? "completed" : outcome.state === "timed_out" ? "timed_out" : "killed";
+      return { state, exitCode: outcome.exitCode ?? null, stdout: outcome.stdout ?? "", stderr: outcome.stderr ?? "" };
+    } catch (error) {
+      return {
+        state: "refused",
+        exitCode: null,
+        stdout: "",
+        stderr: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

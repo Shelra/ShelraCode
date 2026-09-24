@@ -100,6 +100,7 @@ import {
   savePaymentSettings,
   saveUserSettings,
 } from "./utils/settings";
+import { readAll } from "./utils/standard-input";
 import { runUpdate } from "./utils/update-checker";
 import { buildVerifyPrompt, getVerifyCliError } from "./verify/entrypoint";
 
@@ -1458,36 +1459,6 @@ function changeDirectoryOrExit(directory: string | undefined) {
 
 type CliOptions = Record<string, string | boolean | undefined>;
 
-/**
- * Everything piped to the process, such as the JSON input an agent's hook receives. A pipe that stays open
- * without sending anything (a terminal emulator that is not a TTY, a CI runner) yields what arrived once it
- * has been silent for `idleMs`, so a read never hangs.
- */
-function readStandardInput(idleMs = 2_000): Promise<string> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      process.stdin.removeListener("data", onData);
-      process.stdin.pause();
-      resolve(Buffer.concat(chunks).toString("utf8"));
-    };
-    const onData = (chunk: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      clearTimeout(timer);
-      timer = setTimeout(done, idleMs);
-    };
-    timer = setTimeout(done, idleMs);
-    process.stdin.on("data", onData);
-    process.stdin.once("end", done);
-    process.stdin.once("error", done);
-  });
-}
-
 function stringOption(value: string | boolean | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
@@ -2035,7 +2006,7 @@ program
     const result = await runDecisionsCli(workspace, action, id, {
       changed: options.changed,
       hook: options.hook,
-      readHookInput: () => (process.stdin.isTTY ? Promise.resolve(undefined) : readStandardInput()),
+      readHookInput: () => (process.stdin.isTTY ? Promise.resolve(undefined) : readAll(process.stdin)),
     });
     if (result.stream === "stdout") console.log(result.output);
     else console.error(result.output);
