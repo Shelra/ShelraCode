@@ -24,6 +24,10 @@ function balancedBraces(pattern: string): boolean {
 export const MAX_GLOBSTARS = 3;
 /** How many brace alternatives one pattern may expand to; past it the scope covers every path. */
 const MAX_ALTERNATIVES = 256;
+/** How long a pattern may be; past it the scope covers every path rather than risk the expansion's depth. */
+const MAX_PATTERN_LENGTH = 1_024;
+/** Marks where a brace group was, so the stars on either side of it never fuse into a globstar. */
+const BRACE_EDGE = "\u0000";
 
 /** Separators, a leading `./`, a trailing slash and runs of globstars normalized to their plain meaning. */
 export function normalizeGlob(pattern: string): string {
@@ -39,6 +43,7 @@ export function normalizeGlob(pattern: string): string {
 /** Why a proposed scope glob is not a readable rule, or null when it is. */
 export function globProblem(pattern: string): string | null {
   const normalized = normalizeGlob(pattern);
+  if (normalized.length > MAX_PATTERN_LENGTH) return `a scope glob is longer than ${MAX_PATTERN_LENGTH} characters`;
   const globstars = normalized.match(/\*\*/gu)?.length ?? 0;
   if (globstars > MAX_GLOBSTARS) return `${pattern} holds more than ${MAX_GLOBSTARS} "**"`;
   return null;
@@ -65,7 +70,9 @@ function expandBraces(pattern: string): string[] | null {
   const expanded: string[] = [];
   let from = open + 1;
   for (const end of [...commas, close]) {
-    const rest = expandBraces(pattern.slice(0, open) + pattern.slice(from, end) + pattern.slice(close + 1));
+    const rest = expandBraces(
+      `${pattern.slice(0, open)}${BRACE_EDGE}${pattern.slice(from, end)}${BRACE_EDGE}${pattern.slice(close + 1)}`,
+    );
     if (!rest) return null;
     expanded.push(...rest);
     if (expanded.length > MAX_ALTERNATIVES) return null;
@@ -80,6 +87,7 @@ function tokenize(pattern: string): Token[] {
   const tokens: Token[] = [];
   for (let index = 0; index < pattern.length; index += 1) {
     const char = pattern[index] as string;
+    if (char === BRACE_EDGE) continue;
     if (char === "*" && pattern[index + 1] === "*") {
       const slash = pattern[index + 2] === "/";
       tokens.push({ kind: slash ? "globstar-slash" : "globstar" });
@@ -141,9 +149,11 @@ function matchTokens(tokens: readonly Token[], path: string, folderSuffix: boole
 /** Whether one scope glob covers a workspace-relative path (already written with forward slashes). */
 export function globMatches(pattern: string, path: string): boolean {
   const normalized = normalizeGlob(pattern);
+  // A pattern too long, or with too many alternatives, to try: over-cover rather than let a decision miss
+  // the change (or a committed file stall the turn).
+  if (normalized.length > MAX_PATTERN_LENGTH) return true;
   const folderSuffix = !/[*?]/u.test(normalized);
   const alternatives = balancedBraces(normalized) ? expandBraces(normalized) : [normalized];
-  // Too many alternatives to try: over-cover rather than let a decision miss the change.
   if (!alternatives) return true;
   return alternatives.some((alternative) => matchTokens(tokenize(alternative), path, folderSuffix));
 }
@@ -154,10 +164,15 @@ export function globMatches(pattern: string, path: string): boolean {
  */
 const FOLDS_CASE = process.platform === "win32" || process.platform === "darwin";
 
+/** A workspace-relative path as the filesystem compares it: forward slashes, no `./`, case folded where it folds. */
+export function foldPath(path: string, foldCase = FOLDS_CASE): string {
+  const normalized = path.replaceAll("\\", "/").replace(/^\.\//u, "");
+  return foldCase ? normalized.toLowerCase() : normalized;
+}
+
 /** Whether a workspace-relative path falls under any of the globs; an empty scope covers everything. */
 export function inScope(path: string, scope: readonly string[], foldCase = FOLDS_CASE): boolean {
   if (scope.length === 0) return true;
-  const fold = (text: string) => (foldCase ? text.toLowerCase() : text);
-  const normalized = fold(path.replaceAll("\\", "/").replace(/^\.\//u, ""));
-  return scope.some((pattern) => globMatches(fold(pattern), normalized));
+  const normalized = foldPath(path, foldCase);
+  return scope.some((pattern) => globMatches(foldCase ? pattern.toLowerCase() : pattern, normalized));
 }

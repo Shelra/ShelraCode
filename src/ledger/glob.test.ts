@@ -63,6 +63,16 @@ describe("pathological globs", () => {
     expect(performance.now() - started).toBeLessThan(100);
   });
 
+  it("over-covers a scope too long to expand instead of throwing, and keeps brace edges apart", () => {
+    // Review of round 3 (2026-09-24): 30,000 serial groups overflowed the stack and ended every turn; stars
+    // on both sides of a brace fused into a globstar that crossed folders.
+    expect(inScope("src/a.ts", ["{a}".repeat(30_000)])).toBe(true);
+    expect(globProblem("{a}".repeat(400))).toContain("longer than");
+    expect(inScope("src/deep/nested/file.ts", ["src/*{,.test}*.ts"])).toBe(false);
+    expect(inScope("src/a.test.ts", ["src/*{,.test}*.ts"])).toBe(true);
+    expect(inScope("src/ax.ts", ["src/{a*,b}**/x.ts"])).toBe(true);
+  });
+
   it("names a scope that keeps too many ** after collapsing", () => {
     expect(globProblem("**/**/**/src/**")).toBeNull();
     expect(globProblem("**/a/**/b/**/c/**/d")).toBe('**/a/**/b/**/c/**/d holds more than 3 "**"');
