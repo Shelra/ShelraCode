@@ -1,17 +1,37 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { formatTraceEvent, listTraces, readTrace, redact, startTurnTrace, traceDir } from "./session-trace";
+import {
+  formatTraceEvent,
+  listTraces,
+  newTraceEvents,
+  readTrace,
+  recordUiEvent,
+  redact,
+  startTurnTrace,
+  traceDir,
+} from "./session-trace";
 
-const previous = process.env.SHELRA_TRACE;
+const previous = { trace: process.env.SHELRA_TRACE, dir: process.env.SHELRA_TRACE_DIR };
 const dirs: string[] = [];
 
 afterEach(() => {
-  if (previous === undefined) delete process.env.SHELRA_TRACE;
-  else process.env.SHELRA_TRACE = previous;
+  if (previous.trace === undefined) delete process.env.SHELRA_TRACE;
+  else process.env.SHELRA_TRACE = previous.trace;
+  if (previous.dir === undefined) delete process.env.SHELRA_TRACE_DIR;
+  else process.env.SHELRA_TRACE_DIR = previous.dir;
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
+
+/** A verbose trace in a temp folder, as `SHELRA_TRACE=verbose SHELRA_TRACE_DIR=<dir>` sets it. */
+function verboseHere(): string {
+  const dir = mkdtempSync(join(tmpdir(), "shelra-trace-"));
+  dirs.push(dir);
+  process.env.SHELRA_TRACE = "verbose";
+  process.env.SHELRA_TRACE_DIR = dir;
+  return dir;
+}
 
 function traceHere(): string {
   const dir = mkdtempSync(join(tmpdir(), "shelra-trace-"));
@@ -97,5 +117,78 @@ describe("session trace", () => {
     off.chunk({ type: "content", content: "text" });
     off.end();
     expect(listTraces(dir).map((entry) => entry.session)).toEqual(["keys"]);
+  });
+});
+
+describe("verbose session trace (SHELRA_TRACE=verbose)", () => {
+  it("records the stream as it arrives, each step with its tokens, the stages, tool timings and memory", () => {
+    const dir = verboseHere();
+    const trace = startTurnTrace({ sessionId: "live", cwd: "/w", model: "m", mode: "agent", request: "Go." });
+    const seen: string[] = [];
+    const observer = trace.observe({ onStatus: (info) => seen.push(info.detail) });
+    observer.onStatus?.({ stage: "model", detail: "Waiting for m", timestamp: 1 });
+    observer.onStepStart?.({ stepNumber: 1, timestamp: 1 });
+    trace.chunk({ type: "reasoning", content: "I should read the file first. ".repeat(20) });
+    trace.chunk({ type: "content", content: "Reading it." });
+    const read = call("r1", "read_file", { path: "a.ts" });
+    observer.onToolStart?.({ toolCall: read, timestamp: 1 });
+    trace.chunk({ type: "tool_calls", toolCalls: [read] });
+    trace.chunk({ type: "tool_result", toolCall: read, toolResult: { success: true, output: "export {}" } });
+    observer.onStepFinish?.({
+      stepNumber: 1,
+      timestamp: 2,
+      finishReason: "tool-calls",
+      usage: { inputTokens: 1200, outputTokens: 80 },
+    });
+    observer.onMemory?.({ qualified: false, reason: "nothing changed", written: [], decisions: [], timestamp: 3 });
+    trace.end();
+
+    expect(seen).toEqual(["Waiting for m"]);
+    const events = readTrace(listTraces(dir)[0]?.path ?? "");
+    expect(events.map((event) => event.kind)).toEqual([
+      "turn",
+      "status",
+      "step",
+      "thinking",
+      "text",
+      "tool",
+      "result",
+      "step",
+      "memory",
+      "end",
+    ]);
+    expect(events.find((event) => event.kind === "result")).toHaveProperty("durationMs");
+    const finished = events.filter((event) => event.kind === "step").at(-1);
+    expect(formatTraceEvent(finished as never)).toContain("step 1 done  tool-calls · 1200 in / 80 out");
+  });
+
+  it("records what the user does in the UI only in verbose traces", () => {
+    const dir = verboseHere();
+    recordUiEvent("ui-session", "mode", { to: "mixed" });
+    process.env.SHELRA_TRACE = dir;
+    delete process.env.SHELRA_TRACE_DIR;
+    recordUiEvent("ui-session", "cancel", { key: "esc" });
+    const events = readTrace(listTraces(dir)[0]?.path ?? "");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ kind: "ui", action: "mode", to: "mixed" });
+    expect(formatTraceEvent(events[0] as never, false, true)).toContain("[ui-sessi] ");
+  });
+
+  it("watches every session, reading only what each appended, and waits for a line still being written", () => {
+    const dir = verboseHere();
+    const seen = new Map<string, number>();
+    recordUiEvent("first", "mode", { to: "free" });
+    expect(newTraceEvents(seen, dir).map((event) => event.session)).toEqual(["first"]);
+    expect(newTraceEvents(seen, dir)).toEqual([]);
+    recordUiEvent("second", "cancel", {});
+    recordUiEvent("first", "model", { model: "m2" });
+    expect(newTraceEvents(seen, dir).map((event) => `${event.session}:${String(event.action)}`)).toEqual([
+      "second:cancel",
+      "first:model",
+    ]);
+    appendFileSync(join(dir, "first.jsonl"), '{"time":"2026-09-24T23:00:00.000Z","session":"first","kind":"ui"');
+    expect(newTraceEvents(seen, dir)).toEqual([]);
+    appendFileSync(join(dir, "first.jsonl"), ',"action":"late"}\n');
+    expect(newTraceEvents(seen, dir).map((event) => event.action)).toEqual(["late"]);
   });
 });

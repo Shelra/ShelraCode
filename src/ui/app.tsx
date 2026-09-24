@@ -45,6 +45,7 @@ import { MODES } from "../types/index";
 import { processAtMentions } from "../utils/at-mentions.js";
 import { FileIndex } from "../utils/file-index.js";
 import { copyTextToHostClipboard } from "../utils/host-clipboard";
+import { recordUiEvent } from "../utils/session-trace";
 import {
   type CustomSubagentConfig,
   getApiKey,
@@ -977,6 +978,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
         agent.setModel(modelId);
         setModel(modelId);
+        recordUiEvent(agent.getSessionId(), "model", { model: modelId });
         saveProjectSettings({ model: modelId });
         saveUserSettings({ defaultModel: modelId });
         return true;
@@ -2186,6 +2188,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     const next: ModelMode = modelMode === "free" ? "mixed" : "free";
     try {
       const result = await startupConfig.onSetModelMode(next);
+      recordUiEvent(agent.getSessionId(), "mode", {
+        to: next,
+        ...(result.success ? { model: result.modelId } : { error: result.error }),
+      });
       if (!result.success) {
         showNotice(result.error ?? "The model mode could not be changed", 4000);
         return;
@@ -2197,7 +2203,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     } finally {
       switchingModeRef.current = false;
     }
-  }, [modelMode, showNotice, startupConfig.onSetModelMode]);
+  }, [agent, modelMode, showNotice, startupConfig.onSetModelMode]);
 
   useEffect(
     () => () => {
@@ -2504,6 +2510,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       const activeAgent = activeTurnRef.current?.agent ?? agent;
       activeTurnRef.current = null;
       clearLiveTurnUi();
+      recordUiEvent(activeAgent.getSessionId(), "cancel", { key: "esc" });
       activeAgent.abort();
       return true;
     },
@@ -2771,6 +2778,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
             answer: (approved) => {
               if (entry.settled) return;
               entry.settled = true;
+              recordUiEvent(agent.getSessionId(), "command approval", { command, approved });
               signal?.removeEventListener("abort", onAbort);
               setPendingCommandApproval(null);
               resolve(approved);
@@ -2803,6 +2811,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
             answer: (answer) => {
               if (entry.settled) return;
               entry.settled = true;
+              recordUiEvent(agent.getSessionId(), "decision approval", { decision: decision.title, answer });
               signal?.removeEventListener("abort", onAbort);
               setPendingDecisionApproval(null);
               resolve(answer);

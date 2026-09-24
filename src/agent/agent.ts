@@ -2399,7 +2399,7 @@ export class Agent {
       outsideProject: isOutsideProject(cwd),
     });
     try {
-      for await (const chunk of this.runTurn(userMessage, observer)) {
+      for await (const chunk of this.runTurn(userMessage, trace.observe(observer))) {
         trace.chunk(chunk);
         yield chunk;
       }

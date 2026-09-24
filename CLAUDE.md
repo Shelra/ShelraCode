@@ -127,7 +127,9 @@ command and its result. Anything you could not check is reported as not verified
   outside the repo, with `HOME`/`USERPROFILE` pointed at a scratch directory if settings or memory could change. Real
   runs spend the owner's OpenRouter quota: keep them few and say how many you ran. Never run two benchmarks at once.
 - What the owner saw in their own session: read its trace (`bun run src/index.ts trace`, `--list`, `--follow`,
-  `--full`) before asking them to paste it; the session database (`~/.shelra/shelra.db`) holds the transcript.
+  `--full`) before asking them to paste it; the session database (`~/.shelra/shelra.db`) holds the transcript. For a
+  live test, the owner runs `shelra` with `SHELRA_TRACE=verbose` and you run `bun run src/index.ts trace --watch` in
+  the background and read its output as it grows.
 
 ## Gotchas
 

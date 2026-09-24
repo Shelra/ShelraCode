@@ -2089,15 +2089,36 @@ program
   )
   .option("--list", "list the recorded sessions, newest first")
   .option("--follow", "keep printing new events as the session goes on")
+  .option("--watch", "print every session's new events live, including sessions started later")
   .option("--full", "print whole fields instead of one line each")
   .option("--json", "print the raw events")
   .option("--last <n>", "print only the last n events")
   .action(
     async (
       session: string | undefined,
-      options: { list?: boolean; follow?: boolean; full?: boolean; json?: boolean; last?: string },
+      options: { list?: boolean; follow?: boolean; watch?: boolean; full?: boolean; json?: boolean; last?: string },
     ) => {
-      const { formatTraceEvent, listTraces, readTrace, traceDir } = await import("./utils/session-trace");
+      const { formatTraceEvent, listTraces, newTraceEvents, readTrace, traceDir, traceSettings } = await import(
+        "./utils/session-trace"
+      );
+      if (options.watch) {
+        const settings = traceSettings();
+        if (!settings) {
+          console.error("Tracing is off (SHELRA_TRACE=off).");
+          process.exitCode = 1;
+          return;
+        }
+        // Start from what is already recorded, then print what every session adds.
+        const seen = new Map<string, number>();
+        newTraceEvents(seen, settings.dir);
+        console.log(`Watching ${settings.dir} (every session; ctrl+c stops)`);
+        for (;;) {
+          for (const event of newTraceEvents(seen, settings.dir)) {
+            console.log(options.json ? JSON.stringify(event) : formatTraceEvent(event, options.full === true, true));
+          }
+          await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+        }
+      }
       const traces = listTraces();
       if (options.list) {
         for (const trace of traces.slice(0, 30)) {

@@ -108,8 +108,11 @@ What the resilience rule swallows (a failing memory write, checkpoint, index upd
 or `off`; Vitest runs with it off). Every turn, in the terminal UI or headless, is recorded in
 `~/.shelra/logs/sessions/<session>.jsonl`: the request, the model that answered (a fallback, the model a router
 picked), host notes, tool calls and results, text and the verdict, with keys redacted, kept 14 days
-(`src/utils/session-trace.ts`; `SHELRA_TRACE` names another folder or `off`; off under test runners).
-`shelra trace` prints the latest session (`--follow` live, `--list`, `--full`, `--json`, `--last <n>`).
+(`src/utils/session-trace.ts`; `SHELRA_TRACE=off` turns it off, `SHELRA_TRACE_DIR` names another folder; off under
+test runners). `SHELRA_TRACE=verbose` also records the text and reasoning as they stream, each model step with its
+tokens, the turn's stages and what the user does in the terminal UI (mode or model switch, Esc, approvals).
+`shelra trace` prints the latest session (`--follow` live, `--list`, `--full`, `--json`, `--last <n>`), and
+`shelra trace --watch` prints every session's events live, including sessions started later.
 
 ## Repository layout notes
 
