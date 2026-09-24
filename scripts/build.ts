@@ -67,12 +67,12 @@ const bundle = await Bun.build({
   sourcemap: "external",
   plugins: [playwrightSelfRequires],
 });
-assertPlaywrightRequiresRewritten();
-
 if (!bundle.success) {
   printBuildLogs(bundle.logs);
   throw new Error(`${PRODUCT_NAME} JavaScript bundle failed.`);
 }
+// After the bundle's own verdict: a failed bundle must show its logs, not a Playwright message.
+assertPlaywrightRequiresRewritten();
 
 // Keep package consumers and editor tooling supplied with declarations while
 // using the bundled index.js as the executable entrypoint.
