@@ -76,9 +76,16 @@ function slugify(text: string, prefix = ""): string {
 export function extractUserDirectives(userMessage: string): ReflectionCandidate[] {
   const candidates: ReflectionCandidate[] = [];
   const seen = new Set<string>();
+  // A structured document (a spec with "#" headings) states what this task should do: its "prefer" lines are the
+  // task's requirements, not standing rules (seen live 2026-09-24: a game spec left "Prefer a slight horizontal
+  // look-ahead" as a project rule).
+  const document = /^#{1,6}\s/mu.test(userMessage);
   for (const match of userMessage.matchAll(DIRECTIVE_PATTERN)) {
     const sentence = (match[1] ?? "").trim().replace(/\s+/gu, " ");
     if (!sentence || /^(never mind|always wondered|never thought)/iu.test(sentence)) continue;
+    // A lead-in to a list ("… so that it tests your ability to reason about:") is not a complete rule.
+    if (sentence.endsWith(":")) continue;
+    if (document && /^(prefer|prefiero)\b/iu.test(sentence)) continue;
     const slug = slugify(sentence, "user-rule-");
     if (seen.has(slug)) continue;
     seen.add(slug);

@@ -730,12 +730,12 @@ export function createTools(
           .describe("Where to look: this project (default, then user-wide as a fallback) or the user-wide store"),
       }),
       execute: async ({ slug, scope }) => {
+        // The scope named first, then the other one: a project entry named "user-rule-…" read with scope=user (seen
+        // live 2026-09-24) is still found.
         const scopes =
           scope === "user"
-            ? [userMemoryScope()]
-            : scope === "project"
-              ? [projectMemoryScope(cwd())]
-              : [projectMemoryScope(cwd()), userMemoryScope()];
+            ? [userMemoryScope(), projectMemoryScope(cwd())]
+            : [projectMemoryScope(cwd()), userMemoryScope()];
         const result = scopes.map((candidate) => readMemoryEntry(candidate, slug)).find((found) => found.entry) ?? {
           entry: null,
         };

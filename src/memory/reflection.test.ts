@@ -72,6 +72,24 @@ describe("automatic memory capture", () => {
     );
   });
 
+  it("takes neither a list's lead-in nor a spec's own preferences as standing rules", () => {
+    // Seen live 2026-09-24 with a game spec.
+    const spec = [
+      "# GAME CHALLENGE",
+      "## Camera",
+      "Prefer a slight horizontal look-ahead.",
+      "Prefer implementing the core engine yourself so that this challenge tests your ability to reason about:",
+      "- physics",
+      "Always keep the frame rate above 30.",
+    ].join("\n");
+    expect(extractUserDirectives(spec).map((candidate) => candidate.hook)).toEqual([
+      "Always keep the frame rate above 30",
+    ]);
+    expect(extractUserDirectives("Prefer tabs over spaces in this repo.").map((candidate) => candidate.hook)).toEqual([
+      "Prefer tabs over spaces in this repo",
+    ]);
+  });
+
   it("records a failed-then-recovered command deterministically when the model extracts nothing", async () => {
     const provider = new JsonProvider('{"memories":[]}');
     const scope = projectMemoryScope(workspace);

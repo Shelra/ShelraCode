@@ -646,6 +646,14 @@ describe("memory tools", () => {
     expect(readResult.output).toContain("Research notes on Better Auth's organization plugin");
     expect(readResult.output).toContain("memberships, invitations, and roles out of the box");
 
+    // Seen live 2026-09-24: a model read project entries with scope=user and was told they did not exist.
+    const wrongScope = (await tools.memory_read.execute({ slug: "better-auth-org-plugin", scope: "user" }, {})) as {
+      success: boolean;
+      output: string;
+    };
+    expect(wrongScope.success).toBe(true);
+    expect(wrongScope.output).toContain("memberships, invitations, and roles out of the box");
+
     await rm(cwd, { recursive: true, force: true });
   });
 
