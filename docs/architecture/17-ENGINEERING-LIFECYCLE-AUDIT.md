@@ -1134,26 +1134,30 @@ exit criterion is met, and the parallel-building clause covers the next phase's 
 **First slice (zero quota). Done on 2026-09-24.**
 
 - **Scope, as built.** The code is `src/contract/check-definitions.ts` and the gate block after test
-  protection in `src/agent/agent.ts`. This is the third version. Two adversarial workflows attacked
-  the first two: the first confirmed 15 ways around it or false alarms, the second found the places
-  where the fixes regressed or stopped short. Each confirmed case is now a test.
+  protection in `src/agent/agent.ts`. Two adversarial workflows attacked it: the first confirmed 15
+  ways around the first version or false alarms, the second found where the fixes regressed or
+  stopped short, and its verifiers re-ran the findings against the fixed code. Each confirmed case
+  is now a test.
   - **What is recorded.** When the turn starts, in the session's workspace (never in a folder a
     `cd` moved the shell to), the host records each check and, part by part, everything in the
     project that decides what it runs:
     - the package scripts it calls, with their pre and post scripts, the scripts those call (in
       nested and workspace packages, through `npm-run-all` globs, `concurrently`, `--workspaces`
       and flags before the verb), and bare `yarn`/`pnpm` script calls;
-    - a Make or just recipe, with its prerequisites, its variables (including overrides, exports and
-      target-specific assignments) and the files it includes;
+    - a Make or just recipe: every rule for the target, its prerequisites, its variables and the
+      variables those use (assignments of every kind and `define` blocks), the files it includes
+      and their content, and whether a `GNUmakefile` would take its place;
     - the tooling files it executes (`scripts/run-tests.js`, `./test.sh`) and the local files those
       load, two levels deep; not the code under test, and not test files, which test protection
       guards;
     - the package manager's settings (`.npmrc`, `.yarnrc`, `.yarnrc.yml`, `pnpm-workspace.yaml`, the
       `packageManager` field);
-    - the test runner's configuration, including its absence: `pytest.ini`, the pytest sections of
-      `setup.cfg`, `tox.ini` and `pyproject.toml`, every `conftest.py`, `bunfig.toml` `[test]`, and
-      the Jest, Vitest, Mocha and Playwright config files;
-    - a `node_modules/.bin` shim and the file it points to;
+    - the test runner's configuration under every name it is read from, including its absence:
+      `pytest.ini`, `.pytest.ini`, `pytest.toml`, the pytest sections of `setup.cfg`, `tox.ini` and
+      `pyproject.toml`, every `conftest.py`, `bunfig.toml` `[test]`, the Jest, Vitest, Vite, Mocha and
+      Playwright config files in every extension, and the runner fields of `package.json`;
+    - a `node_modules/.bin` shim and the file it points to (npm's `.cmd` and shell shims, links, and
+      Bun's `.bunx`);
     - a local module that would shadow `python -m pytest` (`pytest`, `_pytest`, `pluggy`,
       `iniconfig`, `py`).
   - **What the contract runs.** The turn-start commands, in that workspace, also under the Shuru
@@ -1178,13 +1182,18 @@ exit criterion is met, and the parallel-building clause covers the next phase's 
     rebase). A prohibition ("don't change the lint script", "leave the scripts alone") takes away
     the kinds its clause names, or every kind when it names a check but no kind; "do not modify the
     tests" is about test files, not about what a check runs. A short approval ("yes, go ahead",
-    "dale", at most eight words) keeps what the request it answers allowed. Accepting a change
-    already made ("keep the check changes", "keep the new test script", "acepta los cambios de los
-    checks") allows it; every `[Not verified]` note about a changed check names that phrase.
+    "dale": approval words only, at most eight) keeps what the request it answers allowed; "ok, now
+    fix X" is a new request. A sentence with any negation grants nothing, even one the prohibition
+    lexicon does not know. A bare object ("fix the config loader so the tests pass") grants only a
+    runner the sentence names, or a kind right after it ("the config for the tests"). Merging covers
+    "merge PR #42", "sync with upstream" and "resolve the conflicts". Accepting a change already
+    made ("keep the check changes", "keep the new test script", "acepta los cambios de los checks";
+    never "keep the current test script", which forbids) allows it; every `[Not verified]` note
+    about a changed check names that phrase.
   - **Who made the change.** Judged from each file as it was before the turn's first write to it
     (the attempt journal), so a script another session, the user's editor, a merge or a shell
     command changed is not blamed on the turn, even when the turn then wrote the same file for
-    another reason.
+    another reason. A file the turn found with merge-conflict markers is the merge's.
   - **What happens on a change.**
     - Made by the turn's own file edits: one round to put the checks back, then
       `[Not verified — it changed the checks that decide "done" …]`.
@@ -1214,16 +1223,18 @@ exit criterion is met, and the parallel-building clause covers the next phase's 
 
     The other two, a request that asks for the change and a follow-up approval, pass on the
     previous code, which never blocked a change.
-  - Twenty-one unit tests in `check-definitions.test.ts` cover the resolver, the appended-step rule,
+  - Twenty-four unit tests in `check-definitions.test.ts` cover the resolver, the appended-step rule,
     the repair rule, the recorded configuration, dependency updates, byte-order marks, the evidence
-    discount, ownership and the request rules above; a `bash.test.ts` case covers a host run in the
+    discount, ownership and the request rules above (seven of them fail on `9e05f87`, the first
+    commit of the fix, which the second round's verifiers re-tested); a `bash.test.ts` case covers a host run in the
     folder it names. Reading the definitions at turn start cannot end the turn: a failure is
     recorded and the turn runs unprotected.
 - **Known gaps, not covered by this slice:**
   - the carry and the allowance live in the running session: a session resumed in a new process
     starts from the checks as they are on disk;
-  - runner internals under `node_modules` beyond the shim's target, and user-level settings such as
-    `~/.npmrc`;
+  - runner internals under `node_modules` beyond the shim's target, a shim created during the turn
+    that shadows another (recording absent shims would flag every first `npm install`), and
+    user-level settings such as `~/.npmrc`;
   - setup files that a Jest or Vitest config names (the config itself is recorded), and plugin
     modules that a `conftest.py` loads;
   - reading the definitions is synchronous and walks the project for `conftest.py` files (bounded

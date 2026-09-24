@@ -117,6 +117,7 @@ export interface RecordedFiles {
 const ROOT_DEFINITION_FILES = [
   "package.json",
   "Makefile",
+  "GNUmakefile",
   "justfile",
   ".npmrc",
   ".yarnrc",
@@ -176,6 +177,8 @@ export function changeMadeByTurn(
   return change.files.some((file) => {
     const previous = beforeTurnWrite(file);
     if (previous === undefined) return false;
+    // A file the turn found mid-merge: resolving the conflict keeps what the merge brought, it does not weaken a check.
+    if (previous !== null && /^<{7}(?: |$)/mu.test(previous)) return false;
     const reader: Reader = (path) => (toProjectPath(workspace, path) === file ? previous : diskReader(path));
     const kind = change.kind;
     const then = definitionOf(workspace, change.command, { reader, kind });
@@ -352,20 +355,28 @@ const MAKE_RUN_RE = /\b(?:make|haz que)\s+(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(te
  * los checks"): the phrase a `[Not verified]` note about a changed check tells the user to write.
  */
 const ACCEPT_RE =
-  /\b(?:keep|accept|approve)\s+(?:the\s+|these\s+|those\s+)?(?:(?:new|changed|updated|current)\s+(?:(?:tests?|lint|type-?check|types)\s+)?(?:checks?|scripts?|commands?|config(?:uration)?)|(?:(?:tests?|lint|type-?check|types)\s+)?(?:checks?|scripts?|commands?|config(?:uration)?)\s+changes?)\b/iu;
+  /\b(?:keep|accept|approve)\s+(?:the\s+|these\s+|those\s+)?(?:(?:new|changed|updated|rewritten)\s+(?:(?:tests?|lint|type-?check|types)\s+)?(?:checks?|scripts?|commands?|config(?:uration)?)|(?:(?:tests?|lint|type-?check|types)\s+)?(?:checks?|scripts?|commands?|config(?:uration)?)\s+changes?)\b/iu;
 const ACCEPT_ES_RE =
   /\b(?:mant[eé]n|conserva|acepta)\w*\s+(?:los\s+|el\s+|la\s+|las\s+)?(?:cambios?|nuevos?|nuevas?)\s+(?:de\s+|del\s+|en\s+)?(?:los\s+|las\s+|el\s+|la\s+)?(?:checks?|scripts?|comandos?|configuraci[oó]n)\b/iu;
 const PROHIBITION_RE =
-  /\b(?:do not|don't|dont|never|without|not allowed to|must not|mustn't|may not|cannot|can't|should not|shouldn't|no need to)\b[^.]{0,50}?\b(?:chang|modif|edit|touch|updat|rewrit|delet|remov|alter|weaken|disabl|replac)\w*|\b(?:leave|keep)\b[^.]{0,40}\b(?:alone|untouched|unchanged|as (?:it is|is))\b|\boff[- ]limits\b|\b(?:no|sin|nunca|jamás)\s+(?:\w+\s+){0,2}?(?:cambi|modifi|toqu|toc|edit|borr|elimin|reemplac)\w*|\bdeja\b[^.]{0,40}\b(?:igual|como est[aá])\b/iu;
+  /\b(?:do not|don't|dont|never|without|not allowed to|must not|mustn't|may not|cannot|can't|should not|shouldn't|no need to)\b[^.]{0,50}?\b(?:chang|modif|edit|touch|updat|rewrit|delet|remov|alter|weaken|disabl|replac)\w*|\b(?:leave|keep)\b[^.]{0,40}\b(?:alone|untouched|unchanged|as (?:it is|is))\b|\boff[- ]limits\b|\b(?:avoid|refrain from|preserve)\b|\bkeep\s+(?:the\s+)?(?:current|existing|same)\b|\bevita\w*|\b(?:no|sin|nunca|jamás)\s+(?:\w+\s+){0,2}?(?:cambi|modifi|toqu|toc|edit|borr|elimin|reemplac)\w*|\bdeja\b[^.]{0,40}\b(?:igual|como est[aá])\b/iu;
 const CHECK_THING_RE =
   /\b(?:scripts?|package\.json|makefile|justfile|checks?|commands?|runner|config(?:uration)?|comandos?|configuraci[oó]n)\b/iu;
 /** Bringing other work in: its changes to the checks come with it. "Open a pull request" is not one. */
 const EXTERNAL_CHANGE_RE =
-  /\bgit\s+(?:merge|pull|rebase|cherry-pick)\b|\bmerge\s+(?:the\s+)?(?:\S+\s+)?branch\b|\bmerge\s+(?:origin|upstream)\/|\bmerge\s+(?:main|master|develop)\b|\brebase\s+(?:on|onto)\b|\bpull\s+(?:the\s+latest\s+)?(?:changes\s+)?from\s+(?:origin|upstream|main|master)\b/iu;
+  /\bgit\s+(?:merge|pull|rebase|cherry-pick)\b|\bmerge\s+(?:the\s+)?(?:\S+\s+)?branch\b|\bmerge\s+(?:origin|upstream)\/|\bmerge\s+(?:main|master|develop)\b|\brebase\s+(?:on|onto)\b|\bpull\s+(?:the\s+latest\s+)?(?:changes\s+)?from\s+(?:origin|upstream|main|master)\b|\bmerge\s+(?:the\s+)?(?:pr|pull\s+request)\s*#?\d+|\bsync\s+(?:with|from)\s+(?:the\s+)?(?:upstream|origin|main|master)\b|\bresolve\s+(?:the\s+)?(?:merge\s+)?conflicts?\b|\bresuelve\s+(?:los\s+)?conflictos\b/iu;
+/** Any negation: a sentence that holds one grants nothing, whatever the prohibition lexicon above recognises. */
+const NEGATION_RE = /\b(?:not|no|never|nor|without|avoid|sin|nunca|jamás|ni)\b|n't\b/iu;
 
 function kindsNamed(sentence: string): Set<CheckKind> {
   const kinds = new Set<CheckKind>();
   for (const [pattern, kind] of [...RUNNERS, ...KIND_WORDS]) if (pattern.test(sentence)) kinds.add(kind);
+  return kinds;
+}
+
+function runnersNamed(sentence: string): Set<CheckKind> {
+  const kinds = new Set<CheckKind>();
+  for (const [pattern, kind] of RUNNERS) if (pattern.test(sentence)) kinds.add(kind);
   return kinds;
 }
 
@@ -403,11 +414,22 @@ export function checkEditsAllowedBy(request: string): Set<CheckKind> {
     const protectedKinds = prohibition ? forbiddenBy(whole.slice(prohibition.index)) : null;
     if (protectedKinds === "all") forbidsAll = true;
     else for (const kind of protectedKinds ?? []) forbidden.add(kind);
-    const sentence = prohibition && protectedKinds ? whole.slice(0, prohibition.index) : whole;
+    const sentence = prohibition ? whole.slice(0, prohibition.index) : whole;
+    // A negation the lexicon above does not know ("please avoid changing the test script") must not read as a
+    // request to change the check: such a sentence grants nothing.
+    if (NEGATION_RE.test(sentence)) continue;
     const object = CHECK_OBJECT_RE.exec(sentence) ?? CHECK_OBJECT_ES_RE.exec(sentence);
     if (object) {
-      const inObject = object[1] ? kindsNamed(object[1]) : new Set<CheckKind>();
-      for (const kind of inObject.size > 0 ? inObject : kindsNamed(sentence)) allowed.add(kind);
+      // A kind in the object ("the test script"), or right after it ("the config for the tests"), or a runner the
+      // sentence names ("the scripts … to use vitest"); never a kind the sentence merely mentions ("fix the config
+      // loader so the tests pass").
+      const after = sentence.slice(object.index + object[0].length);
+      const suffix =
+        /^\s+(?:for|of|de|del|para)\s+(?:the\s+|los\s+|las\s+|el\s+|la\s+)?(tests?|testing|unit|e2e|integration|lint(?:ing)?|type-?check(?:ing)?|types|pruebas|tipos)\b/iu.exec(
+          after,
+        )?.[1];
+      const named = object[1] ? kindsNamed(object[1]) : suffix ? kindsNamed(suffix) : runnersNamed(sentence);
+      for (const kind of named) allowed.add(kind);
     }
     if (MIGRATE_RE.test(sentence) || ADOPT_RE.test(sentence)) {
       for (const [pattern, kind] of RUNNERS) if (pattern.test(sentence)) allowed.add(kind);
@@ -425,13 +447,25 @@ export function checkEditsAllowedBy(request: string): Set<CheckKind> {
   return allowed;
 }
 
-/** "yes, go ahead", "dale", "ok gracias, continúa": an answer that carries what the request before it allowed. */
+const APPROVAL_WORDS = new Set(
+  (
+    "yes yep yeah ok okay sure go ahead do it proceed continue approve approved sounds good great perfect fine " +
+    "please thanks thank you lgtm si sí dale vale adelante hazlo procede continúa continua de acuerdo perfecto " +
+    "listo correcto gracias porfa por favor bien bueno claro"
+  ).split(" "),
+);
+
+/**
+ * "yes, go ahead", "dale", "ok gracias, continúa": an approval and nothing else, which carries what the request before
+ * it allowed. "ok, now fix slugify" is a new request.
+ */
 export function isShortFollowUp(request: string): boolean {
-  const text = request.trim().toLowerCase();
-  if (text.split(/\s+/u).filter(Boolean).length > 8) return false;
-  return /^(?:yes|yep|yeah|ok|okay|sure|go ahead|do it|proceed|continue|approved?|sounds good|please do|s[ií]|dale|vale|adelante|hazlo|procede|contin[uú]a|de acuerdo|perfecto|listo|correcto)\b/u.test(
-    text,
-  );
+  const words = request
+    .trim()
+    .toLowerCase()
+    .split(/[\s,.;:!?¡¿]+/u)
+    .filter(Boolean);
+  return words.length > 0 && words.length <= 8 && words.every((word) => APPROVAL_WORDS.has(word));
 }
 
 /* ── Reading what a command runs ──────────────────────────────────────────── */
@@ -800,10 +834,46 @@ function resolveTask(context: ResolveContext, dir: string, runner: string, args:
       index += 1;
     } else if (!word.startsWith("-") && !word.includes("=")) targets.push(word);
   }
-  const fileName = runner === "make" ? "Makefile" : "justfile";
+  let fileName = "justfile";
+  if (runner === "make") {
+    // GNU make reads GNUmakefile before Makefile: creating one replaces every recipe.
+    const gnu = context.reader(join(here, "GNUmakefile"));
+    const gnuFile = toProjectPath(context.workspace, join(here, "GNUmakefile"));
+    if (gnu === null) push(context, { key: `file:${gnuFile}`, value: "(absent)", file: gnuFile });
+    fileName = gnu === null ? "Makefile" : "GNUmakefile";
+  }
   for (const target of targets.length > 0 ? targets : ["(default)"]) {
     resolveRecipe(context, here, fileName, target, depth);
   }
+}
+
+/** A variable's definitions in a makefile or justfile: every assignment and `define … endef` block. */
+function variableDefinitions(lines: readonly string[], variable: string): string[] {
+  const assignment = new RegExp(
+    `^(?:[^\\t#:]*:\\s*)?(?:override\\s+|export\\s+)*${variable}\\s*(?::=|::=|\\?=|\\+=|!=|=)`,
+    "u",
+  );
+  const define = new RegExp(`^(?:override\\s+|export\\s+)*define\\s+${variable}\\b`, "u");
+  const out: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = (lines[index] ?? "").trimStart();
+    if (assignment.test(line)) out.push(line);
+    else if (define.test(line)) {
+      const block = [line];
+      while (index + 1 < lines.length && !/^\s*endef\b/u.test(lines[index + 1] ?? "")) {
+        index += 1;
+        block.push((lines[index] ?? "").trim());
+      }
+      out.push(block.join("\n"));
+    }
+  }
+  return out;
+}
+
+function variablesIn(text: string): string[] {
+  return [...text.matchAll(/\$[({]([A-Za-z_]\w*)[)}]|\{\{\s*([A-Za-z_]\w*)\s*\}\}/gu)].map(
+    (match) => (match[1] ?? match[2]) as string,
+  );
 }
 
 function resolveRecipe(context: ResolveContext, dir: string, fileName: string, target: string, depth: number): void {
@@ -818,41 +888,60 @@ function resolveRecipe(context: ResolveContext, dir: string, fileName: string, t
   }
   const lines = text.split(/\r?\n/u);
   const escaped = target.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const start =
+  // Every rule for the target: make merges their prerequisites and runs the last recipe, so a second `test:` rule
+  // added further down changes the check.
+  const starts =
     target === "(default)"
-      ? lines.findIndex((line) => /^[A-Za-z][\w-]*\s*:(?!=)/u.test(line))
-      : lines.findIndex((line) => new RegExp(`^${escaped}\\s*:(?!=)`, "u").test(line));
-  if (start < 0) {
+      ? [lines.findIndex((line) => /^[A-Za-z][\w-]*\s*:(?!=)/u.test(line))].filter((index) => index >= 0)
+      : lines.flatMap((line, index) => (new RegExp(`^${escaped}\\s*:(?!=)`, "u").test(line) ? [index] : []));
+  if (starts.length === 0) {
     push(context, { key: `recipe:${id}`, value: "(no such target)", file, missing: true });
     return;
   }
-  const header = lines[start] ?? "";
+  const headers: string[] = [];
   const recipe: string[] = [];
-  for (const line of lines.slice(start + 1)) {
-    if (!/^[\t ]/u.test(line) && line.trim() !== "") break;
-    if (line.trim() !== "") recipe.push(line.trim());
+  const blocks: string[] = [];
+  for (const start of starts) {
+    const header = (lines[start] ?? "").trim();
+    const body: string[] = [];
+    for (const line of lines.slice(start + 1)) {
+      if (!/^[\t ]/u.test(line) && line.trim() !== "") break;
+      if (line.trim() !== "") body.push(line.trim());
+    }
+    headers.push(header);
+    recipe.push(...body);
+    blocks.push([header, ...body].join("\n"));
   }
-  push(context, { key: `recipe:${id}`, value: [header.trim(), ...recipe].join("\n"), file });
-  // Included makefiles and the variables the recipe uses (`$(PYTEST)`, `${PYTEST}`, `{{pytest}}` in a justfile),
-  // including `override`, `export` and target-specific assignments.
+  push(context, { key: `recipe:${id}`, value: blocks.join("\n\n"), file });
+  // Included makefiles, as lines and as content, and the variables the recipe uses (`$(PYTEST)`, `${PYTEST}`,
+  // `{{pytest}}` in a justfile), with the variables their definitions use in turn.
   const includes = lines.filter((line) => /^\s*-?include\s+/u.test(line));
   push(context, { key: `recipe:${file}$include`, value: includes.join("\n"), file });
-  for (const variable of new Set(
-    [...recipe.join("\n").matchAll(/\$[({]([A-Za-z_]\w*)[)}]|\{\{\s*([A-Za-z_]\w*)\s*\}\}/gu)].map(
-      (match) => (match[1] ?? match[2]) as string,
-    ),
-  )) {
-    const assignment = new RegExp(
-      `^(?:[^\\t#:]*:\\s*)?(?:override\\s+|export\\s+)*${variable}\\s*(?::=|::=|\\?=|\\+=|!=|=)`,
-      "u",
-    );
-    const definition = lines.filter((line) => assignment.test(line.trimStart()));
-    push(context, { key: `recipe:${file}$${variable}`, value: definition.join("\n") || "(undefined)", file });
+  for (const line of includes) {
+    for (const name of line.replace(/^\s*-?include\s+/u, "").split(/\s+/u)) {
+      if (!name || /[$*?[]/u.test(name)) continue;
+      const path = resolve(dir, name);
+      const included = toProjectPath(context.workspace, path);
+      if (included.startsWith("..")) continue;
+      const content = context.reader(path);
+      push(context, { key: `file:${included}`, value: content === null ? "(absent)" : hash(content), file: included });
+    }
+  }
+  const variables = new Set(variablesIn(recipe.join("\n")));
+  for (const variable of variables) {
+    if (variables.size > 40) break;
+    const definitions = variableDefinitions(lines, variable);
+    push(context, { key: `recipe:${file}$${variable}`, value: definitions.join("\n") || "(undefined)", file });
+    for (const inner of variablesIn(definitions.join("\n"))) variables.add(inner);
   }
   // Prerequisites run first, so they are part of the check too.
-  const prerequisites = header
-    .replace(/^[^:]*:(?!=)/u, "")
-    .split(/\s+/u)
+  const prerequisites = headers
+    .flatMap((header) =>
+      header
+        .replace(/^[^:]*:(?!=)/u, "")
+        .replace(/#.*$/u, "")
+        .split(/\s+/u),
+    )
     .filter((name) => /^[A-Za-z][\w-]*$/u.test(name));
   for (const name of prerequisites) resolveRecipe(context, dir, fileName, name, depth + 1);
   for (const line of recipe) resolveCommand(context, dir, line.replace(/^[@-]+/u, ""), depth + 1);
@@ -894,14 +983,10 @@ function addTestRunnerConfig(context: ResolveContext): void {
   const root = context.workspace;
   const read = (name: string) => context.reader(join(root, name));
   const put = (key: string, file: string, value: string) => push(context, { key: `config:${key}`, value, file });
-  put(
-    "pytest.ini",
-    "pytest.ini",
-    (() => {
-      const text = read("pytest.ini");
-      return text === null ? "(absent)" : hash(text);
-    })(),
-  );
+  for (const name of ["pytest.ini", ".pytest.ini", "pytest.toml", ".pytest.toml"]) {
+    const text = read(name);
+    put(name, name, text === null ? "(absent)" : hash(text));
+  }
   put("setup.cfg#pytest", "setup.cfg", section(read("setup.cfg"), /^\[tool:pytest\]/u));
   put("tox.ini#pytest", "tox.ini", section(read("tox.ini"), /^\[pytest\]/u));
   put("pyproject.toml#pytest", "pyproject.toml", section(read("pyproject.toml"), /^\[tool\.(?:pytest|coverage)/u));
@@ -914,15 +999,32 @@ function addTestRunnerConfig(context: ResolveContext): void {
     const text = context.reader(join(root, file));
     put(file, file, text === null ? "(absent)" : hash(text));
   }
-  for (const base of ["jest.config", "vitest.config", "vitest.workspace", ".mocharc", "playwright.config"]) {
-    for (const extension of [".js", ".ts", ".mjs", ".cjs", ".mts", ".cts", ".json", ".yml", ".yaml"]) {
+  // Every name a runner reads its configuration from, present or not, so creating one under any name is seen.
+  for (const base of [
+    "jest.config",
+    "vitest.config",
+    "vitest.workspace",
+    "vite.config",
+    ".mocharc",
+    "playwright.config",
+  ]) {
+    for (const extension of [".js", ".ts", ".mjs", ".cjs", ".mts", ".cts", ".json", ".jsonc", ".yml", ".yaml"]) {
       const name = `${base}${extension}`;
       const text = read(name);
-      // Only files that exist, plus the one canonical name per runner, so creating a config is seen.
-      if (text !== null || extension === ".ts" || (base === ".mocharc" && extension === ".json")) {
-        put(name, name, text === null ? "(absent)" : hash(text));
-      }
+      put(name, name, text === null ? "(absent)" : hash(text));
     }
+  }
+  // Runner settings kept in package.json itself.
+  const manifest = read("package.json");
+  for (const field of ["jest", "mocha", "ava", "vitest"]) {
+    let value = "(absent)";
+    try {
+      const settings = manifest === null ? undefined : (parseJson(manifest) as Record<string, unknown>)[field];
+      if (settings !== undefined) value = hash(JSON.stringify(settings));
+    } catch {
+      // An unparsable package.json is recorded by its scripts.
+    }
+    put(`package.json#${field}`, "package.json", value);
   }
 }
 
@@ -1029,6 +1131,11 @@ function shimTarget(path: string, text: string): string | null {
     if (normalizePath(real) !== normalizePath(path)) return real;
   } catch {
     // Not a link.
+  }
+  // Bun's Windows shim: UTF-16LE text that starts with the target, relative to node_modules (`vitest\vitest.mjs"`).
+  if (path.endsWith(".bunx")) {
+    const relativeTarget = /^([^"\r\n]+?)"/u.exec(text.replaceAll("\u0000", ""))?.[1];
+    return relativeTarget ? resolve(dirname(path), "..", relativeTarget.replaceAll("\\", "/")) : null;
   }
   const cmd = /%~?dp0%?\\?\.\.[\\/]([^"\s]+)/u.exec(text)?.[1];
   if (cmd) return resolve(dirname(path), "..", cmd.replaceAll("\\", "/"));

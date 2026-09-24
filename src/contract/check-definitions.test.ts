@@ -119,6 +119,20 @@ describe("what a check runs, as the turn started with it (audit doc 17, S10)", (
     );
   });
 
+  it("covers every rule for the target, GNUmakefile, included files and the variables a variable uses", () => {
+    const base = "PY = python\nPYTEST = $(PY) -m pytest\ninclude rules.mk\n\ntest: ## Run the tests\n\t$(PYTEST)\n";
+    const cwd = workspace({ Makefile: base, "rules.mk": "CHECK = strict\n" });
+    expect(changesAfter(cwd, () => put(cwd, "Makefile", `${base}\ntest:\n\t@echo 1 pass\n`))).toHaveLength(1);
+    put(cwd, "Makefile", base);
+    expect(changesAfter(cwd, () => put(cwd, "GNUmakefile", "test:\n\t@echo 1 pass\n"))).toHaveLength(1);
+    rmSync(join(cwd, "GNUmakefile"));
+    expect(changesAfter(cwd, () => put(cwd, "rules.mk", "test:\n\t@true\n"))).toHaveLength(1);
+    expect(changesAfter(cwd, () => put(cwd, "Makefile", base.replace("PY = python", "PY = true")))).toHaveLength(1);
+    const defined = "define PYTEST\npytest -q\nendef\n\ntest:\n\t$(PYTEST)\n";
+    const block = workspace({ Makefile: defined });
+    expect(changesAfter(block, () => put(block, "Makefile", defined.replace("pytest -q", "true")))).toHaveLength(1);
+  });
+
   it("covers the tooling a check executes and what it loads, the shell and manager settings, and a shim's target", () => {
     const tooling = workspace({
       "package.json": pkg({ test: "node scripts/run-tests.js" }),
@@ -143,6 +157,19 @@ describe("what a check runs, as the turn started with it (audit doc 17, S10)", (
       "node_modules/vitest/vitest.mjs": "run();\n",
     });
     expect(changesAfter(shim, () => put(shim, "node_modules/vitest/vitest.mjs", "process.exit(0);\n"))).toHaveLength(1);
+
+    // Bun's Windows shims: an .exe and a UTF-16LE .bunx that names the target.
+    const bun = workspace({
+      "package.json": pkg({ test: "vitest run" }),
+      "node_modules/vitest/package.json": JSON.stringify({ name: "vitest", version: "3.2.4" }),
+      "node_modules/vitest/vitest.mjs": "run();\n",
+    });
+    mkdirSync(join(bun, "node_modules/.bin"), { recursive: true });
+    writeFileSync(
+      join(bun, "node_modules/.bin/vitest.bunx"),
+      Buffer.from('vitest\\vitest.mjs"\u0000node "', "utf16le"),
+    );
+    expect(changesAfter(bun, () => put(bun, "node_modules/vitest/vitest.mjs", "process.exit(0);\n"))).toHaveLength(1);
   });
 
   it("covers the test runner's configuration and modules that would shadow pytest", () => {
@@ -164,6 +191,19 @@ describe("what a check runs, as the turn started with it (audit doc 17, S10)", (
       changesAfter(js, () =>
         put(js, "vitest.config.ts", "export default { test: { passWithNoTests: true, include: [] } };\n"),
       ),
+    ).toHaveLength(1);
+
+    // A configuration created under any name the runner reads.
+    for (const name of ["vitest.config.mjs", "vite.config.ts", "jest.config.js", ".pytest.ini", "pytest.toml"]) {
+      const fresh = workspace({ "package.json": pkg({ test: "vitest run" }), "pyproject.toml": "" });
+      expect(
+        changesAfter(fresh, () => put(fresh, name, "export default {};\n")),
+        name,
+      ).toHaveLength(1);
+    }
+    const field = workspace({ "package.json": pkg({ test: "jest" }) });
+    expect(
+      changesAfter(field, () => put(field, "package.json", pkg({ test: "jest" }, { jest: { testMatch: [] } }))),
     ).toHaveLength(1);
   });
 
@@ -337,6 +377,18 @@ describe("who changed a check", () => {
     // The file tools never wrote it (a shell command or a merge did).
     expect(changeMadeByTurn(change, cwd, () => undefined)).toBe(false);
   });
+
+  it("does not blame the turn for the script a merge brought when the turn resolves the conflict", () => {
+    const cwd = workspace({ "package.json": pkg({ test: "bun test" }), "bun.lock": "" });
+    const before = snapshotCheckDefinitions(cwd);
+    const merged = pkg({ test: "cross-env NODE_ENV=test bun test" });
+    put(cwd, "package.json", merged);
+    const [change] = changedCheckDefinitions(before, cwd);
+    if (!change) throw new Error("expected a change");
+    const conflicted = `{\n<<<<<<< HEAD\n  "scripts": { "test": "bun test" }\n=======\n  "scripts": { "test": "cross-env NODE_ENV=test bun test" }\n>>>>>>> feature\n}\n`;
+    expect(changeMadeByTurn(change, cwd, () => conflicted)).toBe(false);
+    expect(changeMadeByTurn(change, cwd, () => pkg({ test: "bun test" }))).toBe(true);
+  });
 });
 
 describe("which check changes the request asks for", () => {
@@ -379,15 +431,36 @@ describe("which check changes the request asks for", () => {
       "Implement slugify so it trims and lowercases, and please don’t change the test script.",
       "Implementa slugify sin cambiar los scripts de package.json.",
       "Upgrade eslint to v9 but leave the scripts alone.",
+      // Found by the second adversarial round (2026-09-24).
+      "Fix the config loader so the tests pass.",
+      "Fix the config loader so the lint passes.",
+      "Keep the current test script.",
+      "Please avoid changing the test script, and implement slugify.",
+      "Implementa slugify y mantén el script de tests como está.",
     ]) {
       expect(kinds(request), request).toEqual([]);
     }
   });
 
+  it("allows a merge's check changes however the merge is asked for", () => {
+    for (const request of [
+      "Merge PR #42 and resolve the conflicts.",
+      "Sync with upstream and resolve the conflicts.",
+      "Resuelve los conflictos del merge.",
+    ]) {
+      expect(kinds(request), request).toEqual(["lint", "test", "typecheck"]);
+    }
+    expect(kinds("Update the scripts in package.json to use vitest.")).toEqual(["test"]);
+    expect(kinds("Change the config for the tests so it uses jsdom.")).toEqual(["test"]);
+  });
+
   it("treats a short approval as a follow-up to the request before it, and nothing else", () => {
     expect(isShortFollowUp("yes, go ahead")).toBe(true);
     expect(isShortFollowUp("ok gracias, continúa")).toBe(true);
-    expect(isShortFollowUp("dale, usa globals")).toBe(true);
+    expect(isShortFollowUp("Sí, dale.")).toBe(true);
+    expect(isShortFollowUp("dale, usa globals")).toBe(false);
+    expect(isShortFollowUp("ok, now fix slugify in src/slug.ts")).toBe(false);
+    expect(isShortFollowUp("yes. Now rewrite the parser")).toBe(false);
     expect(isShortFollowUp("Now rewrite the parser")).toBe(false);
     expect(
       isShortFollowUp("Implement slugify in src/slug.ts so it trims, lowercases and replaces runs of spaces."),
