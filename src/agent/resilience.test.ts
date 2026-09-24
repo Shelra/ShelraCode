@@ -121,7 +121,7 @@ interface Round {
 
 /** Plays one scripted round per model request; the last round repeats. */
 class ScriptedProvider implements ProviderAdapter {
-  readonly id = "resilience-test";
+  readonly id: string = "resilience-test";
   readonly defaultModelId = "primary-model";
   readonly requests: ProviderStreamRequest[] = [];
 
@@ -415,6 +415,38 @@ describe("a failing model connection never ends the turn", () => {
     expect(text).toContain("Paid answer.");
   });
 
+  it("ends a turn Limited, with the time the free allowance comes back, when a Free session has used it up", async () => {
+    // Owner, 2026-09-24: in Free mode, no provider that can bill; say "Limited" and when the provider resets.
+    const previous = process.env.SHELRA_MODEL_POLICY;
+    process.env.SHELRA_MODEL_POLICY = "free";
+    try {
+      const resetsAt = Date.now() + 3 * 3_600_000;
+      const used = new APICallError({
+        message: "Rate limit exceeded: free-models-per-day",
+        url: "https://example.test/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: { "X-RateLimit-Reset": String(resetsAt) },
+        responseBody: '{"error":{"message":"Rate limit exceeded: free-models-per-day","code":429}}',
+      });
+      class OpenRouterLike extends ScriptedProvider {
+        override readonly id = "openrouter";
+      }
+      const provider = new OpenRouterLike([{ events: [], fail: used }]);
+      const { chunks, text } = await run(provider);
+
+      const limit = chunks.find((chunk) => chunk.type === "limit") as { limit?: { resetsAt?: string } } | undefined;
+      expect(limit?.limit?.resetsAt).toBe(new Date(resetsAt).toISOString());
+      expect(text).toContain("[Limited — OpenRouter's free models reached the limit of the free plan; it resets at ");
+      expect(text).toContain("Free mode does not continue on providers that can bill.");
+      expect(text).toContain("switch to Mixed (ctrl+f) to use paid models");
+      expect(text).not.toContain("[Paused");
+    } finally {
+      if (previous === undefined) delete process.env.SHELRA_MODEL_POLICY;
+      else process.env.SHELRA_MODEL_POLICY = previous;
+    }
+  });
+
   it("switches at once when the model cannot serve the request (no credits)", async () => {
     const provider = new ScriptedProvider(
       [{ events: [], fail: apiError(402, "This request requires more credits") }, answer("Free model answer.")],
@@ -628,12 +660,13 @@ describe("a provider that cannot serve the turn hands it to another free provide
     expect(text).toContain("Answered on Gemini.");
   });
 
-  it("pauses as before when no other provider is configured", async () => {
+  it("ends Limited, saying when the allowance resets, when no other provider can take the turn", async () => {
     const openrouter = new ScriptedProvider([{ events: [], fail: quotaSpent() }]);
     const { text } = await run(openrouter);
 
     expect(openrouter.requests).toHaveLength(1);
-    expect(text).toContain("[Paused");
+    expect(text).toContain("[Limited — ");
+    expect(text).not.toContain("[Paused");
   });
 
   it("answers a key the moved-to provider rejects with its next provider, then the first provider's own model", async () => {

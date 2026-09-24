@@ -1,4 +1,5 @@
 import { getModelInfo } from "../models/catalog";
+import { formatResetShort } from "../providers/limits";
 
 /** The model answering a turn: the one it runs on, and for a router (`openrouter/auto`) the model that answered. */
 export interface AnsweringModel {
@@ -34,4 +35,16 @@ export function isFreeModelId(modelId: string): boolean {
   if (modelId === "openrouter/free" || modelId.endsWith(":free")) return true;
   const info = getModelInfo(modelId);
   return info !== undefined && info.pricingKnown !== false && info.inputPrice === 0 && info.outputPrice === 0;
+}
+
+/**
+ * The footer's "Limited" time: when a used-up free allowance comes back ("" when the provider did not say), or null
+ * when none is used up or its reset has passed.
+ */
+export function limitedUntilLabel(limited: { resetsAt?: string } | null, now = new Date()): string | null {
+  if (!limited) return null;
+  if (!limited.resetsAt) return "";
+  const at = new Date(limited.resetsAt);
+  if (Number.isNaN(at.getTime()) || at.getTime() <= now.getTime()) return null;
+  return formatResetShort(at, now);
 }

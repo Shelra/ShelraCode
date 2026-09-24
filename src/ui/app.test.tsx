@@ -198,6 +198,31 @@ describe("ComposerFooter", () => {
     }
   });
 
+  it("says Limited, and until when, in the warning colour when the free allowance is used up", async () => {
+    for (const width of [80, 120]) {
+      const { frame, spans } = await render(
+        <ComposerFooter
+          t={dark}
+          width={width}
+          model="Nemotron 3 Ultra"
+          modelMode="free"
+          limitedUntil="8:00 PM"
+          isProcessing={false}
+          showSuggestions={false}
+          queuedCount={0}
+          hasViews={false}
+          viewOpen={false}
+          approvalOpen={false}
+        />,
+        width,
+        1,
+      );
+      expect(frame).toContain("● Limited · 8:00 PM  Nemotron 3 Ultra");
+      expect(frame).not.toContain("● Free");
+      expect(find(spans, "● Limited · 8:00 PM")?.fg.equals(RGBA.fromHex(dark.warning))).toBe(true);
+    }
+  });
+
   it("shows no mode where modes do not apply", async () => {
     const { frame } = await render(
       <ComposerFooter

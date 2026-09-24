@@ -27,6 +27,16 @@ export type HeadlessJsonEvent =
       supportsReasoning: boolean;
     }
   | {
+      /** A provider's free allowance is used up: the turn ended Limited, and when the allowance comes back. */
+      type: "limit";
+      sessionID?: string;
+      provider: string;
+      name: string;
+      resetsAt?: string;
+      estimated: boolean;
+      timestamp: number;
+    }
+  | {
       /** The model the turn now runs on (a fallback), and for a router the model that answered. */
       type: "model";
       sessionID?: string;
@@ -370,6 +380,14 @@ export function createHeadlessJsonlEmitter(sessionId?: string): {
             timestamp: Date.now(),
           }) as HeadlessJsonEvent,
         );
+        break;
+
+      case "limit":
+        if (chunk.limit) {
+          stdout += jsonLine(
+            withSession({ type: "limit", ...chunk.limit, timestamp: Date.now() }) as HeadlessJsonEvent,
+          );
+        }
         break;
 
       case "model":

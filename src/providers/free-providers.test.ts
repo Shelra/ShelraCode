@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ProviderCredential } from "../security/credentials";
+import { credentialFallbackChain } from "./credential-fallback";
 import {
   configuredFreeProviders,
   createFreeProvider,
   FREE_PROVIDERS,
   freeProviderCliError,
   freeProviderFallbackSources,
+  outsideFreeMode,
   requireFreeProvider,
   resolveFreeProvider,
 } from "./free-providers";
@@ -86,6 +88,33 @@ describe("free providers, review round 3 (2026-09-24)", () => {
       { prompt: false, autonomous: false, verify: true },
     ]) {
       expect(freeProviderCliError({ provider: "groq", ...mode })).toContain("--provider groq runs a headless prompt");
+    }
+  });
+});
+
+describe("other providers in Free mode (owner, 2026-09-24: paid providers only in Mixed)", () => {
+  it("never moves a Free session to another provider, and keeps the chain for a switch to Mixed", async () => {
+    const previous = process.env.SHELRA_MODEL_POLICY;
+    const calls: string[] = [];
+    const chain = outsideFreeMode(
+      credentialFallbackChain([
+        async () => {
+          calls.push("groq");
+          return { provider: {} as never, modelId: "llama", label: "Groq" };
+        },
+      ]),
+    );
+    const request = { modelId: "m", signal: new AbortController().signal };
+    try {
+      process.env.SHELRA_MODEL_POLICY = "free";
+      expect(await chain(request)).toBeNull();
+      expect(calls).toEqual([]);
+      process.env.SHELRA_MODEL_POLICY = "mixed";
+      expect((await chain(request))?.label).toBe("Groq");
+      expect(calls).toEqual(["groq"]);
+    } finally {
+      if (previous === undefined) delete process.env.SHELRA_MODEL_POLICY;
+      else process.env.SHELRA_MODEL_POLICY = previous;
     }
   });
 });

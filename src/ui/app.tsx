@@ -80,7 +80,7 @@ import {
   SubagentEditorModal,
   SubagentsBrowserModal,
 } from "./agents-modal";
-import { type AnsweringModel, answeringModelLabel, isFreeModelId } from "./answering-model";
+import { type AnsweringModel, answeringModelLabel, isFreeModelId, limitedUntilLabel } from "./answering-model";
 import { SectionBadge } from "./components/badge";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
@@ -645,8 +645,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   // The model answering the running or last turn, when it is not the chosen one: a fallback, or the model a router
   // picked. Cleared when the user chooses another model.
   const [answeringModel, setAnsweringModel] = useState<AnsweringModel | null>(null);
+  // A provider's free allowance used up, and when it comes back: the footer says "Limited" until then.
+  const [limited, setLimited] = useState<{ resetsAt?: string } | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new choice of model replaces what answered before it
-  useEffect(() => setAnsweringModel(null), [model]);
+  useEffect(() => {
+    setAnsweringModel(null);
+    setLimited(null);
+  }, [model]);
   const [modelMode, setModelMode] = useState<ModelMode | undefined>(startupConfig.modelMode);
   const switchingModeRef = useRef(false);
   const [sandboxMode, setSandboxModeState] = useState<SandboxMode>(agent.getSandboxMode());
@@ -2209,6 +2214,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           return;
         }
         setModelMode(next);
+        setLimited(null);
         if (result.modelId) setModel(result.modelId);
         // Short enough for an 80-column footer next to the badge, which already says Free or Mixed.
         showNotice(next === "mixed" ? "Paid models on" : "Paid models off", 3200);
@@ -2619,6 +2625,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       setIsProcessing(true);
       // A turn starts on the chosen model; the one that answered the last turn is not what answers this one.
       setAnsweringModel(null);
+      setLimited(null);
       setKernelState(null);
       setPublishedPlan(null);
       setTurnError(null);
@@ -2657,6 +2664,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 break;
               case "reasoning":
                 noteReasoning(chunk.content || "");
+                break;
+              case "limit":
+                if (chunk.limit) setLimited(chunk.limit.resetsAt ? { resetsAt: chunk.limit.resetsAt } : {});
                 break;
               case "model":
                 if (chunk.modelId) {
@@ -4790,6 +4800,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                   model={model}
                   modelInfo={modelInfo}
                   answeringLabel={answeringModelLabel(answeringModel, model)}
+                  limitedUntil={limitedUntilLabel(limited)}
                   modelMode={modelMode}
                   contextStats={contextStats}
                   queuedCount={queuedMessages.length}
@@ -4856,6 +4867,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 model={model}
                 modelInfo={modelInfo}
                 answeringLabel={answeringModelLabel(answeringModel, model)}
+                limitedUntil={limitedUntilLabel(limited)}
                 modelMode={modelMode}
                 contextStats={contextStats}
                 placeholder={"What are we building?"}
@@ -5204,6 +5216,7 @@ function PromptBox({
   model,
   modelInfo,
   answeringLabel,
+  limitedUntil,
   modelMode,
   contextStats,
   placeholder,
@@ -5234,6 +5247,8 @@ function PromptBox({
   modelInfo: ReturnType<typeof getModelInfo>;
   /** The model answering the turn when it is not the chosen one (a fallback, or a router's pick). */
   answeringLabel?: string | null;
+  /** A free allowance used up: when it comes back ("" when unknown); null or absent when it is not. */
+  limitedUntil?: string | null;
   modelMode?: ModelMode;
   contextStats?: ContextStats | null;
   placeholder?: string;
@@ -5336,6 +5351,7 @@ function PromptBox({
         width={width ?? 80}
         model={answeringLabel ?? (modelInfo?.name || model)}
         modelMode={modelMode}
+        limitedUntil={limitedUntil}
         contextStats={contextStats}
         isProcessing={isProcessing}
         showSuggestions={showSuggestions}
@@ -5372,6 +5388,7 @@ export function ComposerFooter({
   width,
   model,
   modelMode,
+  limitedUntil,
   contextStats,
   isProcessing,
   showSuggestions,
@@ -5386,6 +5403,8 @@ export function ComposerFooter({
   model: string;
   /** Free or Mixed, shown before the model; absent where modes do not apply. */
   modelMode?: ModelMode;
+  /** When a free allowance comes back ("" when unknown): the badge says Limited instead of the mode until then. */
+  limitedUntil?: string | null;
   contextStats?: ContextStats | null;
   isProcessing: boolean;
   showSuggestions: boolean;
@@ -5403,7 +5422,8 @@ export function ComposerFooter({
   const nameRoom = Math.max(8, 26 - modelSuffix.length);
   const modelLabel = `${modelName.length > nameRoom ? `${modelName.slice(0, nameRoom - 1)}…` : modelName}${modelSuffix}`;
   const meter = contextStats ? contextMeterText(contextStats, inner >= 64) : "";
-  const modeLabel = modelMode === "mixed" ? "● Mixed" : modelMode === "free" ? "● Free" : "";
+  const limitedLabel = typeof limitedUntil === "string" ? `● Limited${limitedUntil ? ` · ${limitedUntil}` : ""}` : "";
+  const modeLabel = limitedLabel || (modelMode === "mixed" ? "● Mixed" : modelMode === "free" ? "● Free" : "");
   const leftWidth = (modeLabel ? modeLabel.length + 2 : 0) + modelLabel.length + (meter ? meter.length + 2 : 0);
   const room = Math.max(0, inner - leftWidth - 3);
   const base = approvalOpen
@@ -5434,8 +5454,8 @@ export function ComposerFooter({
     >
       <box flexDirection="row" gap={2} alignItems="center" height={1}>
         {modeLabel ? (
-          // Mixed may spend: warning colour. Free cannot: accent. The word carries it, not the colour alone.
-          <text fg={modelMode === "mixed" ? t.warning : t.accent} wrapMode="none">
+          // Mixed may spend and Limited cannot answer: warning colour. Free: accent. The word carries it, not colour.
+          <text fg={modelMode === "mixed" || limitedLabel ? t.warning : t.accent} wrapMode="none">
             {modeLabel}
           </text>
         ) : null}

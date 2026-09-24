@@ -1,5 +1,6 @@
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { getStoredProviderCredential, type ProviderCredential } from "../security/credentials";
+import { sessionModelPolicy } from "../utils/settings";
 import type { CredentialFallbackSource } from "./credential-fallback";
 import type { ProviderAdapter } from "./types";
 
@@ -169,6 +170,16 @@ export function describeFreeProvider(preset: FreeProviderPreset): string {
  * Where a turn continues when OpenRouter's free models cannot serve it (the daily quota spent, no model
  * answering): each configured free provider in turn, on its default model, each tried once per session.
  */
+/**
+ * Another provider's key can be on a paid plan that bills, so a session in Free mode never moves to one on its own
+ * (owner, 2026-09-24: paid providers only in Mixed): the turn ends "Limited" with the time its free allowance comes
+ * back instead. In Mixed the chain answers as before. The chain itself is kept, so a switch to Mixed later still
+ * finds every provider.
+ */
+export function outsideFreeMode(chain: CredentialFallbackSource): CredentialFallbackSource {
+  return async (request) => (sessionModelPolicy() === "free" ? null : chain(request));
+}
+
 export function freeProviderFallbackSources(providers: readonly ConfiguredFreeProvider[]): CredentialFallbackSource[] {
   return providers.map(
     (configured): CredentialFallbackSource =>

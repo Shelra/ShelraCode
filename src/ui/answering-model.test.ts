@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answeringModelLabel, isFreeModelId } from "./answering-model";
+import { answeringModelLabel, isFreeModelId, limitedUntilLabel } from "./answering-model";
 
 describe("the model the footer shows", () => {
   it("names the model a router picked, with the router", () => {
@@ -32,6 +32,15 @@ describe("the model the footer shows", () => {
     );
     expect(answeringModelLabel({ modelId: "openrouter/vendor-z/chosen" }, "openrouter/vendor-z/chosen")).toBeNull();
     expect(answeringModelLabel(null, "openrouter/vendor-z/chosen")).toBeNull();
+  });
+
+  it("says Limited until the reset, and nothing once it has passed", () => {
+    const now = new Date(2026, 8, 24, 15, 0);
+    expect(limitedUntilLabel(null, now)).toBeNull();
+    expect(limitedUntilLabel({}, now)).toBe("");
+    expect(limitedUntilLabel({ resetsAt: new Date(2026, 8, 24, 20, 0).toISOString() }, now)).toBe("8:00 PM");
+    expect(limitedUntilLabel({ resetsAt: new Date(2026, 8, 25, 2, 0).toISOString() }, now)).toBe("Sep 25, 2:00 AM");
+    expect(limitedUntilLabel({ resetsAt: new Date(2026, 8, 24, 14, 0).toISOString() }, now)).toBeNull();
   });
 
   it("says free models can queue only for a free model", () => {

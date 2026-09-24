@@ -71,9 +71,9 @@ directory.
   `KEY_GROQ`, or `shelra auth groq <key>`), Google Gemini (`GEMINI_API_KEY`, `shelra auth gemini`)
   and Cloudflare Workers AI (`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, `shelra auth
   cloudflare <accountId> <token>`). A headless prompt runs on one with `--provider <id>`, a
-  benchmark with `shelra bench --provider <id>`, and a session continues on them when OpenRouter's
-  free models cannot serve a turn (see Resilience). Their plans and privacy terms are in
-  `docs/future-research/05_FREE_AND_LOW_COST_LLM_INFRASTRUCTURE.md`.
+  benchmark with `shelra bench --provider <id>`, and a session in Mixed mode continues on them when
+  OpenRouter's free models cannot serve a turn (see Resilience); a session in Free mode does not.
+  Their plans and privacy terms are in `docs/future-research/05_FREE_AND_LOW_COST_LLM_INFRASTRUCTURE.md`.
 - Optional spend controls: `SHELRA_MAX_SESSION_COST_USD` and
   `SHELRA_MAX_REQUEST_COST_USD` (CLI equivalents `--max-cost` and
   `--max-request-cost`).
@@ -148,12 +148,16 @@ turn at once. Everything else is recovered:
   `openrouter/free` in Mixed mode (`ctrl+f` in the terminal UI, `--model-policy mixed`) or a paid tier. A fallback is not always free: the switch
   notice states its cost, and spend limits still apply. A strict (benchmark) model is never
   replaced. When no model of the provider can serve the turn (the day's free quota spent, none
-  answering), the session continues on another free provider the user configured (Groq, Gemini,
-  Cloudflare Workers AI, then OpenRouter Free when the turn started elsewhere), each tried once per
-  session; the notice states its plan, that a key on a paid plan is billed by that provider, and,
-  for Gemini's free tier, that Google may use the prompts (`setProviderFallback`, wired in
-  `src/index.ts`). Only then does a turn in which no model answers pause with its progress saved
-  and say how to resume.
+  answering), a session in Mixed mode continues on another free provider the user configured (Groq,
+  Gemini, Cloudflare Workers AI, then OpenRouter Free when the turn started elsewhere), each tried
+  once per session; the notice states its plan, that a key on a paid plan is billed by that provider,
+  and, for Gemini's free tier, that Google may use the prompts (`setProviderFallback`, wired in
+  `src/index.ts`). A session in Free mode never moves to another provider, whose key could be on a
+  paid plan (owner, 2026-09-24): only OpenRouter Free and an installed local model. Only then does a
+  turn in which no model answers pause with its progress saved and say how to resume; when the
+  provider's free allowance is what ran out, it ends `[Limited — …]` with the time the allowance
+  comes back, as the provider reports it or as its documentation schedules it
+  (`src/providers/limits.ts`), and the terminal UI's footer shows "● Limited" until then.
 - A sub-agent recovers the same way on its own, within a tighter bound (four attempts without
   progress, ten in all), and then returns a failed task the parent routes around.
 - A key the provider rejects moves the session, with its completed steps, to a fallback the user

@@ -71,6 +71,7 @@ import {
   freeProviderCliError,
   freeProviderFallbackSources,
   isFreeProviderId,
+  outsideFreeMode,
   requireFreeProvider,
 } from "./providers/free-providers";
 import { createOpenRouterProvider } from "./providers/openrouter";
@@ -236,7 +237,10 @@ function configureFreeProviderSession(agent: Agent, id: FreeProviderId, model: s
   const others = configuredFreeProviders().filter((provider) => provider.preset.id !== id);
   // One chain for both failures, so each provider is tried once per session whichever way it is reached;
   // a rejected key ends on an installed local model only once that chain is spent.
-  const next = credentialFallbackChain([...freeProviderFallbackSources(others), ...openRouterFreeFallbackSources()]);
+  const next = thenFallback(
+    outsideFreeMode(credentialFallbackChain(freeProviderFallbackSources(others))),
+    credentialFallbackChain(openRouterFreeFallbackSources()),
+  );
   agent.setProviderFallback(next);
   agent.setCredentialFallback(thenFallback(next, installedLocalModelFallback));
 }
@@ -261,7 +265,10 @@ async function configureRemoteProvider(
     const openRouterFree = credentialFallbackChain(openRouterFreeFallbackSources());
     agent.setCredentialFallback(thenFallback(openRouterFree, installedLocalModelFallback));
     agent.setProviderFallback(
-      thenFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())), openRouterFree),
+      thenFallback(
+        outsideFreeMode(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders()))),
+        openRouterFree,
+      ),
     );
     return {
       models: [],
@@ -383,7 +390,9 @@ async function configureRemoteProvider(
   );
   // No OpenRouter model can serve the turn (the day's free quota spent, none answering): continue on
   // another free provider the user configured (Groq, Gemini, Cloudflare), whose notice states its plan.
-  agent.setProviderFallback(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders())));
+  agent.setProviderFallback(
+    outsideFreeMode(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders()))),
+  );
   // Switching the mode starts from the model a restart in that mode would: Mixed runs the model the user picked, or
   // the auto router when they picked none; Free keeps a free model and otherwise takes the best free ones. A session
   // already moved to another free provider (the day's OpenRouter quota spent) stays there on a switch to Free. A switch

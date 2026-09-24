@@ -83,6 +83,7 @@ import { isOpenRouterBaseURL, lastOpenRouterCatalog } from "../models/openrouter
 import { BASE_URL_ENV, MAX_TOKENS_ENV } from "../product/identity";
 import { generateRecap as genRecap, generateTitle as genTitle, normalizeRecap } from "../providers/auxiliary";
 import type { CredentialFallback, CredentialFallbackSource } from "../providers/credential-fallback";
+import { describeLimit, limitFromError } from "../providers/limits";
 import { normalizeModelMessages } from "../providers/messages";
 import { createOpenRouterProvider } from "../providers/openrouter";
 import { isProviderStreamIdleError } from "../providers/stream";
@@ -282,6 +283,9 @@ interface InterruptionState {
   onModel: number;
   total: number;
   triedModels: Set<string>;
+  /** The last failure and the provider it came from: a used-up free allowance ends the turn "Limited". */
+  lastError?: unknown;
+  lastProvider?: string;
 }
 
 type InterruptionOutcome =
@@ -1341,6 +1345,8 @@ export class Agent {
     signal: AbortSignal;
   }): AsyncGenerator<StreamChunk, InterruptionOutcome, unknown> {
     const { reason, state } = args;
+    state.lastError = args.error;
+    state.lastProvider = args.provider.id;
     // Only a completed step is progress. Text streamed before a stall (a preamble such as "Let me
     // write the file now.") is not: counting it kept a stalling model from ever being replaced and
     // filled the transcript with fragments; the retried round regenerates it.
@@ -1397,17 +1403,37 @@ export class Agent {
     return { action: "retry" };
   }
 
-  /** The end of a turn no model could serve: progress is already saved and resumable. */
+  /**
+   * The end of a turn no model could serve: progress is already saved and resumable. When the provider's free
+   * allowance is what ran out, the turn ends "Limited" with the time it comes back, as the provider reports it.
+   */
   private async *pauseAfterInterruptions(
     cause: string,
     observer?: ProcessMessageObserver,
+    state?: InterruptionState,
   ): AsyncGenerator<StreamChunk, void, unknown> {
-    const message = `${cause} Everything completed so far is saved; send "continue" to resume, or choose another model with /models.`;
+    const limit =
+      state?.lastProvider && state.lastError !== undefined ? limitFromError(state.lastProvider, state.lastError) : null;
+    const free = sessionModelPolicy() === "free";
+    const message = limit
+      ? `${describeLimit(limit)}${free ? " Free mode does not continue on providers that can bill." : ""} Everything completed so far is saved; send "continue" after the reset${free ? ", or switch to Mixed (ctrl+f) to use paid models" : ", or choose another model with /models"}.`
+      : `${cause} Everything completed so far is saved; send "continue" to resume, or choose another model with /models.`;
     this.kernel?.recordObservation(message);
     this.kernel?.transition("blocked");
     this.persistKernelIndex(message);
     notifyObserver(observer?.onError, { message, timestamp: Date.now() });
-    yield { type: "content", content: `\n\n${this.endNote(`[Paused — ${message}]`)}` };
+    if (limit) {
+      yield {
+        type: "limit",
+        limit: {
+          provider: limit.provider,
+          name: limit.name,
+          estimated: limit.estimated,
+          ...(limit.resetsAt ? { resetsAt: limit.resetsAt.toISOString() } : {}),
+        },
+      };
+    }
+    yield { type: "content", content: `\n\n${this.endNote(`[${limit ? "Limited" : "Paused"} — ${message}]`)}` };
     yield { type: "done" };
   }
 
@@ -3184,7 +3210,7 @@ export class Agent {
               adoptProvider(moved);
               continue;
             }
-            yield* this.pauseAfterInterruptions(outcome.message, observer);
+            yield* this.pauseAfterInterruptions(outcome.message, observer, interruptions);
             return;
           }
 
@@ -3923,7 +3949,7 @@ export class Agent {
               adoptProvider(moved);
               continue;
             }
-            yield* this.pauseAfterInterruptions(outcome.message, observer);
+            yield* this.pauseAfterInterruptions(outcome.message, observer, interruptions);
             return;
           }
 

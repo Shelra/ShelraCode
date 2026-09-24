@@ -252,11 +252,22 @@ export interface PaymentPrecheck {
 }
 
 export interface StreamChunk {
-  type: "content" | "tool_calls" | "tool_result" | "tool_approval_request" | "done" | "error" | "reasoning" | "model";
+  type:
+    | "content"
+    | "tool_calls"
+    | "tool_result"
+    | "tool_approval_request"
+    | "done"
+    | "error"
+    | "reasoning"
+    | "model"
+    | "limit";
   content?: string;
   /** `model`: the model the turn now runs on, and, for a router, the model that answered. */
   modelId?: string;
   servedModelId?: string;
+  /** `limit`: a provider's free allowance is used up, and when it comes back (ISO time, when known). */
+  limit?: { provider: string; name: string; resetsAt?: string; estimated: boolean };
   toolCalls?: ToolCall[];
   toolCall?: ToolCall;
   toolResult?: ToolResult;
