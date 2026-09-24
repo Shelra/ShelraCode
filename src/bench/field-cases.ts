@@ -126,7 +126,17 @@ export function redact(text: string, identity: { home: string; user: string; hos
     [identity.host, "<host>"],
     [identity.user, "<user>"],
   ] as const) {
-    if (value.length >= 3) out = out.replace(new RegExp(`\\b${escapeRegExp(value)}\\b`, "giu"), placeholder);
+    // Also the slug form memory entries are named with ("John Doe" → "john-doe"), and between underscores,
+    // which `\b` does not treat as a boundary.
+    const slug = value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "");
+    for (const candidate of new Set([value, slug])) {
+      if (candidate.length < 3) continue;
+      const bounded = `(?<![\\p{L}\\p{N}])${escapeRegExp(candidate)}(?![\\p{L}\\p{N}])`;
+      out = out.replace(new RegExp(bounded, "giu"), placeholder);
+    }
   }
   return out;
 }

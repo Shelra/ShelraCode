@@ -46,6 +46,16 @@ describe("redact", () => {
   it("leaves short names alone rather than rewriting ordinary words", () => {
     expect(redact("an item", { home: "", user: "an", host: "" })).toBe("an item");
   });
+
+  it("removes the user name in a memory entry's slug and between underscores", () => {
+    // Review round 3 (2026-09-24): slugs reach the committed history through `memoryWritten`.
+    const john = { home: "C:\\Users\\john.doe", user: "john.doe", host: "" };
+    expect(redact("failure-cd-c-users-john-doe-appdata-local-temp", john)).toBe(
+      "failure-cd-c-users-<user>-appdata-local-temp",
+    );
+    expect(redact("users_ana_x", identity)).toBe("users_<user>_x");
+    expect(redact("banana and Anastasia", identity)).toBe("banana and Anastasia");
+  });
 });
 
 describe("renderScoreboard", () => {
