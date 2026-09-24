@@ -3,7 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { contractChecks } from "../contract/contract";
 import { discoverChecks } from "../contract/discover";
-import { listWorkspaceFiles } from "../contract/workspace-files";
+import { IGNORED_DIRS, listWorkspaceFiles } from "../contract/workspace-files";
 import type { ContextPacket, TurnClassification } from "./types";
 
 const MAX_CONTEXT_CHARS = 8_000;
@@ -136,7 +136,10 @@ function isDirectory(path: string): boolean {
 function projectFiles(root: string): { files: string[]; complete: boolean } {
   const listed = git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
   if (listed?.ok) {
-    const files = listed.stdout.split("\0").filter(Boolean);
+    // Tool state and dependencies a project forgot to ignore are still not its own files.
+    const files = listed.stdout
+      .split("\0")
+      .filter((file) => file && !file.split("/").some((part) => IGNORED_DIRS.has(part)));
     return { files: [...new Set(files)].sort(), complete: true };
   }
   const walked = listWorkspaceFiles(root);
@@ -228,9 +231,12 @@ function namedFiles(root: string, prompt: string): { lines: string[]; files: str
 
 /**
  * What a model cannot cheaply discover for itself (audit doc 15, Phase 3.1): the checks the project
- * states, the git state, and the files the request names. A generated overview of path names was
- * noise on any real repository, and read files on demand beat an injected map. Project instructions
- * (AGENTS.md, CLAUDE.md) are merged into the system prompt separately.
+ * states, the git state, and the files the request names. A project of at most 40 files also gets its
+ * whole file list, and a larger one the tests of the files the request names: without either, F4 of the
+ * execution plan measured a free model searching for the tests in nearly every task and spending 55%
+ * more tokens. A generated overview of a large repository stays out, where it was noise and reading
+ * files on demand beat an injected map. Project instructions (AGENTS.md, CLAUDE.md) are merged into the
+ * system prompt separately.
  */
 export function compileContextPacket(root: string, prompt: string, maxChars = MAX_CONTEXT_CHARS): ContextPacket {
   const classification = classifyTurn(prompt);

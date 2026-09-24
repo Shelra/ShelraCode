@@ -138,6 +138,26 @@ describe("host context compiler", () => {
     expect(packet.promptAppendix).not.toContain("README BODY");
   });
 
+  it("leaves tool state out of a small project's list, and lists nothing it could not walk to the end", () => {
+    // A project that forgot to ignore .shelra: git lists it, the packet does not.
+    const tracked = repository("shelra-context-tool-state-", {
+      "package.json": '{"name":"fixture"}',
+      "src/index.ts": "export const a = 1;\n",
+      ".shelra/memory/MEMORY.md": "- [x](x.md)\n",
+    });
+    const packet = compileContextPacket(tracked, "revisa el proyecto");
+    expect(packet.promptAppendix).toContain("Files in this project (2):\n- package.json\n- src/index.ts");
+    expect(packet.promptAppendix).not.toContain(".shelra");
+
+    // Outside git, a folder deeper than the bounded walk goes means the list would be wrong: none is given.
+    const deep = scratch("shelra-context-deep-", {
+      "pom.xml": "<project/>",
+      "src/main/java/com/example/app/service/impl/Service.java": "class Service {}\n",
+    });
+    const truncated = compileContextPacket(deep, "revisa el proyecto");
+    expect(truncated.promptAppendix).not.toContain("Files in this project");
+  });
+
   it("gives a larger project no file list, only the tests of the files the request names", () => {
     const filler = Object.fromEntries(
       Array.from({ length: 45 }, (_, index) => [`src/module${index}.ts`, `export const m${index} = ${index};\n`]),

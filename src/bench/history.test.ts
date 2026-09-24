@@ -99,7 +99,7 @@ describe("saveHistory", () => {
     writeFileSync(path, `${"x".repeat(50_000)}\n`);
     const history: History = { schemaVersion: 1, description: "d", updatedAt: "", runs: [], fieldCases: [] };
 
-    saveHistory(path, history, repositoryRoot);
+    saveHistory(path, history);
 
     expect(readFileSync(path, "utf8")).toBe(`${JSON.stringify(history, null, 2)}\n`);
     expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ schemaVersion: 1, runs: [] });

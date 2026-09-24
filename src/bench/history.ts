@@ -256,17 +256,12 @@ export function mergeRuns(history: History, runs: readonly HistoryRun[]): { adde
 }
 
 /**
- * Writes the history, then asks the repository's formatter to lay it out as a commit would, so an
- * import leaves no formatting diff. The formatter is optional: without Bun on PATH the file is still
- * valid JSON.
- */
-/**
  * Writes the history as formatted JSON and reads it back. No formatter runs here: one spawned after each save
  * could still be writing when the next save began, and a shorter save then kept the tail of the formatter's
  * longer write, which left the file unreadable (2026-09-24, importing six runs one after another). The
  * pre-commit hook formats the file when it is committed.
  */
-export function saveHistory(historyPath: string, history: History, _repositoryRoot?: string): void {
+export function saveHistory(historyPath: string, history: History): void {
   history.updatedAt = new Date().toISOString();
   mkdirSync(dirname(historyPath), { recursive: true });
   const text = `${JSON.stringify(history, null, 2)}\n`;
@@ -293,6 +288,6 @@ export function appendRunsToHistory(input: {
     }),
   );
   history.fieldCases = readFieldCases(join(input.repositoryRoot, "bench", "field", "cases"), identities);
-  saveHistory(historyPath, history, input.repositoryRoot);
+  saveHistory(historyPath, history);
   return { historyPath, runs: history.runs.length, ...counts, fieldCases: history.fieldCases.length };
 }

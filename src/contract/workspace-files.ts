@@ -41,7 +41,12 @@ export function listWorkspaceFiles(
   let truncated = false;
 
   const walk = (dir: string, depth: number): void => {
-    if (depth > maxDepth || files.length >= maxFiles) return;
+    if (depth > maxDepth) {
+      // A folder deeper than the walk goes: whatever it holds is missing from the listing.
+      truncated = true;
+      return;
+    }
+    if (files.length >= maxFiles) return;
     let entries: Dirent<string>[];
     try {
       // Bun's Node declarations choose the Buffer overload for ReturnType<typeof readdirSync>
