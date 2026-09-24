@@ -32,7 +32,12 @@ export const DEFAULT_MEMORY_POLL_MS = 3_000;
 /** Children still running; killed on process exit so a crash never leaves orphans behind. */
 const activeChildren = new Set<number>();
 let exitSweepInstalled = false;
-function trackChild(pid: number | undefined): () => void {
+/**
+ * Kills the child's process tree when this process exits (Ctrl+C included: the CLI's signal handlers end in
+ * `process.exit`). A child spawned in its own process group no longer receives the terminal's Ctrl+C, so
+ * this sweep is the only thing that stops it. Returns the call that forgets the child once it has ended.
+ */
+export function trackChild(pid: number | undefined): () => void {
   if (!pid) return () => {};
   activeChildren.add(pid);
   if (!exitSweepInstalled) {
@@ -262,8 +267,11 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
       timeoutTimer = setTimeout(() => {
         killedReason = "timeout";
         void killProcessTree(child.pid, 500);
-        // If the tree refuses to die, do not hang the caller forever.
-        setTimeout(() => settle("timed_out", null, true, `\nProcess tree kill timed out after ${timeoutMs}ms.`), 5_000);
+        // If the tree refuses to die, do not hang the caller forever; cleanup clears it once the child closes.
+        forceTimer = setTimeout(
+          () => settle("timed_out", null, true, `\nProcess tree kill timed out after ${timeoutMs}ms.`),
+          5_000,
+        );
       }, timeoutMs);
     }
   });

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { trackChild } from "../exec/command";
 import { killProcessTree } from "../exec/shell";
 import { describeFailures, type WorkspaceGrade } from "./grading";
 import type { BenchmarkTaskExecution } from "./runner";
@@ -64,9 +65,12 @@ export function runJsonLinesProcess(
       // Its own process group on POSIX, so a timeout kills the CLI's children too; Windows uses taskkill /T.
       detached: process.platform !== "win32",
     });
+    // Out of the terminal's process group it misses Ctrl+C: the exit sweep stops it with Shelra.
+    const untrack = trackChild(child.pid);
     const finish = (exitCode: number | null) => {
       if (settled) return;
       settled = true;
+      untrack();
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
       if (buffer.trim()) lines.push(buffer.trim());
