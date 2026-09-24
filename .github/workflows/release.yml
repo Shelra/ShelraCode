@@ -99,11 +99,15 @@ jobs:
 
       - name: Resolve release tag
         shell: bash
+        # Values people type reach the script as environment variables, never spliced into it.
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ github.event.inputs.version }}"
+            tag="$INPUT_VERSION"
           else
-            tag="${{ github.ref_name }}"
+            tag="$REF_NAME"
           fi
           echo "RELEASE_TAG=${tag}" >> "$GITHUB_ENV"
 
