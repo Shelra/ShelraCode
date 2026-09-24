@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { splitShellCommands } from "../agent/verification-evidence";
 
@@ -37,20 +38,28 @@ function hasShortFlag(tokens: readonly string[], letter: string): boolean {
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell variable reference, not a template
 const HOME_TOKENS = new Set(["~", "$home", "%userprofile%", "$env:userprofile", "${home}"]);
+const HOME_PREFIX_RE = /^(?:~|\$home|\$\{home\}|\$env:userprofile|%userprofile%)[\\/]/iu;
+
+/** A path as the shell would resolve it from `cwd`: the home folder's spellings included. */
+function resolveTarget(bare: string, cwd: string): string {
+  if (HOME_TOKENS.has(bare.toLowerCase())) return homedir();
+  if (HOME_PREFIX_RE.test(bare)) return resolve(homedir(), bare.replace(/^[^\\/]+[\\/]/u, ""));
+  return isAbsolute(bare) ? bare : resolve(cwd, bare);
+}
 
 /** Why removing `target` recursively is destructive, or null when it stays inside the project. */
 function outsideTarget(target: string, cwd: string, project: string): string | null {
   const bare = target.replace(/^["']|["']$/gu, "");
   if (!bare) return null;
   const lowered = bare.toLowerCase();
-  if (HOME_TOKENS.has(lowered) || /^(?:~|\$home|\$env:userprofile|%userprofile%)[\\/]/u.test(lowered)) {
-    return "your home folder";
-  }
+  if (HOME_TOKENS.has(lowered) || HOME_PREFIX_RE.test(bare)) return "your home folder";
   if (bare === "/" || bare === "/*" || /^[A-Za-z]:[\\/]?\*?$/u.test(bare)) return "the root of a drive";
   if (bare === "*" || bare === "." || bare === "./" || bare === ".\\") return "everything in the project";
-  const full = isAbsolute(bare) ? bare : resolve(cwd, bare);
+  // `./*`, `.\*` and `<folder>/*`: everything under that folder.
+  const everythingUnder = /^(.+?)[\\/]\*+$/u.exec(bare);
+  const full = resolveTarget(everythingUnder?.[1] ?? bare, cwd);
   const rel = relative(resolve(project), resolve(full));
-  if (rel === "") return "the whole project";
+  if (rel === "") return everythingUnder ? "everything in the project" : "the whole project";
   if (rel.startsWith("..") || isAbsolute(rel)) return `${bare}, outside the project`;
   return null;
 }
@@ -60,27 +69,71 @@ function removalTargets(tokens: readonly string[], cmdStyle: boolean): string[] 
   return tokens.slice(1).filter((token) => !token.startsWith("-") && !(cmdStyle && token.startsWith("/")));
 }
 
-const REGISTRY_PATH_RE = /^(?:-path:?)?(?:registry::)?hk(?:lm|cu|cr|u|cc)(?::|\\|$)/iu;
+const REGISTRY_PATH_RE =
+  /^(?:-path:?)?(?:registry::)?(?:hk(?:lm|cu|cr|u|cc)|hkey_(?:local_machine|current_user|classes_root|users|current_config))(?::|\\|$)/iu;
 
-function reasonFor(rawTokens: readonly string[], cwd: string, project: string): string | null {
+/** Git's options before the subcommand, with a value (`-C dir`, `-c k=v`) or without (`--no-pager`). */
+const GIT_OPTIONS_WITH_VALUE = new Set(["-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path"]);
+
+/** The git subcommand and its arguments, skipping the global options that could hide it. */
+function gitSubcommand(args: readonly string[]): string[] {
+  let index = 0;
+  while (index < args.length) {
+    const arg = args[index] as string;
+    if (GIT_OPTIONS_WITH_VALUE.has(arg)) index += 2;
+    else if (arg.startsWith("-")) index += 1;
+    else break;
+  }
+  return args.slice(index);
+}
+
+/** Commands that list files; a recursive removal piped from one deletes what they listed. */
+const LISTING_COMMANDS = new Set(["gci", "get-childitem", "ls", "dir", "gi", "get-item", "find"]);
+const PASS_THROUGH_COMMANDS = new Set([
+  "where-object",
+  "where",
+  "?",
+  "select-object",
+  "select",
+  "foreach-object",
+  "%",
+  "sort-object",
+  "sort",
+  "xargs",
+]);
+
+function reasonFor(
+  rawTokens: readonly string[],
+  cwd: string,
+  project: string,
+  piped: readonly string[],
+): string | null {
   const tokens = rawTokens.filter((token) => !/^\d?>/u.test(token));
   const name = program(tokens[0]);
   const rawArgs = tokens.slice(1);
   const args = lower(rawArgs);
 
   if (name === "git") {
-    const sub = args[0];
+    const sub = gitSubcommand(args)[0];
     if (sub === "push" && (hasFlag(args, "--force", "-f", "--force-with-lease") || args.some((a) => a.startsWith("+"))))
       return "force-pushes, rewriting the remote branch's history";
     if (sub === "reset" && hasFlag(args, "--hard")) return "discards all uncommitted changes";
     if (sub === "clean" && (hasShortFlag(args, "f") || hasFlag(args, "--force"))) return "deletes untracked files";
-    if (sub === "checkout" && (args.includes("--") || args[1] === ".")) return "discards uncommitted changes to files";
-    if (sub === "restore" && !hasFlag(args, "--staged", "-s") && args.length > 1)
+    if (sub === "checkout" && (args.includes("--") || gitSubcommand(args)[1] === "."))
       return "discards uncommitted changes to files";
-    // `-D` (force) differs from `-d` (merged branches only), so this one flag is read case-sensitively.
-    if (sub === "branch" && (hasShortFlag(rawArgs, "D") || (hasFlag(args, "--delete") && hasFlag(args, "--force"))))
+    if (sub === "restore" && !hasFlag(args, "--staged", "-s") && gitSubcommand(args).length > 1)
+      return "discards uncommitted changes to files";
+    // `-D` (force) differs from `-d` (merged branches only), so this one flag is read case-sensitively;
+    // `-d -f`, `-df` and `--delete --force` force it too.
+    if (
+      sub === "branch" &&
+      (hasShortFlag(rawArgs, "D") ||
+        (hasFlag(args, "--delete") && hasFlag(args, "--force")) ||
+        (hasShortFlag(args, "d") && hasShortFlag(args, "f")))
+    )
       return "deletes a branch with work that may not be merged";
-    if (sub === "stash" && (args[1] === "drop" || args[1] === "clear")) return "deletes stashed work";
+    if (sub === "stash" && (gitSubcommand(args)[1] === "drop" || gitSubcommand(args)[1] === "clear"))
+      return "deletes stashed work";
     if (sub === "filter-branch" || sub === "filter-repo") return "rewrites the repository's history";
     return null;
   }
@@ -88,7 +141,8 @@ function reasonFor(rawTokens: readonly string[], cwd: string, project: string): 
   if (name === "rm") {
     const recursive = hasShortFlag(args, "r") || hasShortFlag(args, "R") || hasFlag(args, "--recursive");
     if (!recursive) return null;
-    for (const target of removalTargets(tokens, false)) {
+    const targets = removalTargets(tokens, false);
+    for (const target of targets.length > 0 ? targets : piped) {
       const where = outsideTarget(target, cwd, project);
       if (where) return `deletes ${where} recursively`;
     }
@@ -104,10 +158,13 @@ function reasonFor(rawTokens: readonly string[], cwd: string, project: string): 
 
   // PowerShell and cmd deletion: Remove-Item/ri/rd/rmdir/del/erase with a recursive switch.
   if (["remove-item", "ri", "rd", "rmdir", "del", "erase"].includes(name)) {
-    const recursive = args.some((arg) => arg === "-recurse" || arg === "-r" || arg === "/s");
+    const recursive = args.some(
+      (arg) => arg === "-recurse" || arg === "-recurse:$true" || arg === "-r" || arg === "/s",
+    );
     if (!recursive) return null;
     const cmdStyle = ["rd", "rmdir", "del", "erase"].includes(name) && args.some((arg) => arg.startsWith("/"));
-    for (const target of removalTargets(tokens, cmdStyle)) {
+    const targets = removalTargets(tokens, cmdStyle);
+    for (const target of targets.length > 0 ? targets : piped) {
       const where = outsideTarget(target, cwd, project);
       if (where) return `deletes ${where} recursively`;
     }
@@ -131,14 +188,28 @@ function reasonFor(rawTokens: readonly string[], cwd: string, project: string): 
 export function destructiveCommandReason(command: string, cwd: string): string | null {
   // A `cd` earlier in the same command line moves where later relative paths point.
   let where = cwd;
+  // What a listing command in the pipeline named, for a removal that takes its targets from the pipe.
+  let piped: string[] = [];
   for (const tokens of splitShellCommands(command)) {
     const name = program(tokens[0]);
-    if (["cd", "set-location", "sl", "chdir", "pushd"].includes(name) && tokens[1] && !tokens[1].startsWith("-")) {
-      where = resolve(where, tokens[1].replace(/^["']|["']$/gu, ""));
+    if (["cd", "set-location", "sl", "chdir", "pushd"].includes(name)) {
+      // `cd`, `cd ~` and `cd $HOME` go home; `cd -P dir` and `cd -- dir` still go to dir; `cd -` is unknown.
+      const target = tokens
+        .slice(1)
+        .find((token) => !token.startsWith("-"))
+        ?.replace(/^["']|["']$/gu, "");
+      if (target !== undefined || !tokens.slice(1).includes("-"))
+        where = target ? resolveTarget(target, where) : homedir();
       continue;
     }
-    const reason = reasonFor(tokens, where, cwd);
+    const reason = reasonFor(tokens, where, cwd, piped);
     if (reason) return reason;
+    if (LISTING_COMMANDS.has(name)) {
+      const named = tokens.slice(1).filter((token) => !token.startsWith("-") && !token.startsWith("/"));
+      piped = named.length > 0 ? named : ["."];
+    } else if (!PASS_THROUGH_COMMANDS.has(name)) {
+      piped = [];
+    }
   }
   return null;
 }

@@ -183,6 +183,10 @@ function simpleCommands(chain: string): string[][] {
     } else if (char === "&" && chain[index + 1] === "&") {
       endCommand();
       index += 1;
+    } else if (char === "&" && !/[<>]/u.test(chain[index - 1] ?? "") && chain[index + 1] !== ">") {
+      // A single `&` runs the command so far in the background and starts another; `2>&1` and `&>` are
+      // redirections and stay inside their token.
+      endCommand();
     } else if (char === "|" || char === ";" || char === "\n") {
       endCommand();
       if (char === "|" && chain[index + 1] === "|") index += 1;

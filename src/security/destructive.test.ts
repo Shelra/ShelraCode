@@ -67,3 +67,46 @@ describe("destructiveCommandReason", () => {
     }
   });
 });
+
+describe("destructiveCommandReason, the forms that used to slip through", () => {
+  it("sees through git's global options, root globs, home spellings, cd forms, pipes and a lone &", () => {
+    for (const command of [
+      "rm -rf ./*",
+      "Remove-Item -Recurse -Force .\\*",
+      "Remove-Item -Recurse -Force ..\\x",
+      "git -C .. clean -fdx",
+      "git -c core.pager=cat reset --hard",
+      "git --git-dir=.git clean -f",
+      "git --no-pager reset --hard HEAD~1",
+      "bun test & rm -rf ../x",
+      "cd ~ && rm -rf x",
+      "cd $HOME; rm -rf x",
+      "cd && rm -rf x",
+      "cd -- .. && rm -rf shelra",
+      "cd -P .. && rm -rf shelra",
+      "gci .. | ri -Recurse -Force",
+      "Get-ChildItem .. | Where-Object { $_.Name -like '*' } | Remove-Item -Recurse -Force",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell variable reference, not a template
+      "rm -rf ${HOME}/x",
+      "Remove-Item -Recurse:$true -Force ..",
+      "git branch -df feature",
+      "git branch -d -f feature",
+      "Remove-Item -Path Registry::HKEY_LOCAL_MACHINE\\Software\\Foo -Recurse",
+    ]) {
+      expect(reason(command), command).not.toBeNull();
+    }
+  });
+
+  it("still leaves work inside the project alone", () => {
+    for (const command of [
+      "rm -rf src/generated/*",
+      "git -c core.pager=cat log --oneline",
+      "cd -- src && rm -rf build",
+      "gci src -Filter *.tmp | ri -Recurse",
+      "bun test 2>&1 | tee test.log",
+      "bun run build &> build.log",
+    ]) {
+      expect(reason(command), command).toBeNull();
+    }
+  });
+});
