@@ -101,8 +101,9 @@ diagnostics after an edit stay on. `SHELRA_DEBUG_STREAM=1` traces provider strea
 `SHELRA_DEBUG_STREAM=2` also tees raw response bodies, for diagnosing a model or
 an upstream provider that returns content-less steps. `SHELRA_STREAM_IDLE_MS` (default 180000, 0 disables) is the
 idle budget after which a silent model stream is aborted and the step retried. Once a request's history passes
-160,000 characters, tool results older than the model's last three steps go out as a one-line note (the session
-keeps them whole; the plan and sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
+160,000 characters, tool results older than the model's last three steps go out as a one-line note, and so does
+the text of an older file write or edit, since the file is on disk (the session keeps them whole; the plan and
+sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
 What the resilience rule swallows (a failing memory write, checkpoint, index update, recap or hook) is appended to
 `~/.shelra/logs/swallowed-errors.jsonl` (`src/utils/diagnostics.ts`; `SHELRA_DIAGNOSTICS_LOG` names another file
 or `off`; Vitest runs with it off). Every turn, in the terminal UI or headless, is recorded in
@@ -142,11 +143,14 @@ turn at once. Everything else is recovered:
   no credits, a spend limit, a missing endpoint) keeps its completed steps, is retried after a
   pause, and moves to the provider's next fallback model after two failures in a row, or at once
   when retrying cannot help (`fallbackModelIds`, `SHELRA_FALLBACK_MODELS`). On OpenRouter the
-  fallback is its own router for the spending policy, never a hand-picked model: `openrouter/free`
-  in Free mode (the default, which never runs a paid model, not even one the user names) or for a
-  model chosen with the `custom` policy, `openrouter/auto` (paid, within the policy's cost tier) then
-  `openrouter/free` in Mixed mode (`ctrl+f` in the terminal UI, `--model-policy mixed`) or a paid tier. A fallback is not always free: the switch
-  notice states its cost, and spend limits still apply. A strict (benchmark) model is never
+  fallback is never a hand-picked model. In Free mode (the default, which never runs a paid model,
+  not even one the user names) it is the next free models by the catalog's capability ranking,
+  then `openrouter/free`, which answers with any free model, tiny ones included, as the last resort
+  (seen live 2026-09-24); the same order fills OpenRouter's server-side fallback list. For a model
+  chosen with the `custom` policy it is `openrouter/free`; in Mixed mode (`ctrl+f` in the terminal
+  UI, `--model-policy mixed`) or a paid tier, `openrouter/auto` (paid, within the policy's cost
+  tier) then `openrouter/free`. A fallback is not always free: the switch notice states its cost,
+  and spend limits still apply. A strict (benchmark) model is never
   replaced. When no model of the provider can serve the turn (the day's free quota spent, none
   answering), a session in Mixed mode continues on another free provider the user configured (Groq,
   Gemini, Cloudflare Workers AI, then OpenRouter Free when the turn started elsewhere), each tried

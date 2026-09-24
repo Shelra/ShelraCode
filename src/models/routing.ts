@@ -157,6 +157,17 @@ function rank(entries: CatalogEntry[], policy: ModelPolicy): CatalogEntry[] {
   });
 }
 
+/**
+ * The free models a Free session moves to when its model stops answering, most capable first by the catalog's own
+ * ranking (never hand-picked), the free router left out: it comes after them, as the last resort.
+ */
+export function rankedFreeModels(entries: readonly CatalogEntry[]): string[] {
+  const pool = eligible(entries, { requiresTools: true }).filter(
+    (entry) => isGuaranteedFree(entry) && !isFreeRouter(entry),
+  );
+  return rank(pool, "free").map((entry) => entry.id);
+}
+
 /** Capability-first routing. A free-only route never falls through to a paid entry. */
 export function routeCatalogModel(
   entries: readonly CatalogEntry[],
@@ -217,9 +228,10 @@ export function routeCatalogModel(
   const pool = eligible(entries, request).filter((entry) => policy !== "free" || isGuaranteedFree(entry));
   const router = policy === "free" ? pool.find(isFreeRouter) : undefined;
   const ranked = rank(router ? pool.filter((entry) => entry !== router) : pool, policy);
-  // OpenRouter's server-side fallback list holds three ids: best, second best, then the free router,
-  // so a busy or rate-limited top model degrades to "some free model" instead of failing the turn.
-  const candidates = router ? [...ranked.slice(0, 2), router, ...ranked.slice(2)] : ranked;
+  // OpenRouter's server-side fallback list holds the first three: the three most capable free models. The free
+  // router comes last, because it answers each request with any free model, tiny ones included: seen live on
+  // 2026-09-24, a game spread over ten free models, one of 2.6B parameters, once the router was the third id.
+  const candidates = router ? [...ranked, router] : ranked;
   if (candidates.length === 0) {
     const capabilityText = [
       request.requiresTools ? "tool calling" : undefined,

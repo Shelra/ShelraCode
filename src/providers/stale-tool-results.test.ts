@@ -153,3 +153,54 @@ describe("clearing stale tool results", () => {
     expect(resultTexts(next).slice(5)).toEqual(["whole", "whole", "whole", "whole"]);
   });
 });
+
+describe("file writes in a long history", () => {
+  it("sends the text of an old write or edit as a note, since the file is on disk, and keeps recent ones whole", () => {
+    // Seen live 2026-09-24: a game written in 25 writes sent 3.68M input tokens over 55 steps.
+    const write = (id: string, lines: number): ModelMessage[] => [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: id,
+            toolName: "write_file",
+            input: { path: `js/${id}.js`, content: "const x = 1;\n".repeat(lines) },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: id,
+            toolName: "write_file",
+            output: { type: "text", value: `Created js/${id}.js` },
+          },
+        ],
+      },
+    ];
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Build the game" },
+      ...Array.from({ length: 8 }, (_, index) => write(`m${index + 1}`, 2_500)).flat(),
+    ];
+    const sent = clearStaleToolResults(messages, { boundary: 0 });
+    const inputs = sent.flatMap((message) =>
+      message.role === "assistant" && Array.isArray(message.content)
+        ? message.content.map((part) =>
+            part.type === "tool-call" ? (part.input as { path: string; content: string }) : null,
+          )
+        : [],
+    );
+    for (const input of inputs.slice(0, 5)) {
+      expect(input?.content).toBe(
+        `[Cleared from this request to keep it small: 2500 lines. Read ${input?.path} for its current content.]`,
+      );
+    }
+    for (const input of inputs.slice(5)) expect(input?.content.length).toBeGreaterThan(20_000);
+    // The session's own history keeps every file.
+    expect(JSON.stringify(messages)).toContain("const x = 1;");
+    expect(JSON.stringify(messages).length).toBeGreaterThan(JSON.stringify(sent).length * 2);
+  });
+});

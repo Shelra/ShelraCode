@@ -74,11 +74,15 @@ describe("free policy routing", () => {
   it("picks the most capable free model and closes the fallback list with the router", () => {
     const route = routeCatalogModel(CATALOG, { policy: "free", requiresTools: true });
     expect(route.modelId).toBe("openrouter/nvidia/nemotron-3-ultra-550b-a55b:free");
-    expect(route.candidates.slice(0, 3).map((entry) => entry.id)).toEqual([
+    const ids = route.candidates.map((entry) => entry.id);
+    expect(ids.slice(0, 2)).toEqual([
       "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
-      "openrouter/free",
     ]);
+    // The three server-side fallbacks are ranked models; the free router, which may answer with any free model,
+    // closes the list (seen live 2026-09-24: as the third id it spread a game over ten free models).
+    expect(ids.slice(0, 3)).not.toContain("openrouter/free");
+    expect(ids.at(-1)).toBe("openrouter/free");
     expect(route.reasons.join(" ")).toContain("capability");
   });
 

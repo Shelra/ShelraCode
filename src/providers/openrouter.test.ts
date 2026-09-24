@@ -176,7 +176,38 @@ describe("OpenRouter fallback models", () => {
   it("falls back to OpenRouter's free router under the free policy, never to a hand-picked model", () => {
     const provider = createOpenRouterProvider("secret-not-printed", options);
     expect(provider.fallbackModelIds?.(entry.id)).toEqual(["openrouter/free"]);
-    expect(provider.fallbackModelIds?.("openrouter/free")).toEqual([]);
+    // A session on the free router itself moves to the ranked free models.
+    expect(provider.fallbackModelIds?.("openrouter/free")).toEqual([entry.id]);
+  });
+
+  it("tries the most capable free models by the catalog's ranking before the free router in Free mode", () => {
+    // Seen live 2026-09-24: with the free router as the only fallback, a game was spread over ten free models, one
+    // of 2.6B parameters. The router, which answers with any free model, is now the last resort.
+    const free = (id: string): CatalogEntry => ({
+      ...entry,
+      id: `openrouter/${id}`,
+      name: id,
+      capabilities: { tools: true, reasoning: true, vision: false },
+      state: { kind: "cloud", providerModelId: id, apiKeyConfigured: true, notes: [] },
+    });
+    const paid: CatalogEntry = {
+      ...free("vendor/paid-400b"),
+      cost: { prompt: 0.00001, completion: 0.00002, free: false },
+    };
+    const entries = [
+      free("vendor/tiny-2.6b:free"),
+      free("vendor/ultra-550b:free"),
+      free("vendor/super-120b:free"),
+      free("vendor/mid-32b:free"),
+      paid,
+    ];
+    const provider = createOpenRouterProvider("secret-not-printed", { entries, quarantineStorePath: null });
+    expect(provider.fallbackModelIds?.("openrouter/vendor/ultra-550b:free")).toEqual([
+      "openrouter/vendor/super-120b:free",
+      "openrouter/vendor/mid-32b:free",
+      "openrouter/vendor/tiny-2.6b:free",
+      "openrouter/free",
+    ]);
   });
 
   it("keeps a hand-chosen model (custom policy) off paid routing", () => {

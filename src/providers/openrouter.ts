@@ -5,6 +5,7 @@ import {
   isGuaranteedFree,
   type ModelPolicy,
   paidModelBlockedMessage,
+  rankedFreeModels,
   resolveCatalogModel,
 } from "../models/routing";
 import { type CatalogEntry, catalogEntryToModelInfo } from "../models/types";
@@ -62,6 +63,9 @@ export interface OpenRouterProviderOptions {
  * that is simply broken everywhere from locking itself out of every provider.
  */
 const MAX_QUARANTINED_PROVIDERS = 4;
+
+/** How many ranked free models a Free session tries before the free router. */
+const FREE_FALLBACK_MODELS = 4;
 
 function canonicalModelId(modelId: string): string {
   const trimmed = modelId.trim();
@@ -266,9 +270,10 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
   }
 
   /**
-   * Where a turn continues when `modelId` stops answering: OpenRouter's router for the session's
-   * policy (see `fallbackRoutersForPolicy`), or the ids in `SHELRA_FALLBACK_MODELS`, which the user
-   * may point at paid models. Nothing for a strict (measured) model.
+   * Where a turn continues when `modelId` stops answering: in Free mode the next free models by the catalog's
+   * capability ranking, then the free router as the last resort (it answers with any free model, tiny ones included);
+   * otherwise OpenRouter's router for the session's policy (see `fallbackRoutersForPolicy`); or the ids in
+   * `SHELRA_FALLBACK_MODELS`, which the user may point at paid models. Nothing for a strict (measured) model.
    */
   fallbackModelIds(modelId: string): string[] {
     if (this.strictModel) return [];
@@ -278,7 +283,13 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
       .map((id) => id.trim())
       .filter(Boolean)
       .map(canonicalModelId);
-    const chosen = configured.length > 0 ? configured : fallbackRoutersForPolicy(this.policy);
+    const ranked =
+      this.policy === "free"
+        ? rankedFreeModels(this.entries)
+            .filter((id) => id !== current)
+            .slice(0, FREE_FALLBACK_MODELS)
+        : [];
+    const chosen = configured.length > 0 ? configured : [...ranked, ...fallbackRoutersForPolicy(this.policy)];
     // In Free mode a paid id in SHELRA_FALLBACK_MODELS is never tried.
     return chosen.filter((id) => id !== current && this.paidModelRefusal(id) === null);
   }

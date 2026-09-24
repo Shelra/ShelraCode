@@ -65,6 +65,29 @@ describe("capability-aware model routing", () => {
     expect(mixed.modelId).toBe("openrouter/paid/coder");
   });
 
+  it("fills OpenRouter's server-side fallback list with the most capable free models, the free router last", () => {
+    const router = entry("free", true, true);
+    router.id = "openrouter/free";
+    router.state = { kind: "cloud", providerModelId: "openrouter/free", apiKeyConfigured: true, notes: [] };
+    const route = routeCatalogModel(
+      [
+        router,
+        entry("vendor/tiny-2b:free", true, true),
+        entry("vendor/big-400b:free", true, true),
+        entry("vendor/mid-70b:free", true, true),
+        entry("vendor/small-8b:free", true, true),
+      ],
+      { policy: "free", requiresTools: true },
+    );
+    expect(route.candidates.map((candidate) => candidate.id)).toEqual([
+      "openrouter/vendor/big-400b:free",
+      "openrouter/vendor/mid-70b:free",
+      "openrouter/vendor/small-8b:free",
+      "openrouter/vendor/tiny-2b:free",
+      "openrouter/free",
+    ]);
+  });
+
   it("lets OpenRouter's auto router choose in Mixed mode when the user picked nothing", () => {
     const route = routeCatalogModel([entry("paid/coder", false, true), entry("free/coder", true, true)], {
       policy: "mixed",
