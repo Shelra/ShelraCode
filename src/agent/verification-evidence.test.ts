@@ -46,11 +46,18 @@ describe("describeVerificationEvidence", () => {
       ),
     ).toBeNull();
     expect(maskedVerificationCommand("bash", bash(piped))).toBe(piped);
+    // Review round 3 (2026-09-24): a check sent to the background exits 0 whatever it finds.
+    expect(describeVerificationEvidence("bash", bash("bun test & echo ok"))).toBeNull();
+    expect(describeVerificationEvidence("bash", bash("bun test &"))).toBeNull();
+    expect(maskedVerificationCommand("bash", bash("bun test & echo ok"))).toBe("bun test & echo ok");
+    expect(maskedVerificationCommand("bash", bash("bun test &"))).toBe("bun test &");
   });
 
   it("counts a check whose exit code is the command's", () => {
     expect(describeVerificationEvidence("bash", bash("cd D:/repo && bun test"))).not.toBeNull();
     expect(describeVerificationEvidence("bash", bash("bun test 2>&1"))).not.toBeNull();
+    expect(describeVerificationEvidence("bash", bash("bun test &> test.log"))).not.toBeNull();
+    expect(describeVerificationEvidence("bash", bash("& bun test"))).not.toBeNull();
     expect(describeVerificationEvidence("bash", bash("bun run typecheck && bun run lint"))).not.toBeNull();
     expect(describeVerificationEvidence("bash", bash('echo "== tests =="; bun test'))).not.toBeNull();
     expect(describeVerificationEvidence("bash", bash('grep -c "a|b;c" notes.txt && bun test'))).not.toBeNull();

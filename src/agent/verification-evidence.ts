@@ -137,6 +137,10 @@ function decidingChain(command: string): string {
       index += 1;
     } else if (char === "&" && command[index + 1] === "&") {
       index += 1;
+    } else if (char === "&" && !/[<>]/u.test(command[index - 1] ?? "") && command[index + 1] !== ">") {
+      // A lone `&` sends what came before it to the background (review round 3, 2026-09-24: `bun test & echo
+      // ok` and `bun test &` exit 0 while the tests fail); `2>&1` and `&>` are redirections.
+      start = index + 1;
     } else if (char === "|" || char === ";" || char === "\n") {
       if (char === "|" && command[index + 1] === "|") index += 1;
       start = index + 1;
