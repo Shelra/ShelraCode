@@ -110,3 +110,65 @@ describe("destructiveCommandReason, the forms that used to slip through", () => 
     }
   });
 });
+
+describe("destructiveCommandReason on Windows' default shell and through wrappers", () => {
+  // Review round 3 (2026-09-24): each of these deleted the victim folder with no question asked.
+  it("sees a removal inside cmd /c, powershell -Command, bash -c, iex, a prefix command or xargs", () => {
+    for (const command of [
+      "cmd /c rd /s /q ..\\victim",
+      'cmd /c "rmdir /s /q ..\\victim"',
+      'powershell -NoProfile -Command "Remove-Item -Recurse -Force ..\\victim"',
+      `pwsh -EncodedCommand ${Buffer.from("Remove-Item -Recurse -Force ..\\victim", "utf16le").toString("base64")}`,
+      "bash -c 'rm -rf ../victim'",
+      'iex "rm -rf ../victim"',
+      "sudo -u root rm -rf ../victim",
+      "env -u KEY FOO=1 rm -rf ../victim",
+      "timeout -s KILL 60 rm -rf ../victim",
+      "A=1 rm -rf ../victim",
+      "ls .. | xargs rm -rf",
+      "find .. -name victim | xargs -0 rm -rf",
+    ]) {
+      expect(reason(command), command).not.toBeNull();
+    }
+  });
+
+  it("follows Push-Location, variables and ForEach-Object blocks to what they delete", () => {
+    for (const command of [
+      "Push-Location ..; Remove-Item victim -Recurse -Force; Pop-Location",
+      "Remove-Item -Recurse -Force $env:TEMP\\victim",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell variable reference, not a template
+      "rm -rf ${TMPDIR}/victim",
+      'OUT=..; rm -rf "$OUT/victim"',
+      '$d = "..\\victim"; Remove-Item $d -Recurse -Force',
+      "Remove-Item -Recurse -Force $unknownFolder",
+      "Get-ChildItem .. -Directory -Filter victim | ForEach-Object { Remove-Item $_.FullName -Recurse -Force }",
+      "gci .. | %{ ri $_ -Recurse }",
+      "Remove-Item -Path @('..\\victim') -Recurse",
+      "cd $SOMEWHERE_UNSET && rm -rf build",
+      "find .. -name '*.tmp' -delete",
+      "find . -delete",
+      "rm -rf .git",
+      "git checkout -f",
+      "git switch --discard-changes main",
+    ]) {
+      expect(reason(command), command).not.toBeNull();
+    }
+  });
+
+  it("still leaves ordinary work inside the project alone", () => {
+    for (const command of [
+      "cmd /c rd /s /q dist",
+      "bash -c 'rm -rf node_modules && bun install'",
+      'OUT=dist; rm -rf "$OUT"',
+      "Get-ChildItem src -Filter *.tmp | ForEach-Object { Remove-Item $_.FullName -Recurse }",
+      "find . -name '*.tmp' -delete",
+      "cd src && rm -rf .",
+      "Push-Location src; Remove-Item build -Recurse -Force; Pop-Location",
+      "sudo -u root ls",
+      "git checkout -b feature",
+      "Remove-Item -Recurse -Force $PWD\\dist",
+    ]) {
+      expect(reason(command), command).toBeNull();
+    }
+  });
+});
