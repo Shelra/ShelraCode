@@ -84,9 +84,9 @@
         "(?:remov|delet)\\w*[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,4}(?:never|not\\b|deleted_at|soft)"
       ],
       "declineDecisions": [
-        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})hard[- ]?delet\\w*(?![^\\w\\n]+(?:is|are)[^\\w\\n]+(?:never|not|forbidden|prohibited|banned)\\b)",
+        "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})(?<!\\b(?:instead[^\\w\\n]+of|rather[^\\w\\n]+than|over)[^\\w\\n]+)hard[- ]?delet\\w*\\b(?![^\\w\\n]+(?:is|are)[^\\w\\n]+(?:never|not|forbidden|prohibited|banned)\\b)",
         "(?:is|are|was|were|has|have|with|and)[^\\w\\n]+no[^\\w\\n]+soft[- ]?delet",
-        "(?<!(?:never|not|no|without|instead of|rather than)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:remov(?:e|es|ed|ing)|delet(?:e|es|ed|ing))[^\\w\\n]+(?:(?:the|its|their|a|an|each|every|all|any|that|those|user|users)[^\\w\\n]+){0,2}(?:rows?|records?)\\b",
+        "(?<!\\b(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})(?<!\\b(?:instead[^\\w\\n]+of|rather[^\\w\\n]+than)[^\\w\\n]+)\\b(?:remov(?:e|es|ed|ing)|delet(?:e|es|ed|ing))[^\\w\\n]+(?:(?:the|its|their|a|an|each|every|all|any|that|those|user|users)[^\\w\\n]+){0,2}(?:rows?|records?)\\b",
         "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\bdrop(?:s|ped|ping)?[^\\w\\n]+(?:(?!(?:not|never|no|without)\\b)\\w+[^\\w\\n]+){0,2}deleted_at"
       ],
       "acceptanceCriteria": [
@@ -204,7 +204,7 @@
         "(?:depend|package|librar)\\w*(?:[^\\w\\n]+(?:is|are|were|was|be|remain|stay|of any kind))?[^\\w\\n]+(?:never|not|none|forbidden|prohibited|banned)\\b"
       ],
       "declineDecisions": [
-        "(?<!(?:no|never|not|without|zero)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,2})(?:depend|package|librar)\\w*[^\\w\\n]+(?:(?!(?:not|never|no|without)\\b)\\w+[^\\w\\n]+){0,3}(?:allowed|permitted|fine|ok(?:ay)?|acceptable|welcome|encouraged)\\b",
+        "(?<!\\b(?:no|never|not|without|zero)[ -]+(?:(?!(?:restrict|limit|ban|rule|cap)\\w*\\b)\\w+[ -]+){0,2})(?:depend|package|librar)\\w*[^\\w\\n]+(?:(?!(?:not|never|no|without)\\b)\\w+[^\\w\\n]+){0,3}(?:allowed|permitted|fine|ok(?:ay)?|acceptable|welcome|encouraged)\\b",
         "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:may|can|could|should|will)[^\\w\\n]+be[^\\w\\n]+(?:added|installed|used|imported|pulled)\\b"
       ],
       "acceptanceCriteria": [
@@ -537,7 +537,7 @@
       ],
       "declineDecisions": [
         "(?<!(?:never|not|no|without)[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,3})\\b(?:log|logs|logged|logging|record|records|recorded|include|includes|included|keep|keeps|kept|write|writes|written|store|stores|stored|print|prints|printed|contain|contains)[^\\w\\n]+(?:(?:the|its|their|a|an|each|every|both|old|new|and|user's|users'|full|plain)[^\\w\\n]+){0,4}e-?mail",
-        "e-?mail\\w*[^\\w\\n]+(?:(?:is|are|get|gets|must|should|will|always|also)[^\\w\\n]+)+(?:be[^\\w\\n]+)?(?:logged|recorded|included|kept|written|printed)\\b(?![^\\w\\n]+(?:out|away)\\b)",
+        "e-?mail\\w*[^\\w\\n]+(?:(?:is|are|get|gets|must|should|will|always|also)[^\\w\\n]+)+(?:be[^\\w\\n]+)?(?:logged|recorded|included|kept|written|printed|stored(?=[^\\w\\n]+in[^\\w\\n]+(?:\\w+[^\\w\\n]+){0,2}logs?\\b))\\b(?![^\\w\\n]+(?:out|away)\\b)",
         "nothing[^\\w\\n]+(?:is|gets|will be)[^\\w\\n]+(?:redacted|hidden|masked|stripped|removed)"
       ],
       "acceptanceCriteria": [
