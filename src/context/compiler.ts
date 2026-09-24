@@ -14,6 +14,14 @@ const MAX_NAMED_FILES = 12;
 const MAX_NAME_CANDIDATES = 8;
 /** Files listed for a bare name such as `index.ts`; the rest are counted. */
 const MAX_MATCHES_PER_NAME = 5;
+/**
+ * A project this small gets its whole file list: one line per file costs less than the rounds a model spends
+ * finding its tests and manifest (F4 of the execution plan, 2026-09-24: without it a free model searched for
+ * test files in nearly every task of the core suite, and used 55% more tokens).
+ */
+const SMALL_PROJECT_FILES = 40;
+/** Test files listed for the files a request names in a larger project. */
+const MAX_NAMED_TESTS = 8;
 const MAX_COMMIT_LINE_CHARS = 100;
 const GIT_TIMEOUT_MS = 3_000;
 
@@ -124,6 +132,40 @@ function isDirectory(path: string): boolean {
   }
 }
 
+/** The project's own files: from git (tracked and unignored), or a bounded walk outside a repository. */
+function projectFiles(root: string): { files: string[]; complete: boolean } {
+  const listed = git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
+  if (listed?.ok) {
+    const files = listed.stdout.split("\0").filter(Boolean);
+    return { files: [...new Set(files)].sort(), complete: true };
+  }
+  const walked = listWorkspaceFiles(root);
+  return { files: walked.files.map((file) => file.path).sort(), complete: !walked.truncated };
+}
+
+const TEST_FILE_RE =
+  /(?:^|\/)(?:__tests__|tests?|spec)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)test_[^/]*\.py$|_test\.(?:py|go)$/u;
+
+/** Test files whose name starts with a named file's base name (`queue.ts` → `queue.test.ts`, `test_queue.py`). */
+function testsOf(named: readonly string[], files: readonly string[]): string[] {
+  const stems = named
+    .filter((path) => !path.endsWith("/"))
+    .map((path) =>
+      basename(path)
+        .replace(/\.[^.]+$/u, "")
+        .toLowerCase(),
+    )
+    .filter((stem) => stem.length > 0);
+  if (stems.length === 0) return [];
+  return files.filter((file) => {
+    if (!TEST_FILE_RE.test(file) || named.includes(file)) return false;
+    const name = basename(file)
+      .toLowerCase()
+      .replace(/^test_/u, "");
+    return stems.some((stem) => name.startsWith(`${stem}.`) || name.startsWith(`${stem}_`));
+  });
+}
+
 /** Workspace files with one of these names, from git (tracked and unignored) or a bounded walk elsewhere. */
 function filesNamed(root: string, names: readonly string[]): Map<string, string[]> {
   const listed = git(root, [
@@ -208,6 +250,16 @@ export function compileContextPacket(root: string, prompt: string, maxChars = MA
   ];
   if (repository.text) sections.push(repository.text);
   if (named.lines.length > 0) sections.push(`Files the request names:\n${named.lines.join("\n")}`);
+  const project = projectFiles(root);
+  if (project.complete && project.files.length > 0 && project.files.length <= SMALL_PROJECT_FILES) {
+    sections.push(
+      `Files in this project (${project.files.length}):\n${project.files.map((file) => `- ${file}`).join("\n")}`,
+    );
+  } else {
+    const tests = testsOf(named.files, project.files).slice(0, MAX_NAMED_TESTS);
+    if (tests.length > 0)
+      sections.push(`Tests of the files the request names:\n${tests.map((file) => `- ${file}`).join("\n")}`);
+  }
   const appendix = sections.join("\n\n");
   return {
     classification,

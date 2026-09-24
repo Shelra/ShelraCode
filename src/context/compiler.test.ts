@@ -113,14 +113,16 @@ describe("host context compiler", () => {
     expect(packet.promptAppendix).toContain("?? notes.md");
     expect(packet.promptAppendix).toMatch(/Recent commits:\n {2}[0-9a-f]{7,} Initial state/u);
     expect(packet.promptAppendix).toContain("Files the request names:\n- src/other.ts\n- src/parser.ts");
-    // Nothing the request does not name, and no file contents.
-    expect(packet.promptAppendix).not.toContain("src/unrelated.ts");
+    // A project this small gets its whole file list, the ignored folder left out, and never file contents.
+    expect(packet.promptAppendix).toContain(
+      "Files in this project (6):\n- .gitignore\n- notes.md\n- package.json\n- src/other.ts\n- src/parser.ts\n- src/unrelated.ts",
+    );
     expect(packet.promptAppendix).not.toContain("vendor/parser.ts");
     expect(packet.promptAppendix).not.toContain('"scripts"');
     expect(packet.truncated).toBe(false);
   });
 
-  it("lists no paths for a request that names none", () => {
+  it("lists a small project's files, never their contents, for a request that names none", () => {
     const root = repository("shelra-context-unnamed-", {
       "package.json": '{"name":"fixture"}',
       "README.md": "README BODY SHOULD NOT BE INJECTED",
@@ -132,8 +134,32 @@ describe("host context compiler", () => {
     expect(packet.files).toEqual([]);
     expect(packet.promptAppendix).toContain("The project states no test, type-check or lint command.");
     expect(packet.promptAppendix).toContain("Uncommitted changes: none.");
-    expect(packet.promptAppendix).not.toContain("src/index.ts");
-    expect(packet.promptAppendix).not.toContain("README");
+    expect(packet.promptAppendix).toContain("Files in this project (3):\n- README.md\n- package.json\n- src/index.ts");
+    expect(packet.promptAppendix).not.toContain("README BODY");
+  });
+
+  it("gives a larger project no file list, only the tests of the files the request names", () => {
+    const filler = Object.fromEntries(
+      Array.from({ length: 45 }, (_, index) => [`src/module${index}.ts`, `export const m${index} = ${index};\n`]),
+    );
+    const root = repository("shelra-context-large-", {
+      ...filler,
+      "package.json": '{"scripts":{"test":"bun test"}}',
+      "src/queue.ts": "export function runQueue() {}\n",
+      "src/queue.test.ts": "import { runQueue } from './queue';\n",
+      "test/queue.spec.ts": "import { runQueue } from '../src/queue';\n",
+      "src/queues.test.ts": "// another module's tests\n",
+    });
+
+    const packet = compileContextPacket(root, "Implement runQueue in src/queue.ts");
+
+    expect(packet.files).toEqual(["src/queue.ts"]);
+    expect(packet.promptAppendix).not.toContain("Files in this project");
+    expect(packet.promptAppendix).not.toContain("src/module1.ts");
+    expect(packet.promptAppendix).toContain(
+      "Tests of the files the request names:\n- src/queue.test.ts\n- test/queue.spec.ts",
+    );
+    expect(packet.promptAppendix).not.toContain("src/queues.test.ts");
   });
 
   it("ignores names outside the workspace and names that do not exist", () => {
