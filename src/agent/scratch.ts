@@ -39,6 +39,8 @@ function samePath(a: string, b: string): boolean {
  * A working directory that is not a project: the home folder, a drive root, or a folder with no
  * repository and no project manifest (Desktop, Downloads). Helper files written there litter the
  * user's own folders: seen live 2026-09-22, a camera diagnosis left two scripts in the home folder.
+ * An empty folder, or one holding only hidden entries such as `.shelra`, is a new project: seen live
+ * 2026-09-24, a game asked for in a fresh folder was built in the scratch folder instead.
  */
 export function isOutsideProject(cwd: string): boolean {
   const dir = resolve(cwd);
@@ -46,7 +48,9 @@ export function isOutsideProject(cwd: string): boolean {
   if (findGitRoot(dir)) return false;
   try {
     if (PROJECT_MARKERS.some((marker) => existsSync(join(dir, marker)))) return false;
-    return !readdirSync(dir).some((name) => PROJECT_FILE_EXTENSIONS.some((extension) => name.endsWith(extension)));
+    const names = readdirSync(dir);
+    if (names.every((name) => name.startsWith("."))) return false;
+    return !names.some((name) => PROJECT_FILE_EXTENSIONS.some((extension) => name.endsWith(extension)));
   } catch {
     return false;
   }
@@ -80,7 +84,7 @@ export function sessionScratchDir(sessionId: string): string {
 
 /** The prompt line that sends helper files to the scratch folder. */
 export function scratchPromptLine(dir: string): string {
-  return `This directory is not a project. Write helper scripts and scratch files for the task in ${dir} with write_file, not here, and run them by full path. Give the user the full path of any helper they should keep or run again.`;
+  return `This directory is not a project. What the user asks you to create goes where they say, or here. Your own helper scripts and scratch files go in ${dir} with write_file, not here; run them by full path, and give the user the full path of any helper they should keep or run again.`;
 }
 
 let processDir: string | null = null;

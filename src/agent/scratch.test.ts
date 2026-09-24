@@ -6,6 +6,13 @@ import { resolveWorkspacePath, SCRATCH_ROOT } from "../security/workspace-guard"
 import { isOutsideProject, scratchLineFor } from "./scratch";
 
 const folder = (prefix: string) => mkdtempSync(join(tmpdir(), prefix));
+/** A folder like Downloads: loose files, no repository, no manifest. */
+const looseFiles = (prefix: string) => {
+  const dir = folder(prefix);
+  writeFileSync(join(dir, "invoice.pdf"), "");
+  writeFileSync(join(dir, "notes.txt"), "");
+  return dir;
+};
 
 describe("isOutsideProject", () => {
   it("treats the home folder and a drive root as outside any project", () => {
@@ -14,7 +21,14 @@ describe("isOutsideProject", () => {
   });
 
   it("treats a folder with no repository and no manifest as outside a project", () => {
-    expect(isOutsideProject(folder("shelra-downloads-"))).toBe(true);
+    expect(isOutsideProject(looseFiles("shelra-downloads-"))).toBe(true);
+  });
+
+  it("treats an empty folder, or one holding only Shelra's own folder, as a new project", () => {
+    expect(isOutsideProject(folder("shelra-new-game-"))).toBe(false);
+    const started = folder("shelra-new-game-");
+    mkdirSync(join(started, ".shelra", "memory"), { recursive: true });
+    expect(isOutsideProject(started)).toBe(false);
   });
 
   it("recognizes a project by its repository or its manifest", () => {
@@ -32,9 +46,10 @@ describe("isOutsideProject", () => {
 
 describe("scratch folder", () => {
   it("is named in the prompt only outside a project", () => {
-    const outside = folder("shelra-plain-");
+    const outside = looseFiles("shelra-plain-");
     const line = scratchLineFor(outside);
     expect(line).toContain("This directory is not a project.");
+    expect(line).toContain("What the user asks you to create goes where they say, or here.");
     expect(line).toContain(SCRATCH_ROOT);
     const project = folder("shelra-project-");
     writeFileSync(join(project, "package.json"), "{}");
