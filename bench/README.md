@@ -268,8 +268,9 @@ case style and sends bodies in both styles, so only the style decisions judge st
 decision is judged three ways: SQL text built from anything but a constant, a fragment or `?`
 placeholders; the SQL the code actually ran, which must hold no value the oracle sent and no date;
 and injection through the search. The simulated user of each task (`approveDecisions`) approves a
-proposed decision that records the rule it stated in that session and declines any other; without
-it, as in any headless run, proposals wait.
+proposed decision whose title or rule matches the rule it stated in that session (its topic with the
+negation the user gave, or its idiom, such as soft delete) and declines any other, one that inverts the
+rule included; without it, as in any headless run, proposals wait.
 
 Decisions kept = `AC-KEEP-*` passed over those judged at steps whose `AC-REQUEST` passed (38 when
 every request is done). Report it with the steps passed. Validation, with a reference solution

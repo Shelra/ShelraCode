@@ -9,8 +9,9 @@ const SQL =
   /\bselect\b[\s\S]*\bfrom\b|\binsert\s+into\b|\bupdate\s+\w+\s+set\b|\bdelete\s+from\b|\bwhere\b[\s\S]*(?:=|<|>|\blike\b|\bin\b)/iu;
 const FRAGMENT_NAME =
   /^(?:where|clauses?|conditions?|filters?|columns?|fields|placeholders?|order(?:by)?|sort|limit|sql|fragments?|joins?|select|query|statement)\w*$/iu;
+/** A quoted SQL fragment joined with `+` to something that is not another literal: a value in the text. */
 const CONCATENATED =
-  /(["'])[^"'\n]*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)[^"'\n]*\1\s*\+/iu;
+  /(?:"(?:[^"\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^'\\\n]|\\.)*')\s*\+\s*(?=[^\s"'`])/iu;
 
 function check(path: string): void {
   const source = readFileSync(path, "utf8")

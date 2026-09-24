@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -639,6 +640,16 @@ const SQL_TEXT =
 const FRAGMENT_NAME =
   /^(?:where|clauses?|conditions?|filters?|columns?|fields|placeholders?|order(?:by)?|sort|limit|sql|fragments?|joins?|select|query|statement)\w*$/iu;
 
+/**
+ * A quoted SQL fragment followed by `+` and something that is not another literal: a value joined into the
+ * text. Two constant literals joined with `+` are only a long constant.
+ */
+const CONCATENATED_VALUE =
+  /(?:"(?:[^"\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^'\\\n]|\\.)*')\s*\+\s*(?=[^\s"'`])/iu;
+
+/** Node's own modules count as no dependency, with or without the `node:` prefix. */
+const BUILTIN_MODULES = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
+
 /** SQL text built from something that is not a constant, a fragment of SQL or a list of "?" placeholders. */
 function valuesInSqlText(file: string): string[] {
   const source = code(file);
@@ -662,13 +673,7 @@ function valuesInSqlText(file: string): string[] {
       if (!fine(expression)) problems.push(`builds SQL text from \${${expression.trim()}}`);
     }
   }
-  if (
-    /(["'])[^"'\n]*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)[^"'\n]*\1\s*\+/iu.test(
-      source,
-    )
-  ) {
-    problems.push("builds SQL text by concatenation");
-  }
+  if (CONCATENATED_VALUE.test(source)) problems.push("builds SQL text by concatenation");
   return problems;
 }
 
@@ -727,12 +732,23 @@ const DECISIONS: Record<string, () => Promise<void>> = {
       expectStatus(changed, 404, "PUT /users/:id/email for a deleted user");
     }
     if (step >= 8) {
+      // A member dormant for three years before the request's clock is inactive under any clock the code may
+      // use; whoever the cleanup removes must remain a row, marked deleted.
+      const dormant = await addUser(api, "Dormant Member", "dormant@example.com", at(-3 * 365));
       const count = () => (api.db.query("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
       const before = count();
-      await api.call("POST", "/admin/cleanup", { now: at(3 * 365) });
+      const listed = await userIds(api);
+      await api.call("POST", "/admin/cleanup");
       equal(count(), before, "the users rows after a cleanup");
-      const kept = api.db.query("SELECT deleted_at FROM users WHERE id = ?").get(grace) as { deleted_at: unknown };
-      assert(kept?.deleted_at, "the cleanup did not mark the inactive user deleted");
+      const remaining = new Set(await userIds(api));
+      const removed = listed.filter((id) => !remaining.has(id));
+      assert(removed.includes(dormant), "the cleanup did not remove a member dormant for three years");
+      assert(remaining.has(grace), "the cleanup removed a member who signed up today");
+      for (const id of removed) {
+        const row = api.db.query("SELECT deleted_at FROM users WHERE id = ?").get(id) as { deleted_at: unknown } | null;
+        assert(row, `the cleanup removed the row of user ${id}`);
+        assert(row.deleted_at, `the cleanup left deleted_at empty for user ${id}`);
+      }
     }
   },
 
@@ -754,7 +770,8 @@ const DECISIONS: Record<string, () => Promise<void>> = {
     for (const dir of ["src", "scripts"]) {
       for (const file of sourceFiles(resolve(workspace, dir), (name) => /\.[cm]?[jt]sx?$/u.test(name))) {
         for (const [, name = ""] of code(file).matchAll(specifier)) {
-          const allowed = name.startsWith(".") || name.startsWith("node:") || name.startsWith("bun:") || name === "bun";
+          const allowed =
+            name.startsWith(".") || name.startsWith("bun:") || name === "bun" || BUILTIN_MODULES.has(name);
           assert(allowed, `${relative(workspace, file)} imports the package ${name}`);
         }
       }

@@ -11,7 +11,7 @@
     "oracle": "external_deterministic_oracle",
     "leaderboardEligible": true,
     "minimumTaskCount": 10,
-    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision that records the rule it stated in that session and declines any other. Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
+    "note": "Decisions kept = AC-KEEP-* criteria passed over those judged at steps whose AC-REQUEST passed (38 when every request is done); report it with the steps passed. The two decisions recorded before the chain are in docs/decisions and in AGENTS.md and CLAUDE.md, so every agent knows them; the rules stated later live only in the conversation, and each agent keeps them its own way. The simulated user approves a proposed decision whose title or rule matches the rule it stated in that session (its topic with the negation the user gave, or its idiom, such as soft delete) and declines any other, a proposal that inverts the rule included. Compare full Shelra with --ablate ledger on the same model, and with reference agents (claude-code, codex), k >= 3."
   },
   "scorePolicy": {
     "id": "shelra-agent-core-provisional",
@@ -78,7 +78,9 @@
       "difficulty": "medium",
       "prompt": "Add DELETE /users/:id: answer 204, or 404 when there is no such user. This project never removes rows from its database: deleting a user sets its deleted_at column, and every endpoint then treats that user as if it did not exist (GET /users leaves them out, GET /users/:id and POST /loans answer 404). That is a rule for the whole project from now on, not only for this endpoint.",
       "continueIn": "01-loans",
-      "approveDecisions": ["remov|delet"],
+      "approveDecisions": [
+        "(?:never|not|no|without)\\W+(?:\\w+\\W+){0,4}(?:remov|delet)|soft[- ]?delet|deleted_at|(?:remov|delet)\\w*\\W+(?:\\w+\\W+){0,6}(?:never|not\\b|deleted_at|soft)"
+      ],
       "acceptanceCriteria": [
         {
           "id": "AC-REQUEST",
@@ -188,7 +190,9 @@
       "difficulty": "medium",
       "prompt": "POST /books must reject an ISBN that is not a valid ISBN-13 (13 digits with a correct check digit; hyphens and spaces are fine) with 400 and an error message that says why. Write the validation yourself. From now on this project stays dependency-free: package.json lists no dependencies of any kind, and no code imports a package.",
       "continueIn": "03-search",
-      "approveDecisions": ["depend|package"],
+      "approveDecisions": [
+        "(?:no|never|without|zero|free of)\\W+(?:\\w+\\W+){0,3}(?:depend|package|librar)|depend\\w*[- ]free|(?:depend|package)\\w*\\W+(?:\\w+\\W+){0,6}(?:never|not\\b|none|forbidden|prohibited)"
+      ],
       "acceptanceCriteria": [
         {
           "id": "AC-REQUEST",
@@ -508,7 +512,9 @@
       "difficulty": "medium",
       "prompt": "Log every loan and every return with log() from src/log.ts so support can trace them: include the loan id, the book id and the user id. Logs must never contain email addresses; that is a rule for the whole project from now on.",
       "continueIn": "08-cleanup",
-      "approveDecisions": ["e-?mail"],
+      "approveDecisions": [
+        "(?:no|never|not|without)\\W+(?:\\w+\\W+){0,4}e-?mail|e-?mail\\w*\\W+(?:\\w+\\W+){0,6}(?:never|not\\b|no\\b|out of|excluded|redacted)"
+      ],
       "acceptanceCriteria": [
         {
           "id": "AC-REQUEST",

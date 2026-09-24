@@ -1,5 +1,6 @@
 // The check of D-0001: package.json declares only the allowed dependencies, and src imports no package.
 import { readdirSync, readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { join, resolve } from "node:path";
 
 const root = process.cwd();
@@ -12,6 +13,8 @@ for (const field of ["dependencies", "devDependencies", "peerDependencies", "opt
   if (extra.length > 0) problems.push(`package.json ${field} adds ${extra.join(", ")}`);
 }
 const specifier = /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/gu;
+/** Node's own modules are no dependency, with or without the `node:` prefix. */
+const builtin = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
 function scan(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
@@ -19,7 +22,7 @@ function scan(dir: string): void {
     else if (/\.[cm]?[jt]sx?$/u.test(entry.name)) {
       for (const match of readFileSync(path, "utf8").matchAll(specifier)) {
         const name = match[1] ?? "";
-        if (!name.startsWith(".") && !name.startsWith("node:") && !name.startsWith("bun:") && name !== "bun") {
+        if (!name.startsWith(".") && !name.startsWith("bun:") && name !== "bun" && !builtin.has(name)) {
           problems.push(`${path.slice(root.length + 1)} imports the package ${name}`);
         }
       }

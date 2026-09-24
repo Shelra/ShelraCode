@@ -1,21 +1,52 @@
-// The check of D-0001: no SQL text is built from values, and the search survives quoting and injection.
+// The check of D-0001: no SQL text is built from values, wherever the text is assembled, and the search
+// survives quoting and injection. A constant, a piece of SQL kept in a variable (where, columns,
+// placeholders...) or a list of "?" placeholders is fine.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const problems: string[] = [];
-const sqlCall = /\.(?:query|prepare|run|exec)\(\s*`[^`]*\$\{/u;
-const concatenated = /\.(?:query|prepare|run|exec)\(\s*(["'`])[^"'`]*\1\s*\+/u;
+const SQL =
+  /\bselect\b[\s\S]*\bfrom\b|\binsert\s+into\b|\bupdate\s+\w+\s+set\b|\bdelete\s+from\b|\bwhere\b[\s\S]*(?:=|<|>|\blike\b|\bin\b)/iu;
+const FRAGMENT_NAME =
+  /^(?:where|clauses?|conditions?|filters?|columns?|fields|placeholders?|order(?:by)?|sort|limit|sql|fragments?|joins?|select|query|statement)\w*$/iu;
+/** A quoted SQL fragment joined with `+` to something that is not another literal: a value in the text. */
+const CONCATENATED =
+  /(?:"(?:[^"\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*(?:\bselect\b|\binsert\s+into\b|\bupdate\b|\bdelete\s+from\b|\bwhere\b|\blike\b)(?:[^'\\\n]|\\.)*')\s*\+\s*(?=[^\s"'`])/iu;
+
+function check(path: string): void {
+  const source = readFileSync(path, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .replace(/(^|[^:"'`\\])\/\/.*$/gmu, "$1");
+  const file = relative(root, path);
+  const constants = new Set(
+    [...source.matchAll(/\bconst\s+(\w+)\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|`[^`$]*`)\s*;/gu)].map(([, name]) => name),
+  );
+  const fine = (expression: string) => {
+    const trimmed = expression.trim();
+    const head = /^[\w$]+/u.exec(trimmed)?.[0] ?? "";
+    return (
+      /^[A-Z][A-Z0-9_]*$/u.test(trimmed) ||
+      /["']\?["']/u.test(trimmed) ||
+      constants.has(trimmed) ||
+      FRAGMENT_NAME.test(head)
+    );
+  };
+  for (const [, text = ""] of source.matchAll(/`([^`]*)`/gu)) {
+    if (!SQL.test(text)) continue;
+    for (const [, expression = ""] of text.matchAll(/\$\{([^}]*)\}/gu)) {
+      if (!fine(expression)) problems.push(`${file} builds SQL text from \${${expression.trim()}}`);
+    }
+  }
+  if (CONCATENATED.test(source)) problems.push(`${file} builds SQL text by concatenation`);
+}
+
 function scan(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) scan(path);
-    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
-      const text = readFileSync(path, "utf8");
-      if (sqlCall.test(text) || concatenated.test(text))
-        problems.push(`${path.slice(root.length + 1)} builds SQL text from values`);
-    }
+    else if (/\.[cm]?[jt]s$/u.test(entry.name) && !/\.test\.[cm]?[jt]s$/u.test(entry.name)) check(path);
   }
 }
 scan(resolve(root, "src"));

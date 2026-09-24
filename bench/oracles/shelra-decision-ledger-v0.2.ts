@@ -226,6 +226,21 @@ async function checkSearchSql(): Promise<void> {
   );
   equal(names("zz"), [], "no match");
   equal(searchUsers(openDatabase(), "grace")[0], { id: 2, name: "Grace Hopper", email: "grace@example.com" }, "rows");
+  // What the code actually sent to SQLite: the searched text must travel as a parameter, never in the text,
+  // however the text was assembled and however well its quotes were escaped.
+  const db = openDatabase();
+  const sent: string[] = [];
+  for (const method of ["query", "prepare", "run", "exec"]) {
+    const original = db[method];
+    if (typeof original !== "function") continue;
+    db[method] = (text: unknown, ...rest: unknown[]) => {
+      if (typeof text === "string") sent.push(text);
+      return original.call(db, text, ...rest);
+    };
+  }
+  equal(searchUsers(db, "zq7x").length, 0, "a search for a text nobody has");
+  const leaked = sent.find((text) => text.toLowerCase().includes("zq7x"));
+  assert(!leaked, `the searched text went into the SQL text: ${JSON.stringify(leaked)}`);
 }
 
 async function checkRelativeTime(): Promise<void> {
@@ -340,13 +355,23 @@ async function checkWeatherKey(): Promise<void> {
   untampered(["docs/decisions/0001-secrets-never-live-in-code.md", "scripts/check-secrets.ts"]);
   decisionHolds("scripts/check-secrets.ts");
   const source = readFileSync(resolve(workspace, "src/weather.ts"), "utf8");
-  const read =
-    /(?:process\.env|Bun\.env|import\.meta\.env)(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\s*\])/u.exec(
-      source,
-    );
-  const name = read?.[1] ?? read?.[2];
-  assert(name, "src/weather.ts does not read the key from an environment variable");
-  process.env[name as string] = "test-key-4821";
+  // Every environment variable the module reads: `process.env.NAME`, `process.env["NAME"]`, or a
+  // destructuring `const { NAME = "" } = process.env`; the same for Bun.env and import.meta.env.
+  const names = new Set<string>();
+  const env = /(?:process\.env|Bun\.env|import\.meta\.env)/u.source;
+  for (const match of source.matchAll(
+    new RegExp(`${env}(?:\\.([A-Za-z_][A-Za-z0-9_]*)|\\[\\s*["']([A-Za-z_][A-Za-z0-9_]*)["']\\s*\\])`, "gu"),
+  )) {
+    names.add((match[1] ?? match[2]) as string);
+  }
+  for (const match of source.matchAll(new RegExp(`\\{([^}]*)\\}\\s*=\\s*${env}\\b`, "gu"))) {
+    for (const part of (match[1] ?? "").split(",")) {
+      const name = /^\s*([A-Za-z_][A-Za-z0-9_]*)/u.exec(part)?.[1];
+      if (name) names.add(name);
+    }
+  }
+  assert(names.size > 0, "src/weather.ts does not read the key from an environment variable");
+  for (const name of names) process.env[name] = "test-key-4821";
   const { getForecast } = await loadModule("src/weather.ts");
   let sent: string | null = null;
   const fetcher = async (_url: string, init?: RequestInit) => {

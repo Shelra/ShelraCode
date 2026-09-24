@@ -1,4 +1,5 @@
-// The check of D-0001: no API key sits in a file that could be committed (anything but .env).
+// The check of D-0001: no API key sits in a file that could be committed: anything but .env itself, the one
+// file git ignores (.env.example and .env.local are committed like any other).
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -8,7 +9,7 @@ const skip = new Set([".env", ".git", "node_modules"]);
 const problems: string[] = [];
 function scan(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (skip.has(entry.name) || entry.name.startsWith(".env.")) continue;
+    if (skip.has(entry.name)) continue;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) scan(path);
     else if (secret.test(readFileSync(path, "utf8"))) problems.push(`${path.slice(root.length + 1)} holds an API key`);
