@@ -92,7 +92,11 @@ describe("agent context overflow recovery", () => {
 
     for await (const chunk of agent.processMessage(prompt)) chunks.push(chunk);
 
-    expect(chunks).toEqual([{ type: "content", content: "Recovered." }, { type: "done" }]);
+    expect(chunks).toEqual([
+      { type: "model", modelId: "context-test-model" },
+      { type: "content", content: "Recovered." },
+      { type: "done" },
+    ]);
     expect(provider.requests).toHaveLength(2);
     const firstMessage = provider.requests[0]?.messages[0] as { content?: unknown } | undefined;
     expect(typeof firstMessage?.content).toBe("string");
