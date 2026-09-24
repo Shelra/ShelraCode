@@ -34,6 +34,21 @@ describe("OpenRouter model catalog", () => {
     });
   });
 
+  it("records whether a model takes a sampling temperature, from the parameters OpenRouter lists", () => {
+    // openai/gpt-6-luna-pro lists no `temperature` on any endpoint; sending one under require_parameters fails.
+    const at = "2026-09-24T00:00:00.000Z";
+    const pro = normalizeOpenRouterModel(
+      { ...rawModel, id: "openai/gpt-6-luna-pro", supported_parameters: ["reasoning", "tools", "tool_choice"] },
+      true,
+      at,
+    );
+    expect(pro?.capabilities.temperature).toBe(false);
+    const plain = normalizeOpenRouterModel({ ...rawModel, supported_parameters: ["tools", "temperature"] }, true, at);
+    expect(plain?.capabilities.temperature).toBe(true);
+    const unlisted = normalizeOpenRouterModel({ ...rawModel, supported_parameters: undefined }, true, at);
+    expect(unlisted?.capabilities.temperature).toBeUndefined();
+  });
+
   it("does not double-prefix OpenRouter's free router catalog entry", () => {
     const entry = normalizeOpenRouterModel({
       id: "openrouter/free",

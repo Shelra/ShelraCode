@@ -460,6 +460,11 @@ export class Agent {
   /** Files as they were before each attempt of this turn changed them; read by restore_file. */
   private attemptJournal = new AttemptJournal();
   /**
+   * Models whose endpoints refused the sampling `temperature` (OpenAI's pro reasoning models take none): requests
+   * to them leave it out, so the model the user chose answers instead of the turn falling back to another.
+   */
+  private readonly samplingRejected = new Set<string>();
+  /**
    * Ledger files this turn wrote through the ledger itself, with the text it left (null: it removed the
    * file): the host's record, never work to verify, as long as nothing else changed them afterwards.
    */
@@ -1304,6 +1309,13 @@ export class Agent {
     if (state.withoutProgress > MAX_INTERRUPTIONS_WITHOUT_PROGRESS || state.total > MAX_INTERRUPTIONS_PER_TURN) {
       return { action: "pause", message: `No model answered after repeated attempts (last: ${reason}).` };
     }
+    if (rejectsSamplingParameters(args.error) && !this.samplingRejected.has(args.modelId)) {
+      // No endpoint of the model takes `temperature`, and OpenRouter is asked to honour every parameter: the same
+      // model answers once the request leaves it out, so this is not a reason to move to another model.
+      this.samplingRejected.add(args.modelId);
+      this.kernel?.recordObservation(`${args.modelId} takes no sampling temperature; retrying it without one.`);
+      return { action: "retry" };
+    }
     const unavailable = isModelUnavailableError(args.error);
     if (unavailable || state.onModel >= FAILURES_BEFORE_MODEL_SWITCH) {
       const fallback = nextFallbackModel(args.provider, args.modelId, state);
@@ -1346,6 +1358,11 @@ export class Agent {
     notifyObserver(observer?.onError, { message, timestamp: Date.now() });
     yield { type: "content", content: `\n\n${this.endNote(`[Paused — ${message}]`)}` };
     yield { type: "done" };
+  }
+
+  /** The sampling temperature to send, or none for a model that takes none. */
+  private samplingTemperature(modelId: string, modelInfo: ModelInfo | undefined, value: number): number | undefined {
+    return modelInfo?.supportsTemperature === false || this.samplingRejected.has(modelId) ? undefined : value;
   }
 
   /** A note the host ends the turn with, kept apart from what the model wrote (see `getTurnEndNotes`). */
@@ -1828,7 +1845,7 @@ export class Agent {
           maxSteps: Math.min(this.maxToolRounds, isExplore || isPlan ? 60 : 120),
           timeout: this.modelTimeout,
           signal: withAbortTimeout(signal, this.modelTimeout.totalMs),
-          temperature: isExplore || isPlan ? 0.2 : 0.5,
+          temperature: this.samplingTemperature(attemptModelId, runtime.modelInfo, isExplore || isPlan ? 0.2 : 0.5),
           ...(childMaxOutputTokens === undefined ? {} : { maxOutputTokens: childMaxOutputTokens }),
           ...(childReasoningEffort === undefined ? {} : { reasoningEffort: childReasoningEffort }),
           onStepFinish: (event) => {
@@ -1913,6 +1930,10 @@ export class Agent {
           attempts.total > MAX_SUBAGENT_INTERRUPTIONS
         ) {
           stopped = `no model answered after ${attempts.total} attempts (last: ${interruption.reason})`;
+        } else if (rejectsSamplingParameters(interruption.error) && !this.samplingRejected.has(attemptModelId)) {
+          // As for the main turn: the model takes no `temperature`; the next attempt leaves it out.
+          this.samplingRejected.add(attemptModelId);
+          continue;
         } else {
           const unavailable = isModelUnavailableError(interruption.error);
           if (unavailable || attempts.onModel >= FAILURES_BEFORE_MODEL_SWITCH) {
@@ -2653,7 +2674,7 @@ export class Agent {
             maxSteps: this.maxToolRounds,
             timeout: this.modelTimeout,
             signal: modelSignal,
-            temperature: 0.7,
+            temperature: this.samplingTemperature(runtime.modelId, runtime.modelInfo, 0.7),
             ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
             ...(turnReasoningEffort === undefined ? {} : { reasoningEffort: turnReasoningEffort }),
             onStepStart: (currentStep) => {
@@ -4200,6 +4221,16 @@ function isUpstreamProviderFailure(error: unknown): boolean {
       ? error.message
       : String(error ?? "");
   return /provider returned error/i.test(text);
+}
+
+/** OpenRouter's answer when no endpoint of the model takes a parameter the request sent under `require_parameters`. */
+function rejectsSamplingParameters(error: unknown): boolean {
+  const text = APICallError.isInstance(error)
+    ? `${error.message} ${error.responseBody ?? ""}`
+    : error instanceof Error
+      ? error.message
+      : String(error ?? "");
+  return /no endpoints found that can handle the requested parameters/i.test(text);
 }
 
 /** Failures that retrying the same model cannot fix: no credits, no endpoint, a spend limit, a daily quota. */

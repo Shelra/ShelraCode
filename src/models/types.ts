@@ -9,6 +9,8 @@ export interface CatalogCapabilities {
   reasoning: boolean;
   vision: boolean;
   structuredOutput?: boolean;
+  /** Whether the model takes `temperature`; undefined when the provider did not list its parameters. */
+  temperature?: boolean;
 }
 
 export interface CatalogCost {
@@ -74,6 +76,7 @@ export function catalogEntryToModelInfo(entry: CatalogEntry): ModelInfo {
     supportsClientTools: entry.capabilities.tools,
     supportsMaxOutputTokens: entry.maxOutputTokens !== undefined,
     supportsReasoningEffort: entry.capabilities.reasoning,
+    ...(entry.capabilities.temperature === undefined ? {} : { supportsTemperature: entry.capabilities.temperature }),
     capabilityConfidence: entry.contextConfidence === "measured" ? "measured" : "declared",
     runtimeKind:
       entry.category === "cloud"

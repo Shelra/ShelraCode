@@ -16,6 +16,7 @@ import type {
   ProviderTextResult,
   ProviderToolContext,
 } from "../providers/types";
+import type { ModelInfo } from "../types/index";
 
 /**
  * Hard rule: a missing or failing resource never ends a turn. Reproduced live 2026-09-19: two
@@ -412,6 +413,41 @@ describe("a failing model connection never ends the turn", () => {
     expect(provider.requests.map((request) => request.modelId)).toEqual(["primary-model", "primary-model"]);
     expect(text).toContain("Answered on the retry.");
     expect(text).not.toContain("cannot serve this request");
+  });
+
+  it("keeps the model the user chose when its endpoints only refuse the sampling temperature", async () => {
+    // Seen live 2026-09-24: openai/gpt-6-luna-pro takes no `temperature`; with require_parameters OpenRouter
+    // answered 404 "No endpoints found that can handle the requested parameters", and the turn left the paid
+    // model the user had picked for openrouter/free.
+    const refused = apiError(
+      404,
+      "No endpoints found that can handle the requested parameters. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection",
+    );
+    const provider = new ScriptedProvider(
+      [{ events: [], fail: refused }, answer("Answered by the chosen model.")],
+      ["openrouter/free"],
+    );
+    const { text } = await run(provider);
+
+    expect(provider.requests.map((request) => request.modelId)).toEqual(["primary-model", "primary-model"]);
+    expect(provider.requests[0]?.temperature).toBe(0.7);
+    expect(provider.requests[1]?.temperature).toBeUndefined();
+    expect(text).toContain("Answered by the chosen model.");
+    expect(text).not.toContain("continuing with openrouter/free");
+  });
+
+  it("sends no temperature to a model whose catalog entry says it takes none", async () => {
+    class NoTemperature extends ScriptedProvider {
+      override resolveModelRuntime(modelId: string): ProviderModelRuntime {
+        const runtime = super.resolveModelRuntime(modelId);
+        return { ...runtime, modelInfo: { ...(runtime.modelInfo as ModelInfo), supportsTemperature: false } };
+      }
+    }
+    const provider = new NoTemperature([answer("Answered.")]);
+    await run(provider);
+
+    expect(provider.requests).toHaveLength(1);
+    expect(provider.requests[0]?.temperature).toBeUndefined();
   });
 
   it("still treats a model with no endpoint as unavailable", async () => {

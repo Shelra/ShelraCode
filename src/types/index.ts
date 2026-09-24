@@ -280,6 +280,8 @@ export interface ModelInfo {
   supportsMaxOutputTokens?: boolean;
   defaultReasoningEffort?: ReasoningEffort;
   supportsReasoningEffort?: boolean;
+  /** False when no endpoint of the model takes `temperature` (OpenAI's pro reasoning models): sending it fails the request. */
+  supportsTemperature?: boolean;
   /** Host evidence quality for tool/agent claims. */
   capabilityConfidence?: "unknown" | "declared" | "probed" | "measured";
   runtimeKind?: string;

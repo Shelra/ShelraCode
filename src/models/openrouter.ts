@@ -92,6 +92,7 @@ function capabilities(raw: RawOpenRouterModel): CatalogCapabilities {
     reasoning: supported.has("reasoning") || supported.has("include_reasoning"),
     vision: inputModalities.includes("image") || inputModalities.includes("file"),
     structuredOutput: supported.has("structured_outputs") || supported.has("response_format") ? true : undefined,
+    ...(supported.size > 0 ? { temperature: supported.has("temperature") } : {}),
   };
 }
 

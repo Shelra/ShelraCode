@@ -70,6 +70,7 @@ function catalogEntryToInfo(entry: CatalogEntry): ModelInfo {
     supportsClientTools: entry.capabilities.tools,
     supportsMaxOutputTokens: entry.maxOutputTokens !== undefined,
     supportsReasoningEffort: entry.capabilities.reasoning,
+    ...(entry.capabilities.temperature === undefined ? {} : { supportsTemperature: entry.capabilities.temperature }),
     capabilityConfidence: entry.contextConfidence === "measured" ? "measured" : "declared",
     runtimeKind: entry.category === "cloud" ? `cloud:${entry.provider}` : undefined,
     supportsVision: entry.capabilities.vision,
