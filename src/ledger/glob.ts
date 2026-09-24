@@ -2,11 +2,12 @@
  * Workspace-relative glob matching for a decision's scope: `**` crosses folders, `*` and `?` stay inside one
  * path segment, `{a,b}` is either alternative, and a pattern without wildcards matches that file or everything
  * under that folder.
+ *
+ * Matching walks the path once per pattern token, keeping the set of positions reached, so its cost is the
+ * pattern's length times the path's. A regular expression backtracks instead: `*a*a…*x` against a long name took
+ * minutes (review round 3, 2026-09-24), and a scope comes from a committed file that nobody vetted, while every
+ * turn that changes a file matches it synchronously.
  */
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.+^${}()|[\]\\]/gu, "\\$&");
-}
 
 /** Every `{` closes, and no `}` comes first: only then are braces alternatives rather than characters. */
 function balancedBraces(pattern: string): boolean {
@@ -19,14 +20,12 @@ function balancedBraces(pattern: string): boolean {
   return depth === 0;
 }
 
-/** How many `**` one pattern may hold: each one is a backtracking point against a deep path. */
+/** How many `**` a proposed pattern may hold: past three, a scope says nothing a simpler one would not. */
 export const MAX_GLOBSTARS = 3;
+/** How many brace alternatives one pattern may expand to; past it the scope covers every path. */
+const MAX_ALTERNATIVES = 256;
 
-/**
- * A run of globstars (star-star-slash repeated) means what one globstar means, but compiled naively it
- * backtracks exponentially against a deep path (a 12-fold pattern took over a minute); runs of stars
- * collapse before anything is compiled.
- */
+/** Separators, a leading `./`, a trailing slash and runs of globstars normalized to their plain meaning. */
 export function normalizeGlob(pattern: string): string {
   return pattern
     .replaceAll("\\", "/")
@@ -37,7 +36,7 @@ export function normalizeGlob(pattern: string): string {
     .replace(/(?:\*\*\/)+/gu, "**/");
 }
 
-/** Why a scope glob cannot be compiled safely, or null when it can. */
+/** Why a proposed scope glob is not a readable rule, or null when it is. */
 export function globProblem(pattern: string): string | null {
   const normalized = normalizeGlob(pattern);
   const globstars = normalized.match(/\*\*/gu)?.length ?? 0;
@@ -45,39 +44,120 @@ export function globProblem(pattern: string): string | null {
   return null;
 }
 
-export function globToRegExp(pattern: string): RegExp {
-  const normalized = normalizeGlob(pattern);
-  const alternatives = balancedBraces(normalized);
-  let source = "";
+/** The pattern with each `{a,b}` group replaced by each alternative, nested groups too; null past the limit. */
+function expandBraces(pattern: string): string[] | null {
+  const open = pattern.indexOf("{");
+  if (open < 0) return [pattern];
   let depth = 0;
-  for (let index = 0; index < normalized.length; index += 1) {
-    const char = normalized[index] as string;
-    if (char === "*" && normalized[index + 1] === "*") {
-      const slash = normalized[index + 2] === "/";
-      source += slash ? "(?:.*/)?" : ".*";
-      index += slash ? 2 : 1;
-    } else if (char === "*") {
-      source += "[^/]*";
-    } else if (char === "?") {
-      source += "[^/]";
-    } else if (alternatives && char === "{") {
-      depth += 1;
-      source += "(?:";
-    } else if (alternatives && char === "}") {
+  let close = -1;
+  const commas: number[] = [];
+  for (let index = open; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === "{") depth += 1;
+    else if (char === "}") {
       depth -= 1;
-      source += ")";
-    } else if (alternatives && char === "," && depth > 0) {
-      source += "|";
-    } else {
-      source += escapeRegExp(char);
-    }
+      if (depth === 0) {
+        close = index;
+        break;
+      }
+    } else if (char === "," && depth === 1) commas.push(index);
   }
-  return new RegExp(`^${source}${/[*?]/u.test(normalized) ? "" : "(?:/.*)?"}$`, "u");
+  const expanded: string[] = [];
+  let from = open + 1;
+  for (const end of [...commas, close]) {
+    const rest = expandBraces(pattern.slice(0, open) + pattern.slice(from, end) + pattern.slice(close + 1));
+    if (!rest) return null;
+    expanded.push(...rest);
+    if (expanded.length > MAX_ALTERNATIVES) return null;
+    from = end + 1;
+  }
+  return expanded;
 }
 
+type Token = { kind: "char"; char: string } | { kind: "any-char" | "star" | "globstar" | "globstar-slash" };
+
+function tokenize(pattern: string): Token[] {
+  const tokens: Token[] = [];
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index] as string;
+    if (char === "*" && pattern[index + 1] === "*") {
+      const slash = pattern[index + 2] === "/";
+      tokens.push({ kind: slash ? "globstar-slash" : "globstar" });
+      index += slash ? 2 : 1;
+    } else if (char === "*") tokens.push({ kind: "star" });
+    else if (char === "?") tokens.push({ kind: "any-char" });
+    else tokens.push({ kind: "char", char });
+  }
+  return tokens;
+}
+
+/** One alternative against the path: `reached[i]` says the tokens so far can consume exactly `path[0..i)`. */
+function matchTokens(tokens: readonly Token[], path: string, folderSuffix: boolean): boolean {
+  const length = path.length;
+  let reached = new Uint8Array(length + 1);
+  reached[0] = 1;
+  for (const token of tokens) {
+    const next = new Uint8Array(length + 1);
+    if (token.kind === "char" || token.kind === "any-char") {
+      for (let index = 0; index < length; index += 1) {
+        const fits = token.kind === "char" ? path[index] === token.char : path[index] !== "/";
+        if (reached[index] && fits) next[index + 1] = 1;
+      }
+    } else if (token.kind === "star") {
+      // Any run of characters inside the current segment.
+      let open = false;
+      for (let index = 0; index <= length; index += 1) {
+        if (reached[index]) open = true;
+        if (open) next[index] = 1;
+        if (path[index] === "/") open = false;
+      }
+    } else if (token.kind === "globstar") {
+      // Any run of characters, across segments.
+      let open = false;
+      for (let index = 0; index <= length; index += 1) {
+        if (reached[index]) open = true;
+        if (open) next[index] = 1;
+      }
+    } else {
+      // `**/`: nothing, or any run of whole segments ending in a slash.
+      let open = false;
+      for (let index = 0; index <= length; index += 1) {
+        if (reached[index]) {
+          next[index] = 1;
+          open = true;
+        }
+        if (open && path[index] === "/") next[index + 1] = 1;
+      }
+    }
+    reached = next;
+  }
+  if (reached[length]) return true;
+  // A pattern without wildcards also covers everything under the folder it names.
+  if (folderSuffix)
+    for (let index = 0; index < length; index += 1) if (reached[index] && path[index] === "/") return true;
+  return false;
+}
+
+/** Whether one scope glob covers a workspace-relative path (already written with forward slashes). */
+export function globMatches(pattern: string, path: string): boolean {
+  const normalized = normalizeGlob(pattern);
+  const folderSuffix = !/[*?]/u.test(normalized);
+  const alternatives = balancedBraces(normalized) ? expandBraces(normalized) : [normalized];
+  // Too many alternatives to try: over-cover rather than let a decision miss the change.
+  if (!alternatives) return true;
+  return alternatives.some((alternative) => matchTokens(tokenize(alternative), path, folderSuffix));
+}
+
+/**
+ * Whether paths differing only in case name the same file, as on Windows and macOS: a scope `src/**` covers
+ * `Src/index.ts` there, which is how a model may spell a path it writes (review round 3, 2026-09-24).
+ */
+const FOLDS_CASE = process.platform === "win32" || process.platform === "darwin";
+
 /** Whether a workspace-relative path falls under any of the globs; an empty scope covers everything. */
-export function inScope(path: string, scope: readonly string[]): boolean {
+export function inScope(path: string, scope: readonly string[], foldCase = FOLDS_CASE): boolean {
   if (scope.length === 0) return true;
-  const normalized = path.replaceAll("\\", "/").replace(/^\.\//u, "");
-  return scope.some((pattern) => globToRegExp(pattern).test(normalized));
+  const fold = (text: string) => (foldCase ? text.toLowerCase() : text);
+  const normalized = fold(path.replaceAll("\\", "/").replace(/^\.\//u, ""));
+  return scope.some((pattern) => globMatches(fold(pattern), normalized));
 }

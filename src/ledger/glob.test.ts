@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { globProblem, globToRegExp, inScope, normalizeGlob } from "./glob";
+import { globMatches, globProblem, inScope, normalizeGlob } from "./glob";
 
 describe("decision scope globs", () => {
   it("crosses folders with ** and stays in one segment with * and ?", () => {
-    expect(globToRegExp("src/**/*.ts").test("src/a.ts")).toBe(true);
-    expect(globToRegExp("src/**/*.ts").test("src/agent/deep/b.ts")).toBe(true);
-    expect(globToRegExp("src/*.ts").test("src/agent/b.ts")).toBe(false);
-    expect(globToRegExp("src/memory/**").test("src/memory/store.ts")).toBe(true);
-    expect(globToRegExp("src/memory/**").test("src/memoryx/store.ts")).toBe(false);
-    expect(globToRegExp("docs/?.md").test("docs/a.md")).toBe(true);
-    expect(globToRegExp("docs/?.md").test("docs/ab.md")).toBe(false);
+    expect(globMatches("src/**/*.ts", "src/a.ts")).toBe(true);
+    expect(globMatches("src/**/*.ts", "src/agent/deep/b.ts")).toBe(true);
+    expect(globMatches("src/*.ts", "src/agent/b.ts")).toBe(false);
+    expect(globMatches("src/memory/**", "src/memory/store.ts")).toBe(true);
+    expect(globMatches("src/memory/**", "src/memoryx/store.ts")).toBe(false);
+    expect(globMatches("docs/?.md", "docs/a.md")).toBe(true);
+    expect(globMatches("docs/?.md", "docs/ab.md")).toBe(false);
   });
 
   it("reads a pattern without wildcards as a file or a whole folder", () => {
@@ -28,6 +28,12 @@ describe("decision scope globs", () => {
     expect(inScope("src/a}.ts", ["src/*}.ts"])).toBe(true);
   });
 
+  it("ignores case where the filesystem does, and only there", () => {
+    expect(inScope("Src/API/users.ts", ["src/api/**"], true)).toBe(true);
+    expect(inScope("src/api/users.ts", ["src/API/**"], true)).toBe(true);
+    expect(inScope("Src/API/users.ts", ["src/api/**"], false)).toBe(false);
+  });
+
   it("treats an empty scope as the whole project and ignores separators and a leading ./", () => {
     expect(inScope("anything/at/all.md", [])).toBe(true);
     expect(inScope("src\\agent\\agent.ts", ["./src/agent/**"])).toBe(true);
@@ -36,7 +42,7 @@ describe("decision scope globs", () => {
 });
 
 describe("pathological globs", () => {
-  it("collapses runs of ** before compiling, so a deep path is matched at once", () => {
+  it("collapses runs of **, and matches a deep path at once", () => {
     expect(normalizeGlob("**/**/**/x")).toBe("**/x");
     expect(normalizeGlob("src/**/**")).toBe("src/**");
     expect(normalizeGlob("a/***/b")).toBe("a/**/b");
@@ -45,6 +51,16 @@ describe("pathological globs", () => {
     expect(inScope(deep, [`${"**/".repeat(12)}other.ts`])).toBe(false);
     expect(inScope(deep, [`${"**/".repeat(12)}leaf.ts`])).toBe(true);
     expect(performance.now() - started).toBeLessThan(200);
+  });
+
+  it("matches in time proportional to the pattern and the path, whatever the wildcards", () => {
+    // Review round 3 (2026-09-24): single stars passed the globstar cap, a committed file skipped it, and a
+    // backtracking regular expression took minutes on these.
+    const started = performance.now();
+    expect(inScope("a".repeat(400), [`${"*a".repeat(16)}*x`])).toBe(false);
+    expect(inScope("a".repeat(400), [`${"a**".repeat(13)}x`])).toBe(false);
+    expect(inScope(`src/ui/${"a-".repeat(200)}b.ts`, ["src/**/*-*-*-*-*-*-*-*-*-*-*.ts"])).toBe(true);
+    expect(performance.now() - started).toBeLessThan(100);
   });
 
   it("names a scope that keeps too many ** after collapsing", () => {
