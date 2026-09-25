@@ -116,6 +116,32 @@ describe("editFile when the quote is not exact (seen live 2026-09-25)", () => {
     }
   });
 
+  it("says an edit that only re-spaces the code changed nothing, instead of 'Edited +0 -0' (seen live 2026-09-25)", async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, "beach.ts");
+    const original =
+      "export class BeachTrack {\n    addToScene(parent: THREE.Group) {\n        parent.add(this.mesh);\n    }\n}\n";
+    await writeFsFile(file, original, "utf-8");
+
+    const loose = await editFile(
+      "beach.ts",
+      " addToScene(parent: THREE.Group) {\n parent.add(this.mesh);\n }\n}\n",
+      "  addToScene(parent: THREE.Group) {\n    parent.add(this.mesh);\n  }\n}\n",
+      dir,
+    );
+    const same = await editFile("beach.ts", "parent.add(this.mesh);", "parent.add(this.mesh);", dir);
+
+    expect(loose.success).toBe(false);
+    expect(loose.output).toContain(
+      "No change to beach.ts: new_string differs from the matched text only in whitespace",
+    );
+    expect(same).toMatchObject({
+      success: false,
+      output: "No change to beach.ts: new_string is the same as old_string.",
+    });
+    expect(await readFile(file, "utf-8")).toBe(original);
+  });
+
   it("refuses a loose match found in several places", async () => {
     const dir = await tempDir();
     await writeFsFile(path.join(dir, "a.js"), "let  total = 0;\nlet total  = 0;\n", "utf-8");

@@ -274,6 +274,14 @@ export async function editFile(
         const { start, end } = loose[0];
         const fitted = fitToMatch(oldString, newString, before.slice(start, end), ending);
         const after = `${before.slice(0, start)}${fitted}${before.slice(end)}`;
+        if (after === before) {
+          // Seen live 2026-09-25: edits that only re-indented a method were reported "Edited (+0 -0)" three times while
+          // the build kept failing on a brace; the model took them for changes.
+          return {
+            success: false,
+            output: `No change to ${filePath}: new_string differs from the matched text only in whitespace, and the file keeps its own. If the code is wrong, change what it says, not its spacing: read the failure again.`,
+          };
+        }
         writeFileSync(full, after, "utf-8");
         const diff = computeDiff(filePath, before, after);
         const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(
@@ -313,6 +321,9 @@ export async function editFile(
           ending,
         )
       : before.replace(oldString, () => newString);
+    if (after === before) {
+      return { success: false, output: `No change to ${filePath}: new_string is the same as old_string.` };
+    }
     writeFileSync(full, after, "utf-8");
 
     const diff = computeDiff(filePath, before, after);
