@@ -8,7 +8,8 @@
     "start": "next start",
     "bench:sync": "bun run scripts/bench-summary.ts",
     "images": "bun run scripts/optimize-images.ts",
-    "seo:check": "bun run scripts/seo-check.ts"
+    "seo:check": "bun run scripts/seo-check.ts",
+    "brand": "bun run scripts/brand-assets.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

@@ -26,6 +26,12 @@ it alone. Checked against the app on 2026-09-22. -->
   hour, so the pages are ISR), rendered by `src/components/ui/GitHubStars.tsx` through the async server
   `SiteFrame`. Nothing that imports `SiteFrame` may be a client component. The repository is `Shelra/ShelraCode`
   (`repoSlug` in `content.ts`).
+- The logo is the official mark from the favicon, `>_` (a prompt chevron and a cursor, `#00ff88` on `#080808`),
+  then "shelra" (owner, 2026-09-25): `LogoMark.tsx` and `Wordmark.tsx` in `src/components/ui/`. Never use a `$` as
+  the logo; a `$` stays only where it is a shell prompt in a command. The brand kit is `public/brand/` (SVG
+  sources, PNG renders, README); `bun run brand` renders it and the site's icons, `src/app/favicon.ico`
+  included, from `public/brand/shelra-icon.svg`. The social image `public/images/og-shelra.png` shows the logo:
+  re-render it when the logo or the hero capture changes.
 - Sign-in is Auth.js v5 beta (`src/auth.ts`, `src/lib/auth-*.ts`) with JWT sessions: GitHub and Google OAuth,
   plus email and password stored in libSQL (`src/lib/users.ts`: `.data/auth.db` in development,
   `AUTH_DATABASE_URL`/`AUTH_DATABASE_TOKEN` in production). Secrets go only in `.env.local` (template:

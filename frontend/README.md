@@ -10,9 +10,13 @@ section is generated from the versioned run history (below), the "Field notes"
 section shows measured results instead of testimonials, pricing describes the real cost model
 (Free · your key · local), and every product image is a capture of the real TUI
 (`public/images/tui-*.png`, made with the `scripts/ui-demo` harness: real app, scripted model,
-ConPTY → xterm.js → PNG at 120×32, 28 px Geist Mono). The wordmark is text
-(`src/components/ui/Wordmark.tsx`), the favicon `public/images/favicon.svg`, the social image
-`public/images/og-shelra.png`.
+ConPTY → xterm.js → PNG at 120×32, 28 px Geist Mono). The logo is the official mark, the prompt
+chevron and cursor of the favicon (`src/components/ui/LogoMark.tsx`), and the name set in Geist Mono
+(`src/components/ui/Wordmark.tsx`). The brand kit for use outside the site (SVG sources and PNG
+renders of the icon, the mark and the logo) is in `public/brand/` with its own README, served at
+`https://www.shelra.dev/brand/`; `bun run brand` renders it and the site's icons (`src/app/favicon.ico`,
+`public/images/favicon.svg`, `icon-192.png`, `apple-icon.png`) from `public/brand/shelra-icon.svg`. The
+social image is `public/images/og-shelra.png`.
 
 **What is live:** the landing page and its guides (`/memory`, `/local`, `/free-models`). The web
 app (sign-in, account and the demo dashboard, below) is hidden until the account service ships:

@@ -1,7 +1,7 @@
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: 0.45em;
+  gap: 0.36em;
   font-family: var(--font-geist-mono);
   font-weight: 500;
   line-height: 1;
@@ -11,18 +11,16 @@
   user-select: none;
 }
 
-.prompt {
+/* As tall as the name's ascenders, centred on them (the same proportions as public/brand/shelra-logo.svg). */
+.mark {
+  display: block;
+  height: 0.71em;
+  width: auto;
+  aspect-ratio: 37 / 35;
+  flex: none;
   color: var(--accent);
 }
 
 .name {
   color: var(--default);
-}
-
-.cursor {
-  display: inline-block;
-  width: 0.5em;
-  height: 0.95em;
-  margin-left: -0.2em;
-  background-color: var(--accent);
 }
