@@ -3,6 +3,7 @@ import {
   describeDelegatedEvidence,
   describeVerificationEvidence,
   isVerificationCommand,
+  localRequestUrls,
   maskedVerificationCommand,
 } from "./verification-evidence";
 
@@ -129,6 +130,23 @@ describe("describeVerificationEvidence", () => {
     for (const command of ["prettier --write src", "biome format --write .", "ruff format .", "black src"]) {
       expect(isVerificationCommand(command), command).toBe(false);
     }
+  });
+});
+
+describe("localRequestUrls (a curl that exits 0 on a 500 page, seen live 2026-09-25)", () => {
+  it("names the local pages a GET request checks, so the host can request them too", () => {
+    expect(localRequestUrls("curl -s http://localhost:8080")).toEqual(["http://localhost:8080"]);
+    expect(localRequestUrls("curl -sS localhost:3000/api/health")).toEqual(["http://localhost:3000/api/health"]);
+    expect(localRequestUrls("iwr http://127.0.0.1:5173 -UseBasicParsing")).toEqual(["http://127.0.0.1:5173"]);
+    expect(localRequestUrls("cd app && curl http://0.0.0.0:4000/")).toEqual(["http://localhost:4000/"]);
+  });
+
+  it("leaves a request the host could not repeat, or a chain another check decides, to its exit status", () => {
+    expect(localRequestUrls("curl -X POST http://localhost:3000/api/todos -d '{}'")).toEqual([]);
+    expect(localRequestUrls("curl -I http://localhost:3000")).toEqual([]);
+    expect(localRequestUrls("npm test && curl http://localhost:3000")).toEqual([]);
+    expect(localRequestUrls("curl https://example.com")).toEqual([]);
+    expect(localRequestUrls("curl http://localhost:3000 | jq .")).toEqual([]);
   });
 });
 

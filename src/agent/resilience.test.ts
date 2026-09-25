@@ -444,6 +444,61 @@ describe("a local page the answer says works (seen live 2026-09-25)", () => {
   }, 30_000);
 });
 
+describe("a local page the answer names, when it cannot be a claim or stays broken (seen live 2026-09-25)", () => {
+  async function failingServer() {
+    let requests = 0;
+    const server = createServer((_request, response) => {
+      requests += 1;
+      response.writeHead(500, { "content-type": "text/plain" });
+      response.end("Internal Server Error");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    return { server, url, requests: () => requests };
+  }
+
+  it("is not requested when a turn that changed nothing, in a session running no server, quotes it", async () => {
+    const { server, url, requests } = await failingServer();
+    try {
+      const { text } = await run(
+        new ScriptedProvider([answer(`Memory says the game was served at ${url} before.`)]),
+        "Que tienes en la memoria del proyecto guardado?",
+      );
+
+      expect(requests()).toBe(0);
+      expect(text).not.toContain("[Shelra requested");
+      expect(text).not.toContain("[Not verified");
+    } finally {
+      server.close();
+    }
+  });
+
+  it("leaves the turn unverified when the page still fails after the one repair request", async () => {
+    const { server, url } = await failingServer();
+    const provider = new ScriptedProvider([
+      answer(`The game is running at ${url}.`),
+      answer(`Fixed: the game is running at ${url}.`),
+    ]);
+    const agent = agentFor(provider);
+    const bash = (agent as unknown as { bash: BashTool }).bash;
+    await bash.startBackground('node -e "setInterval(()=>{},1000)"');
+    try {
+      let text = "";
+      for await (const chunk of agent.processMessage("levanta el proyecto para verlo funcionando")) {
+        if (chunk.type === "content") text += chunk.content ?? "";
+      }
+
+      expect(provider.requests).toHaveLength(2);
+      expect(text).toContain(
+        `[Not verified — the local page the answer names does not work: ${url} → HTTP 500 Internal Server Error]`,
+      );
+    } finally {
+      await bash.cleanup();
+      server.close();
+    }
+  }, 30_000);
+});
+
 describe("a round that uses up its time budget (seen live 2026-09-25)", () => {
   it("goes on at once, keeping its steps, and is not reported as a model that stopped answering", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);

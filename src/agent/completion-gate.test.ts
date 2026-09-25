@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { listMemoryRecords, projectMemoryScope, writeMemoryEntry } from "../memory/store";
@@ -240,6 +242,20 @@ class ScenarioProvider implements ProviderAdapter {
 }
 
 describe("completion/verification gate", () => {
+  /** A page that answers 200: a scripted `curl` counts only when the host's own request to the page succeeds too. */
+  const page = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "text/plain" });
+    response.end("ok");
+  });
+  let pageUrl = "";
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => page.listen(0, "127.0.0.1", resolve));
+    pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}`;
+  });
+  afterAll(() => {
+    page.close();
+  });
+
   it("blocks completion when no acceptance criterion was ever verified, after all automatic nudges", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done, trust me." }]);
@@ -367,12 +383,12 @@ describe("completion/verification gate", () => {
   it("does not block when the nudge round actually verifies (a real command is run)", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([
-      toolCallEvent("call-curl", "bash", { command: "curl http://localhost:8080/index.html" }),
+      toolCallEvent("call-curl", "bash", { command: `curl ${pageUrl}/index.html` }),
       toolResultEvent(
         "call-curl",
         "bash",
         { success: true, output: "<html></html>" },
-        { command: "curl http://localhost:8080/index.html" },
+        { command: `curl ${pageUrl}/index.html` },
       ),
       { type: "text-delta", text: "Verified: the page serves correctly." },
     ]);
@@ -415,12 +431,12 @@ describe("completion/verification gate", () => {
       ],
       // Nudge 3: the server is finally up — a real verification action happens.
       [
-        toolCallEvent("call-curl", "bash", { command: "curl http://localhost:3000" }),
+        toolCallEvent("call-curl", "bash", { command: `curl ${pageUrl}` }),
         toolResultEvent(
           "call-curl",
           "bash",
           { success: true, output: "<html></html>" },
-          { command: "curl http://localhost:3000" },
+          { command: `curl ${pageUrl}` },
         ),
         { type: "text-delta", text: "Verified: the app serves correctly." },
       ],
@@ -537,12 +553,12 @@ describe("completion/verification gate", () => {
     // ScenarioProvider). Round 2 pairs real evidence with an explicit update_plan_step(complete)
     // on that same step — the model's own structural declaration of which criterion it advanced.
     const provider = new ScenarioProvider([
-      toolCallEvent("call-curl", "bash", { command: "curl http://localhost:8080/index.html" }),
+      toolCallEvent("call-curl", "bash", { command: `curl ${pageUrl}/index.html` }),
       toolResultEvent(
         "call-curl",
         "bash",
         { success: true, output: "<html></html>" },
-        { command: "curl http://localhost:8080/index.html" },
+        { command: `curl ${pageUrl}/index.html` },
       ),
       toolCallEvent("call-step", "update_plan_step", { index: 1, status: "complete", evidence: "curl returned 200" }),
       toolResultEvent(
@@ -636,6 +652,74 @@ describe("completion/verification gate", () => {
     const verdict = chunks.find((chunk) => chunk.content?.includes("[Not verified"))?.content ?? "";
     expect(verdict).toContain("`npm run build` fails on the final code (src/kart.ts(114,1): error TS1128");
     expect(verdict).not.toContain("No verification action was observed");
+  });
+
+  it("does not count a curl that exits 0 on a page answering 500 (seen live 2026-09-25)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const server = createServer((_request, response) => {
+      response.writeHead(500, { "content-type": "text/plain" });
+      response.end("Internal Server Error");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const command = `curl -s http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    try {
+      const provider = new ScenarioProvider([
+        toolCallEvent("call-curl", "bash", { command }),
+        toolResultEvent("call-curl", "bash", { success: true, output: "Internal Server Error" }, { command }),
+        { type: "text-delta", text: "The page works." },
+      ]);
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+        provider,
+        cwd: mkdtempSync(join(tmpdir(), "shelra-curl-")),
+      });
+
+      const chunks: Array<{ type: string; content?: string }> = [];
+      for await (const chunk of agent.processMessage("Create a digital clock")) chunks.push(chunk as never);
+
+      const nudges = provider.requests.map((request) => lastUserText(request));
+      expect(nudges.some((text) => text.includes("The command exited 0, but Shelra requested"))).toBe(true);
+      const verdict = chunks.find((chunk) => chunk.content?.includes("[Not verified"))?.content ?? "";
+      expect(verdict).toContain(`\`${command}\` fails on the final code`);
+      expect(verdict).toContain("HTTP 500");
+    } finally {
+      server.close();
+    }
+  });
+
+  it("leaves a turn unverified when the page its answer names fails, though a check passed (seen live 2026-09-25)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const server = createServer((_request, response) => {
+      response.writeHead(500, { "content-type": "text/plain" });
+      response.end("Internal Server Error");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    const workspace = mkdtempSync(join(tmpdir(), "shelra-page-"));
+    try {
+      const provider = new ScenarioProvider([
+        toolCallEvent("call-test", "bash", { command: "npx vitest run" }),
+        toolResultEvent(
+          "call-test",
+          "bash",
+          { success: true, output: "Tests 3 passed" },
+          { command: "npx vitest run" },
+        ),
+        { type: "text-delta", text: `Done: open ${url} to see the clock.` },
+      ]);
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: workspace });
+
+      const chunks: Array<{ type: string; content?: string }> = [];
+      for await (const chunk of agent.processMessage("Create a digital clock")) chunks.push(chunk as never);
+
+      const text = chunks.map((chunk) => chunk.content ?? "").join("");
+      expect(text).toContain(
+        `[Not verified — the local page the answer names does not work: ${url} → HTTP 500 Internal Server Error]`,
+      );
+      const episodes = readFileSync(join(workspace, ".shelra", "memory", "episodes.jsonl"), "utf-8");
+      expect(episodes).toContain('"outcome":"unverified"');
+    } finally {
+      server.close();
+    }
   });
 
   it("does not gate a non-coding (conversational) turn even with no tool calls", async () => {

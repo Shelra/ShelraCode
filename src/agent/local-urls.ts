@@ -126,6 +126,17 @@ export function describeUrlChecks(checks: readonly UrlCheck[]): string {
     .join("; ")}]`;
 }
 
+/**
+ * The verdict of a turn whose answer names a local page that does not work: not verified, whatever checks passed
+ * (`checksPassed`, as "`npm test` passed"), since the page is what the user will open.
+ */
+export function failedPagesVerdict(failed: readonly UrlCheck[], checksPassed: string | null): string {
+  const pages = failed.length === 1 ? "page the answer names does" : "pages the answer names do";
+  return `[Not verified — ${checksPassed ? `${checksPassed}, but ` : ""}the local ${pages} not work: ${failed
+    .map(describeOne)
+    .join("; ")}]`;
+}
+
 /** What the model hears, once, when a page it set up and named does not work. */
 export function urlRepairRequest(failed: readonly UrlCheck[]): string {
   return [

@@ -283,6 +283,29 @@ export function isVerificationCommand(command: string): boolean {
   return simpleCommands(command).some(checkOf);
 }
 
+/** Arguments that make a request something other than a GET, which the host could not repeat as is. */
+const NOT_A_GET =
+  /^(?:-X.*|--request|-d|--data.*|-F|--form|--json|-T|--upload-file|-Method|-Body|--method|-I|--head)$/i;
+
+/**
+ * The local URLs a command's deciding chain requests, when GET requests are all it checks. `curl` exits 0 on a page that
+ * answers 500, so such a command proves the page works only when the host sees it answer too (seen live 2026-09-25: a
+ * model's `curl http://localhost:8080` "passed" while the page answered 500). Empty when the chain also runs another
+ * check, whose own exit status decides, or when a request is not a GET.
+ */
+export function localRequestUrls(command: string): string[] {
+  const urls: string[] = [];
+  for (const raw of simpleCommands(decidingChain(command)).filter(checkOf)) {
+    const tokens = unwrap(stripPrefix(cleanArguments(raw)));
+    if (!HTTP_CLIENTS.has(programName(tokens[0] ?? ""))) return [];
+    const args = tokens.slice(1);
+    if (args.some((arg) => NOT_A_GET.test(arg))) return [];
+    for (const arg of args.filter((token) => LOCAL_URL_RE.test(token)))
+      urls.push((/^https?:\/\//iu.test(arg) ? arg : `http://${arg}`).replace("//0.0.0.0", "//localhost"));
+  }
+  return [...new Set(urls)];
+}
+
 function bashCommand(argsJson: string): string | null {
   try {
     return (JSON.parse(argsJson) as { command?: string }).command ?? "";

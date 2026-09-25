@@ -204,7 +204,14 @@ import {
 } from "./compaction";
 import { DelegationManager } from "./delegations";
 import { AgentKernel, type KernelPhase, type KernelState } from "./kernel";
-import { answered, checkLocalUrls, describeUrlChecks, localUrlsIn, urlRepairRequest } from "./local-urls";
+import {
+  answered,
+  checkLocalUrls,
+  describeUrlChecks,
+  failedPagesVerdict,
+  localUrlsIn,
+  urlRepairRequest,
+} from "./local-urls";
 import {
   applyModelConstraints,
   buildConversationSystemPrompt,
@@ -219,6 +226,7 @@ import {
   describeDelegatedEvidence,
   describeVerificationEvidence,
   isVerificationCommand,
+  localRequestUrls,
   maskedVerificationCommand,
 } from "./verification-evidence";
 import { buildVisionUserMessages } from "./vision-input";
@@ -3027,6 +3035,8 @@ export class Agent {
      * Seen live 2026-09-25: "on the final code" was shown, then the requirement audit edited the code for 25 minutes.
      */
     let checkedNote: string | null = null;
+    /** What the checks in `checkedNote` did, as "`npm test` passed". */
+    let checkedPasses: string | null = null;
     /** The turn's contract ran and every check passed on the final code. */
     let contractPassed = false;
     const checkRuns: Array<{
@@ -3329,7 +3339,17 @@ export class Agent {
                   )
                     ? null
                     : described;
-                if (evidence) {
+                // A local request counts only when the host sees the page answer too: `curl` exits 0 on a 500 page.
+                const requested = evidence && ranCommand ? localRequestUrls(ranCommand) : [];
+                const unanswered =
+                  requested.length > 0
+                    ? (await checkLocalUrls(requested, { signal, observe: null })).filter((check) => !answered(check))
+                    : [];
+                const hostSawFailure =
+                  unanswered.length > 0
+                    ? `The command exited 0, but Shelra requested ${unanswered.map((check) => `${check.url} → ${check.detail}`).join("; ")}.`
+                    : null;
+                if (evidence && hostSawFailure === null) {
                   this.turnVerificationEvidence.push(evidence);
                   if (turnStartState) {
                     lastPassingCheck = {
@@ -3338,7 +3358,7 @@ export class Agent {
                       evidence,
                     };
                   }
-                } else if (tr.success) {
+                } else if (tr.success && hostSawFailure === null) {
                   const masked = maskedVerificationCommand(tc.function.name, tc.function.arguments);
                   if (masked) maskedChecks.add(masked);
                 }
@@ -3354,8 +3374,10 @@ export class Agent {
                   if (turnStartState && isVerificationCommand(digestCommand)) {
                     checkRuns.push({
                       command: digestCommand,
-                      passed: tr.success,
-                      detail: ((tr.success ? tr.output : (tr.error ?? tr.output)) ?? "").slice(-6_000),
+                      passed: tr.success && hostSawFailure === null,
+                      detail: `${hostSawFailure ? `${hostSawFailure}\n` : ""}${(
+                        (tr.success ? tr.output : (tr.error ?? tr.output)) ?? ""
+                      ).slice(-6_000)}`,
                       mutationEvents: turnMutationEvents,
                       state: captureWorkspaceState(turnStartWorkspace),
                       cwd: this.bash.getCwd(),
@@ -4004,9 +4026,8 @@ export class Agent {
               }
               // A pass that only reused runs keeps the note: nothing changed since the host's own run.
               if (trusted.some((result) => result.by === "host")) {
-                checkedNote = `[Checked by Shelra on the final code: ${trusted
-                  .map((result) => `\`${result.check.command}\` passed`)
-                  .join(", ")}]`;
+                checkedPasses = trusted.map((result) => `\`${result.check.command}\` passed`).join(", ");
+                checkedNote = `[Checked by Shelra on the final code: ${checkedPasses}]`;
               }
               const ownPasses = results.filter((result) => result.check.source.endsWith(DEFINED_THIS_TURN));
               if (ownPasses.length > 0 && !ownChecksReported) {
@@ -4354,23 +4375,24 @@ export class Agent {
             continue;
           }
 
-          if (checkedNote) {
-            this.recordVerdict(checkedNote);
-            yield { type: "content", content: `\n\n${checkedNote}` };
-          }
-
-          // The local pages the answer names are requested now, on the final state (src/agent/local-urls.ts). When
-          // one does not answer while a server this session started is running, the model is told once and may fix
-          // it; the user always sees what the host observed.
-          if (this.mode === "agent" && !this.ablations.has("gate")) {
+          // The local pages the answer names are requested now, on the final state (src/agent/local-urls.ts), before
+          // the verdict: a page that does not work leaves the turn unverified whatever checks passed. When one fails
+          // while a server this session started is running, the model is told once and may fix it. Only a turn that
+          // changed files, or a session running a server of its own, claims anything about a page: an answer can quote
+          // a URL from memory (seen live 2026-09-25: a question about memory, in a session that ran no server, ended
+          // with the host reporting the 404 of a URL the answer quoted from a memory entry).
+          let urlNote: string | null = null;
+          let pagesVerdict: string | null = null;
+          const servesPages = mutations.length > 0 || this.bash.runningProcesses().length > 0;
+          if (this.mode === "agent" && !this.ablations.has("gate") && servesPages) {
             const urls = localUrlsIn(assistantText);
             if (urls.length > 0) {
               reportStatus("checks", `Requesting ${urls.join(", ")}`);
               const checks = await checkLocalUrls(urls, { signal });
               const failed = checks.filter((check) => !answered(check));
-              yield { type: "content", content: `\n\n${describeUrlChecks(checks)}` };
               if (failed.length > 0 && !urlRepairAsked && this.bash.runningProcesses().length > 0) {
                 urlRepairAsked = true;
+                yield { type: "content", content: `\n\n${describeUrlChecks(checks)}` };
                 this.messages.push({ role: "user", content: urlRepairRequest(failed) });
                 this.messageSeqs.push(null);
                 this.kernel?.recordObservation(
@@ -4378,8 +4400,18 @@ export class Agent {
                 );
                 continue;
               }
+              if (failed.length > 0) pagesVerdict = failedPagesVerdict(failed, checkedNote ? checkedPasses : null);
+              else urlNote = describeUrlChecks(checks);
             }
           }
+          const pagesBroken = pagesVerdict !== null;
+
+          const verdict = pagesVerdict ?? checkedNote;
+          if (verdict) {
+            this.recordVerdict(verdict);
+            yield { type: "content", content: `\n\n${verdict}` };
+          }
+          if (urlNote) yield { type: "content", content: `\n\n${urlNote}` };
 
           const stopInput: StopHookInput = {
             hook_event_name: "Stop",
@@ -4408,7 +4440,8 @@ export class Agent {
 
           this.persistKernelIndex();
           // The memories this turn was given were there when the project's checks passed (audit doc 15, M3).
-          if (contractPassed && !this.ablations.has("memory")) creditMemoryUse(memoryScope, memoryContext.expanded, 1);
+          if (contractPassed && !pagesBroken && !this.ablations.has("memory"))
+            creditMemoryUse(memoryScope, memoryContext.expanded, 1);
           // An entry that names a command which passed in this turn is current again (audit doc 15, M2).
           if (!this.ablations.has("memory")) {
             reconfirmByPassingCommands(memoryScope, [
@@ -4425,13 +4458,13 @@ export class Agent {
               assistantText: turnText.slice(-12_000),
               changedFiles: [...mutations],
               commands: turnCommands,
-              verified: this.turnVerificationEvidence.length > 0,
+              verified: this.turnVerificationEvidence.length > 0 && !pagesBroken,
               toolCalls: turnToolCalls,
             },
             runtime.modelId,
             signal,
             observer,
-            this.turnVerificationEvidence.length > 0 ? "verified" : "answered",
+            pagesBroken ? "unverified" : this.turnVerificationEvidence.length > 0 ? "verified" : "answered",
           );
           yield { type: "done" };
           return;
