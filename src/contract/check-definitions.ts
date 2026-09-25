@@ -63,6 +63,19 @@ export function snapshotCheckDefinitions(workspace: string): CheckDefinition[] {
     .map((check) => ({ ...check, parts: definitionOf(workspace, check.command, { kind: check.kind }).parts }));
 }
 
+/** The builds the workspace defines now, with their definitions: the contract runs one only when nothing else checks. */
+export function snapshotBuildDefinitions(workspace: string): CheckDefinition[] {
+  return discoverChecks(workspace)
+    .filter((check) => check.kind === "build")
+    .map((check) => ({ ...check, parts: definitionOf(workspace, check.command, { kind: check.kind }).parts }));
+}
+
+/** Whether a check the turn started with is defined the same way now. */
+export function definedAsBefore(check: CheckDefinition, workspace: string): boolean {
+  const now = definitionOf(workspace, check.command, { kind: check.kind }).parts;
+  return JSON.stringify(now) === JSON.stringify(check.parts);
+}
+
 /** How each turn-start check's definition differs from the workspace now, once per check. */
 export function changedCheckDefinitions(
   before: readonly CheckDefinition[],

@@ -2103,6 +2103,25 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(text).toContain("Not verified");
       expect(text).not.toContain("Checked by Shelra");
     }, 60_000);
+
+    it("trusts a build the project stated before the turn and the turn left as it was (audit gap #10)", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = empty();
+      writeFileSync(join(dir, "package.json"), GAME_PACKAGE);
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "built", durationMs: 5 }));
+      const { provider } = roundsModel([() => write("w1", "src/kart.ts", "export class Kart { speed = 2; }\n")]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, "Make the kart faster.");
+
+      expect(text).toMatch(/\[Checked by Shelra on the final code: `[^`]*run build` passed/u);
+      expect(text).not.toContain("a check a turn writes itself");
+      expect(text).not.toContain("Not verified");
+    }, 60_000);
   });
 
   it("does not take a run of a check script the turn wrote as evidence when the project stated none", async () => {

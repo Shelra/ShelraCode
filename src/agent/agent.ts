@@ -11,10 +11,12 @@ import {
   changeMadeByTurn,
   checkEditsAllowedBy,
   checkKindOf,
+  definedAsBefore,
   isShortFollowUp,
   type RecordedFiles,
   recordDefinitionFiles,
   runsChangedDefinition,
+  snapshotBuildDefinitions,
   snapshotCheckDefinitions,
 } from "../contract/check-definitions";
 import {
@@ -3001,6 +3003,9 @@ export class Agent {
       this.mode === "agent"
         ? (carried?.checks ?? readDefinitions(() => snapshotCheckDefinitions(turnStartWorkspace), []))
         : [];
+    // The builds as the turn found them: one stated before the turn and unchanged is the project's check, not the turn's.
+    const turnStartBuilds =
+      this.mode === "agent" ? readDefinitions(() => snapshotBuildDefinitions(turnStartWorkspace), []) : [];
     // The files that define package scripts, recipes and runner settings as the turn found them (or as the turn
     // that left a change unresolved found them): a check a turn wrote itself is not evidence about the code.
     const turnStartDefinitionFiles =
@@ -3976,11 +3981,19 @@ export class Agent {
             if (!contractApplies || turnStartChecks.length > 0) return [];
             const now = discoverChecks(turnStartWorkspace).filter((check) => !allowedCheckKinds.has(check.kind));
             const checks = contractChecks(now);
+            // A build the project stated before this turn, defined the same way now, is the project's own check (audit
+            // gap #10: a game's `build` was labeled "defined this turn" in every later turn, so its pass never counted).
+            const statedBefore = (command: string) =>
+              turnStartBuilds.some(
+                (start) =>
+                  isSameCheck(command, start) &&
+                  readDefinitions(() => definedAsBefore(start, turnStartWorkspace), false),
+              );
             return (checks.length > 0 ? checks : now.filter((check) => check.kind === "build")).map(
               ({ kind, command, source, runs }) => ({
                 kind,
                 command,
-                source: `${source}, ${DEFINED_THIS_TURN}`,
+                source: kind === "build" && statedBefore(command) ? source : `${source}, ${DEFINED_THIS_TURN}`,
                 ...(runs ? { runs } : {}),
               }),
             );

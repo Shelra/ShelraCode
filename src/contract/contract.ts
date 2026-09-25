@@ -1,6 +1,7 @@
 import type { BrowserObservation, CommandOutcome, HttpProbe } from "../exec/types";
 import { type CheckEnd, checkCouldNotRun } from "../ledger/judge";
 import { destructiveCommandReason } from "../security/destructive";
+import { definitionOf } from "./check-definitions";
 import { type CheckKind, type DiscoveredCheck, isSameCheck } from "./discover";
 import { evaluateAcceptance } from "./evaluate";
 import type { AcceptanceCriterion } from "./types";
@@ -71,6 +72,22 @@ export interface ContractRun {
   exitCode?: number | null;
 }
 
+/**
+ * Why running `command` would do damage, looking through the scripts and recipes it runs: `npm run build` is harmless
+ * text, and the build script a model wrote may not be (audit gap #10).
+ */
+export function checkDamageReason(command: string, workspace: string): string | null {
+  const direct = destructiveCommandReason(command, workspace);
+  if (direct) return direct;
+  for (const part of definitionOf(workspace, command).parts) {
+    if (part.missing || !/^(?:script|recipe):/u.test(part.key)) continue;
+    const reason = destructiveCommandReason(part.value, workspace);
+    // `script:package.json#build` reads as `build`.
+    if (reason) return `${reason} (in \`${part.key.replace(/^\w+:(?:.*#)?/u, "")}\` of ${part.file})`;
+  }
+  return null;
+}
+
 /** Why a failed decision check reached no verdict, or undefined for any other check or a real failure. */
 function unrunnableDecision(check: ContractCheck, end: CheckEnd): string | undefined {
   return check.kind === "decision" ? (checkCouldNotRun(end, check.command) ?? undefined) : undefined;
@@ -119,7 +136,7 @@ export async function evaluateTurnContract(input: {
       });
       continue;
     }
-    const destructive = destructiveCommandReason(check.command, input.workspace);
+    const destructive = checkDamageReason(check.command, input.workspace);
     if (destructive) {
       // A command table in a repository is data: a check that would do damage is never run for it.
       const detail = `not run: \`${check.command}\` ${destructive}`;

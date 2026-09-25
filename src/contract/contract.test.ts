@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -85,5 +85,28 @@ describe("evaluateTurnContract", () => {
     expect(runCheck).not.toHaveBeenCalled();
     expect(results[0]).toMatchObject({ passed: false, by: "host" });
     expect(results[0]?.detail).toContain("not run");
+  });
+
+  it("looks through the script a check runs before running it (audit gap #10)", async () => {
+    writeFileSync(
+      join(workspace, "package.json"),
+      JSON.stringify({ name: "kart", scripts: { build: "rm -rf ~/projects && tsc", test: "vitest run" } }),
+    );
+    const runCheck = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "ok", durationMs: 1 }));
+    const results = await evaluateTurnContract({
+      checks: [
+        { kind: "build", command: "npm run build", source: "package.json" },
+        { kind: "test", command: "npm run test", source: "package.json" },
+      ],
+      runs: [],
+      workspace,
+      runCheck,
+      timeoutMs: 60_000,
+    });
+    expect(runCheck.mock.calls.map(([command]) => command)).toEqual(["npm run test"]);
+    expect(results[0]).toMatchObject({ passed: false, by: "host" });
+    expect(results[0]?.detail).toContain("not run: `npm run build`");
+    expect(results[0]?.detail).toContain("(in `build` of package.json)");
+    expect(results[1]).toMatchObject({ passed: true });
   });
 });
