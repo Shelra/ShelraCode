@@ -51,7 +51,7 @@ export function wantsResearch(request: string): boolean {
 
 /** A line that reports an error, as a runtime or a tool prints it. */
 const ERROR_LINE_RE =
-  /\b(?:[A-Z][A-Za-z]*Error|Exception|Traceback|error(?:\[\w+\])?:|E[A-Z]{3,}|cannot find|not found|failed to|fatal:|panic:)/u;
+  /\b(?:[A-Z][A-Za-z]*Error|Exception|Traceback|error(?:\[\w+\])?:|error\s+[A-Z]+\d+:|E[A-Z]{3,}|cannot find|not found|failed to|fatal:|panic:)/u;
 
 /**
  * The line of a pasted error to search for: the first line that reports an error, without paths, stack frames or
@@ -63,8 +63,11 @@ function errorQuery(request: string): string | null {
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter(Boolean);
-  const error = lines.find((line) => ERROR_LINE_RE.test(line) && !/^at\s/u.test(line));
-  if (!error) return null;
+  const found = lines.find((line) => ERROR_LINE_RE.test(line) && !/^at\s/u.test(line));
+  if (!found) return null;
+  // `src/tracks/beach.ts(100,22): error TS1005: ',' expected.` is searched from `error` on: the place is the project's.
+  const at = /\berror\b/iu.exec(found);
+  const error = at && at.index > 0 && /[\\/.(:]/u.test(found.slice(0, at.index)) ? found.slice(at.index) : found;
   const cleaned = error
     .replace(/(?:[A-Za-z]:)?(?:[\\/][\w .@-]+)+(?::\d+(?::\d+)?)?/gu, " ")
     .replace(/\s+/gu, " ")
@@ -75,6 +78,11 @@ function errorQuery(request: string): string | null {
     ?.replace(/^>\s*/u, "")
     .split(/\s+/u)[0];
   return program && !cleaned.toLowerCase().includes(program.toLowerCase()) ? `${program} ${cleaned}` : cleaned;
+}
+
+/** The search query for a check's failing output: its first error line, as `errorQuery` reads a pasted one. */
+export function failureQuery(output: string): string | null {
+  return errorQuery(output)?.split(" ").slice(0, QUERY_WORDS).join(" ") ?? null;
 }
 
 /**
@@ -112,9 +120,11 @@ export async function researchTask(
   options: {
     signal?: AbortSignal;
     search?: (query: string, options: WebSearchOptions) => Promise<WebSearchResult>;
+    /** What to search instead of the request's own words: the error the project's checks report before the work. */
+    query?: string;
   } = {},
 ): Promise<TaskResearch> {
-  const query = researchQuery(request);
+  const query = options.query ?? researchQuery(request);
   const timeout = AbortSignal.timeout(RESEARCH_TIMEOUT_MS);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
   try {

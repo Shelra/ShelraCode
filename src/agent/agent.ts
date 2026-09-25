@@ -22,6 +22,7 @@ import {
 import {
   type ContractCheck,
   type ContractCheckRunner,
+  checkDamageReason,
   contractChecks,
   evaluateTurnContract,
 } from "../contract/contract";
@@ -119,7 +120,7 @@ import { normalizeModelMessages } from "../providers/messages";
 import { createOpenRouterProvider } from "../providers/openrouter";
 import { isProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
 import type { HostStopReason, ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
-import { researchEnabled, researchTask, researchToolResult, wantsResearch } from "../research/pre-task";
+import { failureQuery, researchEnabled, researchTask, researchToolResult, wantsResearch } from "../research/pre-task";
 import type { WebSearchOptions, WebSearchResult } from "../research/web";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { destructiveCommandReason } from "../security/destructive";
@@ -215,6 +216,7 @@ import {
   localUrlsIn,
   urlRepairRequest,
 } from "./local-urls";
+import { DIAGNOSIS_TIMEOUT_MS, diagnosisChecks, diagnosisOutput, wantsDiagnosis } from "./pre-work";
 import {
   applyModelConstraints,
   buildConversationSystemPrompt,
@@ -2734,6 +2736,62 @@ export class Agent {
     this.messages.push(userModelMessage);
     this.messageSeqs.push(null);
 
+    // The project's state before the work (src/agent/pre-work.ts): asked to check, fix, continue or test a project
+    // that states its checks, the host runs them on the code as the turn found it and hands the model the results as
+    // its own run would read, before it changes anything. A check that would do damage is not run.
+    const preWorkRuns: Array<{ command: string; passed: boolean; output: string }> = [];
+    if (
+      this.mode === "agent" &&
+      !this.ablations.has("gate") &&
+      !this.ablations.has("diagnose") &&
+      wantsDiagnosis(userMessage)
+    ) {
+      const workspace = this.bash.getRootCwd();
+      const checks = diagnosisChecks(workspace).filter((check) => !checkDamageReason(check.command, workspace));
+      const deadline = AbortSignal.timeout(DIAGNOSIS_TIMEOUT_MS);
+      for (const check of checks) {
+        if (signal.aborted || deadline.aborted) break;
+        reportStatus("checks", `Checking the project before the work: ${check.command}`);
+        const run = await this.checkRunner(check.command, {
+          timeoutMs: DIAGNOSIS_TIMEOUT_MS,
+          signal: combineAbortSignals(signal, deadline),
+          cwd: workspace,
+        }).catch((error: unknown) => ({ passed: false, output: String(error), durationMs: 0 }));
+        if (signal.aborted) break;
+        preWorkRuns.push({ command: check.command, passed: run.passed, output: run.output });
+        const callId = `diagnosis-${preWorkRuns.length}-${Date.now().toString(36)}`;
+        const input = { command: check.command };
+        const call: ToolCall = {
+          id: callId,
+          type: "function",
+          function: { name: "bash", arguments: JSON.stringify(input) },
+        };
+        const observed = { success: run.passed, output: diagnosisOutput(check.command, run.passed, run.output) };
+        this.messages.push(
+          { role: "assistant", content: [{ type: "tool-call", toolCallId: callId, toolName: "bash", input }] },
+          {
+            role: "tool",
+            content: [
+              { type: "tool-result", toolCallId: callId, toolName: "bash", output: { type: "json", value: observed } },
+            ],
+          },
+        );
+        this.messageSeqs.push(null, null);
+        yield { type: "tool_calls", toolCalls: [call] };
+        yield { type: "tool_result", toolCall: call, toolResult: observed };
+      }
+      if (signal.aborted) {
+        this.discardAbortedTurn(userModelMessage);
+        yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
+        yield { type: "done" };
+        return;
+      }
+    }
+    // A failure the checks report is what the search looks up, unless the request pastes an error of its own.
+    const observedFailure = preWorkRuns.find((run) => !run.passed);
+    const failureSearch =
+      observedFailure && !failureQuery(userMessage) ? (failureQuery(observedFailure.output) ?? undefined) : undefined;
+
     // Research before the work (owner, 2026-09-25; src/research/pre-task.ts): one web search on the request, handed
     // to the model as the result of a search_web call, so it plans with context about the objective. A greeting, an
     // approval or a question about memory is not researched; a search that fails leaves the turn as it was.
@@ -2742,12 +2800,13 @@ export class Agent {
       !this.ablations.has("web") &&
       !this.ablations.has("research") &&
       researchEnabled() &&
-      wantsResearch(userMessage)
+      (wantsResearch(userMessage) || failureSearch !== undefined)
     ) {
       reportStatus("context", "Searching the web for context");
       const research = await researchTask(userMessage, {
         signal,
         ...(this.webSearch ? { search: this.webSearch } : {}),
+        ...(failureSearch ? { query: failureSearch } : {}),
       });
       if (signal.aborted) {
         this.discardAbortedTurn(userModelMessage);
@@ -3077,6 +3136,18 @@ export class Agent {
       /** A host run of a decision check that reached no verdict keeps that judgment when it is reused. */
       unrunnable?: string;
     }> = [];
+    // The checks the host ran before the work are runs on the code as the turn found it: a failure among them
+    // predates the turn, and a pass that fails later is a regression the turn caused.
+    for (const run of preWorkRuns) {
+      checkRuns.push({
+        command: run.command,
+        passed: run.passed,
+        detail: run.output.slice(-6_000),
+        mutationEvents: 0,
+        state: turnStartState,
+        cwd: turnStartWorkspace,
+      });
+    }
 
     try {
       while (true) {

@@ -1989,6 +1989,8 @@ describe("the checks that decide done are the ones the turn started with (audit 
       provider,
       cwd: dir,
       checkRunner,
+      // These count the host's runs of the changed check; the run before the work is not what they measure.
+      ablate: ["diagnose"],
     });
 
     const text = await run(agent, "Change the test script in package.json so bun test stops at the first failure.");
@@ -2122,6 +2124,45 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(text).not.toContain("a check a turn writes itself");
       expect(text).not.toContain("Not verified");
     }, 60_000);
+
+    it("runs the project's checks before the work when asked to check or fix it, and searches their error (owner, 2026-09-25)", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const previous = process.env.SHELRA_RESEARCH;
+      process.env.SHELRA_RESEARCH = "on";
+      try {
+        const dir = empty();
+        writeFileSync(join(dir, "package.json"), GAME_PACKAGE);
+        const failure = "src/tracks/beach.ts(100,22): error TS1005: ',' expected.";
+        const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+          passed: false,
+          output: `> kart@1.0.0 build\n> tsc && esbuild src/index.ts --bundle\n\n${failure}`,
+          durationMs: 5,
+        }));
+        const queries: string[] = [];
+        const webSearch = async (query: string) => {
+          queries.push(query);
+          return { success: true, query, provider: "duckduckgo" as const, sources: [], output: "" };
+        };
+        const { provider, requests } = roundsModel([() => []]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+          webSearch,
+        });
+
+        await run(agent, "continuemos: verifica que todo funcione y arregla lo necesario");
+
+        expect(checkRunner.mock.calls[0]?.[0]).toMatch(/run build/u);
+        const first = JSON.stringify(requests[0]?.messages);
+        expect(first).toMatch(/\[Shelra ran `[^`]*run build` before the task began, on the project as you found it\]/u);
+        expect(first).toContain("TS1005");
+        expect(queries[0]).toBe("tsc error TS1005: ',' expected.");
+      } finally {
+        if (previous === undefined) delete process.env.SHELRA_RESEARCH;
+        else process.env.SHELRA_RESEARCH = previous;
+      }
+    }, 60_000);
   });
 
   it("does not take a run of a check script the turn wrote as evidence when the project stated none", async () => {
@@ -2178,6 +2219,8 @@ describe("the checks that decide done are the ones the turn started with (audit 
       provider,
       cwd: dir,
       checkRunner,
+      // These count the host's runs of the changed check; the run before the work is not what they measure.
+      ablate: ["diagnose"],
     });
 
     await run(agent, "Migrate the tests from jest to vitest.");

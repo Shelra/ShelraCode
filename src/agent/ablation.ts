@@ -16,6 +16,7 @@ import type { ToolSet } from "ai";
  * - web: no web research tools or guidance (and so no research before the work)
  * - research: no web search by the host before the work (src/research/pre-task.ts); the tools stay
  * - smoke: the host does not open the app a turn changed in a headless browser (src/agent/runtime-smoke.ts)
+ * - diagnose: the host does not run the project's checks before the work (src/agent/pre-work.ts)
  * - bare: all of the above, a prompt of environment facts only, and six basic tools
  */
 export const ABLATIONS = [
@@ -31,6 +32,7 @@ export const ABLATIONS = [
   "web",
   "research",
   "smoke",
+  "diagnose",
   "bare",
 ] as const;
 
