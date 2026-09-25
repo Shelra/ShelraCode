@@ -9,9 +9,13 @@ function withoutAssignments(command: string): string {
   return command.trim().replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/u, "");
 }
 
-/** A command's program and first argument, up to the first pipe or separator: two runs of the same check share it. */
-export function checkHead(command: string): string {
-  return withoutAssignments(command.split(/[|;&]/u)[0] ?? "")
+/** A step that only moves the shell: `cd`, `Set-Location`, `pushd`, `if ($?) {` wrappers left around it. */
+const MOVE_RE = /^(?:if\s*\(\$\?\)\s*\{\s*)?(?:cd|chdir|pushd|sl|set-location)(?:\s|$)/iu;
+
+/** A step's program and first argument: two runs of the same check share it. */
+function headOf(step: string): string {
+  return step
+    .replace(/^if\s*\(\$\?\)\s*\{\s*/iu, "")
     .split(/\s+/u)
     .filter(Boolean)
     .slice(0, 2)
@@ -22,6 +26,40 @@ export function checkHead(command: string): string {
         .toLowerCase(),
     )
     .join(" ");
+}
+
+/**
+ * What a command does, read past its changes of directory: the first step that does work (its head and text) and
+ * the first change of directory. Seen live 2026-09-25: a model prefixed every command with `cd <project>;`, so every
+ * command looked like the same check and a lesson paired two unrelated ones.
+ */
+interface CommandShape {
+  work: string;
+  workStep: string;
+  move: string;
+}
+
+function shapeOf(command: string): CommandShape {
+  const steps = command
+    .split(/[|;&\r\n]+/u)
+    .map((step) => withoutAssignments(step).trim())
+    .filter(Boolean);
+  const workStep = steps.find((step) => !MOVE_RE.test(step)) ?? "";
+  const moveStep = steps.find((step) => MOVE_RE.test(step)) ?? "";
+  return { work: headOf(workStep), workStep: workStep.replace(/^if\s*\(\$\?\)\s*\{\s*/iu, ""), move: headOf(moveStep) };
+}
+
+/** A command's program and first argument, past any change of directory: two runs of the same check share it. */
+export function checkHead(command: string): string {
+  const shape = shapeOf(command);
+  return shape.work || shape.move;
+}
+
+/** Another program given the same first argument, not a flag: `bun install` for `npm install`. */
+function isAlternative(failedHead: string, laterHead: string): boolean {
+  const [program, argument] = failedHead.split(" ");
+  const [otherProgram, otherArgument] = laterHead.split(" ");
+  return !!argument && !argument.startsWith("-") && program !== otherProgram && argument === otherArgument;
 }
 
 /** A line that says what went wrong, rather than a banner or a progress line. */
@@ -62,30 +100,30 @@ export interface Recovery {
 export function recoveryOf(commands: readonly TurnCommand[], index: number): Recovery | null {
   const failed = commands[index];
   if (!failed || failed.success) return null;
-  const head = checkHead(failed.command);
-  if (!head) return null;
-  const [program, argument] = head.split(" ");
+  const shape = shapeOf(failed.command);
+  if (!shape.work && !shape.move) return null;
+  const sameCheck = (other: CommandShape) => shape.work !== "" && other.work === shape.work;
+  // A later command that only changes directory can stand for the failed command's own change of directory
+  // (`Set-Location "D:\my game"` after `cd D:\my game && …` failed on the space).
+  const alternativeTo = (other: CommandShape) =>
+    isAlternative(shape.work, other.work) || (other.work === "" && isAlternative(shape.move, other.move));
   const later = commands.slice(index + 1);
   const at = later.findIndex((command) => {
     if (!command.success) return false;
-    const other = checkHead(command.command);
-    if (other === head) return true;
-    const [otherProgram, otherArgument] = other.split(" ");
-    return otherProgram !== program && !!argument && !argument.startsWith("-") && otherArgument === argument;
+    const other = shapeOf(command.command);
+    return sameCheck(other) || alternativeTo(other);
   });
   const passed = later[at];
   if (!passed) return null;
-  const alternative = checkHead(passed.command) !== head;
+  const alternative = !sameCheck(shapeOf(passed.command));
   const between = alternative
     ? []
     : later
         .slice(0, at)
-        .filter(
-          (command) =>
-            command.success &&
-            checkHead(command.command) !== head &&
-            !INSPECTION_RE.test(withoutAssignments(command.command)),
-        )
+        .filter((command) => {
+          const other = shapeOf(command.command);
+          return command.success && other.work !== "" && !sameCheck(other) && !INSPECTION_RE.test(other.workStep);
+        })
         .map((command) => command.command)
         .slice(-2);
   return { passed, alternative, between };

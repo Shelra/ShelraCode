@@ -457,6 +457,29 @@ describe("automatic memory capture", () => {
     expect(failuresOf(banner)[0]?.error).toBe("error: Cannot find package 'ms' from 'ms.test.ts'");
   });
 
+  it("reads each command past its leading cd, so two unrelated ones are not the same check (seen live 2026-09-25)", () => {
+    const moved: TurnDigest = {
+      ...digest,
+      commands: [
+        { command: "cd C:\\work\\snake; node --check index.html", success: false, output: "SyntaxError: bad token" },
+        { command: "cd C:\\work\\snake; if ($?) { node test_snake.js }", success: true, output: "all pass" },
+      ],
+    };
+    expect(deterministicFailureCandidates(moved)).toEqual([]);
+    expect(failuresOf(moved)[0]?.fixedBy).toBeUndefined();
+    const same: TurnDigest = {
+      ...digest,
+      commands: [
+        { command: "cd C:\\work\\snake; bun test", success: false, output: "error: Cannot find package 'jsdom'" },
+        { command: "cd C:\\work\\snake; bun add -d jsdom", success: true, output: "installed jsdom" },
+        { command: "cd C:\\work\\snake; bun test", success: true, output: "3 pass" },
+      ],
+    };
+    expect(deterministicFailureCandidates(same)[0]?.title).toBe(
+      "cd C:\\work\\snake; bun test failed until cd C:\\work\\snake; bun add -d jsdom",
+    );
+  });
+
   it("keeps no lesson when the same command passed after nothing but edits: that is the code being fixed", () => {
     const fixed: TurnDigest = {
       ...digest,
