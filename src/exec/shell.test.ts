@@ -1,6 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { buildShellInvocation, normalizeShellErrorLine, translateForWindowsPowerShell } from "./shell";
+import {
+  buildShellInvocation,
+  normalizeShellErrorLine,
+  powerShellParseHint,
+  translateForWindowsPowerShell,
+} from "./shell";
 
 describe("translateForWindowsPowerShell", () => {
   it("rewrites a top-level && chain into a $?-guarded sequence", () => {
@@ -17,6 +22,29 @@ describe("translateForWindowsPowerShell", () => {
     expect(translateForWindowsPowerShell('echo "a && b"')).toBe('echo "a && b"');
     expect(translateForWindowsPowerShell("echo 'x && y' && ls")).toBe("echo 'x && y'; if ($?) { ls }");
     expect(translateForWindowsPowerShell("echo `&& && ls")).toBe("echo `&&; if ($?) { ls }");
+  });
+
+  it("rewrites a top-level || chain into a -not $?-guarded sequence (seen live 2026-09-25)", () => {
+    expect(translateForWindowsPowerShell('node --check index.html || echo "failed"')).toBe(
+      'node --check index.html; if (-not $?) { $global:LASTEXITCODE = $null; echo "failed" }',
+    );
+    expect(translateForWindowsPowerShell("a || b || c")).toBe(
+      "a; if (-not $?) { $global:LASTEXITCODE = $null; b; if (-not $?) { $global:LASTEXITCODE = $null; c } }",
+    );
+    expect(translateForWindowsPowerShell("echo 'a || b'")).toBe("echo 'a || b'");
+  });
+
+  it("names what to do instead for a shape PowerShell cannot parse", () => {
+    expect(
+      powerShellParseHint(
+        "cd C:\\w; cat > test.js << 'EOF'\nconsole.log(1)\nEOF",
+        "Missing file specification after redirection operator.",
+      ),
+    ).toBe("Windows PowerShell has no heredocs: write the file with write_file, then run it.");
+    expect(powerShellParseHint("a || b && c", "The token '||' is not a valid statement separator")).toContain(
+      "no && or ||",
+    );
+    expect(powerShellParseHint("bun test", "1 fail")).toBeNull();
   });
 
   it("refuses shapes it cannot translate safely", () => {

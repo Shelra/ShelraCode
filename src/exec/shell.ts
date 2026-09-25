@@ -94,10 +94,12 @@ function encodePowerShellCommand(command: string): string {
  * Windows PowerShell 5.1 has no `&&`/`||` pipeline-chain operators (PowerShell 7 does). Models
  * write `cd x && bun test` constantly regardless of instructions, and in 5.1 that is a parse
  * error before anything runs. Rewrite a top-level `&&` chain into the equivalent `$?`-guarded
- * sequence; anything with quoting or operators this splitter does not understand is left alone.
+ * sequence, and a top-level `||` chain into the `-not $?`-guarded one (seen live 2026-09-25:
+ * `node --check index.html || echo failed` never ran); a chain mixing both, and anything with
+ * quoting or operators this splitter does not understand, is left alone.
  */
 export function translateForWindowsPowerShell(command: string): string {
-  if (!command.includes("&&")) return command;
+  if (!command.includes("&&")) return translateOrChain(command);
   const segments: string[] = [];
   let current = "";
   let quote: "'" | '"' | null = null;
@@ -131,6 +133,65 @@ export function translateForWindowsPowerShell(command: string): string {
   if (quote || segments.length < 2 || segments.some((segment) => segment.trim() === "")) return command;
   const trimmed = segments.map((segment) => segment.trim());
   return trimmed.reduceRight((rest, segment) => (rest ? `${segment}; if ($?) { ${rest} }` : segment), "");
+}
+
+/**
+ * `a || b` as `a; if (-not $?) { $global:LASTEXITCODE = $null; b }`: the fallback's own status is the result, as in
+ * sh (a cmdlet such as echo sets no exit code, and the failed command's would otherwise be reported). Any other shape
+ * is returned unchanged.
+ */
+function translateOrChain(command: string): string {
+  if (!command.includes("||")) return command;
+  const segments: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index] as string;
+    if (quote) {
+      current += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "`") {
+      current += char + (command[index + 1] ?? "");
+      index += 1;
+      continue;
+    }
+    if (char === "|" && command[index + 1] === "|") {
+      segments.push(current);
+      current = "";
+      index += 1;
+      continue;
+    }
+    current += char;
+  }
+  segments.push(current);
+  if (quote || segments.length < 2 || segments.some((segment) => segment.trim() === "")) return command;
+  const trimmed = segments.map((segment) => segment.trim());
+  return trimmed.reduceRight(
+    (rest, segment) => (rest ? `${segment}; if (-not $?) { $global:LASTEXITCODE = $null; ${rest} }` : segment),
+    "",
+  );
+}
+
+/**
+ * A hint for a command Windows PowerShell 5.1 cannot parse at all, added to its error: shapes the translation above
+ * cannot rewrite. Seen live 2026-09-25: a model wrote a test file with a bash heredoc (`cat > x << 'EOF'`), got
+ * "Missing file specification after redirection operator", and tried again the same way.
+ */
+export function powerShellParseHint(command: string, output: string): string | null {
+  if (/<<\s*['"]?[A-Za-z_]+['"]?/u.test(command) && /redirection operator|operator is reserved/iu.test(output)) {
+    return "Windows PowerShell has no heredocs: write the file with write_file, then run it.";
+  }
+  if (/\|\|/u.test(command) && /&&/u.test(command) && /not a valid statement separator/iu.test(output)) {
+    return "Windows PowerShell 5.1 has no && or ||: split the chain and guard each step with `; if ($?) { … }`.";
+  }
+  return null;
 }
 
 function powerShellInvocation(file: string, command: string): ShellInvocation {

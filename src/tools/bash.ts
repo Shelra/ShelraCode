@@ -4,7 +4,7 @@ import { mkdtemp, rm, stat, unlink } from "fs/promises";
 import os from "os";
 import path from "path";
 import { runCommand } from "../exec/command";
-import { buildShellInvocation, killProcessTree, spawnOptions } from "../exec/shell";
+import { buildShellInvocation, killProcessTree, powerShellParseHint, spawnOptions } from "../exec/shell";
 import { executeEventHooks } from "../hooks/index";
 import type { CwdChangedHookInput } from "../hooks/types";
 import type { ToolResult } from "../types/index";
@@ -144,7 +144,9 @@ export class BashTool {
       if (outcome.state !== "completed" || outcome.exitCode !== 0) {
         const sandboxError = this.formatSandboxRuntimeError(output, outcome.stderr || "Command failed");
         if (sandboxError) return { success: false, error: sandboxError };
-        return { success: false, error: output || `Command failed with exit code ${outcome.exitCode ?? "unknown"}` };
+        const failure = output || `Command failed with exit code ${outcome.exitCode ?? "unknown"}`;
+        const hint = powerShellParseHint(command, failure);
+        return { success: false, error: hint ? `${failure}\n\n[Shelra: ${hint}]` : failure };
       }
 
       return { success: true, output: output || "Command executed successfully (no output)" };
