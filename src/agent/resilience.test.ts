@@ -256,6 +256,30 @@ function continuationIndex(messages: Array<{ role: string; content: unknown }>) 
   );
 }
 
+describe("a model writing a large file (seen live 2026-09-25)", () => {
+  it("shows the file and how much has arrived instead of waiting for the model", async () => {
+    const provider = new ScriptedProvider([
+      {
+        events: [
+          { type: "tool-input", id: "call-1", toolName: "write_file", chars: 0 },
+          { type: "tool-input", id: "call-1", toolName: "write_file", path: "index.html", chars: 12_800 },
+          { type: "text-delta", text: "Wrote the game." },
+        ],
+        text: "Wrote the game.",
+      },
+    ]);
+    const agent = agentFor(provider);
+    const statuses: string[] = [];
+    for await (const _chunk of agent.processMessage("Build the game", {
+      onStatus: (info) => statuses.push(info.detail),
+    })) {
+      // drain
+    }
+    expect(statuses).toContain("Preparing write_file");
+    expect(statuses).toContain("Writing index.html · 12.5 KB");
+  });
+});
+
 describe("a failing model connection never ends the turn", () => {
   it("retries after the SDK's own timeout aborts the generation (the live 2026-09-19 failure)", async () => {
     const provider = new ScriptedProvider([

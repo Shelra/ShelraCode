@@ -3052,6 +3052,19 @@ export class Agent {
                 yield { type: "content", content: part.text };
                 break;
 
+              case "tool-input": {
+                // The model is writing a tool call (a file's content, a long command): say so, with what has arrived,
+                // instead of "Waiting for" the model while the file streams in.
+                const size = part.chars >= 1_024 ? `${(part.chars / 1_024).toFixed(1)} KB` : `${part.chars} chars`;
+                reportStatus(
+                  "model",
+                  part.path
+                    ? `Writing ${part.path} · ${size}`
+                    : `Preparing ${part.toolName}${part.chars > 0 ? ` · ${size}` : ""}`,
+                );
+                break;
+              }
+
               case "reasoning-delta":
                 reasoningPreview = `${reasoningPreview}${part.text}`.slice(-256);
                 if (containsEncryptedReasoning(reasoningPreview)) {

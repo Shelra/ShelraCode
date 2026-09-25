@@ -183,3 +183,22 @@ describe("tool errors", () => {
     ]);
   });
 });
+
+describe("a tool call being written (seen live 2026-09-25)", () => {
+  it("reports which file the model is writing and how much has arrived, every 2 KB, not per fragment", async () => {
+    async function* raw() {
+      yield { type: "tool-input-start", id: "call-1", toolName: "write_file" };
+      yield { type: "tool-input-delta", id: "call-1", delta: '{"path":"index.html","content":"' };
+      for (let index = 0; index < 50; index += 1)
+        yield { type: "tool-input-delta", id: "call-1", delta: "x".repeat(100) };
+      yield { type: "tool-input-end", id: "call-1" };
+    }
+    const events: unknown[] = [];
+    for await (const event of normalizeProviderEvents(raw())) events.push(event);
+    expect(events[0]).toEqual({ type: "tool-input", id: "call-1", toolName: "write_file", chars: 0 });
+    expect(events.slice(1)).toEqual([
+      { type: "tool-input", id: "call-1", toolName: "write_file", path: "index.html", chars: 2_132 },
+      { type: "tool-input", id: "call-1", toolName: "write_file", path: "index.html", chars: 4_232 },
+    ]);
+  });
+});

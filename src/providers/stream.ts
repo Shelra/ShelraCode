@@ -56,13 +56,40 @@ function traceRawPart(part: Record<string, unknown>): void {
 `);
 }
 
+/** A tool call being written is reported at its start and then every this many characters, not per fragment. */
+const TOOL_INPUT_REPORT_CHARS = 2_048;
+
 /** Converts provider stream envelopes into the stable application event set. */
 export async function* normalizeProviderEvents(stream: AsyncIterable<unknown>): AsyncGenerator<ProviderEvent> {
+  // A model writing a large file sends its arguments in fragments for tens of seconds; they used to be dropped, and the
+  // terminal showed "Waiting for the model" while the file was arriving (seen live 2026-09-25).
+  const inputs = new Map<string, { toolName: string; head: string; chars: number; reported: number }>();
   for await (const raw of stream) {
     const part = record(raw);
     if (!part) continue;
     if (DEBUG_STREAM) traceRawPart(part);
     switch (part.type) {
+      case "tool-input-start": {
+        const id = stringValue(part.id, "");
+        const toolName = stringValue(part.toolName, "tool");
+        inputs.set(id, { toolName, head: "", chars: 0, reported: 0 });
+        yield { type: "tool-input", id, toolName, chars: 0 };
+        break;
+      }
+      case "tool-input-delta": {
+        const id = stringValue(part.id, "");
+        const input = inputs.get(id);
+        if (!input) break;
+        const delta = stringValue(part.delta, "");
+        input.chars += delta.length;
+        if (input.head.length < 400) input.head += delta.slice(0, 400 - input.head.length);
+        if (input.chars - input.reported >= TOOL_INPUT_REPORT_CHARS) {
+          input.reported = input.chars;
+          const path = /"(?:path|file_path|filePath)"\s*:\s*"([^"]+)"/u.exec(input.head)?.[1];
+          yield { type: "tool-input", id, toolName: input.toolName, ...(path ? { path } : {}), chars: input.chars };
+        }
+        break;
+      }
       case "text-delta":
         yield { type: "text-delta", text: stringValue(part.text, "") };
         break;

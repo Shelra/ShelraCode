@@ -68,6 +68,8 @@ export type ProviderEvent =
   | { type: "tool-call"; toolCall: ToolCall }
   | { type: "tool-result"; toolCall: ToolCall; output: unknown }
   | { type: "tool-approval-request"; approvalId: string; toolCall: ToolCall }
+  /** A tool call the model is still writing: which tool, the file it names once known, and how much has arrived. */
+  | { type: "tool-input"; id: string; toolName: string; path?: string; chars: number }
   | { type: "error"; error: unknown }
   | { type: "abort" };
 
