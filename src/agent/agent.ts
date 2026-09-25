@@ -3714,7 +3714,11 @@ export class Agent {
                 ? [{ kind: "decision", command: decision.check, source: decision.id }]
                 : [],
             ),
-          ];
+          ].filter(
+            // One command is one check, however many criteria name it: five plan criteria with the same command were
+            // run and reported five times (seen live 2026-09-25).
+            (check, index, all) => all.findIndex((other) => isSameCheck(check.command, other)) === index,
+          );
           if (contract.length > 0) {
             const results = await evaluateTurnContract({
               checks: contract,

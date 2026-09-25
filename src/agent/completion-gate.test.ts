@@ -1036,6 +1036,34 @@ describe("task contract: the project's own checks decide (audit doc 15, Phase 1.
     expect(chunks.some((c) => c.content?.includes("`bun test clock` passed"))).toBe(true);
   });
 
+  it("runs and reports a command once, however many plan criteria name it (seen live 2026-09-25)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const base = planWithCommand("failed");
+    const criterion = base.plan.acceptanceCriteria[0];
+    const plan = {
+      ...base,
+      plan: {
+        ...base.plan,
+        acceptanceCriteria: ["AC1", "AC2", "AC3"].map((id) => ({ ...criterion, id })),
+      },
+    };
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Still done." }], ["index.html"], plan);
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: mkdtempSync(join(tmpdir(), "shelra-contract-plan-once-")),
+      checkRunner,
+    });
+
+    let text = "";
+    for await (const chunk of agent.processMessage("Create a digital clock")) {
+      if (chunk.type === "content") text += chunk.content ?? "";
+    }
+
+    expect(checkRunner.mock.calls.map(([command]) => command)).toEqual(["bun test clock"]);
+    expect(text).toContain("[Checked by Shelra on the final code: `bun test clock` passed]");
+  });
+
   it("does not count a plan criterion's command that already passed before the change", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider(
