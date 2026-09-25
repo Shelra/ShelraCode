@@ -21,6 +21,14 @@ export const DIAGNOSIS_TIMEOUT_MS = 90_000;
 /** At most this many checks run before the work. */
 const MAX_CHECKS = 3;
 
+/**
+ * Whether a tool call is one the host made before the work (this diagnosis, the web search), not the model's: a
+ * benchmark that counted them credited the model with a check it never ran.
+ */
+export function isHostCall(id: string): boolean {
+  return id.startsWith("diagnosis-") || id.startsWith("research-");
+}
+
 /** Whether a request asks for the project's state to be checked before the work: not a greeting or an approval. */
 export function wantsDiagnosis(request: string): boolean {
   const text = request.trim();

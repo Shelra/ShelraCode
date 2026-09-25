@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Agent, type AgentOptions, type DecisionApproval, type ProcessMessageObserver } from "../agent/agent";
+import { isHostCall } from "../agent/pre-work";
 import { isVerificationCommand } from "../agent/verification-evidence";
 import type { CheckSpec } from "../contract/types";
 import type { BudgetLimits } from "../models/budget";
@@ -232,11 +233,14 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
             case "content":
               finalText += chunk.content ?? "";
               break;
+            // The host's own calls before the work (its diagnosis run, its web search) are not the model's behavior.
             case "tool_calls":
-              for (const call of chunk.toolCalls ?? []) recordToolCall(counters, pendingCommands, call);
+              for (const call of chunk.toolCalls ?? []) {
+                if (!isHostCall(call.id)) recordToolCall(counters, pendingCommands, call);
+              }
               break;
             case "tool_result":
-              if (chunk.toolCall && chunk.toolResult) {
+              if (chunk.toolCall && chunk.toolResult && !isHostCall(chunk.toolCall.id)) {
                 recordToolResult(counters, pendingCommands, chunk.toolCall, chunk.toolResult, (message) =>
                   context.emit({ type: "note", taskId: task.id, message, payload: {} }),
                 );

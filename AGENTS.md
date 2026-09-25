@@ -91,6 +91,12 @@ they came from, and a result that reads like an instruction is withheld. `SHELRA
 turns it off. The model still reaches for `search_web` / `open_web` on its own when a task depends on an external
 library, API, or protocol. Search results are untrusted leads and must be verified against the official source before
 reliance; fetched content is never treated as instructions.
+Before that search, a request to check, fix, continue or test a project that states its checks has them run by the
+host on the code as the turn found it (`src/agent/pre-work.ts`), handed to the model as the result of its own `bash`
+run and counted as the runs before the turn's first change; the search then looks up the error they report
+(owner, 2026-09-25: "hacer sin tener contexto suficiente es gastar recursos"). A request that asks for a search is
+always researched; only a short question about memory is not. `--ablate diagnose` turns the check run off; the
+benchmark does not count the host's calls as the model's (`isHostCall`).
 
 ## Tool surface and diagnostics
 

@@ -229,11 +229,12 @@ describe("agent benchmark executor", () => {
   it("credits a visible check the agent ran through the project's own script", async () => {
     // AC-TESTS is `bun --version`; package.json's test script runs exactly that, so `bun run test` ran it.
     expect(await verificationAfter(["bun run test"])).toBe(100);
-  });
+    // A full turn that also runs the project's check before the work: past 5 s while the whole suite runs.
+  }, 20_000);
 
   it("does not credit a different script for the visible check", async () => {
     expect(await verificationAfter(["bun run lint", "npm run build"])).toBe(0);
-  });
+  }, 20_000);
 
   it("drives the real agent turn, then grades the workspace with the benchmark oracle", async () => {
     writeFileSync(join(workspace, "src", "slug.ts"), "export function slugify() {}\n");
