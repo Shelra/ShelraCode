@@ -38,8 +38,41 @@ export function wantsResearch(request: string): boolean {
   return searchTerms(text).length >= 3;
 }
 
-/** The search query for a request: its first sentences, without code blocks or markup, at most 32 words. */
+/** A line that reports an error, as a runtime or a tool prints it. */
+const ERROR_LINE_RE =
+  /\b(?:[A-Z][A-Za-z]*Error|Exception|Traceback|error(?:\[\w+\])?:|E[A-Z]{3,}|cannot find|not found|failed to|fatal:|panic:)/u;
+
+/**
+ * The line of a pasted error to search for: the first line that reports an error, without paths, stack frames or
+ * positions, with the program that printed it when the paste names one (`> es-dev-server --serve …`). Seen live
+ * 2026-09-25: the whole pasted error, stack included, went out as the query and no search engine returned anything.
+ */
+function errorQuery(request: string): string | null {
+  const lines = request
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const error = lines.find((line) => ERROR_LINE_RE.test(line) && !/^at\s/u.test(line));
+  if (!error) return null;
+  const cleaned = error
+    .replace(/(?:[A-Za-z]:)?(?:[\\/][\w .@-]+)+(?::\d+(?::\d+)?)?/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, 200);
+  const program = lines
+    .find((line) => /^>\s*\S/u.test(line) && !/^>\s*[\w-]+@[\d.]+/u.test(line))
+    ?.replace(/^>\s*/u, "")
+    .split(/\s+/u)[0];
+  return program && !cleaned.toLowerCase().includes(program.toLowerCase()) ? `${program} ${cleaned}` : cleaned;
+}
+
+/**
+ * The search query for a request: the error it pastes, when it pastes one; otherwise its first sentences, without
+ * code blocks or markup, at most 32 words.
+ */
 export function researchQuery(request: string): string {
+  const pasted = errorQuery(request);
+  if (pasted) return pasted.split(" ").slice(0, QUERY_WORDS).join(" ");
   const prose = request
     .replace(/```[\s\S]*?```/gu, " ")
     .replace(/`([^`]*)`/gu, "$1")

@@ -203,6 +203,7 @@ import {
 } from "./compaction";
 import { DelegationManager } from "./delegations";
 import { AgentKernel, type KernelPhase, type KernelState } from "./kernel";
+import { answered, checkLocalUrls, describeUrlChecks, localUrlsIn, urlRepairRequest } from "./local-urls";
 import {
   applyModelConstraints,
   buildConversationSystemPrompt,
@@ -2858,6 +2859,7 @@ export class Agent {
           this.ablations,
         ),
         this.ablations.has("context") ? "" : contextPacket.promptAppendix,
+        runningProcessesNote(this.bash.runningProcesses()),
       ]
         .filter(Boolean)
         .join("\n\n"),
@@ -2963,6 +2965,8 @@ export class Agent {
     let repairEscalated = false;
     /** The model was told once this turn that the host stopped a round of it for making no progress. */
     let hostStopNoted = false;
+    /** The model was told once this turn that a local page its answer names does not answer. */
+    let urlRepairAsked = false;
     /** The current round's total budget (`modelTimeout.totalMs`), replaced at each round. */
     let roundBudget: ReturnType<typeof generationBudget> | undefined;
     /** The model was asked once this turn to apply memory it was given and did not act on (doc 18 §4.2b). */
@@ -4230,6 +4234,28 @@ export class Agent {
             yield { type: "content", content: `\n\n${checkedNote}` };
           }
 
+          // The local pages the answer names are requested now, on the final state (src/agent/local-urls.ts). When
+          // one does not answer while a server this session started is running, the model is told once and may fix
+          // it; the user always sees what the host observed.
+          if (this.mode === "agent" && !this.ablations.has("gate")) {
+            const urls = localUrlsIn(assistantText);
+            if (urls.length > 0) {
+              reportStatus("checks", `Requesting ${urls.join(", ")}`);
+              const checks = await checkLocalUrls(urls, { signal });
+              const failed = checks.filter((check) => !answered(check));
+              yield { type: "content", content: `\n\n${describeUrlChecks(checks)}` };
+              if (failed.length > 0 && !urlRepairAsked && this.bash.runningProcesses().length > 0) {
+                urlRepairAsked = true;
+                this.messages.push({ role: "user", content: urlRepairRequest(failed) });
+                this.messageSeqs.push(null);
+                this.kernel?.recordObservation(
+                  `Local pages the answer names do not answer: ${failed.map((check) => check.url).join(", ")}`,
+                );
+                continue;
+              }
+            }
+          }
+
           const stopInput: StopHookInput = {
             hook_event_name: "Stop",
             session_id: this.session?.id,
@@ -4982,6 +5008,26 @@ function interruptionContinuation(reason: string): string {
     ? `This round ended: ${reason}.`
     : `The connection to the model was interrupted (${reason}).`;
   return `${what} Your completed steps are above and their effects are on disk. Continue the task from where it stopped; do not redo finished work.`;
+}
+
+/**
+ * The background processes this session started and that still run, for the next turn's context. Seen live
+ * 2026-09-25: the user pasted "EADDRINUSE: address already in use :::8080" three times; each time the model killed
+ * whatever held the port and started the same server again in the background, so the user's own `npm run start`
+ * failed again. The process holding the port was the session's own.
+ */
+function runningProcessesNote(
+  processes: ReadonlyArray<{ id: number; command: string; pid: number; startedAt: Date }>,
+): string {
+  if (processes.length === 0) return "";
+  return [
+    "Background processes this session started that are still running (yours: read their output with process_logs, stop one with process_stop):",
+    ...processes.map(
+      (process) =>
+        `- [${process.id}] ${process.command} (pid ${process.pid}, since ${process.startedAt.toISOString().slice(11, 16)} UTC)`,
+    ),
+    "A port one of them listens on is held by your own process: the user cannot start that server again until it is stopped, and restarting it yourself does not fix what the user reported.",
+  ].join("\n");
 }
 
 /** Aborts one generation when its total budget runs out, with a reason of its own. */

@@ -31,6 +31,23 @@ describe("research before the work (owner, 2026-09-25)", () => {
     );
   });
 
+  it("searches the error a request pastes, with the program that printed it (seen live 2026-09-25)", () => {
+    const pasted = [
+      "tengo este error npm run start",
+      "",
+      "> mario-kart-3d@1.0.0 start",
+      "> es-dev-server --serve . --open --port 8080",
+      "",
+      "Error: listen EADDRINUSE: address already in use :::8080",
+      "    at Server.setupListenHandle [as _listen2] (node:net:2324:16)",
+      "    at listenInCluster (node:net:2433:12)",
+    ].join("\n");
+    expect(researchQuery(pasted)).toBe("es-dev-server Error: listen EADDRINUSE: address already in use :::8080");
+    expect(
+      researchQuery("TypeError: Cannot read properties of undefined (reading 'x') at C:\\app\\src\\main.ts:12:5"),
+    ).toBe("TypeError: Cannot read properties of undefined (reading 'x') at");
+  });
+
   it("withholds a result that reads like an instruction, and keeps the rest", async () => {
     const research = await researchTask("Create the classic Super Mario Bros game", {
       search: async () =>

@@ -112,6 +112,12 @@ A generation that stops making progress is ended: six steps that only repeat ear
 (`isRepeatingToolLoop`), or twelve that only read, search or run commands and return no word the generation had not
 seen (`createStallDetector`, `src/providers/stream.ts`). Once per turn the model is told why and may take another way
 or report; a second stop goes on to the completion gate.
+A local page the final answer names (`http://localhost…`, `127.0.0.1`) is requested by the host when the turn ends
+and, when it answers with HTML, loaded in a headless browser (`observePage`) for uncaught errors, console errors and
+requests that fail or answer 4xx/5xx; the user sees what was observed, and while a server the session started is
+running a failing page goes back to the model once (`src/agent/local-urls.ts`). Each turn's context lists the
+background processes the session left running (seen live 2026-09-25: a model kept killing and restarting its own
+server on the port the user reported busy, and answered "the game works" over a page that answered 500).
 What the resilience rule swallows (a failing memory write, checkpoint, index update, recap or hook) is appended to
 `~/.shelra/logs/swallowed-errors.jsonl` (`src/utils/diagnostics.ts`; `SHELRA_DIAGNOSTICS_LOG` names another file
 or `off`; Vitest runs with it off). Every turn, in the terminal UI or headless, is recorded in

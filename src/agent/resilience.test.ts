@@ -1,4 +1,6 @@
 import { mkdtempSync as makeTestWorkspace, readFileSync as readTestFile } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir as testTmpdir } from "node:os";
 import { join as joinTestPath } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
@@ -17,6 +19,7 @@ import type {
   ProviderTextResult,
   ProviderToolContext,
 } from "../providers/types";
+import type { BashTool } from "../tools/bash";
 import type { ModelInfo } from "../types/index";
 import type { Ablation } from "./ablation";
 
@@ -394,6 +397,51 @@ describe("a model that stops making progress (seen live 2026-09-25)", () => {
     expect(text.match(/\[Shelra stopped the round/gu)).toHaveLength(1);
     expect(chunks.at(-1)).toEqual({ type: "done" });
   });
+});
+
+describe("a local page the answer says works (seen live 2026-09-25)", () => {
+  it("is requested when the turn ends, and a failing one sent back to the model once", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(500, { "content-type": "text/plain" });
+      response.end("Internal Server Error");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as AddressInfo).port;
+    const url = `http://127.0.0.1:${port}/public/index.html`;
+    const provider = new ScriptedProvider([
+      answer(`The game is now running and accessible at ${url}.`),
+      answer("It does not work yet: the build fails on a type error in src/kart.ts."),
+    ]);
+    const agent = agentFor(provider);
+    const bash = (agent as unknown as { bash: BashTool }).bash;
+    // A server this session started is still running, as the model's own dev server was.
+    await bash.startBackground('node -e "setInterval(()=>{},1000)"');
+    try {
+      let text = "";
+      for await (const chunk of agent.processMessage("levanta el proyecto para verlo funcionando")) {
+        if (chunk.type === "content") text += chunk.content ?? "";
+      }
+
+      expect(provider.requests).toHaveLength(2);
+      expect(text).toContain(
+        `[Shelra requested the local page the answer names when the turn ended: ${url} → HTTP 500`,
+      );
+      const repair = sentMessages(provider, 1).filter(
+        (message) => message.role === "user" && String(message.content).startsWith("Your answer says local pages work"),
+      );
+      expect(repair).toHaveLength(1);
+      expect(String(repair[0]?.content)).toContain(`${url} → HTTP 500`);
+      expect(text).toContain("It does not work yet");
+      // The model is told which background processes the session left running: the one holding the port was its own.
+      expect(provider.requests[0]?.system).toContain(
+        "Background processes this session started that are still running",
+      );
+      expect(provider.requests[0]?.system).toMatch(/- \[\d+\] node -e "setInterval\(\(\)=>\{\},1000\)" \(pid \d+/u);
+    } finally {
+      await bash.cleanup();
+      server.close();
+    }
+  }, 30_000);
 });
 
 describe("a round that uses up its time budget (seen live 2026-09-25)", () => {

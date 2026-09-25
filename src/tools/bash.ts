@@ -198,6 +198,13 @@ export class BashTool {
     }
   }
 
+  /** The background processes this tool started that are still running, oldest first. */
+  runningProcesses(): Array<{ id: number; command: string; pid: number; startedAt: Date }> {
+    return [...this.bgProcesses.values()]
+      .filter((entry) => entry.alive)
+      .map(({ id, command, pid, startedAt }) => ({ id, command, pid, startedAt }));
+  }
+
   async startBackground(command: string): Promise<ToolResult> {
     const alive = [...this.bgProcesses.values()].filter((p) => p.alive);
     if (alive.length >= MAX_BACKGROUND_PROCESSES) {

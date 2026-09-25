@@ -16,6 +16,7 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
     consoleErrors: [],
     pageErrors: [],
     failedRequests: [],
+    badResponses: [],
     externalRequests: [],
     assertions: [],
     viewport: options.viewport,
@@ -34,6 +35,11 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
       if (message.type() === "error") observation.consoleErrors.push(message.text().slice(0, 1_000));
     });
     page.on("pageerror", (error) => observation.pageErrors.push(String(error).slice(0, 1_000)));
+    page.on("response", (response) => {
+      if (response.status() >= 400) {
+        observation.badResponses?.push(`${response.status()} ${response.url()}`.slice(0, 1_000));
+      }
+    });
     page.on("requestfailed", (request) => {
       observation.failedRequests.push(
         `${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "failed"}`.slice(0, 1_000),

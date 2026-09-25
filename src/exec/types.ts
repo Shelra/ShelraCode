@@ -103,6 +103,8 @@ export interface BrowserObservation {
   consoleErrors: string[];
   pageErrors: string[];
   failedRequests: string[];
+  /** Requests the page made that the server answered with a 4xx or 5xx status (a module that 404s, a 500). */
+  badResponses?: string[];
   /** Successful or failed HTTP(S) requests that left the app's own origin. */
   externalRequests: string[];
   /** Results of caller-supplied DOM assertions. */
