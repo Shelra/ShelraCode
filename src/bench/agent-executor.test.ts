@@ -430,7 +430,8 @@ describe("agent benchmark executor", () => {
     const unanswered = await run();
     expect(unanswered.statuses).toEqual(["Users are never removed: proposed", "Loans last 14 days: proposed"]);
     expect(unanswered.notes).toEqual([]);
-  });
+    // Two full agent turns: under 2 s alone, past the 5 s default while the whole suite runs in parallel.
+  }, 20_000);
 
   it("vetoes, with the chain suite's own patterns, a proposal that inverts or replaces the rule the user stated", async () => {
     const suite = JSON.parse(readFileSync("bench/suites/shelra-decision-chain-v0.1.json", "utf8")) as {
