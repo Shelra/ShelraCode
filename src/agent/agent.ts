@@ -1358,6 +1358,44 @@ export class Agent {
     return this.getSessionSnapshot();
   }
 
+  /**
+   * Continues a saved session in place, as `shelra -s <id>` does at startup: its transcript, plan state and task
+   * kernel come back, and the next turn goes on from them (the owner, 2026-09-25: "I cannot continue earlier chats";
+   * the terminal UI's /resume picker calls this). Returns null for an agent that saves no session; throws when the id
+   * names no saved session.
+   */
+  openSavedSession(id: string): SessionSnapshot | null {
+    if (!this.sessionStore) return null;
+    const store = new SessionStore(this.bash.getCwd());
+    // Resolved before anything is reset, so an unknown id leaves the current session as it was.
+    const session = store.openSession(id, this.modelId, this.mode, this.bash.getCwd());
+    if (this.sessionStartHookFired) {
+      const endInput: SessionEndHookInput = {
+        hook_event_name: "SessionEnd",
+        session_id: this.session?.id,
+        cwd: this.bash.getCwd(),
+      };
+      this.fireHook(endInput).catch(() => {});
+      this.sessionStartHookFired = false;
+    }
+    this.contextSummary = null;
+    this.activeAcceptanceCriteria = null;
+    this.activePlanSteps = null;
+    this.turnVerificationEvidence = [];
+    this.turnLinkedCriteriaIds = new Set();
+    this.sessionStore = store;
+    this.workspace = store.getWorkspace();
+    this.session = session;
+    this.mode = session.mode;
+    const transcript = loadTranscriptState(session.id);
+    this.messages = normalizeModelMessages(transcript.messages);
+    this.messageSeqs = transcript.seqs;
+    this.restorePersistedPlanState();
+    store.setModel(session.id, this.modelId);
+    this.kernel = this.loadPersistedKernel();
+    return this.getSessionSnapshot();
+  }
+
   getSessionInfo(): SessionInfo | null {
     return this.session;
   }
