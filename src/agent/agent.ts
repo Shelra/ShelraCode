@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
@@ -1368,6 +1368,14 @@ export class Agent {
   openSavedSession(id: string): SessionSnapshot | null {
     if (!this.sessionStore) return null;
     const store = new SessionStore(this.bash.getCwd());
+    // A chat from another folder continues there, where its files, memory and checks are: its tools run here would
+    // change the wrong project. Claude Code prints the same `cd` hint; a chat whose folder is gone continues here.
+    const saved = store.getSessionById(id);
+    if (saved && saved.workspaceId !== store.getWorkspace().id && existsSync(saved.cwdLast)) {
+      throw new Error(
+        `That chat belongs to ${saved.cwdLast}. Continue it there: cd "${saved.cwdLast}"; shelra -s ${saved.id}`,
+      );
+    }
     // Resolved before anything is reset, so an unknown id leaves the current session as it was.
     const session = store.openSession(id, this.modelId, this.mode, this.bash.getCwd());
     if (this.sessionStartHookFired) {

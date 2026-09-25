@@ -21,15 +21,24 @@ const saved: Record<string, Array<{ role: string; content: string }>> = {
   ],
 };
 
+/** Chats saved in another folder: one that still exists, and one that was deleted. */
+const elsewhere = mkdtempSync(join(tmpdir(), "shelra-other-project-"));
+const folders: Record<string, { workspaceId: string; cwd: string }> = {
+  "chat-elsewhere": { workspaceId: "ws-2", cwd: elsewhere },
+  "chat-gone": { workspaceId: "ws-3", cwd: join(elsewhere, "deleted-project") },
+};
+saved["chat-elsewhere"] = [{ role: "user", content: "Fix the API in the other project" }];
+saved["chat-gone"] = [{ role: "user", content: "Tune the old prototype" }];
+
 const session = (id: string) => ({
   id,
-  workspaceId: "ws-1",
+  workspaceId: folders[id]?.workspaceId ?? "ws-1",
   title: id === "chat-kart" ? "Kart game" : null,
   recap: null,
   model: "primary-model",
   mode: "agent" as const,
-  cwdAtStart: "/tmp/ws",
-  cwdLast: "/tmp/ws",
+  cwdAtStart: folders[id]?.cwd ?? "/tmp/ws",
+  cwdLast: folders[id]?.cwd ?? "/tmp/ws",
   status: "active" as const,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -72,6 +81,9 @@ vi.mock("../storage/index", () => ({
     }
     createSession() {
       return session("fresh");
+    }
+    getSessionById(id: string) {
+      return saved[id] ? session(id) : null;
     }
     getRequiredSession(id: string) {
       return session(id);
@@ -164,5 +176,19 @@ describe("continuing a saved session in place (the owner, 2026-09-25)", () => {
     });
     expect(() => agent.openSavedSession("no-such-chat")).toThrow('Session "no-such-chat" was not found.');
     expect(agent.getSessionId()).toBe("fresh");
+  });
+
+  it("sends a chat from another folder there, since its tools would change this one; a chat whose folder is gone continues here", () => {
+    const agent = new Agent(undefined, undefined, "primary-model", undefined, {
+      provider: new EchoProvider(),
+      cwd: mkdtempSync(join(tmpdir(), "shelra-switch-")),
+    });
+
+    expect(() => agent.openSavedSession("chat-elsewhere")).toThrow(
+      `That chat belongs to ${elsewhere}. Continue it there: cd "${elsewhere}"; shelra -s chat-elsewhere`,
+    );
+    expect(agent.getSessionId()).toBe("fresh");
+
+    expect(agent.openSavedSession("chat-gone")?.session.id).toBe("chat-gone");
   });
 });
