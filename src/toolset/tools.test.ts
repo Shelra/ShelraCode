@@ -529,7 +529,8 @@ describe("schedule daemon tools", () => {
       // Windows holds the folder for a moment after the process tree exits.
       await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => undefined);
     }
-  });
+    // It starts and stops a real process tree: past 5 s while the whole suite runs.
+  }, 20_000);
 
   it("refuses destructive commands without asking when the settings block them", async () => {
     const cwd = await scratchRepo("shelra-destructive-block-");

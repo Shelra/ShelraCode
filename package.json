@@ -1,6 +1,6 @@
 {
   "name": "shelra",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "A cloud-first AI coding agent with an explicit managed local mode, built with Bun and OpenTUI.",
   "type": "module",
   "main": "dist/index.js",
