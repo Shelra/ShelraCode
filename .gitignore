@@ -130,3 +130,7 @@ bench/suites/polyglot-*.json
 # Python bytecode from the research scripts
 __pycache__/
 *.pyc
+
+# The account service (Bun API + Supabase) lives only in the owner's checkout, not in this public repository
+# (owner, 2026-09-25).
+backend/

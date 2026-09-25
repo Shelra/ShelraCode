@@ -167,8 +167,9 @@ tokens, the turn's stages and what the user does in the terminal UI (mode or mod
   never in the repo.
 - `backend/` is the account service (Bun API over Supabase Postgres and Auth), a separate
   package with its own lockfile and `bun test` suites; root scripts, root Vitest and the
-  npm package exclude it. Its values go in `backend/.env` (see `backend/.env.example`).
-  See `backend/README.md` and `docs/architecture/16-BACKEND.md`.
+  npm package exclude it. Since 2026-09-25 it is kept out of this repository (`.gitignore`,
+  owner's decision) and exists only in the owner's checkout, so CI does not check it. Its values
+  go in `backend/.env` (see `backend/.env.example`). See `docs/architecture/16-BACKEND.md`.
 
 ## Resilience (hard rule)
 
