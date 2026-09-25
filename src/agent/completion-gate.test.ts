@@ -1701,6 +1701,29 @@ describe("the checks that decide done are the ones the turn started with (audit 
     expect(text).not.toContain("Not verified");
   }, 60_000);
 
+  it("says the checks passed on the final code only once the turn ends, after the requirement audit", async () => {
+    // Seen live 2026-09-25: "[Checked by Shelra on the final code …]" was shown, then the audit round changed the
+    // code for 25 minutes and the turn was cancelled.
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = slugProject();
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+    const { provider, requests } = roundsModel([
+      () => write("w1", "src/slug.ts", "export const slugify = (s: string) => s.trim().toLowerCase();\n"),
+      () => [{ type: "text-delta", text: "Audit: every stated behavior is exercised." }],
+    ]);
+    const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner,
+    });
+
+    const text = await run(agent, DENSE_REQUEST);
+
+    expect(lastUserText(requests[1])).toContain("audit the request requirement by requirement");
+    expect(text.match(/\[Checked by Shelra on the final code/gu)).toHaveLength(1);
+    expect(text.indexOf("[Checked by Shelra")).toBeGreaterThan(text.indexOf("Audit: every stated behavior"));
+  }, 60_000);
+
   it("lets a request that asks for a new test command change it, and runs the new one", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const dir = slugProject();

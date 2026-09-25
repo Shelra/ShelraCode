@@ -2865,6 +2865,11 @@ export class Agent {
     let repairEscalated = false;
     /** The model was told once this turn that the host stopped a round of it for making no progress. */
     let hostStopNoted = false;
+    /**
+     * The host ran the project's checks and they passed; said when the turn ends, while the contract still passes.
+     * Seen live 2026-09-25: "on the final code" was shown, then the requirement audit edited the code for 25 minutes.
+     */
+    let checkedNote: string | null = null;
     /** The turn's contract ran and every check passed on the final code. */
     let contractPassed = false;
     const checkRuns: Array<{
@@ -3800,18 +3805,18 @@ export class Agent {
             }
             const failing = results.filter((result) => !result.passed);
             contractPassed = failing.length === 0;
+            if (!contractPassed) checkedNote = null;
             if (failing.length === 0) {
               for (const result of results) {
                 this.turnVerificationEvidence.push(
                   `${result.check.command} passed (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
                 );
               }
+              // A pass that only reused runs keeps the note: nothing changed since the host's own run.
               if (results.some((result) => result.by === "host")) {
-                const note = `[Checked by Shelra on the final code: ${results
+                checkedNote = `[Checked by Shelra on the final code: ${results
                   .map((result) => `\`${result.check.command}\` passed`)
                   .join(", ")}]`;
-                this.recordVerdict(note);
-                yield { type: "content", content: `\n\n${note}` };
               }
             } else if (verificationRetries < MAX_VERIFICATION_RETRIES) {
               verificationRetries += 1;
@@ -4066,6 +4071,11 @@ export class Agent {
             );
             this.persistKernelIndex("Auditing the stated requirements");
             continue;
+          }
+
+          if (checkedNote) {
+            this.recordVerdict(checkedNote);
+            yield { type: "content", content: `\n\n${checkedNote}` };
           }
 
           const stopInput: StopHookInput = {

@@ -96,6 +96,17 @@ describe("session trace", () => {
     expect(formatTraceEvent(events[6] as never)).toContain("ok    write_file Created index.html");
   });
 
+  it("ends a turn cancelled after its checks passed as cancelled, not checked (seen live 2026-09-25)", () => {
+    const dir = traceHere();
+    const trace = startTurnTrace({ sessionId: "cancel1", cwd: "/w", model: "m", mode: "agent", request: "Build it." });
+    trace.chunk({ type: "content", content: "\n\n[Checked by Shelra on the final code: `bun test` passed]" });
+    trace.chunk({ type: "content", content: "\n\n[Cancelled]" });
+    trace.end();
+
+    const events = readTrace(listTraces(dir)[0]?.path ?? "");
+    expect(events.at(-1)).toMatchObject({ verdict: "[Cancelled]" });
+  });
+
   it("records what memory a turn was given and why (doc 18 §4.5)", () => {
     const dir = traceHere();
     const trace = startTurnTrace({ sessionId: "mem1", cwd: "/work", model: "m", mode: "agent", request: "fix login" });
@@ -202,6 +213,11 @@ describe("verbose session trace (SHELRA_TRACE=verbose)", () => {
     expect(newTraceEvents(seen, dir).map((event) => event.session)).toEqual(["first"]);
     expect(newTraceEvents(seen, dir)).toEqual([]);
     recordUiEvent("second", "cancel", {});
+    // Events from two files are ordered by time; two written in the same millisecond have no order to keep.
+    const written = Date.now();
+    while (Date.now() === written) {
+      // wait for the next millisecond
+    }
     recordUiEvent("first", "model", { model: "m2" });
     expect(newTraceEvents(seen, dir).map((event) => `${event.session}:${String(event.action)}`)).toEqual([
       "second:cancel",

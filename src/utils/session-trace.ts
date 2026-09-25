@@ -226,7 +226,15 @@ export function startTurnTrace(input: {
             text += content;
             for (const notice of noticesIn(content)) {
               lastNotice = notice;
-              if (/^\[(?:Not verified|Not marked complete|Checked by Shelra|Verified)/u.test(notice)) verdict = notice;
+              // A note that ends the turn replaces a verdict given before it: a turn cancelled after its checks passed
+              // ended cancelled.
+              if (
+                /^\[(?:Not verified|Not marked complete|Checked by Shelra|Verified|Cancelled|Paused|Limited|Stopped|No response|Error)\b/u.test(
+                  notice,
+                )
+              ) {
+                verdict = notice;
+              }
               write("notice", { text: clip(notice, MAX_NOTICE_CHARS) });
             }
             if (verbose && due(text, textSince)) flushText();
