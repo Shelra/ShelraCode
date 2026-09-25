@@ -73,6 +73,7 @@ import {
   takePendingReflection,
   turnOutcome,
 } from "../memory/episodes";
+import { errorLine } from "../memory/recovery";
 import {
   admitCandidates,
   cueTermsOf,
@@ -4182,9 +4183,48 @@ export class Agent {
               .map((c) => `- ${c.id}: ${c.description} (verify: ${c.verification})`)
               .join("\n");
             const maxRetries = documentsOnly ? 1 : MAX_VERIFICATION_RETRIES;
+            // A check the turn ran on the final code that failed is what it hears and what the verdict names, not "no
+            // verification observed" (seen live 2026-09-25: `npm run build` failed on the final code in turn after
+            // turn, and each ended "No verification action was observed for 8 acceptance criteria").
+            const failedOnFinal = [
+              ...new Map(
+                checkRuns
+                  .filter(
+                    (run) =>
+                      !run.passed &&
+                      !run.unrunnable &&
+                      foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
+                      run.mutationEvents === turnMutationEvents &&
+                      run.state !== null &&
+                      endState !== null &&
+                      changedPaths(run.state, endState)?.length === 0,
+                  )
+                  .map((run) => [run.command.trim(), run] as const),
+              ).values(),
+            ].filter(
+              // Only a check whose latest run failed: a failure fixed and run again is not reported.
+              (run) =>
+                checkRuns.filter((other) => other.command.trim() === run.command.trim()).at(-1)?.passed === false,
+            );
 
             if (verificationRetries < maxRetries) {
               verificationRetries += 1;
+              if (failedOnFinal.length > 0 && !documentsOnly) {
+                this.messages.push({
+                  role: "user",
+                  content: [
+                    `Completion blocked: ${failedOnFinal.map((run) => `\`${run.command}\``).join(", ")} failed on the final code, when you ran ${failedOnFinal.length === 1 ? "it" : "them"}:`,
+                    ...failedOnFinal.map((run) => `- \`${run.command}\`:\n${describeFailures(run.detail)}`),
+                    "Fix what it reports and run it again; the turn is not done while it fails.",
+                  ].join("\n"),
+                });
+                this.messageSeqs.push(null);
+                this.kernel?.recordObservation(
+                  `Completion gate: ${failedOnFinal.map((run) => run.command).join(", ")} failed on the final code (attempt ${verificationRetries}/${maxRetries}).`,
+                );
+                this.persistKernelIndex("A check fails on the final code");
+                continue;
+              }
               const blockedLine = [
                 staleEvidence && lastPassingCheck
                   ? `Completion blocked: you changed ${
@@ -4229,9 +4269,11 @@ export class Agent {
 
             const reason = documentsOnly
               ? `${mutations.length} document(s) written, and no check can run a document.`
-              : criteria.length > 0
-                ? `No verification action was observed for ${criteria.length} acceptance criteria after ${verificationRetries} automatic request(s).`
-                : `No verification action was observed after ${mutations.length} file(s) changed and ${verificationRetries} automatic request(s).`;
+              : failedOnFinal.length > 0
+                ? `${failedOnFinal.map((run) => `\`${run.command}\` fails on the final code (${errorLine(run.detail)})`).join("; ")}.`
+                : criteria.length > 0
+                  ? `No verification action was observed for ${criteria.length} acceptance criteria after ${verificationRetries} automatic request(s).`
+                  : `No verification action was observed after ${mutations.length} file(s) changed and ${verificationRetries} automatic request(s).`;
             const advice = documentsOnly
               ? "Review them before relying on them."
               : "Run the relevant checks yourself, or ask me to, before treating this as done.";

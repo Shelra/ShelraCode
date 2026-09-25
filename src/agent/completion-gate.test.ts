@@ -610,6 +610,34 @@ describe("completion/verification gate", () => {
     expect(agent.getVerificationStatus().evidenceCount).toBe(0);
   });
 
+  it("names a check the turn ran that fails on the final code, instead of 'no verification observed' (seen live 2026-09-25)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const failure = "src/kart.ts(114,1): error TS1128: Declaration or statement expected.";
+    const provider = new ScenarioProvider([
+      toolCallEvent("call-build", "bash", { command: "npm run build" }),
+      toolResultEvent(
+        "call-build",
+        "bash",
+        { success: false, output: failure, error: `> build\n> tsc\n\n${failure}` },
+        { command: "npm run build" },
+      ),
+      { type: "text-delta", text: "Done, the game builds." },
+    ]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
+
+    const chunks: Array<{ type: string; content?: string }> = [];
+    for await (const chunk of agent.processMessage("Create a digital clock")) chunks.push(chunk as never);
+
+    const nudges = provider.requests.map((request) => lastUserText(request));
+    expect(nudges.some((text) => text.includes("Completion blocked: `npm run build` failed on the final code"))).toBe(
+      true,
+    );
+    expect(nudges.some((text) => text.includes("TS1128"))).toBe(true);
+    const verdict = chunks.find((chunk) => chunk.content?.includes("[Not verified"))?.content ?? "";
+    expect(verdict).toContain("`npm run build` fails on the final code (src/kart.ts(114,1): error TS1128");
+    expect(verdict).not.toContain("No verification action was observed");
+  });
+
   it("does not gate a non-coding (conversational) turn even with no tool calls", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const provider = new ScenarioProvider([]);
