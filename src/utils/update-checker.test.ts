@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const RELEASE_URL = "https://api.github.com/repos/yosoyjavieruiz/ShelraCode/releases/latest";
+const RELEASE_URL = "https://api.github.com/repos/Shelra/ShelraCode/releases/latest";
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());

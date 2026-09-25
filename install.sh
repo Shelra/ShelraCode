@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP="shelra"
-REPO="yosoyjavieruiz/ShelraCode"
+REPO="Shelra/ShelraCode"
 RELEASES_API="https://api.github.com/repos/${REPO}/releases"
 USER_DIR="${HOME}/.shelra"
 INSTALL_DIR="${USER_DIR}/bin"
@@ -20,8 +20,8 @@ usage() {
 Install ShelraCode from GitHub Releases.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/yosoyjavieruiz/ShelraCode/main/install.sh | bash
-  curl -fsSL https://raw.githubusercontent.com/yosoyjavieruiz/ShelraCode/main/install.sh | bash -s -- --version 1.1.4
+  curl -fsSL https://raw.githubusercontent.com/Shelra/ShelraCode/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/Shelra/ShelraCode/main/install.sh | bash -s -- --version 1.1.4
   bash install.sh --binary /path/to/shelra
 
 Options:

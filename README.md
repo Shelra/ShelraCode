@@ -1,6 +1,6 @@
 # ShelraCode: a cloud-first terminal coding agent
 
-[![CI](https://github.com/yosoyjavieruiz/ShelraCode/actions/workflows/typecheck.yml/badge.svg)](https://github.com/yosoyjavieruiz/ShelraCode/actions/workflows/typecheck.yml)
+[![CI](https://github.com/Shelra/ShelraCode/actions/workflows/typecheck.yml/badge.svg)](https://github.com/Shelra/ShelraCode/actions/workflows/typecheck.yml)
 [![npm](https://img.shields.io/npm/v/shelra.svg)](https://www.npmjs.com/package/shelra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -22,7 +22,7 @@ Local inference remains available as an explicit private/offline mode with
 irm https://www.shelra.dev/install.ps1 | iex
 ```
 
-It downloads the latest [GitHub release](https://github.com/yosoyjavieruiz/ShelraCode/releases) into
+It downloads the latest [GitHub release](https://github.com/Shelra/ShelraCode/releases) into
 `%USERPROFILE%\.shelra\bin`, verifies its SHA-256 against the release's `checksums.txt`, adds the folder
 to your user PATH and records the install for `shelra update` and `shelra uninstall`. The release
 binary is self-contained: the Bun runtime, every package and OpenTUI's native library are inside
@@ -687,7 +687,7 @@ Make sure you have a modern shell and `curl` available:
 which curl
 
 # If using an outdated shell, try with bash explicitly
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/yosoyjavieruiz/ShelraCode/main/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Shelra/ShelraCode/main/install.sh)"
 ```
 
 **Bun not found**
@@ -792,7 +792,7 @@ If you're on Intel Mac or Linux, sandbox mode is not available. Use standard mod
 
 ### Getting help
 
-- Check existing [issues](https://github.com/yosoyjavieruiz/ShelraCode/issues)
+- Check existing [issues](https://github.com/Shelra/ShelraCode/issues)
 - Open a new issue with:
   - OS and terminal emulator version
   - ShelraCode version (`shelra --version`)

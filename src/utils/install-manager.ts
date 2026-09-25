@@ -8,7 +8,7 @@ import semverGt from "semver/functions/gt.js";
 import semverValid from "semver/functions/valid.js";
 import { getProductUserDir } from "../product/identity";
 
-export const SHELRA_RELEASE_REPO = "yosoyjavieruiz/ShelraCode";
+export const SHELRA_RELEASE_REPO = "Shelra/ShelraCode";
 export const SHELRA_RELEASES_API = `https://api.github.com/repos/${SHELRA_RELEASE_REPO}/releases`;
 export const SCRIPT_INSTALL_METHOD = "script";
 
