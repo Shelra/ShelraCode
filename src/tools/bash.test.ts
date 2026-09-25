@@ -429,7 +429,14 @@ describe("parseStandaloneCd", () => {
 describe("background processes are stopped with everything they started", () => {
   const made: string[] = [];
   afterEach(() => {
-    for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+    // Windows can hold a folder a killed process ran in for a moment after it is gone.
+    for (const dir of made.splice(0)) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch {
+        // a leftover temp folder must not fail the test
+      }
+    }
   });
 
   /** A background command that starts a child of its own, prints its pid and keeps running. */

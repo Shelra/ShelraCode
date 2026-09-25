@@ -99,6 +99,46 @@ function encodePowerShellCommand(command: string): string {
  * quoting or operators this splitter does not understand, is left alone.
  */
 export function translateForWindowsPowerShell(command: string): string {
+  return translateChains(preferCurlExe(command));
+}
+
+/**
+ * In Windows PowerShell 5.1 `curl` is an alias of Invoke-WebRequest, which takes none of curl's flags: seen live
+ * 2026-09-25, `curl -s http://localhost:8080/` failed twice with "missing mandatory parameters: Uri". Windows 10 and
+ * later ship the real curl as `curl.exe`; a `curl` that starts a command is sent there. Text in quotes is left alone.
+ */
+function preferCurlExe(command: string): string {
+  if (!/\bcurl\b/iu.test(command)) return command;
+  let result = "";
+  let quote: "'" | '"' | null = null;
+  let atStart = true;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index] as string;
+    if (quote) {
+      result += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      atStart = false;
+      result += char;
+      continue;
+    }
+    if (atStart && /^curl(?=\s|$)/iu.test(command.slice(index))) {
+      result += `${command.slice(index, index + 4)}.exe`;
+      index += 3;
+      atStart = false;
+      continue;
+    }
+    if (/[;|{(\n&]/u.test(char)) atStart = true;
+    else if (!/\s/u.test(char)) atStart = false;
+    result += char;
+  }
+  return result;
+}
+
+function translateChains(command: string): string {
   if (!command.includes("&&")) return translateOrChain(command);
   const segments: string[] = [];
   let current = "";

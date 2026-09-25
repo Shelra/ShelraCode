@@ -34,6 +34,16 @@ describe("translateForWindowsPowerShell", () => {
     expect(translateForWindowsPowerShell("echo 'a || b'")).toBe("echo 'a || b'");
   });
 
+  it("sends a curl that starts a command to the real curl.exe, not the Invoke-WebRequest alias (seen live 2026-09-25)", () => {
+    expect(translateForWindowsPowerShell("curl -s http://localhost:8080/")).toBe("curl.exe -s http://localhost:8080/");
+    expect(translateForWindowsPowerShell("cd game; curl -I http://x.test && echo ok")).toBe(
+      "cd game; curl.exe -I http://x.test; if ($?) { echo ok }",
+    );
+    expect(translateForWindowsPowerShell('echo "use curl -s here"')).toBe('echo "use curl -s here"');
+    expect(translateForWindowsPowerShell("curl.exe -s http://x.test")).toBe("curl.exe -s http://x.test");
+    expect(translateForWindowsPowerShell("npx curlconverter")).toBe("npx curlconverter");
+  });
+
   it("names what to do instead for a shape PowerShell cannot parse", () => {
     expect(
       powerShellParseHint(
