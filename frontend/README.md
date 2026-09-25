@@ -14,6 +14,17 @@ ConPTY → xterm.js → PNG at 120×32, 28 px Geist Mono). The wordmark is text
 (`src/components/ui/Wordmark.tsx`), the favicon `public/images/favicon.svg`, the social image
 `public/images/og-shelra.png`.
 
+**What is live:** the landing page and its guides (`/memory`, `/local`, `/free-models`). The web
+app (sign-in, account and the demo dashboard, below) is hidden until the account service ships:
+`src/lib/features.ts` reads `NEXT_PUBLIC_SHELRA_APP`, and without `=1` its routes and `/api/auth/*`
+are rewritten to the 404 page (`next.config.ts`), the pages refuse too, the navbar has no account
+entry and no page asks for a session. Build with `NEXT_PUBLIC_SHELRA_APP=1` to work on it.
+
+The navbar links the repository with its live star count (`src/components/ui/GitHubStars.tsx`):
+`src/lib/github.ts` reads it from GitHub's API on the server, cached for an hour, so the pages
+regenerate hourly (ISR) and visitors never call GitHub. A failure shows the link without a count;
+`GITHUB_TOKEN` (optional) raises the API's rate limit.
+
 ## Run
 
 ```bash
@@ -42,18 +53,23 @@ section for its options).
 
 The "Benchmark" section of the home page shows Shelra Bench as recorded in
 `../bench/history/benchmark-history.json` (every run and field case, see `bench/history/README.md`):
-the best completed run per agent and model on the core suite (tasks resolved, cost, wall time,
-run number, date and harness commit), the product path's progression on the model it was
+per agent and model, every completed core-suite run of its latest measured version added up
+(ShelraCode: its newest harness commit measured, by git date; reference agents record no commit,
+so all their runs), with tasks resolved over tasks attempted, runs, average cost and time per run,
+date and commit; never a best run. A core-suite run is one recorded under the suite's name or,
+like the 2026-09-23 audit and 2026-09-24 phase-4 runs recorded under their own labels, one over
+exactly the suite's tasks at its version; the audit's "silent" runs (same tasks, prompts that no
+longer ask for the tests) and ablations stay out, and so do rows measured only before the history
+rewrite of 2026-09-22. The side panel keeps the product path's progression on the model it was
 measured on most, and the field cases with their reference agent and re-runs. The page reads
 `src/lib/bench-summary.json`, which `bun run bench:sync` (`scripts/bench-summary.ts`) derives
-from the history; nothing is typed in by hand. Reference agents (Claude Code, Codex) appear as
-"being recorded" until their runs are imported into the history, then fill in on the next sync.
-After importing runs (`bun run scripts/bench-history.ts import …` at the repo root), run
-`bun run bench:sync` here and commit both files.
+from the history; nothing is typed in by hand. A reference agent without a recorded run is listed
+as "no run recorded yet". After importing runs (`bun run scripts/bench-history.ts import …` at the
+repo root), run `bun run bench:sync` here and commit both files.
 
-## Sign-in (GitHub, Google, email + password)
+## Sign-in (GitHub, Google, email + password) · hidden
 
-`/login`, `/signup` and `/account` use [Auth.js](https://authjs.dev) (`next-auth` v5) with
+Only with `NEXT_PUBLIC_SHELRA_APP=1` (see above). `/login`, `/signup` and `/account` use [Auth.js](https://authjs.dev) (`next-auth` v5) with
 stateless JWT sessions. Copy `.env.example` to `.env.local` and fill in `AUTH_SECRET`
 (`openssl rand -base64 32`).
 
@@ -71,9 +87,9 @@ The marketing pages never depend on auth being set up. Outside Vercel also set
 `src/lib/auth-actions.ts` (server actions), `src/lib/users.ts` (user store),
 `src/components/auth/` (the pages' UI) and `src/app/api/auth/[...nextauth]/route.ts` (handlers).
 
-## Dashboard (demo, no backend)
+## Dashboard (demo, no backend) · hidden
 
-`/dashboard` is the product's web app in demo form: Overview (prompt box, live missions, review
+Only with `NEXT_PUBLIC_SHELRA_APP=1` (see above). `/dashboard` is the product's web app in demo form: Overview (prompt box, live missions, review
 queue, usage, agents), Missions (list, new mission, detail with a live terminal log, plan, files
 and PR), Agents, Repositories, Usage, Billing, API keys, Team, Integrations, Activity and
 Settings, plus a ⌘K command palette, notifications and an account menu. Everything is simulated

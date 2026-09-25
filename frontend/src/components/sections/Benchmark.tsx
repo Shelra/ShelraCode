@@ -85,7 +85,7 @@ export function Benchmark() {
               <div className={styles.who}>
                 <p className="t-body-strong pre">{row.label}</p>
                 <p className="t-small-mono wrap muted">
-                  {modelName(row.model)}
+                  {modelName(row.free ? row.model.replace(/:free$/, "") : row.model)}
                   {row.free ? " · free" : ""}
                   {row.variant ? ` · ${row.variant}` : ""}
                 </p>
@@ -111,7 +111,7 @@ export function Benchmark() {
               <p className={`t-body-mono pre ${styles.num}`}>{money(row.costUsd)}</p>
               <p className={`t-body-mono pre ${styles.num}`}>{row.minutes === null ? "—" : `${row.minutes} min`}</p>
               <p className={`t-small-mono pre muted ${styles.run}`}>
-                #{row.runNumber} · {row.date}
+                {row.runs} {row.runs === 1 ? benchmark.run : benchmark.runs} · {row.date}
                 {row.commit ? ` · ${row.commit}` : ""}
               </p>
             </div>

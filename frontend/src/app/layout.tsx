@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { SessionProvider } from "next-auth/react";
 import type { ReactNode } from "react";
 import { seo } from "@/lib/content";
+import { appEnabled } from "@/lib/features";
 import { socialImage } from "@/lib/metadata";
 import { siteName, siteUrl } from "@/lib/site";
 import "./globals.css";
@@ -65,8 +66,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </noscript>
       </head>
       <body>
-        {/* The session is fetched on the client so the marketing pages stay static. */}
-        <SessionProvider>{children}</SessionProvider>
+        {/* With the web app on, the session is fetched on the client so the marketing pages stay static. */}
+        {appEnabled ? <SessionProvider>{children}</SessionProvider> : children}
       </body>
     </html>
   );

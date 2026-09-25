@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AccountPanel } from "@/components/auth/AccountPanel";
 import { AuthFrame } from "@/components/auth/AuthFrame";
@@ -7,6 +7,7 @@ import { AuthScene } from "@/components/auth/AuthScene";
 import { signOutAction } from "@/lib/auth-actions";
 import { providerLabel } from "@/lib/auth-providers";
 import { authCopy, type CardLine } from "@/lib/content";
+import { appEnabled } from "@/lib/features";
 
 export const metadata: Metadata = {
   title: "Account",
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AccountPage() {
+  if (!appEnabled) notFound();
   const session = await auth().catch(() => null);
   if (!session?.user) redirect("/login?callbackUrl=%2Faccount");
 

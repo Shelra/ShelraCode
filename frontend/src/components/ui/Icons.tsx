@@ -52,6 +52,13 @@ export const ArrowRightIcon = makeIcon("Arrow Right", [
   { d: "M 0 0 L 7 7 L 0 14", transform: "translate(12 5)" },
 ]);
 
+export const StarIcon = makeIcon("Star", [
+  {
+    d: "M 10 0 L 13.09 6.26 L 20 7.27 L 15 12.14 L 16.18 19.02 L 10 15.77 L 3.82 19.02 L 5 12.14 L 0 7.27 L 6.91 6.26 Z",
+    transform: "translate(2 2)",
+  },
+]);
+
 export const CopyIcon = makeIcon("Copy", [
   {
     d: "M 2 0 L 12 0 C 13.105 0 14 0.895 14 2 L 14 12 C 14 13.105 13.105 14 12 14 L 2 14 C 0.895 14 0 13.105 0 12 L 0 2 C 0 0.895 0.895 0 2 0 Z",

@@ -1,12 +1,18 @@
 import type { NextRequest } from "next/server";
 import { handlers } from "@/auth";
+import { appEnabled } from "@/lib/features";
 
 /*
- * Auth.js handlers. A production deployment without AUTH_SECRET has no working
- * sign-in; instead of a 500 on every session poll, the session endpoint says
- * "no session" and the other auth routes explain what is missing.
+ * Auth.js handlers. With the web app hidden (lib/features.ts) there is no sign-in: every auth route answers
+ * 404. A deployment with the app on but without AUTH_SECRET has no working sign-in either; instead of a 500
+ * on every session poll, the session endpoint says "no session" and the other auth routes explain what is
+ * missing.
  */
 const configured = Boolean(process.env.AUTH_SECRET) || process.env.NODE_ENV === "development";
+
+function hidden(): Response {
+  return Response.json({ error: "Not found." }, { status: 404 });
+}
 
 function unavailable(request: NextRequest): Response {
   if (request.nextUrl.pathname.endsWith("/session")) return Response.json(null);
@@ -16,5 +22,5 @@ function unavailable(request: NextRequest): Response {
   );
 }
 
-export const GET = configured ? handlers.GET : unavailable;
-export const POST = configured ? handlers.POST : unavailable;
+export const GET = !appEnabled ? hidden : configured ? handlers.GET : unavailable;
+export const POST = !appEnabled ? hidden : configured ? handlers.POST : unavailable;

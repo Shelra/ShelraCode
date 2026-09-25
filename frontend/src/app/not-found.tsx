@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { NotFoundView } from "@/components/layout/NotFoundView";
+import { SiteFrame } from "@/components/layout/SiteFrame";
 
 // Next adds noindex to every 404; the title says what the page is instead of repeating the home page's.
 export const metadata: Metadata = {
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function NotFound() {
-  return <NotFoundView />;
+  return (
+    <SiteFrame showFinalCta={false}>
+      <NotFoundView />
+    </SiteFrame>
+  );
 }

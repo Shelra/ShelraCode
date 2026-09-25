@@ -23,7 +23,8 @@ const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 
 // The production origin every canonical, sitemap entry and social image must use.
 const CANONICAL_ORIGIN = siteUrl;
-// Private routes are always visited, linked or not, so a lost noindex is caught.
+// Private routes are always visited, linked or not, so a lost noindex is caught. While the web app is hidden
+// (src/lib/features.ts) they answer 404, which is never indexed either.
 const PRIVATE_SEEDS = ["/login", "/signup", "/account", "/dashboard"];
 const MISSING_PATH = "/__seo-check-missing__";
 // Crawlers whose robots.txt rules must allow every public page: search and answer engines.
@@ -735,6 +736,7 @@ async function main() {
         }
         continue;
       }
+      if (facts.status === 404 && isNoindexPath(path) && isNoindex(facts)) continue; // a hidden private route
       if (facts.status !== 200) {
         add("error", "status", `Status ${facts.status}.`);
         continue;

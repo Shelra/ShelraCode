@@ -3,7 +3,9 @@
 // bench-summary.json (bun run bench:sync), never typed: the field notes below read it like the Benchmark section.
 import bench from "./bench-summary.json";
 
-const repo = "https://github.com/yosoyjavieruiz/ShelraCode";
+/** The repository on GitHub (owner/name): its links, and the star count in the navbar (lib/github.ts). */
+export const repoSlug = "Shelra/ShelraCode";
+const repo = `https://github.com/${repoSlug}`;
 
 export const links = {
   github: repo,
@@ -65,13 +67,15 @@ export const benchmark = {
   heading: ["Measured, not promised. ", "Same tasks, same oracle, every run on record."],
   suiteLabel: "CORE SUITE",
   updated: "updated",
-  columns: ["Agent · model", "Resolved", "Cost", "Time", "Run"],
-  // Reference agents measured on the same tasks and oracle; shown as pending until their runs are recorded.
+  columns: ["Agent · model", "Resolved", "Cost / run", "Time / run", "Runs"],
+  run: "run",
+  runs: "runs",
+  // Reference agents measured on the same tasks and oracle; listed without numbers until a run of theirs is recorded.
   references: [
-    { agent: "claude-code", label: "Claude Code", model: "Sonnet 5" },
+    { agent: "claude-code", label: "Claude Code", model: "Sonnet" },
     { agent: "codex", label: "Codex", model: "gpt-5.6-luna" },
   ],
-  pendingNote: "being recorded · audit 2026-09-23",
+  pendingNote: "no run recorded yet",
   infraNote: "lost to the provider",
   infraFootnote: "tasks lost to the provider, not to the harness",
   progressLabel: "HARNESS PROGRESS",
@@ -81,7 +85,7 @@ export const benchmark = {
   unsolved: "Not solved",
   reruns: "Re-runs on later commits",
   toolCalls: "tool calls",
-  method: `One run is one sample · benchmark-owned oracle · model pinned per run · ${costNote()} · full record in bench/history`,
+  method: `Each row adds up every run of its latest version · benchmark-owned oracle · model pinned per run · ${costNote()} · full record in bench/history`,
   button: "See every run",
   link: links.benchHistory,
 };
@@ -320,7 +324,6 @@ const lastRerun = case001?.reruns.at(-1);
 const progressRuns = bench.progress.runs;
 const firstProgress = progressRuns[0];
 const bestProgress = progressRuns.reduce((best, run) => (run.resolved > best.resolved ? run : best), progressRuns[0]);
-const progressRow = bench.rows.find((row) => row.model === bench.progress.model);
 // "qwen/qwen3-coder-30b-a3b-instruct" → "qwen3-coder-30b"
 const modelName = (id: string) => (id.split("/").pop() ?? id).replace(/^(.*?\d+b)-.*$/, "$1");
 const count = (n: number) => ["no", "one", "two", "three", "four", "five"][n] ?? String(n);
@@ -346,7 +349,7 @@ export const testimonials = {
       badge: "SHELRA BENCH",
       quote: `The real turn loop went from ${firstProgress.resolved} of ${firstProgress.total} tasks to ${bestProgress.resolved} of ${bestProgress.total} with the same model. The model did not change; the harness did.`,
       author: `${bench.suite.name} v${bench.suite.version.replace(/\.0$/, "")}`,
-      position: `${modelName(bench.progress.model)} · $${progressRow?.costUsd?.toFixed(2)} · ${progressRow?.minutes} min`,
+      position: `${modelName(bench.progress.model)} · ${bestProgress.costUsd === null ? "cost n/a" : `$${bestProgress.costUsd.toFixed(2)}`} · ${bestProgress.minutes} min`,
     },
     {
       badge: "RESILIENCE",

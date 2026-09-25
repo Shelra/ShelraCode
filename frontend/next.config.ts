@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
+import { appEnabled } from "./src/lib/features";
 import { siteUrl } from "./src/lib/site";
+
+// The web app's routes while it is hidden (src/lib/features.ts). The pages refuse too; routing them away first
+// gives the plain 404 page, whose title does not name what is behind it.
+const hiddenAppRoutes = ["/login", "/signup", "/account", "/dashboard", "/dashboard/:path*", "/api/auth/:path*"];
 
 const nextConfig: NextConfig = {
   // The frontend is nested in the shelra repository; keep Turbopack scoped to it.
@@ -21,6 +26,14 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+  async rewrites() {
+    if (appEnabled) return [];
+    return {
+      beforeFiles: hiddenAppRoutes.map((source) => ({ source, destination: "/__not-found" })),
+      afterFiles: [],
+      fallback: [],
+    };
   },
   async redirects() {
     // Only in a Vercel production build: previews and local builds keep their own addresses.

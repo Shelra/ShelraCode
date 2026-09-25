@@ -27,7 +27,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ShelraRepo = "yosoyjavieruiz/ShelraCode"
+$ShelraRepo = "Shelra/ShelraCode"
 $ShelraReleasesApi = if ($env:SHELRA_RELEASES_API) { $env:SHELRA_RELEASES_API.TrimEnd("/") } else { "https://api.github.com/repos/$ShelraRepo/releases" }
 $ShelraSourceZip = if ($env:SHELRA_SOURCE_ZIP) { $env:SHELRA_SOURCE_ZIP } else { "https://github.com/$ShelraRepo/archive/refs/heads/main.zip" }
 $ShelraTarget = "windows-x64"

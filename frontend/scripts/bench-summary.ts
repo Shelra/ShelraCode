@@ -4,16 +4,19 @@
  *   bun run scripts/bench-summary.ts        (from frontend/; also `bun run bench:sync`)
  *
  * Reads ../bench/history/benchmark-history.json (the record of every Shelra Bench run and field
- * case, see bench/history/README.md) and writes src/lib/bench-summary.json: the best completed run
- * per agent and model on the core suite, the progression of the product path on its pinned model,
- * and the field cases. The site never computes numbers itself; re-run this after importing runs.
+ * case, see bench/history/README.md) and writes src/lib/bench-summary.json: per agent and model, every
+ * completed core-suite run of its latest measured version (the table), the progression of the product
+ * path on its pinned model, and the field cases. The site never computes numbers itself; re-run this
+ * after importing runs.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const historyPath = resolve(root, "..", "bench", "history", "benchmark-history.json");
+const manifestPath = resolve(root, "..", "bench", "suites", "shelra-agent-core-v0.2.json");
 const outPath = resolve(root, "src", "lib", "bench-summary.json");
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -67,20 +70,29 @@ interface History {
   fieldCases: FieldCase[];
 }
 
+/**
+ * One agent and model in the table: every completed core-suite run of its latest measured version (the
+ * latest harness commit for ShelraCode; reference agents record none), added up, never a best run.
+ */
 export interface BenchRow {
   agent: string;
   label: string;
   model: string;
   free: boolean;
   variant: string | null;
+  /** Runs added up in this row. */
+  runs: number;
+  /** Tasks resolved and attempted across those runs. */
   resolved: number;
   total: number;
   /** Tasks that ended on a provider failure rather than on the task itself. */
   infra: number;
+  /** Average per run. */
   costUsd: number | null;
   costKind: string | null;
+  /** Average per run. */
   minutes: number | null;
-  runNumber: number;
+  /** Date of the latest run. */
   date: string;
   commit: string | null;
   source: string;
@@ -93,7 +105,16 @@ export interface BenchSummary {
   rows: BenchRow[];
   progress: {
     model: string;
-    runs: { runNumber: number; date: string; resolved: number; total: number; infra: number; commit: string | null }[];
+    runs: {
+      runNumber: number;
+      date: string;
+      resolved: number;
+      total: number;
+      infra: number;
+      commit: string | null;
+      costUsd: number | null;
+      minutes: number | null;
+    }[];
   };
   fieldCases: {
     id: string;
@@ -108,6 +129,9 @@ export interface BenchSummary {
   }[];
   /** Every core-suite run of ShelraCode on a free model, whatever its status: the honest free-tier record. */
   freeRuns: {
+    id: string;
+    /** "#N" for a run recorded under the suite's name, else the label it was recorded under. */
+    label: string;
     runNumber: number;
     date: string;
     model: string;
@@ -136,6 +160,9 @@ export interface BenchSummary {
 
 const SUITE = "shelra-agent-core";
 const MEMORY_SUITE = "shelra-memory";
+// Runs from before the history rewrite of 2026-09-22 record commits the public history no longer has: they stay in
+// the history and the progress panel, and leave the table, which shows measurements that can be replayed.
+const REWRITE = "2026-09-22";
 const INFRA =
   /402|credit|429|rate limit|overloaded|provider returned|404|timed out|timeout|stalled|no model answered|unavailable/i;
 
@@ -152,36 +179,81 @@ function infraCount(run: HistoryRun): number {
   return run.taskResults.filter((t) => t.status !== "passed" && t.failureReason && INFRA.test(t.failureReason)).length;
 }
 
-function toRow(run: HistoryRun): BenchRow {
+// Subsystems switched off for an experiment; "none" is the full harness.
+function variantOf(run: HistoryRun): string | null {
   const cfg = config(run);
   const ablation =
     typeof cfg.ablation === "string" ? cfg.ablation : Array.isArray(cfg.ablation) ? cfg.ablation.join(",") : null;
+  return ablation && ablation !== "none" ? `ablation: ${ablation}` : null;
+}
+
+// Reference agents record their model behind the CLI's name: "claude-code/sonnet", "codex/gpt-5.6-luna@max".
+function displayModel(run: HistoryRun): string {
+  const model = shortModel(run.model).replace(/^(claude-code|codex)\//, "");
+  const [name, effort] = model.split("@");
+  return effort ? `${name} · effort ${effort}` : name;
+}
+
+const usd = (micros: number) => Math.round(micros / 10_000) / 100;
+const commitOf = (run: HistoryRun) => (run.harnessCommit ? run.harnessCommit.slice(0, 7) : null);
+const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+
+function toRow(runs: HistoryRun[]): BenchRow {
+  const latest = runs.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
+  const costs = runs.filter((r) => r.costMicros !== null).map((r) => r.costMicros as number);
+  const durations = runs.filter((r) => r.durationMs !== null).map((r) => r.durationMs as number);
+  const kinds = new Set(runs.map((r) => r.costKind ?? null));
   return {
-    agent: run.agent.name,
-    label: agentLabel(run.agent.name),
-    model: shortModel(run.model),
-    free: isFree(run.model, run.costMicros),
-    variant: ablation ? `ablation: ${ablation}` : null,
-    resolved: run.tasks.resolved,
-    total: run.tasks.total,
-    infra: infraCount(run),
-    costUsd: run.costMicros === null ? null : Math.round(run.costMicros / 10_000) / 100,
-    costKind: run.costKind ?? null,
-    minutes: run.durationMs === null ? null : Math.round(run.durationMs / 60_000),
-    runNumber: run.runNumber,
-    date: run.createdAt.slice(0, 10),
-    commit: run.harnessCommit ? run.harnessCommit.slice(0, 7) : null,
-    source: run.source,
+    agent: latest.agent.name,
+    label: agentLabel(latest.agent.name),
+    model: displayModel(latest),
+    free: runs.every((r) => isFree(r.model, r.costMicros)),
+    variant: variantOf(latest),
+    runs: runs.length,
+    resolved: runs.reduce((sum, r) => sum + r.tasks.resolved, 0),
+    total: runs.reduce((sum, r) => sum + r.tasks.total, 0),
+    infra: runs.reduce((sum, r) => sum + infraCount(r), 0),
+    costUsd: costs.length ? usd(average(costs)) : null,
+    costKind: !costs.length ? null : kinds.size === 1 && kinds.has("exact") ? "exact" : "estimated",
+    minutes: durations.length ? Math.round(average(durations) / 60_000) : null,
+    date: latest.createdAt.slice(0, 10),
+    commit: commitOf(latest),
+    source: latest.source,
   };
 }
 
 const history = JSON.parse(readFileSync(historyPath, "utf8")) as History;
 
-// The product path on the core suite: completed runs that actually ran (a run that died in its first
-// minute is a configuration failure, not a measurement).
+// The core suite's tasks. The 2026-09-23 audit and the 2026-09-24 phase-4 runs were recorded under their own
+// labels ("C1-core-claude-sonnet", "F4C-core-current-nemotron-1") rather than the suite's name: a run over exactly
+// these tasks at the suite's version is a core-suite run. The audit's "silent" runs have the same tasks with
+// prompts that no longer ask for the tests, a different measurement, and stay out.
+const manifest = existsSync(manifestPath)
+  ? (JSON.parse(readFileSync(manifestPath, "utf8")) as { benchmarkVersion: string; tasks: { id: string }[] })
+  : null;
+const coreTaskIds = manifest
+  ? manifest.tasks
+      .map((t) => t.id)
+      .sort()
+      .join(",")
+  : null;
+
+function isCoreRun(run: HistoryRun): boolean {
+  if (run.suite === SUITE) return true;
+  if (!manifest || /silent/i.test(run.suite) || run.benchmarkVersion !== manifest.benchmarkVersion) return false;
+  return (
+    run.taskResults
+      .map((t) => t.taskId ?? "")
+      .sort()
+      .join(",") === coreTaskIds
+  );
+}
+
+// The core suite's measurements: completed runs that actually ran (a run that died in its first minute is a
+// configuration failure, not a measurement), on the product path.
 const core = history.runs.filter(
   (r) =>
-    r.suite === SUITE &&
+    isCoreRun(r) &&
     r.status === "completed" &&
     (r.durationMs ?? 0) >= 120_000 &&
     (r.agent.name !== "shelra" || config(r).harness !== "autonomy-runtime"),
@@ -191,29 +263,53 @@ const version =
     .map((r) => r.benchmarkVersion)
     .sort()
     .at(-1) ?? "0.2.0";
-const total = core[0]?.tasks.total ?? 8;
+const total = manifest?.tasks.length ?? core[0]?.tasks.total ?? 8;
 
-// Best completed run per agent + model + variant: most tasks resolved, then the latest.
-const best = new Map<string, HistoryRun>();
-for (const run of core) {
-  const row = toRow(run);
-  const key = `${row.agent}|${row.model}|${row.variant ?? ""}`;
-  const current = best.get(key);
-  if (
-    !current ||
-    run.tasks.resolved > current.tasks.resolved ||
-    (run.tasks.resolved === current.tasks.resolved && run.createdAt > current.createdAt)
-  ) {
-    best.set(key, run);
-  }
+// When a commit was made, from this repository's git history: an A/B measurement alternates its runs between
+// two commits, so the latest run is not always on the newest one. "" when git does not know the commit.
+function commitTime(commit: string | null): string {
+  if (!commit) return "";
+  const out = spawnSync("git", ["log", "-1", "--format=%cI", commit], { cwd: root, encoding: "utf8" });
+  return out.status === 0 ? out.stdout.trim() : "";
 }
-const rows = [...best.values()].map(toRow).sort((a, b) => {
-  const order = (agent: string) => (agent === "shelra" ? 0 : agent === "claude-code" ? 1 : agent === "codex" ? 2 : 3);
-  return order(a.agent) - order(b.agent) || b.resolved - a.resolved || (a.costUsd ?? 0) - (b.costUsd ?? 0);
-});
 
-// Progression of the product path on the model it was measured on most often.
-const shelraRuns = core.filter((r) => r.agent.name === "shelra" && !toRow(r).variant);
+// The runs of a group's latest measured version: its newest harness commit (by commit date, else by the date of
+// its runs). Reference agents record no commit, so all their runs.
+function latestVersion(runs: HistoryRun[]): HistoryRun[] {
+  const commits = [...new Set(runs.map(commitOf))];
+  const lastRun = (commit: string | null) =>
+    runs
+      .filter((r) => commitOf(r) === commit)
+      .map((r) => r.createdAt)
+      .sort()
+      .at(-1) ?? "";
+  const newest = commits.reduce((a, b) => {
+    const [ta, tb] = [commitTime(a), commitTime(b)];
+    if (ta && tb && ta !== tb) return tb > ta ? b : a;
+    return lastRun(b) > lastRun(a) ? b : a;
+  });
+  return runs.filter((r) => commitOf(r) === newest);
+}
+
+// The table: per agent and model (full harness only), every run of its latest measured version, added up.
+const groups = new Map<string, HistoryRun[]>();
+for (const run of core.filter((r) => !variantOf(r))) {
+  const key = `${run.agent.name}|${shortModel(run.model)}`;
+  groups.set(key, [...(groups.get(key) ?? []), run]);
+}
+const rows = [...groups.values()]
+  .map(latestVersion)
+  .filter((runs) => runs.every((r) => r.createdAt.slice(0, 10) > REWRITE))
+  .map(toRow)
+  .sort((a, b) => {
+    const order = (agent: string) => (agent === "shelra" ? 0 : agent === "claude-code" ? 1 : agent === "codex" ? 2 : 3);
+    return order(a.agent) - order(b.agent) || b.resolved / b.total - a.resolved / a.total;
+  });
+
+// Progression of the product path on the model it was measured on most often: the runs the product-path bench
+// recorded under the suite's name, one model across harness commits. (The audit's repeated runs compare agents
+// and commits side by side; the table shows them.)
+const shelraRuns = core.filter((r) => r.suite === SUITE && r.agent.name === "shelra" && !variantOf(r));
 const byModel = new Map<string, HistoryRun[]>();
 for (const run of shelraRuns) {
   const key = shortModel(run.model);
@@ -252,7 +348,9 @@ const summary: BenchSummary = {
         resolved: r.tasks.resolved,
         total: r.tasks.total,
         infra: infraCount(r),
-        commit: r.harnessCommit ? r.harnessCommit.slice(0, 7) : null,
+        commit: commitOf(r),
+        costUsd: r.costMicros === null ? null : usd(r.costMicros),
+        minutes: r.durationMs === null ? null : Math.round(r.durationMs / 60_000),
       })),
   },
   fieldCases: history.fieldCases.map((c) => ({
@@ -271,10 +369,13 @@ const summary: BenchSummary = {
       gateLoops: r.gateLoops,
     })),
   })),
+  // The full harness only: a run with subsystems switched off measures the experiment, not the product.
   freeRuns: history.runs
-    .filter((r) => r.suite === SUITE && r.agent.name === "shelra" && /:free$/.test(r.model ?? ""))
-    .sort((a, b) => a.runNumber - b.runNumber)
+    .filter((r) => isCoreRun(r) && r.agent.name === "shelra" && /:free$/.test(r.model ?? "") && !variantOf(r))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.runNumber - b.runNumber)
     .map((r) => ({
+      id: r.id,
+      label: r.suite === SUITE ? `#${r.runNumber}` : r.suite,
       runNumber: r.runNumber,
       date: r.createdAt.slice(0, 10),
       model: shortModel(r.model),
@@ -315,5 +416,5 @@ console.log(
 );
 for (const row of rows)
   console.log(
-    `  ${row.label} · ${row.model}${row.variant ? ` (${row.variant})` : ""}: ${row.resolved}/${row.total}${row.infra ? ` (${row.infra} lost to the provider)` : ""} · ${row.costUsd === null ? "cost n/a" : `$${row.costUsd.toFixed(2)}`} · ${row.minutes ?? "?"} min · #${row.runNumber} ${row.date}`,
+    `  ${row.label} · ${row.model}${row.variant ? ` (${row.variant})` : ""}: ${row.resolved}/${row.total} in ${row.runs} ${row.runs === 1 ? "run" : "runs"}${row.infra ? ` (${row.infra} lost to the provider)` : ""} · ${row.costUsd === null ? "cost n/a" : `$${row.costUsd.toFixed(2)}/run`} · ${row.minutes ?? "?"} min/run · ${row.date}${row.commit ? ` ${row.commit}` : ""}`,
   );

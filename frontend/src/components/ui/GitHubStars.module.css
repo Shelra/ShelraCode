@@ -1,0 +1,49 @@
+.stars {
+  --bc: var(--border);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  flex: none;
+  position: relative;
+  color: var(--default);
+  text-decoration: none;
+  background-color: var(--surface);
+  transition: background-color 0.2s ease;
+}
+
+.stars::after {
+  transition: border-color 0.2s ease;
+}
+
+.stars:hover {
+  --bc: var(--accent-40);
+  background-color: var(--white-8);
+}
+
+.stars:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.count {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding-left: 8px;
+  box-shadow: inset 1px 0 0 var(--border);
+  color: var(--default);
+}
+
+.compact {
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.compact .count {
+  padding-left: 6px;
+}

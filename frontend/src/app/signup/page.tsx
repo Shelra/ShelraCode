@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AuthFrame } from "@/components/auth/AuthFrame";
 import { AuthPanel } from "@/components/auth/AuthPanel";
@@ -8,6 +8,7 @@ import { signInWith, signUpWithPassword } from "@/lib/auth-actions";
 import { type AuthSearchParams, readAuthSearch } from "@/lib/auth-page";
 import { getAuthProviders, providerLabel } from "@/lib/auth-providers";
 import { authCopy } from "@/lib/content";
+import { appEnabled } from "@/lib/features";
 
 export const metadata: Metadata = {
   title: "Create your account",
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
 
 // Signing up with an OAuth provider is the same flow as signing in; the page differs in what it says.
 export default async function SignupPage({ searchParams }: { searchParams: AuthSearchParams }) {
+  if (!appEnabled) notFound();
   const session = await auth().catch(() => null);
   if (session?.user) redirect("/account");
   const { error, provider, redirectTo } = readAuthSearch(await searchParams);

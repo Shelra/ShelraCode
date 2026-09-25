@@ -1,45 +1,62 @@
 {
-  "updatedAt": "2026-09-23",
+  "updatedAt": "2026-09-24",
   "suite": {
     "name": "shelra-agent-core",
     "version": "0.2.0",
     "tasks": 8
   },
-  "runsTotal": 32,
+  "runsTotal": 80,
   "rows": [
     {
       "agent": "shelra",
       "label": "ShelraCode",
-      "model": "deepseek/deepseek-v4-flash",
-      "free": false,
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "free": true,
       "variant": null,
-      "resolved": 5,
-      "total": 8,
+      "runs": 3,
+      "resolved": 21,
+      "total": 24,
       "infra": 0,
-      "costUsd": 0.03,
+      "costUsd": 0,
       "costKind": "estimated",
-      "minutes": 15,
-      "runNumber": 22,
-      "date": "2026-09-17",
-      "commit": "572c0e0",
-      "source": "owner-db-2026-09"
+      "minutes": 41,
+      "date": "2026-09-24",
+      "commit": "e9c776e",
+      "source": "f4-2026-09-24"
     },
     {
-      "agent": "shelra",
-      "label": "ShelraCode",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "agent": "claude-code",
+      "label": "Claude Code",
+      "model": "sonnet",
       "free": false,
       "variant": null,
-      "resolved": 5,
+      "runs": 1,
+      "resolved": 8,
       "total": 8,
       "infra": 0,
-      "costUsd": 1.32,
+      "costUsd": 0.92,
       "costKind": "estimated",
-      "minutes": 27,
-      "runNumber": 11,
-      "date": "2026-09-17",
-      "commit": "af7e7bd",
-      "source": "owner-db-2026-09"
+      "minutes": 5,
+      "date": "2026-09-23",
+      "commit": null,
+      "source": "audit-2026-09-23-baseline"
+    },
+    {
+      "agent": "codex",
+      "label": "Codex",
+      "model": "gpt-5.6-luna · effort max",
+      "free": false,
+      "variant": null,
+      "runs": 1,
+      "resolved": 8,
+      "total": 8,
+      "infra": 0,
+      "costUsd": null,
+      "costKind": null,
+      "minutes": 24,
+      "date": "2026-09-23",
+      "commit": null,
+      "source": "audit-2026-09-23-baseline"
     }
   ],
   "progress": {
@@ -51,7 +68,9 @@
         "resolved": 1,
         "total": 8,
         "infra": 0,
-        "commit": "af7e7bd"
+        "commit": "af7e7bd",
+        "costUsd": 0,
+        "minutes": 7
       },
       {
         "runNumber": 11,
@@ -59,7 +78,9 @@
         "resolved": 5,
         "total": 8,
         "infra": 0,
-        "commit": "af7e7bd"
+        "commit": "af7e7bd",
+        "costUsd": 1.32,
+        "minutes": 27
       },
       {
         "runNumber": 24,
@@ -67,7 +88,9 @@
         "resolved": 2,
         "total": 8,
         "infra": 6,
-        "commit": "572c0e0"
+        "commit": "572c0e0",
+        "costUsd": null,
+        "minutes": 12
       }
     ]
   },
@@ -138,6 +161,8 @@
   ],
   "freeRuns": [
     {
+      "id": "run_20260914143723_83bafb09",
+      "label": "#3",
       "runNumber": 3,
       "date": "2026-09-14",
       "model": "thinkingmachines/inkling-small:free",
@@ -148,6 +173,8 @@
       "commit": "af7e7bd"
     },
     {
+      "id": "run_20260914180339_5a417b2e",
+      "label": "#4",
       "runNumber": 4,
       "date": "2026-09-14",
       "model": "thinkingmachines/inkling-small:free",
@@ -158,6 +185,8 @@
       "commit": "af7e7bd"
     },
     {
+      "id": "run_20260918011003_d95a62a4",
+      "label": "#28",
       "runNumber": 28,
       "date": "2026-09-18",
       "model": "deepseek/deepseek-v4-flash-0731:free",
@@ -168,6 +197,8 @@
       "commit": "572c0e0"
     },
     {
+      "id": "run_20260918011508_e19ecf8e",
+      "label": "#31",
       "runNumber": 31,
       "date": "2026-09-18",
       "model": "deepseek/deepseek-v4-flash-0731:free",
@@ -178,6 +209,8 @@
       "commit": "572c0e0"
     },
     {
+      "id": "run_20260918012032_af2ba131",
+      "label": "#32",
       "runNumber": 32,
       "date": "2026-09-18",
       "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -186,6 +219,90 @@
       "total": 8,
       "infra": 0,
       "commit": "572c0e0"
+    },
+    {
+      "id": "run_20260923121914_685f8be1",
+      "label": "S1-core-full-nemotron",
+      "runNumber": 5,
+      "date": "2026-09-23",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 5,
+      "total": 8,
+      "infra": 3,
+      "commit": "7b433b0"
+    },
+    {
+      "id": "run_20260924000511_36a28fa7",
+      "label": "F4C-core-current-nemotron-1",
+      "runNumber": 1,
+      "date": "2026-09-24",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 7,
+      "total": 8,
+      "infra": 0,
+      "commit": "e9c776e"
+    },
+    {
+      "id": "run_20260924004221_5bdd15d2",
+      "label": "F4B-core-baseline-nemotron-1",
+      "runNumber": 1,
+      "date": "2026-09-24",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 8,
+      "total": 8,
+      "infra": 0,
+      "commit": "7b433b0"
+    },
+    {
+      "id": "run_20260924011331_fe69670b",
+      "label": "F4C-core-current-nemotron-2",
+      "runNumber": 1,
+      "date": "2026-09-24",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 7,
+      "total": 8,
+      "infra": 0,
+      "commit": "e9c776e"
+    },
+    {
+      "id": "run_20260924020140_a354f1a6",
+      "label": "F4B-core-baseline-nemotron-2",
+      "runNumber": 1,
+      "date": "2026-09-24",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 7,
+      "total": 8,
+      "infra": 0,
+      "commit": "7b433b0"
+    },
+    {
+      "id": "run_20260924023653_19996cc8",
+      "label": "F4C-core-current-nemotron-3",
+      "runNumber": 1,
+      "date": "2026-09-24",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 7,
+      "total": 8,
+      "infra": 0,
+      "commit": "e9c776e"
+    },
+    {
+      "id": "run_20260924031546_a5cb16f9",
+      "label": "F4B-core-baseline-nemotron-3",
+      "runNumber": 1,
+      "date": "2026-09-24",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "status": "completed",
+      "resolved": 8,
+      "total": 8,
+      "infra": 0,
+      "commit": "7b433b0"
     }
   ],
   "memory": {

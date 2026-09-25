@@ -125,7 +125,7 @@ export function FreeModelResults() {
         </p>
       )}
       <p className={`t-small ${styles.p}`}>
-        Every run of ShelraCode on a free model in the eight-task core suite, whatever its outcome:
+        Every run of ShelraCode (the full harness) on a free model in the eight-task core suite, whatever its outcome:
       </p>
       {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a keyboard must reach a box that scrolls sideways on a phone to scroll it (WCAG 2.1.1) */}
       <section className={styles.tableWrap} aria-label="Core-suite runs on free models" tabIndex={0}>
@@ -141,8 +141,8 @@ export function FreeModelResults() {
           </thead>
           <tbody>
             {runs.map((run) => (
-              <tr key={run.runNumber}>
-                <td className={styles.mono}>#{run.runNumber}</td>
+              <tr key={run.id}>
+                <td className={styles.mono}>{run.label}</td>
                 <td>
                   {run.resolved} of {run.total}
                 </td>

@@ -148,6 +148,15 @@
   color: var(--accent);
 }
 
+/* Phones: the repository link beside the menu button. */
+.mobileActions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
 .hamburger {
   background: none;
   border: 0;

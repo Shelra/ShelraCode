@@ -4,19 +4,23 @@ import { AnimatePresence, motion } from "motion/react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { GitHubStars } from "@/components/ui/GitHubStars";
 import { MenuIcon, XIcon } from "@/components/ui/Icons";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { links, mobileNav, nav } from "@/lib/content";
+import { appEnabled } from "@/lib/features";
 import { useBreakpoint } from "@/lib/useBreakpoint";
 import styles from "./NavBar.module.css";
 
 type Props = {
   /** Id of the section past which the CTA switches to the filled variant. */
   switchAt?: string;
+  /** The repository's star count, read on the server (lib/github.ts); null when GitHub could not be read. */
+  stars: number | null;
 };
 
 // Fixed top navigation with the mobile overlay menu.
-export function NavBar({ switchAt }: Props) {
+export function NavBar({ switchAt, stars }: Props) {
   const bp = useBreakpoint();
   const mobile = bp !== "desktop";
   const [open, setOpen] = useState(false);
@@ -80,7 +84,8 @@ export function NavBar({ switchAt }: Props) {
             )}
             {!mobile && (
               <div className={styles.actions}>
-                <NavAuth />
+                {appEnabled && <NavAuth />}
+                <GitHubStars stars={stars} />
                 <Button
                   text="Get Started"
                   href={links.getStarted}
@@ -90,14 +95,17 @@ export function NavBar({ switchAt }: Props) {
               </div>
             )}
             {mobile && (
-              <button
-                type="button"
-                className={styles.hamburger}
-                onClick={() => setOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                <MenuIcon size={24} strokeWidth={2} color="var(--default)" />
-              </button>
+              <div className={styles.mobileActions}>
+                <GitHubStars stars={stars} compact />
+                <button
+                  type="button"
+                  className={styles.hamburger}
+                  onClick={() => setOpen((v) => !v)}
+                  aria-label="Open menu"
+                >
+                  <MenuIcon size={24} strokeWidth={2} color="var(--default)" />
+                </button>
+              </div>
             )}
           </div>
         </nav>
@@ -121,7 +129,11 @@ export function NavBar({ switchAt }: Props) {
               exit={{ opacity: 0, y: 720 }}
               transition={{ type: "spring", damping: 30, stiffness: 220, mass: 1 }}
             >
-              <MobileMenu onClose={() => setOpen(false)} />
+              {appEnabled ? (
+                <MobileMenuWithAccount onClose={() => setOpen(false)} />
+              ) : (
+                <MobileMenu onClose={() => setOpen(false)} />
+              )}
             </motion.div>
           </>
         )}
@@ -165,13 +177,18 @@ function NavAuth() {
   );
 }
 
-function MobileMenu({ onClose }: { onClose: () => void }) {
+// The mobile menu with the account entry, when the web app is on (lib/features.ts).
+function MobileMenuWithAccount({ onClose }: { onClose: () => void }) {
   const { data } = useSession();
   const account = data?.user ? { label: "Dashboard", href: "/dashboard" } : { label: "Sign in", href: "/login" };
+  return <MobileMenu onClose={onClose} account={account} />;
+}
+
+function MobileMenu({ onClose, account }: { onClose: () => void; account?: { label: string; href: string } }) {
   return (
     <div className={styles.mobileMenu}>
       <div className={styles.mobileLinks}>
-        {[...mobileNav, account].map((item, i) => (
+        {[...mobileNav, ...(account ? [account] : [])].map((item, i) => (
           <div key={item.label} className={styles.mobileRow}>
             <motion.p
               className={`t-h1 pre ${styles.mobileLink}`}
