@@ -51,3 +51,51 @@ describe("editFile line endings", () => {
     expect(result.output).toContain("old_string not found");
   });
 });
+
+describe("editFile when the quote is not exact (seen live 2026-09-25)", () => {
+  it("applies a unique match that differs only in whitespace, and says so", async () => {
+    const dir = await tempDir();
+    await writeFsFile(
+      path.join(dir, "game.js"),
+      "function jump(p){ if(p.grounded){p.vy=-5.35;p.grounded=false} }\n",
+      "utf-8",
+    );
+    const result = await editFile(
+      "game.js",
+      "if(p.grounded){p.vy=-5.35;p.grounded=false}  }",
+      "if(p.grounded){p.vy=-6.5;p.grounded=false} }",
+      dir,
+    );
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("matched with different whitespace");
+    expect(await readFile(path.join(dir, "game.js"), "utf-8")).toBe(
+      "function jump(p){ if(p.grounded){p.vy=-6.5;p.grounded=false} }\n",
+    );
+  });
+
+  it("refuses a loose match found in several places", async () => {
+    const dir = await tempDir();
+    await writeFsFile(path.join(dir, "a.js"), "let  total = 0;\nlet total  = 0;\n", "utf-8");
+    const result = await editFile("a.js", "let total = 0;", "let total = 1;", dir);
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("matches 2 places when whitespace is ignored");
+  });
+
+  it("shows the closest lines when the quote is wrong, so one retry can fix it", async () => {
+    const dir = await tempDir();
+    await writeFsFile(
+      path.join(dir, "index.html"),
+      "<body>\n<script>\nctx.fillText(stateMessage[mode][2],W/2,180);if(mode==='ready'){drawBitmap(W/2-9,196,marioSmall)}\n</script>\n",
+      "utf-8",
+    );
+    const result = await editFile(
+      "index.html",
+      "...stateMessage[mode][2],W/2,180);if(mode==='ready'){drawBitmap(W/2-9,196,marioSmall,palettes.mario)}",
+      "x",
+      dir,
+    );
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("The closest text is at line 3:");
+    expect(result.output).toContain("ctx.fillText(stateMessage[mode][2]");
+  });
+});

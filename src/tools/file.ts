@@ -136,6 +136,44 @@ export async function writeFile(filePath: string, content: string, cwd: string):
   }
 }
 
+/** Where `needle` occurs in `text` when any run of whitespace may be any other run (at least one character). */
+function whitespaceTolerantMatch(text: string, needle: string): Array<{ start: number; end: number }> {
+  const trimmed = needle.trim();
+  if (trimmed.length < 8) return [];
+  const pattern = trimmed
+    .split(/\s+/u)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+    .join("\\s+");
+  const matches: Array<{ start: number; end: number }> = [];
+  for (const match of text.matchAll(new RegExp(pattern, "gu"))) {
+    matches.push({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length });
+    if (matches.length > 3) break;
+  }
+  return matches;
+}
+
+/** The lines of `text` that share the most words with `needle`'s first lines, clipped, for a retry that fixes a quote. */
+function closestLines(text: string, needle: string): { line: number; text: string } | null {
+  const words = (value: string) => new Set(value.split(/[^A-Za-z0-9_$]+/u).filter((word) => word.length > 2));
+  const target = words(needle.split(/\r?\n/u).slice(0, 3).join(" "));
+  if (target.size === 0) return null;
+  const lines = text.split(/\r?\n/u);
+  let best = { index: -1, score: 0 };
+  lines.forEach((line, index) => {
+    const own = words(line);
+    let score = 0;
+    for (const word of target) if (own.has(word)) score += 1;
+    if (score > best.score) best = { index, score };
+  });
+  if (best.index < 0 || best.score < Math.min(3, target.size)) return null;
+  const clip = (line: string) => (line.length > 400 ? `${line.slice(0, 400)}…` : line);
+  const excerpt = lines
+    .slice(best.index, best.index + 3)
+    .map(clip)
+    .join("\n");
+  return { line: best.index + 1, text: excerpt };
+}
+
 export async function editFile(
   filePath: string,
   oldString: string,
@@ -158,7 +196,37 @@ export async function editFile(
     if (useNormalized) count = normalizedBefore.split(normalizedOld).length - 1;
 
     if (count === 0) {
-      return { success: false, output: `old_string not found in ${filePath}` };
+      // A model quoting from memory gets the spacing of a long line or an indentation slightly wrong (seen live
+      // 2026-09-25: two misses in one minute on a one-line HTML file, each costing a full re-read). A unique match that
+      // differs only in whitespace is applied; otherwise the closest lines are shown, so one retry can fix the quote.
+      const loose = whitespaceTolerantMatch(before, oldString);
+      if (loose.length === 1 && loose[0]) {
+        const { start, end } = loose[0];
+        const after = `${before.slice(0, start)}${newString}${before.slice(end)}`;
+        writeFileSync(full, after, "utf-8");
+        const diff = computeDiff(filePath, before, after);
+        const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(
+          () => [] as LspDiagnosticFile[],
+        );
+        const lspSummary = summarizeDiagnostics(lspDiagnostics);
+        return {
+          success: true,
+          output: `Edited ${filePath} (+${diff.additions} -${diff.removals}; old_string matched with different whitespace)${lspSummary ? `\n${lspSummary}` : ""}`,
+          diff,
+          lspDiagnostics,
+        };
+      }
+      if (loose.length > 1) {
+        return {
+          success: false,
+          output: `old_string not found exactly in ${filePath}, and it matches ${loose.length} places when whitespace is ignored. Include more surrounding context.`,
+        };
+      }
+      const closest = closestLines(before, oldString);
+      return {
+        success: false,
+        output: `old_string not found in ${filePath}.${closest ? ` The closest text is at line ${closest.line}:\n${closest.text}\nCopy the text to replace exactly from there (or read_file those lines) and retry.` : ""}`,
+      };
     }
     if (count > 1) {
       return {
