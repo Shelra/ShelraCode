@@ -147,6 +147,17 @@ during the turn, with no model call:
 - `memory_list` shows, after the saved entries, the turns in progress in other sessions and the last three episodes:
   what the project did lately is memory too.
 
+### 4.2b Memory that is applied, not only shown (2026-09-25)
+
+Seen on the memory suite the same day (a free model): the recall session was given "Run scripts/build-messages.ts to
+create src/generated/messages.ts before using t()", edited the locale file the catalog is built from, never ran the
+script, and reported done with a stale catalog; retrieval had worked, the model did not act on it. When a turn that
+changed files is about to end, the host looks at the how-to entries it was given (build, testing, procedure,
+conventions) and the commands they name (`src/memory/apply.ts`: shell code blocks and inline code spans that read as
+commands). An entry none of whose commands ran, directly or through the package script of the same name, is named
+to the model once, with the files the turn changed: run what applies, or say in one line why it does not. The host
+runs nothing a memory names, and asks at most once per turn.
+
 ### 4.3 Retrieval engine
 
 Tiers, each with its own budget:
@@ -245,7 +256,7 @@ The owner's 18 acceptance criteria map onto three layers of evidence:
 | M6 (done 2026-09-25) | Procedural: validated procedures proposed as skills, promoted on the user's yes | `src/memory/skills.ts`: a procedure credited in two passing turns is proposed under `.shelra/memory/skill-proposals/`; `shelra memory skills / promote / decline`; a declined revision is not proposed again; an update to an approved skill is proposed too. Tests in `reflection.test.ts`, `cli.test.ts`. The terminal UI does not show proposals yet (the UI is another session's area) |
 | M7 (one sample, 2026-09-25) | Real-model evaluation on free models | the memory suite on `42da87a`, Nemotron free (`MEM-R3-nemotron-1`): 5/6; with memory both recall tasks passed (37 s and 30 s), without memory one passed (83 s) and one failed with a false completion. One sample, consistent with the 2026-09-17 tally (with 4/6, without 1/9); not proof |
 | M8 (done 2026-09-25) | Memory that behaves like a person's (§4.6) | `dynamics.test.ts`, `consolidate.test.ts`, reminder and metamemory tests, `bench/memory/life.ts` |
-| M9 (done 2026-09-25) | Capture while the turn works (§4.2a): lessons as they happen, the live save and its recovery, recent work in `memory_list`; lessons only from what got past a failure; index entries always one line | memory-capture tests ("memory kept while a turn works"), `tools.test.ts` (recent work and turns in progress), `reflection.test.ts` and `store.test.ts` (the live 2026-09-25 cases) |
+| M9 (done 2026-09-25) | Capture while the turn works (§4.2a): lessons as they happen, the live save and its recovery, recent work in `memory_list`; lessons only from what got past a failure; index entries always one line; memory applied, not only shown (§4.2b) | memory-capture tests ("memory kept while a turn works"), `tools.test.ts` (recent work and turns in progress), `reflection.test.ts` and `store.test.ts` (the live 2026-09-25 cases) |
 | Held-out check (2026-09-25) | A second dataset written blind after all tuning (`bench/memory/dataset-v2.json`, 3 new projects, 92 queries) | at 5,000 entries per project: the original engine recall 65%, precision 48%, rules 20%, superseded shown 8; round 2 recall 83%, precision 75%, rules 100%, superseded 0, noise 0. Weak: vague requests (43%), superseded subjects (67%) |
 
 ## 7a. Adversarial review of M1 and M2 (round 2, 2026-09-25)

@@ -59,6 +59,7 @@ import {
 import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
+import { packageScripts, unappliedMemories } from "../memory/apply";
 import { consolidateMemory } from "../memory/consolidate";
 import {
   appendEpisode,
@@ -2890,6 +2891,8 @@ export class Agent {
     let repairEscalated = false;
     /** The model was told once this turn that the host stopped a round of it for making no progress. */
     let hostStopNoted = false;
+    /** The model was asked once this turn to apply memory it was given and did not act on (doc 18 §4.2b). */
+    let memoryApplyNudged = false;
     /**
      * The host ran the project's checks and they passed; said when the turn ends, while the contract still passes.
      * Seen live 2026-09-25: "on the final code" was shown, then the requirement audit edited the code for 25 minutes.
@@ -4077,6 +4080,44 @@ export class Agent {
             yield { type: "content", content: `\n\n${verdict}` };
             yield { type: "done" };
             return;
+          }
+
+          // Memory the turn was given that says how to do something, and names a command the turn never ran (doc 18
+          // §4.2b): the model is asked once to apply it or say why it does not apply. Seen on the memory suite
+          // 2026-09-25: given "run scripts/build-messages.ts", a session edited the locale file and left the catalog
+          // stale. The host runs nothing it names.
+          if (!memoryOff && !memoryApplyNudged && mutatedThisTurn && memoryContext.expanded.length > 0) {
+            const unapplied = unappliedMemories(
+              listMemoryRecords(memoryScope),
+              memoryContext.expanded,
+              [...turnCommands.map((command) => command.command), ...checkRuns.map((run) => run.command)],
+              packageScripts(turnStartWorkspace),
+            );
+            if (unapplied.length > 0) {
+              memoryApplyNudged = true;
+              this.messages.push({
+                role: "user",
+                content: [
+                  "Before you finish: project memory you were given says how to work here, and this turn never ran what it names:",
+                  ...unapplied.map(
+                    (item) => `- ${item.title}: ${item.commands.map((command) => `\`${command}\``).join(", ")}`,
+                  ),
+                  `This turn changed ${mutations.slice(0, 8).join(", ")}${mutations.length > 8 ? ` and ${mutations.length - 8} more` : ""}. Run what applies to this change and check the result again; for anything that does not apply, say in one line why.`,
+                ].join("\n"),
+              });
+              this.messageSeqs.push(null);
+              this.kernel?.recordObservation(
+                `Memory given but not applied: ${unapplied.map((item) => item.slug).join(", ")}`,
+              );
+              yield {
+                type: "content",
+                content: `\n\n[Project memory names ${unapplied
+                  .flatMap((item) => item.commands.slice(0, 1))
+                  .map((command) => `\`${command}\``)
+                  .join(", ")}, which this turn did not run; asking the model to apply it or say why not.]\n\n`,
+              };
+              continue;
+            }
           }
 
           if (
