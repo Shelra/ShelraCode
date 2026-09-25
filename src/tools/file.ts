@@ -152,6 +152,76 @@ function whitespaceTolerantMatch(text: string, needle: string): Array<{ start: n
   return matches;
 }
 
+/**
+ * `newString` fitted to the whitespace of the text it replaces, when the model's quote matched only with its
+ * whitespace ignored. The file keeps its own indentation before the match and its own whitespace after it, so the
+ * replacement is trimmed at both ends. Each later line that repeats a line of the quote takes the indentation the file
+ * has on that line (lines are paired by content, since a model can flatten every level to one space); a line the
+ * replacement adds takes the indentation of the line before it, one level deeper or shallower when the model's own
+ * indentation says so. Seen live 2026-09-25: the model quoted a 4-space block with every line at 1 space, its
+ * replacement was spliced in untrimmed, the block's indentation doubled and a blank line appeared, the next exact
+ * edit undid it, and four files flipped back and forth for two hours.
+ */
+function fitToMatch(oldString: string, newString: string, matched: string, ending: "\r\n" | "\n"): string {
+  const indentOf = (line: string) => /^[ \t]*/u.exec(line)?.[0] ?? "";
+  const quote = oldString.trim().split(/\r?\n/u);
+  const file = matched.split(/\r?\n/u);
+  const lines = newString.trim().split(/\r?\n/u);
+  // The file's indentation for each line of the quote, when the quote and the matched text have the same lines.
+  const fileIndent =
+    quote.length === file.length ? file.map((line, index) => (index === 0 ? "" : indentOf(line))) : null;
+  // One indentation step of the file: its smallest positive difference between lines, else four spaces.
+  const widths = file.map((line) => indentOf(line)).filter((indent) => indent.length > 0);
+  const tab = widths.some((indent) => indent.includes("\t"));
+  const step = tab ? "\t" : " ".repeat(Math.min(...widths.map((indent) => indent.length), 4) || 4);
+  // Pair the replacement's lines with the quote's by content (longest common subsequence of trimmed lines).
+  const a = quote.map((line) => line.trim());
+  const b = lines.map((line) => line.trim());
+  const paired = new Array<number>(b.length).fill(-1);
+  if (fileIndent && a.length * b.length <= 250_000) {
+    const table = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+    for (let i = a.length - 1; i >= 0; i -= 1) {
+      for (let j = b.length - 1; j >= 0; j -= 1) {
+        table[i]![j] = a[i] === b[j] ? table[i + 1]![j + 1]! + 1 : Math.max(table[i + 1]![j]!, table[i]![j + 1]!);
+      }
+    }
+    for (let i = 0, j = 0; i < a.length && j < b.length; ) {
+      if (a[i] === b[j]) {
+        paired[j] = i;
+        i += 1;
+        j += 1;
+      } else if (table[i + 1]![j]! >= table[i]![j + 1]!) i += 1;
+      else j += 1;
+    }
+  }
+  const out: string[] = [];
+  let previous = "";
+  lines.forEach((line, index) => {
+    const text = line.trim();
+    if (index === 0 || !text) {
+      out.push(text);
+      previous = index === 0 ? (fileIndent?.[0] ?? "") : previous;
+      return;
+    }
+    const pairedAt = paired[index] ?? -1;
+    let indent: string;
+    if (fileIndent && pairedAt >= 0) indent = fileIndent[pairedAt] ?? "";
+    else {
+      // An added line: as deep as the line before it, one step deeper or shallower when the model indents it so.
+      const own = indentOf(line).length - indentOf(lines[index - 1] ?? "").length;
+      indent =
+        own > 0
+          ? `${previous}${step}`
+          : own < 0 && previous.endsWith(step)
+            ? previous.slice(0, -step.length)
+            : previous;
+    }
+    out.push(`${indent}${text}`);
+    previous = indent;
+  });
+  return out.join(ending);
+}
+
 /** The lines of `text` that share the most words with `needle`'s first lines, clipped, for a retry that fixes a quote. */
 function closestLines(text: string, needle: string): { line: number; text: string } | null {
   const words = (value: string) => new Set(value.split(/[^A-Za-z0-9_$]+/u).filter((word) => word.length > 2));
@@ -202,7 +272,8 @@ export async function editFile(
       const loose = whitespaceTolerantMatch(before, oldString);
       if (loose.length === 1 && loose[0]) {
         const { start, end } = loose[0];
-        const after = `${before.slice(0, start)}${newString}${before.slice(end)}`;
+        const fitted = fitToMatch(oldString, newString, before.slice(start, end), ending);
+        const after = `${before.slice(0, start)}${fitted}${before.slice(end)}`;
         writeFileSync(full, after, "utf-8");
         const diff = computeDiff(filePath, before, after);
         const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(

@@ -73,6 +73,49 @@ describe("editFile when the quote is not exact (seen live 2026-09-25)", () => {
     );
   });
 
+  it("keeps the file's indentation when the quote indents differently (the two-hour flip-flop, seen live 2026-09-25)", async () => {
+    const castle = [
+      "export class CastleTrack {",
+      "    mesh: THREE.Group;",
+      "",
+      "    addToScene(parent: THREE.Group) {",
+      "        parent.add(this.mesh);",
+      "    }",
+      "}",
+      "",
+    ];
+    for (const ending of ["\n", "\r\n"]) {
+      const dir = await tempDir();
+      const file = path.join(dir, "castle.ts");
+      const original = castle.join(ending);
+      await writeFsFile(file, original, "utf-8");
+      // The model's quote, as the trace shows it: one space per level and a trailing blank line.
+      const quoted = " addToScene(parent: THREE.Group) {\n parent.add(this.mesh);\n }\n}\n\n";
+      const added =
+        " addToScene(parent: THREE.Group) {\n parent.add(this.mesh);\n this.mesh.visible = true;\n }\n}\n\n";
+
+      const forward = await editFile("castle.ts", quoted, added, dir);
+
+      expect(forward.output).toContain("matched with different whitespace");
+      expect(await readFile(file, "utf-8")).toBe(
+        [
+          "export class CastleTrack {",
+          "    mesh: THREE.Group;",
+          "",
+          "    addToScene(parent: THREE.Group) {",
+          "        parent.add(this.mesh);",
+          "        this.mesh.visible = true;",
+          "    }",
+          "}",
+          "",
+        ].join(ending),
+      );
+      // Its inverse, quoted the same way, restores the file byte for byte.
+      await editFile("castle.ts", added, quoted, dir);
+      expect(await readFile(file, "utf-8")).toBe(original);
+    }
+  });
+
   it("refuses a loose match found in several places", async () => {
     const dir = await tempDir();
     await writeFsFile(path.join(dir, "a.js"), "let  total = 0;\nlet total  = 0;\n", "utf-8");
