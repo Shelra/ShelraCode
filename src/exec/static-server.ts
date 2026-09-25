@@ -30,6 +30,16 @@ const MIME: Record<string, string> = {
   ".woff2": "font/woff2",
   ".ttf": "font/ttf",
   ".txt": "text/plain; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".map": "application/json; charset=utf-8",
+  // `.ts` stays unmapped, as a real static server leaves it: a page that loads TypeScript source does not run.
 };
 
 interface StaticServerHandle {

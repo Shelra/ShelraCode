@@ -19,6 +19,15 @@ import type {
   ProviderToolContext,
 } from "../providers/types";
 
+/** Whether Playwright's Chromium is installed, for the tests that open an app in it. */
+let hasChromium = false;
+try {
+  const playwright = await import("playwright");
+  hasChromium = existsSync(playwright.chromium.executablePath());
+} catch {
+  hasChromium = false;
+}
+
 /** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
 const testWorkspace = mkdtempSync(join(tmpdir(), "shelra-agent-test-"));
 
@@ -721,6 +730,58 @@ describe("completion/verification gate", () => {
       server.close();
     }
   });
+
+  it.skipIf(!hasChromium)(
+    "opens the app the turn changed and holds an error it throws against the turn (audit gap #1, seen live 2026-09-25)",
+    async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const workspace = mkdtempSync(join(tmpdir(), "shelra-app-"));
+      writeFileSync(
+        join(workspace, "index.html"),
+        '<h1>Kart</h1><script>requestAnimationFrame(() => { throw new Error("kart is not defined"); });</script>',
+      );
+      const provider = new ScenarioProvider([{ type: "text-delta", text: "The game works." }]);
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: workspace });
+
+      const chunks: Array<{ type: string; content?: string }> = [];
+      for await (const chunk of agent.processMessage("Create a kart racing game")) chunks.push(chunk as never);
+
+      // Two requests to fix it, then the verdict: three rounds.
+      expect(provider.round).toBe(3);
+      expect(chunks.filter((chunk) => chunk.content?.endsWith("Asking for a fix.]\n\n"))).toHaveLength(2);
+      const nudge = lastUserText(provider.requests.at(-1));
+      expect(nudge).toContain("Completion blocked: after your last change Shelra opened the app");
+      expect(nudge).toContain("uncaught error: Error: kart is not defined");
+      const verdict = chunks.find((chunk) => chunk.content?.includes("[Not verified"))?.content ?? "";
+      expect(verdict).toContain("(index.html, served as static files) does not work in a headless browser");
+      expect(verdict).toContain("kart is not defined, after 2 automatic request(s).");
+    },
+    90_000,
+  );
+
+  it.skipIf(!hasChromium)(
+    "counts an app the host opened and saw work as verified, with no nudge",
+    async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const workspace = mkdtempSync(join(tmpdir(), "shelra-app-"));
+      writeFileSync(
+        join(workspace, "index.html"),
+        '<body style="margin:0;background:#113"><h1 style="color:#fff">Digital clock</h1><p style="color:#0f8">12:00:00</p></body>',
+      );
+      const provider = new ScenarioProvider([{ type: "text-delta", text: "Unused." }]);
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: workspace });
+
+      const chunks: Array<{ type: string; content?: string }> = [];
+      for await (const chunk of agent.processMessage("Create a digital clock")) chunks.push(chunk as never);
+
+      expect(provider.round).toBe(1);
+      const text = chunks.map((chunk) => chunk.content ?? "").join("");
+      expect(text).toMatch(
+        /\[Checked by Shelra on the final code: the app at http:\/\/127\.0\.0\.1:\d+\/ \(index\.html, served as static files\) loaded in a headless browser with no errors\]/u,
+      );
+    },
+    90_000,
+  );
 
   it("does not gate a non-coding (conversational) turn even with no tool calls", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);

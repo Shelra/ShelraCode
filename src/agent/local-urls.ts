@@ -49,14 +49,37 @@ type Observe = (url: string) => Promise<BrowserObservation>;
 const observeHeadless: Observe = (url) =>
   observePage(url, { viewport: { width: 1280, height: 720 }, assertions: [], timeoutMs: BROWSER_TIMEOUT_MS });
 
-/** What a page load showed that means the page does not work. */
-function problemsIn(observation: BrowserObservation): string[] {
+/**
+ * What a page load showed that means the page does not work. Only the app's own requests count: a missing favicon, or
+ * a third-party script or font that fails to load, says nothing about the app (a console line about a failed load
+ * repeats a request already counted).
+ */
+export function pageProblems(observation: BrowserObservation): string[] {
   const clip = (text: string) => text.replace(/\s+/gu, " ").trim().slice(0, 200);
+  let origin = "";
+  try {
+    origin = new URL(observation.url).origin;
+  } catch {
+    // Every request then counts.
+  }
+  const own = (entry: string) => {
+    const url = entry.match(/https?:\/\/\S+/u)?.[0] ?? "";
+    return !/\/favicon\.ico(?:[?#:]|$)/u.test(url) && (!origin || !url || url.startsWith(origin));
+  };
   return [
     ...observation.pageErrors.slice(0, MAX_FINDINGS).map((error) => `uncaught error: ${clip(error)}`),
-    ...observation.consoleErrors.slice(0, MAX_FINDINGS).map((error) => `console error: ${clip(error)}`),
-    ...(observation.badResponses ?? []).slice(0, MAX_FINDINGS).map((response) => `request answered ${clip(response)}`),
-    ...observation.failedRequests.slice(0, MAX_FINDINGS).map((request) => `request failed: ${clip(request)}`),
+    ...observation.consoleErrors
+      .filter((error) => !/^Failed to load resource\b/u.test(error))
+      .slice(0, MAX_FINDINGS)
+      .map((error) => `console error: ${clip(error)}`),
+    ...(observation.badResponses ?? [])
+      .filter(own)
+      .slice(0, MAX_FINDINGS)
+      .map((response) => `request answered ${clip(response)}`),
+    ...observation.failedRequests
+      .filter(own)
+      .slice(0, MAX_FINDINGS)
+      .map((request) => `request failed: ${clip(request)}`),
   ];
 }
 
@@ -91,7 +114,7 @@ export async function checkLocalUrls(
         if (observation.error && observation.pageErrors.length === 0 && observation.consoleErrors.length === 0) {
           check.browserNote = `not opened in a browser: ${observation.error.replace(/\s+/gu, " ").slice(0, 160)}`;
         }
-        check.problems = problemsIn(observation);
+        check.problems = pageProblems(observation);
       }
     } catch (error) {
       const code = (error as { cause?: { code?: string } })?.cause?.code ?? (error as { code?: string })?.code;

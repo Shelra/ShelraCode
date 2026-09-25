@@ -115,6 +115,15 @@ edits that flip a file between the same two versions twice (whitespace aside), o
 four runs in a row while files change between them (`createCircleDetector`, `src/agent/circles.ts`, passed to the
 provider as `hostStops`). Once per turn the model is told why, naming the file and versions or the check and its
 error, and may take another way or report; a second stop goes on to the completion gate.
+A turn that changed a web app's files (html, css, js/ts, vue, svelte, package.json) has the app opened by the host
+before it may end (`src/agent/runtime-smoke.ts`): through the server the session runs, else by serving the folder a
+static-server script names or a plain site's index.html in-process, else by starting Vite on a free port with no
+browser window (other dev servers are not started yet, and a bundler project is never served from its source). A
+headless browser loads it, clicks the first button and presses Enter, Space and ArrowUp; an uncaught error, a console
+error, a request the app's own server fails or a one-color screen sends the findings back to the model (twice), then
+ends the turn `[Not verified — …]`. A pass is host evidence and joins the `[Checked by Shelra …]` verdict; an app that
+could not be opened (no browser, dependencies not installed) is said once and counts neither way. `--ablate smoke`
+turns it off.
 A local page the final answer names (`http://localhost…`, `127.0.0.1`), in a turn that changed files or a session
 running a server of its own, is requested by the host when the turn ends and, when it answers with HTML, loaded in a
 headless browser (`observePage`) for uncaught errors, console errors and requests that fail or answer 4xx/5xx; while

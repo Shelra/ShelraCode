@@ -112,6 +112,8 @@ export interface BrowserObservation {
   screenshotPath?: string;
   /** Document scroll width vs viewport width, used for responsive overflow checks. */
   horizontalOverflowPx?: number;
+  /** The viewport's distinct colors when measured (up to 3): 1 is a blank screen. */
+  distinctColors?: number;
   viewport?: { width: number; height: number };
   error?: string;
 }

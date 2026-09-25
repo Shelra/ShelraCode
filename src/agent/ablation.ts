@@ -15,6 +15,7 @@ import type { ToolSet } from "ai";
  * - subagents: no task/delegate tools, delegation guidance or custom sub-agents
  * - web: no web research tools or guidance (and so no research before the work)
  * - research: no web search by the host before the work (src/research/pre-task.ts); the tools stay
+ * - smoke: the host does not open the app a turn changed in a headless browser (src/agent/runtime-smoke.ts)
  * - bare: all of the above, a prompt of environment facts only, and six basic tools
  */
 export const ABLATIONS = [
@@ -29,6 +30,7 @@ export const ABLATIONS = [
   "subagents",
   "web",
   "research",
+  "smoke",
   "bare",
 ] as const;
 

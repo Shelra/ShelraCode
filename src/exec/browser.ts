@@ -6,6 +6,14 @@ interface ObservePageOptions {
   assertions: DomAssertion[];
   screenshotPath?: string;
   timeoutMs?: number;
+  /** When the page counts as loaded. "networkidle" (the default) never comes for a page a dev server keeps a socket to. */
+  waitUntil?: "load" | "networkidle";
+  /** Time the page gets after it loads, and after the interaction, for what its first frames throw. */
+  settleMs?: number;
+  /** Click the first visible button and press Enter, Space and ArrowUp, as a person starting the app would. */
+  interact?: boolean;
+  /** Count the colors of the whole viewport (`distinctColors`, up to 3): one color is a blank screen. */
+  measureBlank?: boolean;
 }
 
 /** Browser observation is deliberately an optional capability: missing Playwright browsers become evidence. */
@@ -57,7 +65,10 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
       }
     });
 
-    const response = await page.goto(url, { waitUntil: "networkidle", timeout: options.timeoutMs ?? 30_000 });
+    const response = await page.goto(url, {
+      waitUntil: options.waitUntil ?? "networkidle",
+      timeout: options.timeoutMs ?? 30_000,
+    });
     observation.status = response?.status();
     observation.ok = Boolean(response);
     observation.title = await page.title().catch(() => undefined);
@@ -73,6 +84,17 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
       };
       return Math.max(0, browserWindow.document.documentElement.scrollWidth - browserWindow.innerWidth);
     });
+    if (options.settleMs) await page.waitForTimeout(options.settleMs);
+    if (options.interact) {
+      const button = page.locator("button:visible, input[type=button]:visible, [role=button]:visible").first();
+      if ((await button.count().catch(() => 0)) > 0) await button.click({ timeout: 2_000 }).catch(() => undefined);
+      for (const key of ["Enter", "Space", "ArrowUp"]) await page.keyboard.press(key).catch(() => undefined);
+      await page.waitForTimeout(options.settleMs ?? 1_500);
+    }
+    if (options.measureBlank) {
+      const shot = await page.screenshot({ type: "png" }).catch(() => null);
+      if (shot) observation.distinctColors = await countColors(page, shot.toString("base64"));
+    }
     if (options.screenshotPath) {
       await page.screenshot({ path: options.screenshotPath, fullPage: true });
       observation.screenshotPath = options.screenshotPath;
@@ -84,6 +106,50 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
   } finally {
     await browser?.close().catch(() => undefined);
   }
+}
+
+/**
+ * The colors of a screenshot, counted in the page itself (no image library): 1 is a blank screen, and counting stops at
+ * 3. Colors are compared at 5 bits a channel, so noise in one flat color is not a second one. Undefined when the page
+ * cannot decode it (a policy that forbids data: images).
+ */
+async function countColors(page: Page, png: string): Promise<number | undefined> {
+  return page
+    .evaluate(async (data: string) => {
+      const scope = globalThis as unknown as {
+        Image: new () => { src: string; width: number; height: number; decode(): Promise<void> };
+        document: {
+          createElement(tag: "canvas"): {
+            width: number;
+            height: number;
+            getContext(kind: "2d"): {
+              drawImage(image: unknown, x: number, y: number): void;
+              getImageData(x: number, y: number, width: number, height: number): { data: ArrayLike<number> };
+            } | null;
+          };
+        };
+      };
+      const image = new scope.Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = scope.document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d");
+      if (!context) return undefined;
+      context.drawImage(image, 0, 0);
+      const pixels = context.getImageData(0, 0, image.width, image.height).data;
+      const colors = new Set<number>();
+      for (let at = 0; at < pixels.length && colors.size < 3; at += 4) {
+        colors.add(
+          (((pixels[at] as number) >> 3) << 10) |
+            (((pixels[at + 1] as number) >> 3) << 5) |
+            ((pixels[at + 2] as number) >> 3),
+        );
+      }
+      return colors.size;
+    }, png)
+    .catch(() => undefined);
 }
 
 async function evaluateAssertion(

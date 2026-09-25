@@ -222,6 +222,15 @@ import {
 } from "./prompts";
 import { containsEncryptedReasoning, sanitizeModelMessages } from "./reasoning";
 import { extractRequirements, isRequirementDense } from "./requirements";
+import {
+  changesWebFiles,
+  describeSmoke,
+  findWebTarget,
+  runSmokeCheck,
+  type SmokeResult,
+  smokeRepairRequest,
+  withoutAnsi,
+} from "./runtime-smoke";
 import { isOutsideProject } from "./scratch";
 import {
   describeDelegatedEvidence,
@@ -276,6 +285,8 @@ const OVERFLOW_RECOVERY_KEPT_TURNS = 2;
  * docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §12.
  */
 const MAX_VERIFICATION_RETRIES = 3;
+/** Requests to fix an app the host opened and found not working, before the turn ends unverified. */
+const SMOKE_REPAIRS = 2;
 /** How long one of the project's own checks may run when the host runs it on the final code. */
 const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
 /** Marks, in a contract check's source, a check the turn itself defined in a project that stated none. */
@@ -3027,6 +3038,12 @@ export class Agent {
     const circles = createCircleDetector();
     /** The model was told once this turn that a local page its answer names does not answer. */
     let urlRepairAsked = false;
+    /** The host's last opening of the app this turn (src/agent/runtime-smoke.ts), with the workspace as it was then. */
+    let lastSmoke: { result: SmokeResult; mutationEvents: number; state: WorkspaceState | null } | null = null;
+    /** Requests sent this turn to fix an app that does not work in the browser. */
+    let smokeRepairs = 0;
+    /** An app the host could not open was reported once this turn. */
+    let smokeUnavailableNoted = false;
     /** The checks a new project's turn defined were reported passing once. */
     let ownChecksReported = false;
     /** The current round's total budget (`modelTimeout.totalMs`), replaced at each round. */
@@ -4207,6 +4224,98 @@ export class Agent {
             }
           }
 
+          // The app the turn changed, opened by the host in a headless browser (src/agent/runtime-smoke.ts, audit gap
+          // #1): a page that throws, fails its own requests or stays blank does not work, whatever the checks and the
+          // model say. It runs again only once the files changed; a pass is the host's own evidence.
+          if (
+            this.mode === "agent" &&
+            !this.ablations.has("gate") &&
+            !this.ablations.has("smoke") &&
+            mutatedThisTurn &&
+            !documentsOnly &&
+            changesWebFiles(mutations)
+          ) {
+            const stale =
+              lastSmoke === null ||
+              lastSmoke.mutationEvents !== turnMutationEvents ||
+              (lastSmoke.state !== null &&
+                endState !== null &&
+                (changedPaths(lastSmoke.state, endState)?.length ?? 1) > 0);
+            const target = stale ? findWebTarget(turnStartWorkspace) : null;
+            if (target) {
+              reportStatus("checks", "Opening the app in a headless browser");
+              const result = await runSmokeCheck({
+                workspace: turnStartWorkspace,
+                target,
+                sessionUrls: await this.sessionServerUrls(),
+                answerUrls: localUrlsIn(assistantText),
+                signal,
+              });
+              lastSmoke = { result, mutationEvents: turnMutationEvents, state: endState };
+              if (result.status === "passed") {
+                this.turnVerificationEvidence.push(`${describeSmoke(result)} (run by Shelra)`);
+              } else if (result.status === "unavailable" && !smokeUnavailableNoted) {
+                smokeUnavailableNoted = true;
+                yield {
+                  type: "content",
+                  content: `
+
+[${describeSmoke(result)}]`,
+                };
+              }
+            }
+            if (lastSmoke?.result.status === "failed") {
+              const failure = describeSmoke(lastSmoke.result);
+              if (smokeRepairs < SMOKE_REPAIRS) {
+                smokeRepairs += 1;
+                yield {
+                  type: "content",
+                  content: `
+
+[${failure.charAt(0).toUpperCase()}${failure.slice(1)}. Asking for a fix.]
+
+`,
+                };
+                this.messages.push({ role: "user", content: smokeRepairRequest(lastSmoke.result) });
+                this.messageSeqs.push(null);
+                this.kernel?.recordObservation(`Runtime check: ${failure} (attempt ${smokeRepairs}/${SMOKE_REPAIRS}).`);
+                this.persistKernelIndex("The app does not work in a browser");
+                continue;
+              }
+              const reason = `${failure}, after ${smokeRepairs} automatic request(s).`;
+              this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+              this.persistKernelIndex(reason);
+              const verdict = `[Not verified — ${reason}]`;
+              this.recordVerdict(verdict);
+              yield {
+                type: "content",
+                content: `
+
+${verdict}`,
+              };
+              reportStatus("recap", "Updating project memory");
+              await this.learnFromTurn(
+                {
+                  userMessage,
+                  assistantText: `${turnText.slice(-12_000)}
+
+${verdict}`,
+                  changedFiles: [...mutations],
+                  commands: turnCommands,
+                  verified: false,
+                  endedUnverified: true,
+                  toolCalls: turnToolCalls,
+                },
+                runtime.modelId,
+                signal,
+                observer,
+                "unverified",
+              );
+              yield { type: "done" };
+              return;
+            }
+          }
+
           // Checks the turn defined itself do not stand for the project's: a contract of only those still needs
           // evidence of its own (turnDefined above).
           if (
@@ -4391,9 +4500,18 @@ export class Agent {
           // with the host reporting the 404 of a URL the answer quoted from a memory entry).
           let urlNote: string | null = null;
           let pagesVerdict: string | null = null;
+          // What the host itself ran and saw pass on the final code: the project's checks, and the app it opened.
+          const hostPasses =
+            [
+              checkedNote ? checkedPasses : null,
+              lastSmoke?.result.status === "passed" ? describeSmoke(lastSmoke.result) : null,
+            ]
+              .filter((pass): pass is string => pass !== null)
+              .join(", ") || null;
           const servesPages = mutations.length > 0 || this.bash.runningProcesses().length > 0;
           if (this.mode === "agent" && !this.ablations.has("gate") && servesPages) {
-            const urls = localUrlsIn(assistantText);
+            // A page the runtime check already opened on the final state is not requested again.
+            const urls = localUrlsIn(assistantText).filter((url) => url !== lastSmoke?.result.url);
             if (urls.length > 0) {
               reportStatus("checks", `Requesting ${urls.join(", ")}`);
               const checks = await checkLocalUrls(urls, { signal });
@@ -4408,13 +4526,13 @@ export class Agent {
                 );
                 continue;
               }
-              if (failed.length > 0) pagesVerdict = failedPagesVerdict(failed, checkedNote ? checkedPasses : null);
+              if (failed.length > 0) pagesVerdict = failedPagesVerdict(failed, hostPasses);
               else urlNote = describeUrlChecks(checks);
             }
           }
           const pagesBroken = pagesVerdict !== null;
 
-          const verdict = pagesVerdict ?? checkedNote;
+          const verdict = pagesVerdict ?? (hostPasses ? `[Checked by Shelra on the final code: ${hostPasses}]` : null);
           if (verdict) {
             this.recordVerdict(verdict);
             yield { type: "content", content: `\n\n${verdict}` };
@@ -4738,6 +4856,16 @@ export class Agent {
     } catch (error) {
       recordSwallowedError("memory.live", error);
     }
+  }
+
+  /** Local URLs the session's background processes printed: where the app runs as the model started it. */
+  private async sessionServerUrls(): Promise<string[]> {
+    const urls: string[] = [];
+    for (const entry of this.bash.runningProcesses()) {
+      const logs = await this.bash.getProcessLogs(entry.id, 200).catch(() => null);
+      urls.push(...localUrlsIn(withoutAnsi(logs?.output ?? "")));
+    }
+    return [...new Set(urls)];
   }
 
   /** The name of this session's live record; a run without a saved session goes by its process. */
