@@ -425,3 +425,72 @@ describe("parseStandaloneCd", () => {
     expect(parseStandaloneCd("bun test")).toBeNull();
   });
 });
+
+describe("background processes are stopped with everything they started", () => {
+  const made: string[] = [];
+  afterEach(() => {
+    for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A background command that starts a child of its own, prints its pid and keeps running. */
+  async function startParent(bash: BashTool, dir: string): Promise<{ id: number; grandchild: number }> {
+    fs.writeFileSync(
+      path.join(dir, "parent.cjs"),
+      [
+        'const { spawn } = require("node:child_process");',
+        'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit" });',
+        'console.log("GRANDCHILD " + child.pid);',
+        "setInterval(() => {}, 1000);",
+      ].join("\n"),
+    );
+    const started = await bash.startBackground("node parent.cjs");
+    const id = started.backgroundProcess?.id ?? -1;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const logs = await bash.getProcessLogs(id);
+      const pid = Number(/GRANDCHILD (\d+)/u.exec(logs.output ?? "")?.[1]);
+      if (pid > 0) return { id, grandchild: pid };
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error("the background command never printed its child's pid");
+  }
+
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  async function gone(pid: number): Promise<boolean> {
+    for (let attempt = 0; attempt < 50 && alive(pid); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return !alive(pid);
+  }
+
+  it("process_stop ends the processes the command started, not only its shell (seen live 2026-09-25)", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bg-tree-"));
+    made.push(dir);
+    const bash = new BashTool(dir);
+    const { id, grandchild } = await startParent(bash, dir);
+    expect(alive(grandchild)).toBe(true);
+
+    const stopped = await bash.stopProcess(id);
+
+    expect(stopped.success).toBe(true);
+    expect(await gone(grandchild)).toBe(true);
+    await bash.cleanup();
+  }, 30_000);
+
+  it("cleanup at the end of a run ends them too", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bg-tree-"));
+    made.push(dir);
+    const bash = new BashTool(dir);
+    const { grandchild } = await startParent(bash, dir);
+
+    await bash.cleanup();
+
+    expect(await gone(grandchild)).toBe(true);
+  }, 30_000);
+});

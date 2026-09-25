@@ -4,7 +4,7 @@ import { mkdtemp, rm, stat, unlink } from "fs/promises";
 import os from "os";
 import path from "path";
 import { runCommand } from "../exec/command";
-import { buildShellInvocation } from "../exec/shell";
+import { buildShellInvocation, killProcessTree, spawnOptions } from "../exec/shell";
 import { executeEventHooks } from "../hooks/index";
 import type { CwdChangedHookInput } from "../hooks/types";
 import type { ToolResult } from "../types/index";
@@ -216,12 +216,12 @@ export class BashTool {
       const logStream = createWriteStream(logPath, { flags: "a" });
 
       const invocation = buildShellInvocation(prepared.command);
-      const child = spawn(invocation.file, invocation.args, {
-        cwd: this.cwd,
-        detached: false,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, FORCE_COLOR: "0" },
-      });
+      // Its own process group on POSIX, so stopping it can reach every process it starts (see stopProcess).
+      const child = spawn(
+        invocation.file,
+        invocation.args,
+        spawnOptions(this.cwd, { ...process.env, FORCE_COLOR: "0" }),
+      );
 
       child.stdout?.pipe(logStream);
       child.stderr?.pipe(logStream);
@@ -321,21 +321,7 @@ export class BashTool {
     }
 
     try {
-      entry.child.kill("SIGTERM");
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          try {
-            entry.child.kill("SIGKILL");
-          } catch {
-            /* already dead */
-          }
-          resolve();
-        }, 3_000);
-        entry.child.on("exit", () => {
-          clearTimeout(timeout);
-          resolve();
-        });
-      });
+      await stopTree(entry);
 
       return {
         success: true,
@@ -366,14 +352,8 @@ export class BashTool {
   }
 
   async cleanup(): Promise<void> {
+    await Promise.all([...this.bgProcesses.values()].filter((entry) => entry.alive).map((entry) => stopTree(entry)));
     for (const entry of this.bgProcesses.values()) {
-      if (entry.alive) {
-        try {
-          entry.child.kill("SIGTERM");
-        } catch {
-          /* */
-        }
-      }
       try {
         await unlink(entry.logPath);
       } catch {
@@ -479,6 +459,24 @@ export function parseStandaloneCd(command: string): string | null {
   const match = /^\s*cd\s+(?:"([^"]*)"|'([^']*)'|([^\s;&|<>]+))\s*$/u.exec(command);
   if (!match) return null;
   return match[1] ?? match[2] ?? match[3] ?? null;
+}
+
+/**
+ * Stops a background process and everything it started, then lets go of its output. Seen live 2026-09-25 on Windows:
+ * `python -m http.server` started in the background ran under the shell and the Python launcher; stopping only the
+ * shell left both servers running on port 8080, and their hold on the shell's output kept a finished headless run
+ * from exiting for 25 minutes.
+ */
+async function stopTree(entry: BackgroundProcess): Promise<void> {
+  const exited = new Promise<void>((resolve) => {
+    if (!entry.alive) resolve();
+    entry.child.once("exit", () => resolve());
+  });
+  await killProcessTree(entry.pid, 2_000);
+  await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 3_000))]);
+  entry.child.stdout?.destroy();
+  entry.child.stderr?.destroy();
+  entry.alive = false;
 }
 
 function truncCmd(cmd: string, max: number): string {
