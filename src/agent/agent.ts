@@ -268,6 +268,8 @@ const OVERFLOW_RECOVERY_KEPT_TURNS = 2;
 const MAX_VERIFICATION_RETRIES = 3;
 /** How long one of the project's own checks may run when the host runs it on the final code. */
 const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
+/** Marks, in a contract check's source, a check the turn itself defined in a project that stated none. */
+const DEFINED_THIS_TURN = "defined this turn";
 /** How long a plan criterion's command may run when the host checks that it fails before the change. */
 const CRITERION_PROBE_TIMEOUT_MS = 2 * 60_000;
 /** Text documents: nothing runs them, so a turn that only wrote these gets one fact-check request. */
@@ -2967,6 +2969,8 @@ export class Agent {
     let hostStopNoted = false;
     /** The model was told once this turn that a local page its answer names does not answer. */
     let urlRepairAsked = false;
+    /** The checks a new project's turn defined were reported passing once. */
+    let ownChecksReported = false;
     /** The current round's total budget (`modelTimeout.totalMs`), replaced at each round. */
     let roundBudget: ReturnType<typeof generationBudget> | undefined;
     /** The model was asked once this turn to apply memory it was given and did not act on (doc 18 §4.2b). */
@@ -3866,8 +3870,27 @@ export class Agent {
                 ),
               ]
             : [];
+          // A project that stated no checks when the turn began and that the turn itself gave checks to (a new
+          // project's package.json): a failing one is held against the turn like a project check, a passing one is
+          // reported but is not evidence, since a check a turn wrote proves only what it wrote into it (audit doc 17,
+          // S10). Seen live 2026-09-25: a new game's own `build` (tsc) failed on src/kart.ts, nothing ran it, and the
+          // model said the game worked. With no test, type check or lint, the build is the check.
+          const turnDefined: ContractCheck[] = (() => {
+            if (!contractApplies || turnStartChecks.length > 0) return [];
+            const now = discoverChecks(turnStartWorkspace).filter((check) => !allowedCheckKinds.has(check.kind));
+            const checks = contractChecks(now);
+            return (checks.length > 0 ? checks : now.filter((check) => check.kind === "build")).map(
+              ({ kind, command, source, runs }) => ({
+                kind,
+                command,
+                source: `${source}, ${DEFINED_THIS_TURN}`,
+                ...(runs ? { runs } : {}),
+              }),
+            );
+          })();
           const contract: ContractCheck[] = [
             ...baseContract,
+            ...turnDefined,
             // A decision whose check is already one of the project's checks runs once, under that check.
             ...governing.flatMap((decision): ContractCheck[] =>
               decision.check && !baseContract.some((check) => isSameCheck(decision.check as string, check))
@@ -3922,19 +3945,31 @@ export class Agent {
               });
             }
             const failing = results.filter((result) => !result.passed);
-            contractPassed = failing.length === 0;
-            if (!contractPassed) checkedNote = null;
+            // A check the turn itself defined can fail the turn; its pass is not evidence (see turnDefined above).
+            const trusted = results.filter((result) => !result.check.source.endsWith(DEFINED_THIS_TURN));
+            contractPassed = failing.length === 0 && trusted.length > 0;
+            if (failing.length > 0) checkedNote = null;
             if (failing.length === 0) {
-              for (const result of results) {
+              for (const result of trusted) {
                 this.turnVerificationEvidence.push(
                   `${result.check.command} passed (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
                 );
               }
               // A pass that only reused runs keeps the note: nothing changed since the host's own run.
-              if (results.some((result) => result.by === "host")) {
-                checkedNote = `[Checked by Shelra on the final code: ${results
+              if (trusted.some((result) => result.by === "host")) {
+                checkedNote = `[Checked by Shelra on the final code: ${trusted
                   .map((result) => `\`${result.check.command}\` passed`)
                   .join(", ")}]`;
+              }
+              const ownPasses = results.filter((result) => result.check.source.endsWith(DEFINED_THIS_TURN));
+              if (ownPasses.length > 0 && !ownChecksReported) {
+                ownChecksReported = true;
+                yield {
+                  type: "content",
+                  content: `\n\n[Shelra ran the checks this turn defined on the final code: ${ownPasses
+                    .map((result) => `\`${result.check.command}\` passed`)
+                    .join(", ")}; a check a turn writes itself does not verify its work.]`,
+                };
               }
             } else if (verificationRetries < MAX_VERIFICATION_RETRIES) {
               verificationRetries += 1;
@@ -4096,8 +4131,10 @@ export class Agent {
             }
           }
 
+          // Checks the turn defined itself do not stand for the project's: a contract of only those still needs
+          // evidence of its own (turnDefined above).
           if (
-            contract.length === 0 &&
+            contract.length === turnDefined.length &&
             !this.ablations.has("gate") &&
             mutatedThisTurn &&
             (documentsOnly || this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)

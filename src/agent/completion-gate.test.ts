@@ -1867,6 +1867,71 @@ describe("the checks that decide done are the ones the turn started with (audit 
     expect(text).not.toContain("Checked by Shelra");
   }, 60_000);
 
+  describe("a new project whose checks the turn defined (seen live 2026-09-25)", () => {
+    const empty = () => mkdtempSync(join(tmpdir(), "shelra-new-project-"));
+    const GAME_PACKAGE = JSON.stringify({
+      name: "kart",
+      scripts: {
+        start: "es-dev-server --serve .",
+        build: "tsc && esbuild src/index.ts --bundle --outfile=dist/bundle.js",
+      },
+    });
+
+    it("holds a failing build the turn defined against it, and sends the failure back", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = empty();
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+        /build/u.test(command)
+          ? {
+              passed: false,
+              output: "src/kart.ts(114,1): error TS1128: Declaration or statement expected.",
+              durationMs: 5,
+            }
+          : { passed: true, output: "ok", durationMs: 5 },
+      );
+      const { provider, requests } = roundsModel([
+        () => [
+          ...write("w1", "package.json", GAME_PACKAGE),
+          ...write("w2", "src/kart.ts", "export class Kart {\n}\n}\n"),
+        ],
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, "Create a kart racing game in the browser with Three.js.");
+
+      expect(checkRunner.mock.calls.some(([command]) => /run build/u.test(command))).toBe(true);
+      expect(requests.some((request) => lastUserText(request).includes("TS1128"))).toBe(true);
+      expect(text).toContain("Not verified");
+      expect(text).not.toContain("Checked by Shelra");
+    }, 60_000);
+
+    it("reports a passing build the turn defined without taking it as evidence", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = empty();
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "built", durationMs: 5 }));
+      const { provider } = roundsModel([
+        () => [...write("w1", "package.json", GAME_PACKAGE), ...write("w2", "src/kart.ts", "export class Kart {}\n")],
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, "Create a kart racing game in the browser with Three.js.");
+
+      expect(text).toMatch(
+        /\[Shelra ran the checks this turn defined on the final code: `[^`]*run build` passed; a check a turn writes itself does not verify its work\.\]/u,
+      );
+      expect(text).toContain("Not verified");
+      expect(text).not.toContain("Checked by Shelra");
+    }, 60_000);
+  });
+
   it("does not take a run of a check script the turn wrote as evidence when the project stated none", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const dir = slugProject();
