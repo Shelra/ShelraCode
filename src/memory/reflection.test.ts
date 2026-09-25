@@ -90,6 +90,45 @@ describe("automatic memory capture", () => {
     ]);
   });
 
+  it("captures corrections and facts in the user's words, and keeps what a dot inside a name holds", () => {
+    const captured = (message: string) =>
+      extractUserDirectives(message).map((candidate) => [candidate.hook, candidate.tags?.includes("correction")]);
+    expect(captured("No, we use bun test here.")).toEqual([["We use bun test here", true]]);
+    expect(captured("We don't use npm anymore.")).toEqual([["We don't use npm anymore", true]]);
+    expect(captured("Use bun instead of npm.")).toEqual([["Use bun instead of npm", true]]);
+    expect(captured("Remember that the API lives in src/api.")).toEqual([["The API lives in src/api", false]]);
+    expect(captured("Always use Node 20.11 for builds. Thanks")).toEqual([["Always use Node 20.11 for builds", false]]);
+    expect(captured("Ya no usamos Firebase, ahora es Supabase.")).toEqual([
+      ["Ya no usamos Firebase, ahora es Supabase", true],
+    ]);
+    // Ordinary replies and questions state nothing lasting.
+    expect(captured("No problem, it is fine.")).toEqual([]);
+    expect(captured("Actually, it is late.")).toEqual([]);
+    expect(captured("Should we always use yarn?")).toEqual([]);
+  });
+
+  it("sends a preference about how Shelra talks to this person to the user-wide store", () => {
+    const [spanish] = extractUserDirectives("Always answer in Spanish.");
+    expect(spanish?.tags).toContain("user-wide");
+    const [lint] = extractUserDirectives("Always run the linter before committing.");
+    expect(lint?.tags).not.toContain("user-wide");
+  });
+
+  it("keeps each distinct rule the user states, however alike their wording", () => {
+    const scope = projectMemoryScope(workspace);
+    for (const rule of ["Always write tests first.", "Always write docs first.", "Never touch the generated folder."]) {
+      admitCandidates(scope, extractUserDirectives(rule));
+    }
+    expect(
+      listMemoryRecords(scope)
+        .map((record) => record.index.hook)
+        .sort(),
+    ).toEqual(["Always write docs first", "Always write tests first", "Never touch the generated folder"]);
+    // The same statement said again is still one entry.
+    admitCandidates(scope, extractUserDirectives("Always write tests first!"));
+    expect(listMemoryRecords(scope)).toHaveLength(3);
+  });
+
   it("records a failed-then-recovered command deterministically when the model extracts nothing", async () => {
     const provider = new JsonProvider('{"memories":[]}');
     const scope = projectMemoryScope(workspace);

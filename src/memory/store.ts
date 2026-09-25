@@ -58,7 +58,8 @@ function validateIdentifier(value: string, label: string): void {
   }
 }
 
-function scopeDir(scope: MemoryScope): string {
+/** The folder a scope keeps its files in. */
+export function memoryDir(scope: MemoryScope): string {
   if (scope.kind === "agent") {
     validateIdentifier(scope.agentName, "agentName");
     return join(scope.workspace, ".shelra", "memory", "agents", scope.agentName);
@@ -68,16 +69,16 @@ function scopeDir(scope: MemoryScope): string {
 
 /** Exposed for callers/tests that need to locate memory files without duplicating scope logic. */
 export function memoryIndexPath(scope: MemoryScope): string {
-  return join(scopeDir(scope), INDEX_FILE);
+  return join(memoryDir(scope), INDEX_FILE);
 }
 
 export function memoryEntryPath(scope: MemoryScope, slug: string): string {
   validateIdentifier(slug, "slug");
-  return join(scopeDir(scope), `${slug}.md`);
+  return join(memoryDir(scope), `${slug}.md`);
 }
 
 export function memoryHistoryPath(scope: MemoryScope): string {
-  return join(scopeDir(scope), HISTORY_FILE);
+  return join(memoryDir(scope), HISTORY_FILE);
 }
 
 export function projectMemoryScope(workspace: string): MemoryScope {
@@ -249,7 +250,7 @@ function parseIndex(raw: string): MemoryIndexEntry[] {
 function appendHistory(scope: MemoryScope, event: MemoryHistoryEvent): void {
   try {
     const path = memoryHistoryPath(scope);
-    mkdirSync(scopeDir(scope), { recursive: true });
+    mkdirSync(memoryDir(scope), { recursive: true });
     if (existsSync(path) && statSync(path).size > MEMORY_HISTORY_MAX_BYTES) {
       const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
       writeFileAtomic(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);
@@ -337,7 +338,7 @@ export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): M
   if (!input.title.trim()) throw new Error("Memory entry title must not be empty.");
   if (!input.hook.trim()) throw new Error("Memory entry hook must not be empty.");
 
-  const dir = scopeDir(scope);
+  const dir = memoryDir(scope);
   const file = `${input.slug}.md`;
   const currentIndex = readMemoryIndex(scope);
   const withoutExisting = currentIndex.entries.filter((entry) => entry.file !== file);
@@ -496,7 +497,7 @@ export function reconfirmByPassingCommands(scope: MemoryScope, commands: readonl
 export function deleteMemoryEntry(scope: MemoryScope, slug: string, detail?: string): MemoryDeleteResult {
   validateIdentifier(slug, "slug");
 
-  const dir = scopeDir(scope);
+  const dir = memoryDir(scope);
   const file = `${slug}.md`;
   const entryPath = join(dir, file);
   const fileExists = existsSync(entryPath);
@@ -536,8 +537,8 @@ export interface ReflectionAuditRecord {
 /** Why memory changed (or did not) after a turn — the audit trail for automatic capture. */
 export function appendReflectionAudit(scope: MemoryScope, record: ReflectionAuditRecord): void {
   try {
-    const path = join(scopeDir(scope), REFLECTIONS_FILE);
-    mkdirSync(scopeDir(scope), { recursive: true });
+    const path = join(memoryDir(scope), REFLECTIONS_FILE);
+    mkdirSync(memoryDir(scope), { recursive: true });
     if (existsSync(path) && statSync(path).size > MEMORY_HISTORY_MAX_BYTES) {
       const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
       writeFileAtomic(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);
@@ -550,7 +551,7 @@ export function appendReflectionAudit(scope: MemoryScope, record: ReflectionAudi
 }
 
 export function readReflectionAudit(scope: MemoryScope, limit = 50): ReflectionAuditRecord[] {
-  const path = join(scopeDir(scope), REFLECTIONS_FILE);
+  const path = join(memoryDir(scope), REFLECTIONS_FILE);
   if (!existsSync(path)) return [];
   try {
     return readFileSync(path, "utf8")

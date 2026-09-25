@@ -174,6 +174,8 @@ export function createTools(
   options: CreateToolsOptions = {},
 ) {
   const cwd = () => bash.getCwd();
+  // Project memory belongs to the session's root folder, wherever a `cd` moved the shell (doc 18 §2.2 R4).
+  const memoryRoot = () => bash.getRootCwd();
   const groups = options.toolGroups ?? {};
 
   /**
@@ -705,7 +707,7 @@ export function createTools(
         "List this project's saved persistent memory (research findings, architecture decisions, known problems, conventions from earlier turns/sessions). Cheap — an index only. Check this before researching something that may already be answered.",
       inputSchema: z.object({}),
       execute: async () => {
-        const result = readMemoryIndex(projectMemoryScope(cwd()));
+        const result = readMemoryIndex(projectMemoryScope(memoryRoot()));
         const userEntries = readMemoryIndex(userMemoryScope()).entries;
         if (result.entries.length === 0 && userEntries.length === 0) {
           return { success: true, output: "No project memory saved yet." };
@@ -734,8 +736,8 @@ export function createTools(
         // live 2026-09-24) is still found.
         const scopes =
           scope === "user"
-            ? [userMemoryScope(), projectMemoryScope(cwd())]
-            : [projectMemoryScope(cwd()), userMemoryScope()];
+            ? [userMemoryScope(), projectMemoryScope(memoryRoot())]
+            : [projectMemoryScope(memoryRoot()), userMemoryScope()];
         const result = scopes.map((candidate) => readMemoryEntry(candidate, slug)).find((found) => found.entry) ?? {
           entry: null,
         };
@@ -778,7 +780,7 @@ export function createTools(
       }),
       execute: async ({ slug, title, hook, type, description, body, related_files, confidence, scope: scopeName }) => {
         try {
-          const scope = scopeName === "user" ? userMemoryScope() : projectMemoryScope(cwd());
+          const scope = scopeName === "user" ? userMemoryScope() : projectMemoryScope(memoryRoot());
           const candidate = {
             slug,
             title,
@@ -828,7 +830,10 @@ export function createTools(
       }),
       execute: async ({ slug, scope }) => {
         try {
-          const result = deleteMemoryEntry(scope === "user" ? userMemoryScope() : projectMemoryScope(cwd()), slug);
+          const result = deleteMemoryEntry(
+            scope === "user" ? userMemoryScope() : projectMemoryScope(memoryRoot()),
+            slug,
+          );
           if (!result.ok) {
             return {
               success: false,

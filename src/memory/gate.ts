@@ -32,6 +32,8 @@ export interface GateOptions {
 
 const DEFAULT_PER_TYPE_CAP = 40;
 const DEFAULT_DUPLICATE_THRESHOLD = 0.6;
+/** Two statements of the user's are the same only above this similarity; below it they are two statements. */
+const SAME_HUMAN_STATEMENT = 0.9;
 const MIN_BODY_CHARS = 20;
 const MAX_BODY_CHARS = 6_000;
 
@@ -203,7 +205,11 @@ export function decideMemoryWrite(
     );
     if (!best || score > best.score) best = { record, score };
   }
-  if (best && best.score >= duplicateThreshold) {
+  const bothHuman = candidateSource === "human" && best?.record.entry.frontmatter.metadata.source === "human";
+  // Two different sentences the user stated are two statements unless they are practically the same: "Always write
+  // docs for new code" used to replace "Always write tests for new code" (doc 18 §2.1 C3). A contradiction between
+  // them is resolved by supersession, never by one silently overwriting the other.
+  if (best && best.score >= duplicateThreshold && !(bothHuman && best.score < SAME_HUMAN_STATEMENT)) {
     const existingMeta = best.record.entry.frontmatter.metadata;
     const existingSource = existingMeta.source;
     if (existingSource === "human" && candidateSource !== "human") {

@@ -59,15 +59,34 @@ import {
 import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
-import { admitCandidates, extractUserDirectives, reflectOnTurn, type TurnCommand } from "../memory/reflection";
+import {
+  appendEpisode,
+  didWork,
+  episodeFrom,
+  queuePendingReflection,
+  type TurnOutcome,
+  takePendingReflection,
+  turnOutcome,
+} from "../memory/episodes";
+import {
+  admitCandidates,
+  deterministicFailureCandidates,
+  extractUserDirectives,
+  reflectOnTurn,
+  type TurnCommand,
+  type TurnDigest,
+  turnQualifiesForReflection,
+} from "../memory/reflection";
 import type { MemoryContext } from "../memory/retrieval";
 import { promoteProceduresToSkills } from "../memory/skills";
 import {
+  appendReflectionAudit,
   creditMemoryUse,
   listMemoryRecords,
   projectMemoryScope,
   reconfirmByPassingCommands,
   recordMemoryUse,
+  userMemoryScope,
 } from "../memory/store";
 import {
   type BudgetLimits,
@@ -537,6 +556,10 @@ export class Agent {
   private turnStartLedger = new Map<string, Decision>();
   /** The host's own end notes of the current turn; see `getTurnEndNotes`. */
   private turnEndNotes: string[] = [];
+  /** What the running turn did, across all its rounds, for memory; null outside a turn (doc 18 §4.2). */
+  private turnMemoryDigest: (() => TurnDigest) | null = null;
+  /** Set once the turn's learning ran; a turn that ends any other way records its episode when it closes. */
+  private turnLearned = false;
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
@@ -2486,6 +2509,7 @@ export class Agent {
       trace.error(error);
       throw error;
     } finally {
+      this.recordUnlearnedTurn();
       trace.end();
     }
   }
@@ -2564,21 +2588,56 @@ export class Agent {
     const contextPacket = compileContextPacket(this.bash.getCwd(), userMessage);
     // Standing instructions in the user's own words are memory the moment they are said; no model
     // call is needed to recognize "always ..." / "never ...". The gate still validates them.
-    const memoryScope = projectMemoryScope(this.bash.getCwd());
+    // The store is the session's root folder, never a folder a `cd` moved the shell to (doc 18 §2.2 R4).
+    const memoryRoot = this.bash.getRootCwd();
+    const memoryScope = projectMemoryScope(memoryRoot);
     const memoryOff = this.ablations.has("memory");
     try {
       const directives = memoryOff ? [] : extractUserDirectives(userMessage);
-      if (directives.length > 0) admitCandidates(memoryScope, directives);
+      // A preference about how Shelra talks to this person holds in every project.
+      const routed: Array<[typeof memoryScope, typeof directives]> = [
+        [memoryScope, directives.filter((directive) => !directive.tags?.includes("user-wide"))],
+        [userMemoryScope(), directives.filter((directive) => directive.tags?.includes("user-wide"))],
+      ];
+      for (const [scope, list] of routed) {
+        if (list.length === 0) continue;
+        const admitted = admitCandidates(scope, list);
+        appendReflectionAudit(scope, {
+          at: new Date().toISOString(),
+          qualified: true,
+          reason: "the user's own words",
+          candidates: list.length,
+          decisions: admitted.decisions,
+          written: admitted.written,
+        });
+      }
     } catch (error) {
       // memory capture must never block a turn
       recordSwallowedError("memory.capture", error);
     }
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
-      : memoryContextFor(this.bash.getCwd(), userMessage, contextPacket.files);
+      : memoryContextFor(memoryRoot, userMessage, contextPacket.files);
     this.lastMemoryContext = memoryContext;
     if (memoryContext.expanded.length > 0) recordMemoryUse(memoryScope, memoryContext.expanded);
     const turnCommands: TurnCommand[] = [];
+    // Everything the turn said and every tool it called, across all its rounds: a reflection used to see only the
+    // last round (doc 18 §2.1 C2).
+    let turnText = "";
+    let turnToolCalls = 0;
+    this.turnLearned = false;
+    this.turnMemoryDigest = () => ({
+      userMessage,
+      assistantText: turnText.slice(-12_000),
+      changedFiles: mergeChangedFiles(
+        memoryRoot,
+        this.kernel?.snapshot().mutations ?? [],
+        (turnStartState && changedPaths(turnStartState, captureWorkspaceState(memoryRoot))) ?? [],
+      ),
+      commands: turnCommands,
+      verified: this.turnVerificationEvidence.length > 0,
+      toolCalls: turnToolCalls,
+    });
     const pendingCommands = new Map<string, string>();
     /** Checks this turn ran whose exit status a later command replaced; the gate names them. */
     const maskedChecks = new Set<string>();
@@ -2908,6 +2967,7 @@ export class Agent {
               case "text-delta":
                 if (part.text) lastStepProducedOutput = true;
                 assistantText += part.text;
+                turnText += part.text;
                 yield { type: "content", content: part.text };
                 break;
 
@@ -2928,6 +2988,7 @@ export class Agent {
                 lastStepProducedOutput = true;
                 lastStepToolCalls += 1;
                 activeToolCalls.push(tc);
+                turnToolCalls += 1;
                 if (tc.function.name === "bash") {
                   try {
                     const command = (JSON.parse(tc.function.arguments) as { command?: string }).command;
@@ -3753,7 +3814,7 @@ export class Agent {
               await this.learnFromTurn(
                 {
                   userMessage,
-                  assistantText: `${assistantText}\n\n${verdict}`,
+                  assistantText: `${turnText.slice(-12_000)}\n\n${verdict}`,
                   changedFiles: [...mutations],
                   commands: [
                     ...turnCommands,
@@ -3765,11 +3826,12 @@ export class Agent {
                   ],
                   verified: false,
                   endedUnverified: true,
-                  toolCalls: activeToolCalls.length,
+                  toolCalls: turnToolCalls,
                 },
                 runtime.modelId,
                 signal,
                 observer,
+                "unverified",
               );
               yield { type: "done" };
               return;
@@ -3912,15 +3974,16 @@ export class Agent {
           await this.learnFromTurn(
             {
               userMessage,
-              assistantText,
+              assistantText: turnText.slice(-12_000),
               changedFiles: [...mutations],
               commands: turnCommands,
               verified: this.turnVerificationEvidence.length > 0,
-              toolCalls: activeToolCalls.length,
+              toolCalls: turnToolCalls,
             },
             runtime.modelId,
             signal,
             observer,
+            this.turnVerificationEvidence.length > 0 ? "verified" : "answered",
           );
           yield { type: "done" };
           return;
@@ -4044,9 +4107,14 @@ export class Agent {
     modelId: string,
     signal: AbortSignal,
     observer?: ProcessMessageObserver,
+    outcome: TurnOutcome = "answered",
   ): Promise<void> {
+    this.turnLearned = true;
     if (!this.provider || this.mode !== "agent" || this.ablations.has("memory")) return;
-    const scope = projectMemoryScope(this.bash.getCwd());
+    const scope = projectMemoryScope(this.bash.getRootCwd());
+    if (didWork(digest)) {
+      appendEpisode(scope, episodeFrom(digest, outcome, { session: this.session?.id, model: modelId }));
+    }
     try {
       const report = await reflectOnTurn({
         scope,
@@ -4069,13 +4137,80 @@ export class Agent {
         decisions: report.decisions,
         timestamp: Date.now(),
       });
-      const promotion = promoteProceduresToSkills(scope, this.bash.getCwd(), listMemoryRecords(scope));
+      // A reflection the model could not run (a 429, a timeout) is deferred, not lost (doc 18 §2.1 C6); when it did
+      // run, the model answers now, so one deferred reflection from an earlier turn runs too.
+      if (report.qualified && report.error) queuePendingReflection(scope, digest, outcome);
+      else if (!signal.aborted) await this.reflectDeferred(scope, modelId, signal);
+      const promotion = promoteProceduresToSkills(scope, this.bash.getRootCwd(), listMemoryRecords(scope));
       if (promotion.promoted.length > 0) {
         this.kernel?.recordObservation(`Skills: promoted ${promotion.promoted.join(", ")}`);
       }
     } catch (error) {
       // learning must never fail the turn
       if (!signal.aborted) recordSwallowedError("memory.learn", error);
+    }
+  }
+
+  /** Reflects one turn queued when no model could (doc 18 §4.2); re-queues it when the model still cannot. */
+  private async reflectDeferred(
+    scope: ReturnType<typeof projectMemoryScope>,
+    modelId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const pending = takePendingReflection(scope);
+    if (!pending || !this.provider) return;
+    const report = await reflectOnTurn({
+      scope,
+      provider: this.provider,
+      modelId,
+      digest: pending.digest,
+      signal: withAbortTimeout(signal, 45_000),
+      timeoutMs: 45_000,
+    });
+    if (report.usage) this.recordUsage(report.usage, "other", modelId);
+    if (report.error) queuePendingReflection(scope, pending.digest, pending.outcome);
+  }
+
+  /**
+   * A turn that ended without its learning step (Limited, Paused, blocked, stopped, cancelled, an error, the
+   * no-evidence gate) still did work: its episode and the lessons that need no model are recorded now, and its
+   * reflection is queued for when a model answers (doc 18 §2.1 C1). Never throws.
+   */
+  private recordUnlearnedTurn(): void {
+    const digestOf = this.turnMemoryDigest;
+    this.turnMemoryDigest = null;
+    if (this.turnLearned || !digestOf || this.mode !== "agent" || this.ablations.has("memory")) return;
+    try {
+      const digest = digestOf();
+      if (!didWork(digest)) return;
+      const note = this.turnEndNotes.at(-1);
+      const outcome = turnOutcome(note, digest.verified);
+      const scope = projectMemoryScope(this.bash.getRootCwd());
+      appendEpisode(scope, episodeFrom(digest, outcome, { session: this.session?.id, note, model: this.modelId }));
+      const failures = deterministicFailureCandidates(digest);
+      const admitted = failures.length > 0 ? admitCandidates(scope, failures) : { decisions: [], written: [] };
+      const qualification = turnQualifiesForReflection(digest);
+      // Only a turn no model could finish waits for a reflection. The other exits that skip the learning step are the
+      // ones whose work the host would not trust (tests or checks or decision records changed, no evidence, a Stop
+      // hook, report_blocker) or the user's own cancel: what the host observed is kept, the model infers nothing.
+      const deferrable = outcome === "limited" || outcome === "paused" || outcome === "error";
+      const deferred = qualification.qualified && deferrable;
+      if (deferred) queuePendingReflection(scope, digest, outcome);
+      const why = deferred
+        ? "; reflection deferred until a model answers"
+        : qualification.qualified && !deferrable
+          ? "; no reflection on this exit"
+          : "";
+      appendReflectionAudit(scope, {
+        at: new Date().toISOString(),
+        qualified: qualification.qualified,
+        reason: `ended ${outcome}: ${qualification.reason}${why}`,
+        candidates: failures.length,
+        decisions: admitted.decisions,
+        written: admitted.written,
+      });
+    } catch (error) {
+      recordSwallowedError("memory.unlearned-turn", error);
     }
   }
 

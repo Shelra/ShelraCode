@@ -182,14 +182,19 @@ Tests: `src/agent/resilience.test.ts`. Background: `docs/architecture/14-AGENT-H
 ## Persistent memory (hard rule)
 
 Shelra must not behave like a stateless agent. `src/memory/` implements project memory under
-`.shelra/memory/` (index + topic files + `history.jsonl` timeline + `reflections.jsonl` audit):
+`.shelra/memory/` in the session's root folder, whatever folder the shell moved to (index + topic files +
+`history.jsonl` timeline + `reflections.jsonl` audit + `episodes.jsonl` + `pending-reflections.jsonl`):
 retrieval ranks entries against every request and sub-agent brief (lexical, no embeddings) and
-injects the relevant bodies; after a turn that changed and verified files, worked through a
-failure, or investigated substantially (a turn stopped by test protection, a decision-record edit,
-missing evidence, a Stop hook or `report_blocker` does not reflect), one bounded reflection call proposes durable facts and a
+injects the relevant bodies. Every turn that did work records an episode (outcome, files, what failed and what got
+past it), however it ended. After a turn that changed and verified files, worked through a
+failure, or investigated substantially, one bounded reflection call proposes durable facts and a
 deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text,
-no inference overwriting a human statement, no near-duplicates). Explicit standing rules from the
-user ("always …", "never …") are captured without a model call. A project entry gains credit when the
+no inference overwriting a human statement, no near-duplicates). A turn no model could finish (Limited, Paused)
+keeps its host-observed lessons at once and queues its reflection for the next turn a model answers; a turn stopped
+by test protection, a check or decision-record edit, missing evidence, a Stop hook or `report_blocker` keeps its
+episode and host-observed lessons, and no model reflects on it (`docs/architecture/18-MEMORY-V2.md`). Explicit
+standing rules, facts and corrections from the user ("always …", "never …", "remember that …", "no, we use …") are
+captured without a model call; a preference about how Shelra talks to the person goes to the user-wide store. A project entry gains credit when the
 host runs the checks a project states and they pass with it in context, and loses it when they fail (a
 project that states no checks gives no credit); a procedure that was part of
 two passing turns is promoted to `.agents/skills/<slug>/SKILL.md`. Design and evidence: `docs/design/shelra-memory-engine.md`;

@@ -51,12 +51,31 @@ const MAX_CANDIDATES = 5;
 const MAX_PROMPT_CHARS = 9_000;
 
 /**
- * Standing-rule markers only. Task-local prohibitions ("do not modify tests" inside one request)
- * are constraints of that task, not of the project, and must not become permanent rules; the
- * reflection step may still record a convention it judges durable.
+ * What the user states as lasting, in their own words (docs/architecture/18-MEMORY-V2.md §4.2). Task-local
+ * prohibitions ("do not modify tests" inside one request) are constraints of that task, not of the project, and do not
+ * become permanent rules; the reflection step may still record a convention it judges durable.
+ *
+ * - a rule: a sentence that starts with always, never, from now on, going forward, prefer (and the Spanish forms);
+ * - a fact: "remember that …", "we use …", "this project uses …";
+ * - a correction: "no, we use …", "actually, …", "we don't use X anymore", "use Y instead of X".
  */
-const DIRECTIVE_PATTERN =
-  /(?:^|[.!?\n]\s*)((?:always|never|from now on|going forward|prefer|en adelante|siempre|nunca|prefiero)\b[^.!?\n]{8,200})/giu;
+const RULE_START =
+  /^(?:always|never|from now on|going forward|prefer|en adelante|a partir de ahora|siempre|nunca|jam[aá]s|prefiero)\b/iu;
+const REMEMBER_START =
+  /^(?:remember that|keep in mind that|note that|recuerda que|ten en cuenta que|toma en cuenta que)\s+/iu;
+const FACT_START =
+  /^(?:we use|we're using|we are using|this project uses|the project uses|usamos|el proyecto usa|en este proyecto usamos)\b/iu;
+// "No problem, it is fine" is not a correction: a bare "no" needs its comma, and the rest must state a project fact.
+const CORRECTION_START =
+  /^(?:(?:no|nope|wrong|incorrect)\s*[,.:;!]|(?:actually|en realidad|te equivocas|that's wrong|eso est[aá] mal)\b[,.:;!]?)\s*/iu;
+const CORRECTION_STATEMENT =
+  /\b(?:we(?:'re| are)? (?:use|using|run|build|deploy|test|keep|store|call)|this project|the project|usamos|el proyecto|se usa|lives in|is in|is at|est[aá] en|vive en)\b/iu;
+const NO_LONGER =
+  /\b(?:we (?:don't|do not|no longer) use|we stopped using|we (?:moved|migrated) (?:away )?from|ya no usamos|dejamos de usar|migramos de)\b/iu;
+const INSTEAD = /\b(?:use|usa|utiliza|usamos)\b.{2,80}\b(?:instead of|rather than|en vez de|en lugar de)\b/iu;
+/** A preference about how Shelra talks to this person holds in every project: it goes to the user-wide store. */
+const PERSONAL =
+  /\b(?:answer|respond|reply|write to me|talk to me|explain|responde|contesta|h[aá]blame|escr[ií]beme|expl[ií]came)\b.{0,40}\b(?:in|en)\s+(?:spanish|english|espa[nñ]ol|ingl[eé]s|castellano)\b|\b(?:my|mi)\s+(?:language|idioma)\b/iu;
 
 function slugify(text: string, prefix = ""): string {
   const base = text
@@ -69,39 +88,85 @@ function slugify(text: string, prefix = ""): string {
   return combined || "memory-entry";
 }
 
+/** A message's sentences; a period inside a name, a path or a version ("Node 20.11", "src/index.ts") does not end one. */
+function sentencesOf(message: string): string[] {
+  return message
+    .split(/(?<=[.!?])\s+|\n+/u)
+    .map((sentence) =>
+      sentence
+        .trim()
+        .replace(/\s+/gu, " ")
+        .replace(/[.!]+$/u, ""),
+    )
+    .filter(Boolean);
+}
+
+type DirectiveKind = "rule" | "fact" | "correction";
+
+/** What a sentence states as lasting, and the statement itself; null when it states nothing lasting. */
+function directiveOf(sentence: string, document: boolean): { kind: DirectiveKind; statement: string } | null {
+  if (/^(never mind|always wondered|never thought)/iu.test(sentence)) return null;
+  if (RULE_START.test(sentence)) {
+    // A structured document (a spec with "#" headings) states what this task should do: its "prefer" lines are the
+    // task's requirements, not standing rules (seen live 2026-09-24).
+    if (document && /^(prefer|prefiero)\b/iu.test(sentence)) return null;
+    return { kind: "rule", statement: sentence };
+  }
+  const remember = REMEMBER_START.exec(sentence);
+  if (remember) return { kind: "fact", statement: sentence.slice(remember[0].length) };
+  // Specs describe the task's target: only its explicit rules and "remember that" lines last beyond it.
+  if (document) return null;
+  if (NO_LONGER.test(sentence)) return { kind: "correction", statement: sentence };
+  const correction = CORRECTION_START.exec(sentence);
+  if (correction) {
+    const rest = sentence.slice(correction[0].length);
+    if (CORRECTION_STATEMENT.test(rest)) return { kind: "correction", statement: rest };
+  }
+  if (FACT_START.test(sentence)) return { kind: "fact", statement: sentence };
+  if (INSTEAD.test(sentence)) return { kind: "correction", statement: sentence };
+  return null;
+}
+
 /**
- * Explicit standing instructions in the user's own words. Only sentence-initial directive verbs
- * count, so ordinary prose ("never mind", "I always wondered") is not captured as a rule.
+ * Explicit standing instructions, facts and corrections in the user's own words, captured without a model call.
+ * Ordinary prose ("never mind", "I always wondered") is not captured; a lead-in to a list is not a complete rule;
+ * a preference about how Shelra talks to this person is tagged `user-wide` for the user's own store.
  */
 export function extractUserDirectives(userMessage: string): ReflectionCandidate[] {
   const candidates: ReflectionCandidate[] = [];
   const seen = new Set<string>();
-  // A structured document (a spec with "#" headings) states what this task should do: its "prefer" lines are the
-  // task's requirements, not standing rules (seen live 2026-09-24: a game spec left "Prefer a slight horizontal
-  // look-ahead" as a project rule).
   const document = /^#{1,6}\s/mu.test(userMessage);
-  for (const match of userMessage.matchAll(DIRECTIVE_PATTERN)) {
-    const sentence = (match[1] ?? "").trim().replace(/\s+/gu, " ");
-    if (!sentence || /^(never mind|always wondered|never thought)/iu.test(sentence)) continue;
-    // A lead-in to a list ("… so that it tests your ability to reason about:") is not a complete rule.
-    if (sentence.endsWith(":")) continue;
-    if (document && /^(prefer|prefiero)\b/iu.test(sentence)) continue;
-    const slug = slugify(sentence, "user-rule-");
+  const today = new Date().toISOString().slice(0, 10);
+  for (const sentence of sentencesOf(userMessage)) {
+    // A lead-in to a list ("… so that it tests your ability to reason about:") is not a complete statement.
+    // Nor is a question ("should we always use X?").
+    if (/[:?]$/u.test(sentence) || sentence.length < 8 || sentence.length > 300) continue;
+    const directive = directiveOf(sentence, document);
+    if (!directive || directive.statement.length < 8) continue;
+    const statement = directive.statement.charAt(0).toUpperCase() + directive.statement.slice(1);
+    const prefix = directive.kind === "rule" ? "user-rule-" : directive.kind === "fact" ? "user-fact-" : "user-fix-";
+    const slug = slugify(statement, prefix);
     if (seen.has(slug)) continue;
     seen.add(slug);
+    const personal = PERSONAL.test(sentence);
     candidates.push({
       slug,
-      title: sentence.length > 60 ? `${sentence.slice(0, 57)}...` : sentence,
-      hook: sentence,
-      type: "preference",
-      description: `User instruction stated on ${new Date().toISOString().slice(0, 10)}: ${sentence}`,
-      body: `The user instructed: "${sentence}"\n\nApply this in this project unless the user says otherwise.`,
+      title: statement.length > 60 ? `${statement.slice(0, 57)}...` : statement,
+      hook: statement,
+      type: directive.kind === "rule" ? "preference" : "conventions",
+      description: `${directive.kind === "correction" ? "User correction" : directive.kind === "fact" ? "User statement" : "User instruction"} on ${today}: ${statement}`,
+      // The statement alone: a shared boilerplate body made unrelated short rules look like duplicates.
+      body: `${statement}.\n\n(${directive.kind === "correction" ? "Corrected" : "Stated"} by the user on ${today}.)`,
       source: "human",
       confidence: 1,
-      tags: ["user-directive"],
+      tags: [
+        "user-directive",
+        ...(directive.kind === "correction" ? ["correction"] : []),
+        ...(personal ? ["user-wide"] : []),
+      ],
     });
   }
-  return candidates.slice(0, 3);
+  return candidates.slice(0, 5);
 }
 
 export function turnQualifiesForReflection(digest: TurnDigest): { qualified: boolean; reason: string } {
@@ -352,7 +417,18 @@ export interface ReflectOptions {
 export async function reflectOnTurn(options: ReflectOptions): Promise<ReflectionReport> {
   const qualification = turnQualifiesForReflection(options.digest);
   const report: ReflectionReport = { ...qualification, candidates: [], decisions: [], written: [] };
-  if (!qualification.qualified) return report;
+  if (!qualification.qualified) {
+    // Why a turn taught nothing is part of the audit too (doc 18 §2.2 R8): before, only qualifying turns left a record.
+    appendReflectionAudit(options.scope, {
+      at: new Date().toISOString(),
+      qualified: false,
+      reason: qualification.reason,
+      candidates: 0,
+      decisions: [],
+      written: [],
+    });
+    return report;
+  }
   const records = listMemoryRecords(options.scope);
   const { system, prompt } = buildReflectionPrompt(options.digest, records);
   const timeoutMs = options.timeoutMs ?? 30_000;

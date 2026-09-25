@@ -11,7 +11,7 @@ export interface BenchCleanRoom {
   home: string;
   /** HOME and USERPROFILE as they were before the run, for adapters that need the user's own logins. */
   realHome: { HOME?: string; USERPROFILE?: string };
-  /** Puts HOME and USERPROFILE back. */
+  /** Puts HOME, USERPROFILE and the user-wide memory root back. */
   leave: () => void;
 }
 
@@ -33,8 +33,11 @@ export function enterBenchCleanRoom(base: string = tmpdir()): BenchCleanRoom {
   writeFileSync(join(home, ".gitconfig"), "[user]\n\tname = Shelra Bench\n\temail = bench@shelra.invalid\n");
 
   const realHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  // The user-wide memory store can be named apart from HOME; the run must not read it either.
+  const realMemoryRoot = process.env.SHELRA_USER_MEMORY_ROOT;
   process.env.HOME = home;
   process.env.USERPROFILE = home;
+  process.env.SHELRA_USER_MEMORY_ROOT = home;
   let left = false;
   return {
     root,
@@ -44,8 +47,9 @@ export function enterBenchCleanRoom(base: string = tmpdir()): BenchCleanRoom {
     leave: () => {
       if (left) return;
       left = true;
-      for (const key of ["HOME", "USERPROFILE"] as const) {
-        const value = realHome[key];
+      const saved = { ...realHome, SHELRA_USER_MEMORY_ROOT: realMemoryRoot };
+      for (const key of ["HOME", "USERPROFILE", "SHELRA_USER_MEMORY_ROOT"] as const) {
+        const value = saved[key];
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
       }

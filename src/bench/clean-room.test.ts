@@ -48,6 +48,8 @@ describe("enterBenchCleanRoom", () => {
     expect(discoverSkills(workspace).map((skill) => skill.name)).toContain("personal-skill");
     expect(loadCustomInstructions(workspace)).toContain("Personal instructions.");
 
+    // A user-wide memory store named apart from HOME is the person's too (Vitest names one for every test).
+    const memoryRoot = process.env.SHELRA_USER_MEMORY_ROOT;
     const room = enterBenchCleanRoom(base);
     try {
       expect(loadUserSettings()).toEqual({});
@@ -62,6 +64,7 @@ describe("enterBenchCleanRoom", () => {
     }
 
     expect(process.env.HOME).toBe(personalHome);
+    expect(process.env.SHELRA_USER_MEMORY_ROOT).toBe(memoryRoot);
     expect(loadUserSettings().shell?.destructive).toBe("allow");
   });
 });
