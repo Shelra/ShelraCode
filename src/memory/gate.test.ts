@@ -159,4 +159,12 @@ describe("secrets memory never keeps (review round 3)", () => {
     expect(containsSecret("run bun test --preload ./test/setup.ts")).toBe(false);
     expect(privateText("run bun test --preload ./test/setup.ts")).toBe("run bun test --preload ./test/setup.ts");
   });
+
+  it("keeps no user's profile folder, whatever HOME is (seen 2026-09-25)", () => {
+    expect(
+      privateText("Cannot find package 'ms' from 'C:\\Users\\someone\\AppData\\Local\\Temp\\run\\ms.test.ts'"),
+    ).toBe("Cannot find package 'ms' from '~\\AppData\\Local\\Temp\\run\\ms.test.ts'");
+    expect(privateText("open /home/someone/project/a.ts and /Users/other/b.ts")).toBe("open ~/project/a.ts and ~/b.ts");
+    expect(privateText("D:\\PROYECTS\\game\\index.html")).toBe("D:\\PROYECTS\\game\\index.html");
+  });
 });

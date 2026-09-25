@@ -1,6 +1,6 @@
 import type { ProviderAdapter, ProviderUsage } from "../providers/types";
 import { decideMemoryWrite, type GateDecision, privateText } from "./gate";
-import { recoveryOf } from "./recovery";
+import { errorLine, recoveryOf } from "./recovery";
 import {
   appendReflectionAudit,
   archiveMemoryEntry,
@@ -301,11 +301,7 @@ export function deterministicFailureCandidates(digest: TurnDigest): ReflectionCa
     const slug = slugify(`${failed.command.split(/\s+/u).slice(0, 4).join(" ")} failed`, "failure-");
     if (seen.has(slug)) continue;
     seen.add(slug);
-    const errorHead =
-      failed.output
-        .trim()
-        .split(/\r?\n/u)
-        .find((line) => line.trim()) ?? "(no output)";
+    const errorHead = errorLine(failed.output);
     const fix = between[0] ?? recovered.command;
     candidates.push({
       slug,

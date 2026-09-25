@@ -277,9 +277,15 @@ const HOME_PATTERN = HOME
  * What memory keeps of a turn's own text: no key, token, password or private key (the trace's shapes and the gate's,
  * with the env-file lines around them; doc 18 reviews, rounds 2 and 3), and no personal home folder.
  */
+/**
+ * Any user's profile folder, whoever runs Shelra: a run whose HOME points elsewhere (a sandbox, a service account)
+ * still wrote `C:\Users\<name>\…` into a lesson (seen 2026-09-25).
+ */
+const PROFILE_PATTERN = /(?:\b[A-Za-z]:[\\/]+Users|\/(?:home|Users))[\\/]+[^\\/\s"'`]+/gu;
+
 export function privateText(text: string): string {
   const clean = redactSecrets(redact(text));
-  return HOME_PATTERN ? clean.replace(HOME_PATTERN, "~") : clean;
+  return (HOME_PATTERN ? clean.replace(HOME_PATTERN, "~") : clean).replace(PROFILE_PATTERN, "~");
 }
 
 export function looksInjectionShaped(text: string): boolean {

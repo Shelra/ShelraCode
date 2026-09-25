@@ -11,7 +11,7 @@ import {
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { privateText } from "./gate";
-import { recoveryOf } from "./recovery";
+import { errorLine, recoveryOf } from "./recovery";
 import { type TurnDigest, typedText } from "./reflection";
 import { ensureMemoryDir, memoryDir } from "./store";
 import { previousRequestWeight, searchTerms } from "./terms";
@@ -111,7 +111,7 @@ export function failuresOf(digest: TurnDigest): EpisodeFailure[] {
     const fixedBy = recovery ? (recovery.between[0] ?? recovery.passed.command) : undefined;
     failures.push({
       command: clip(command.command, 240),
-      error: clip(command.output, 300),
+      error: clip(errorLine(command.output), 300),
       ...(fixedBy ? { fixedBy: clip(fixedBy, 240) } : {}),
     });
   });

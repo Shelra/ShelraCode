@@ -24,6 +24,23 @@ export function checkHead(command: string): string {
     .join(" ");
 }
 
+/** A line that says what went wrong, rather than a banner or a progress line. */
+const ERROR_LINE_RE =
+  /\b(?:error|errors|fail|failed|failure|cannot|can't|couldn't|not found|no such|missing|denied|refused|exception|traceback|panic|fatal|invalid|unexpected|undefined|timed out)\b/iu;
+
+/**
+ * The line of a command's output that names the failure: the first one that reads like an error, else the first line
+ * (seen 2026-09-25: a lesson quoted `bun test v1.4.1 (4661e494f)`, the runner's banner, instead of
+ * `error: Cannot find package 'ms'`).
+ */
+export function errorLine(output: string): string {
+  const lines = output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.find((line) => ERROR_LINE_RE.test(line)) ?? lines[0] ?? "(no output)";
+}
+
 export interface Recovery {
   /** The later command that passed: the same check, or another program doing the same job. */
   passed: TurnCommand;

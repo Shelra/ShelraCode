@@ -436,6 +436,27 @@ describe("automatic memory capture", () => {
     expect(failuresOf(trap)[0]?.fixedBy).toBe("bun install");
   });
 
+  it("quotes the line that names the failure, not the runner's banner (seen 2026-09-25)", () => {
+    const banner: TurnDigest = {
+      ...digest,
+      commands: [
+        {
+          command: "bun run test",
+          success: false,
+          output:
+            "$ bun test\nbun test v1.4.1 (4661e494f)\n\nms.test.ts:\nerror: Cannot find package 'ms' from 'ms.test.ts'\n 0 pass\n 1 fail",
+        },
+        { command: "bun install", success: true, output: "1 package installed" },
+        { command: "bun run test", success: true, output: "1 pass" },
+      ],
+    };
+    const [lesson] = deterministicFailureCandidates(banner);
+    expect(lesson?.hook).toBe(
+      "`bun run test` failed (error: Cannot find package 'ms' from 'ms.test.ts'); it passed after `bun install`",
+    );
+    expect(failuresOf(banner)[0]?.error).toBe("error: Cannot find package 'ms' from 'ms.test.ts'");
+  });
+
   it("keeps no lesson when the same command passed after nothing but edits: that is the code being fixed", () => {
     const fixed: TurnDigest = {
       ...digest,
