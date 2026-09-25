@@ -309,7 +309,11 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     const agent = agentIn(workspace, provider);
     executeEventHooksMock.mockImplementation(async (input) =>
       input.hook_event_name === "Stop"
-        ? { ...emptyHookResult, blocked: true, blockingErrors: [{ stderr: "Release notes missing." }] }
+        ? {
+            ...emptyHookResult,
+            blocked: true,
+            blockingErrors: [{ command: "check-release-notes", stderr: "Release notes missing." }],
+          }
         : emptyHookResult,
     );
     try {
