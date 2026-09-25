@@ -102,7 +102,8 @@ function List({ t, items }: { t: Theme; items: readonly ListItem[] }) {
   );
 }
 
-function codeColor(t: Theme, kind: CodeTokenKind): string {
+/** The colour of a highlighted code token, the same in code blocks and in diffs. */
+export function codeColor(t: Theme, kind: CodeTokenKind): string {
   switch (kind) {
     case "keyword":
       return t.info;

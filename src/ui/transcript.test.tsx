@@ -1,3 +1,4 @@
+import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
@@ -126,6 +127,139 @@ describe("TranscriptActivityView", () => {
     expect(frame).toContain("✓ Edited src/auth.ts");
     expect(frame).toContain("+1 -1");
     expect(frame).toContain("✓ Created src/token.ts");
+  });
+});
+
+const AUTH_PATCH = [
+  "Index: src/auth.ts",
+  "===================================================================",
+  "--- src/auth.ts",
+  "+++ src/auth.ts",
+  "@@ -11,3 +11,3 @@",
+  " export function isExpired(session: Session, now = Date.now()): boolean {",
+  "-  return session.expiresAt < now;",
+  "+  return session.expiresAt <= now;",
+  " }",
+  "",
+].join("\n");
+
+function editRow(patch: string, overrides: Partial<ActivityRowModel> = {}): ActivityRowModel {
+  return row({
+    group: "change",
+    tone: "success",
+    verb: "Edited",
+    object: "src/auth.ts",
+    operation: "edit_file",
+    diff: { filePath: "src/auth.ts", additions: 1, removals: 1, patch, isNew: false },
+    ...overrides,
+  });
+}
+
+async function spansOf(node: ReactNode, width = 100) {
+  const screen = await testRender(node, { width, height: 24 });
+  await screen.renderOnce();
+  const frame = screen.captureCharFrame();
+  const spans = screen.captureSpans();
+  screen.renderer.destroy();
+  return { frame, lines: spans.lines };
+}
+
+describe("a file change in the log", () => {
+  it("reads as the call it was, with what it did in words and its diff", async () => {
+    const { frame } = await spansOf(
+      <TranscriptActivityView t={dark} item={item("change", [editRow(AUTH_PATCH)])} width={90} detailed={false} />,
+    );
+    expect(frame).toContain("● Update(src/auth.ts)");
+    expect(frame).toContain("└ Added 1 line, removed 1 line");
+    expect(frame).toContain("11  export function isExpired");
+    expect(frame).toContain("12 -  return session.expiresAt < now;");
+    expect(frame).toContain("12 +  return session.expiresAt <= now;");
+    expect(frame).toContain("13  }");
+  });
+
+  it("puts a removed line on a red band and an added line on a green band, across the width", async () => {
+    const { lines } = await spansOf(
+      <TranscriptActivityView t={dark} item={item("change", [editRow(AUTH_PATCH)])} width={90} detailed={false} />,
+    );
+    const bandOf = (marker: string) => {
+      const line = lines.find((candidate) => candidate.spans.some((span) => span.text.includes(marker)));
+      return line?.spans.filter((span) =>
+        span.bg.equals(RGBA.fromHex(marker.includes("-") ? dark.diffRemoved : dark.diffAdded)),
+      );
+    };
+    const removed = bandOf("12 -");
+    const added = bandOf("12 +");
+    // The band runs past the code to the end of the log column, not just under the text.
+    expect(removed?.reduce((sum, span) => sum + span.width, 0)).toBeGreaterThan(80);
+    expect(added?.reduce((sum, span) => sum + span.width, 0)).toBeGreaterThan(80);
+    const marker = lines.flatMap((line) => line.spans).find((span) => span.text.includes("12 -"));
+    expect(marker?.fg.equals(RGBA.fromHex(dark.diffRemovedFg))).toBe(true);
+  });
+
+  it("wraps a long line inside its band and repeats the marker on the next row", async () => {
+    const long = `  test("returns the same session outside the refresh window, and leaves a fresh token untouched", () => {`;
+    const patch = [
+      "@@ -25,1 +25,1 @@",
+      `-${long.replace("refresh window, and leaves a fresh token untouched", "window")}`,
+      `+${long}`,
+      "",
+    ].join("\n");
+    const { frame } = await spansOf(
+      <TranscriptActivityView t={dark} item={item("change", [editRow(patch)])} width={60} detailed={false} />,
+      64,
+    );
+    const rows = frame.split("\n");
+    const first = rows.findIndex((line) => line.includes("25 +"));
+    expect(first).toBeGreaterThan(0);
+    // The continuation row has no number, keeps the marker in the same column, and goes on with the code.
+    const markerColumn = (rows[first] ?? "").indexOf("+");
+    expect((rows[first + 1] ?? "").charAt(markerColumn)).toBe("+");
+    expect((rows[first + 1] ?? "").slice(0, markerColumn).trim()).toBe("");
+    expect(rows.slice(first, first + 3).join("")).toContain("untouched");
+  });
+
+  it("shows a new file as written lines and says how many more there are", async () => {
+    const content = Array.from({ length: 20 }, (_, index) => `+const line${index + 1} = ${index + 1};`);
+    const patch = ["--- src/lines.ts", "+++ src/lines.ts", "@@ -0,0 +1,20 @@", ...content, ""].join("\n");
+    const { frame } = await spansOf(
+      <TranscriptActivityView
+        t={dark}
+        item={item("change", [
+          editRow(patch, {
+            operation: "write_file",
+            object: "src/lines.ts",
+            diff: { filePath: "src/lines.ts", additions: 20, removals: 0, patch, isNew: true },
+          }),
+        ])}
+        width={90}
+        detailed={false}
+      />,
+    );
+    expect(frame).toContain("● Write(src/lines.ts)");
+    expect(frame).toContain("└ Wrote 20 lines");
+    expect(frame).toContain(" 1 +const line1 = 1;");
+    expect(frame).toContain("… +8 lines (ctrl+o to expand)");
+    expect(frame).not.toContain("line13 =");
+  });
+
+  it("says what failed instead of a diff", async () => {
+    const { frame } = await spansOf(
+      <TranscriptActivityView
+        t={dark}
+        item={item("change", [
+          editRow("", {
+            tone: "danger",
+            verb: "Could not edit",
+            diff: undefined,
+            lines: ["old_string was not found in src/auth.ts"],
+          }),
+        ])}
+        width={90}
+        detailed={false}
+      />,
+    );
+    expect(frame).toContain("✗ Update(src/auth.ts)");
+    expect(frame).toContain("└ old_string was not found in src/auth.ts");
   });
 });
 

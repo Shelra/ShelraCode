@@ -6,7 +6,8 @@ export type ColorMode = "truecolor" | "256";
  * The Shelra palette: the tokens of the approved landing page (`frontend/src/app/globals.css`), each
  * with its xterm-256 fallback. A terminal has no alpha, so the site's alpha tokens are blended on base
  * here. Warning and error are the only colours the site does not have; they colour text and glyphs,
- * never a surface. Nothing else may appear on screen: no gradients, shadows or glows.
+ * and the one surface they tint is a diff's removed line (the owner asked for red and green change
+ * bands, 2026-09-24). Nothing else may appear on screen: no gradients, shadows or glows.
  */
 export const PALETTE = {
   /** App background, every full-screen surface. */
@@ -31,6 +32,10 @@ export const PALETTE = {
   accent40: { hex: "#056B3B", ansi256: 22 },
   /** White at 8% on base: hover on base. */
   white8: { hex: "#1C1C1C", ansi256: 234 },
+  /** Accent at 18% on base: the band behind an added line of a diff. */
+  accent18: { hex: "#07341F", ansi256: 22 },
+  /** Error at 26% on base: the band behind a removed line of a diff, as strong to the eye as accent18. */
+  error26: { hex: "#481E1E", ansi256: 52 },
   warning: { hex: "#FFB454", ansi256: 215 },
   error: { hex: "#FF5C5C", ansi256: 203 },
 } as const;
@@ -186,15 +191,16 @@ function themeFrom(p: Record<PaletteToken, string>): Theme {
     selected: p.default,
     selectedBg: p.accent16,
     disabled: p.subtle,
-    // Diffs: no tinted rows; added text in accent, removed text in the error colour.
-    diffAdded: p.base,
+    // Diffs: a removed line on a red band, an added one on a green band, both from the palette's own
+    // status colours; the marker and the line number carry the colour too, for a screen without it.
+    diffAdded: p.accent18,
     diffAddedFg: p.accent,
-    diffAddedLineNum: p.subtle,
-    diffRemoved: p.base,
+    diffAddedLineNum: p.accent,
+    diffRemoved: p.error26,
     diffRemovedFg: p.error,
-    diffRemovedLineNum: p.subtle,
+    diffRemovedLineNum: p.error,
     diffContext: p.base,
-    diffContextFg: p.subtle,
+    diffContextFg: p.default,
     diffLineNumber: p.subtle,
     diffHeader: p.surface,
     diffHeaderFg: p.default,

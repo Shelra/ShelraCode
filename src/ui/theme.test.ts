@@ -71,6 +71,22 @@ describe("Shelra palette", () => {
     expect(contrast(dark.textMuted, dark.background)).toBeCloseTo(5.65, 1);
   });
 
+  it("tints a diff's rows red and green with the status colours blended on base, and keeps them readable", () => {
+    // The owner asked for red removed lines and green added ones (2026-09-24): blends, never the pure colour.
+    expect(dark.diffRemoved).toBe(PALETTE.error26.hex);
+    expect(dark.diffAdded).toBe(PALETTE.accent18.hex);
+    for (const theme of [dark, dark256]) {
+      for (const band of [theme.diffRemoved, theme.diffAdded]) {
+        expect(contrast(theme.text, band)).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(theme.diffRemovedFg, theme.diffRemoved)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(theme.diffAddedFg, theme.diffAdded)).toBeGreaterThanOrEqual(4.5);
+    }
+    // The two bands weigh the same to the eye, so neither colour shouts over the other. The xterm cube has
+    // no green darker than #005f00, so the 256-colour fallback only has to stay readable.
+    expect(Math.abs(luminance(dark.diffRemoved) - luminance(dark.diffAdded))).toBeLessThan(0.01);
+  });
+
   it("maps each token to its exact xterm-256 colour", () => {
     expect(ansi256Hex(232)).toBe("#080808");
     expect(ansi256Hex(233)).toBe("#121212");

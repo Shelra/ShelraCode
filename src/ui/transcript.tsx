@@ -8,7 +8,7 @@ import {
   summarizeGroup,
   truncateText,
 } from "./activity";
-import { DiffView } from "./diff-view";
+import { DiffView, FileChangeBlock } from "./diff-view";
 import { GLYPH } from "./glyphs";
 import {
   type TranscriptActivityItem,
@@ -168,13 +168,55 @@ function DetailLines({
 
 const FOLDED_GROUPS = new Set(["explore", "research"]);
 
-function RowView({ t, row, width, detailed }: { t: Theme; row: ActivityRowModel; width: number; detailed: boolean }) {
+/** How the log names a change to a file, like the tool call it was: `Update(path)`, `Write(path)`. */
+function fileChangeAction(row: ActivityRowModel): string | null {
+  if (row.operation === "edit_file") return "Update";
+  if (row.operation === "write_file") return row.diff && !row.diff.isNew ? "Update" : "Write";
+  if (row.operation === "delete_file") return "Delete";
+  return null;
+}
+
+/** A file block has room around it in its group: a diff reads as its own unit, not part of the next row. */
+function spacedRow(rows: readonly ActivityRowModel[], index: number): boolean {
+  const isBlock = (row: ActivityRowModel | undefined) =>
+    row !== undefined && fileChangeAction(row) !== null && (row.diff !== undefined || row.tone === "danger");
+  return index > 0 && (isBlock(rows[index]) || isBlock(rows[index - 1]));
+}
+
+function RowView({
+  t,
+  row,
+  width,
+  detailed,
+  spaced = false,
+}: {
+  t: Theme;
+  row: ActivityRowModel;
+  width: number;
+  detailed: boolean;
+  spaced?: boolean;
+}) {
   const failed = row.tone === "danger";
+  const action = fileChangeAction(row);
+  if (action && (row.diff || failed)) {
+    return (
+      <FileChangeBlock
+        t={t}
+        action={action}
+        path={row.object}
+        diff={row.diff}
+        error={failed ? (row.lines[0] ?? row.verb) : undefined}
+        width={width}
+        detailed={detailed}
+        spaced={spaced}
+      />
+    );
+  }
   // Failures are evidence: they are always visible. Passing output only appears on request.
   const lines = failed || detailed ? row.lines : [];
   const showTail = detailed && !failed && row.tail && row.tail.length > 0 && row.lines.length === 0;
   return (
-    <box flexDirection="column" flexShrink={0}>
+    <box flexDirection="column" flexShrink={0} marginTop={spaced ? 1 : 0}>
       <ActivityLine t={t} tone={row.tone} verb={row.verb} object={row.object} meta={row.meta} width={width} />
       <DetailLines t={t} lines={lines} tone={row.tone} width={width} />
       {showTail ? <DetailLines t={t} lines={row.tail ?? []} tone="neutral" width={width} /> : null}
@@ -230,13 +272,29 @@ export function TranscriptActivityView({
         <>
           <ActivityLine t={t} tone={summary.tone} verb={summary.title} width={width} quiet glyph={GLYPH.expanded} />
           <box flexDirection="column" paddingLeft={2} flexShrink={0}>
-            {item.rows.map((row) => (
-              <RowView key={row.id} t={t} row={row} width={width - 2} detailed={detailed} />
+            {item.rows.map((row, index) => (
+              <RowView
+                key={row.id}
+                t={t}
+                row={row}
+                width={width - 2}
+                detailed={detailed}
+                spaced={spacedRow(item.rows, index)}
+              />
             ))}
           </box>
         </>
       ) : (
-        item.rows.map((row) => <RowView key={row.id} t={t} row={row} width={width} detailed={detailed} />)
+        item.rows.map((row, index) => (
+          <RowView
+            key={row.id}
+            t={t}
+            row={row}
+            width={width}
+            detailed={detailed}
+            spaced={spacedRow(item.rows, index)}
+          />
+        ))
       )}
     </box>
   );

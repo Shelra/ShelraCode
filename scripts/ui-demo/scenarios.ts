@@ -408,6 +408,78 @@ const DECISION: DemoTurn[] = [
   ],
 ];
 
+/**
+ * File changes the log shows as diffs: a long line that wraps, a multi-line swap, a new file past its preview.
+ * Ask for it with "Fix the refresh tests, and rewrite them so they say what they check.": a request that does
+ * not ask to change tests leaves the turn unverified, because the host protects the tests that existed.
+ */
+const EDITS: DemoTurn[] = [
+  [
+    [
+      { say: "I'll fix the two failures, then make the refresh tests say what they check." },
+      {
+        call: "generate_plan",
+        ms: 300,
+        input: {
+          title: "Fix the refresh tests",
+          goal: "`bun test` passes and the refresh tests name what they guarantee.",
+          acceptanceCriteria: [{ id: "AC1", description: "The suite passes", verification: "bun test" }],
+          steps: [
+            { title: "Fix expiry and rotation", filePaths: ["src/auth.ts"], satisfies: ["AC1"] },
+            { title: "Rewrite the refresh tests", filePaths: ["tests/auth.test.ts"], satisfies: ["AC1"] },
+          ],
+        },
+      },
+    ],
+    [
+      {
+        call: "edit_file",
+        input: {
+          path: "src/auth.ts",
+          old_string: "  return session.expiresAt < now;",
+          new_string: "  return session.expiresAt <= now;",
+        },
+        ms: 300,
+      },
+      {
+        call: "edit_file",
+        input: {
+          path: "src/auth.ts",
+          old_string:
+            "  return { ...session, token: session.token, expiresAt: now + SESSION_TTL_MS, refreshedAt: now };",
+          new_string:
+            '  return { ...session, token: "tok_" + now.toString(36), expiresAt: now + SESSION_TTL_MS, refreshedAt: now };',
+        },
+        ms: 300,
+      },
+    ],
+    [
+      {
+        call: "edit_file",
+        input: {
+          path: "tests/auth.test.ts",
+          old_string:
+            '  test("returns the same session outside the window", () => {\n    expect(refreshSession(base, 100_000)).toBe(base);',
+          new_string:
+            '  test("returns the same session outside the refresh window, and leaves a token that is still fresh untouched", () => {\n    // Outside the window nothing changes: the same object comes back, with its token and its expiry.\n    const same = refreshSession(base, 100_000);\n    expect(same).toBe(base);\n    expect(same.token).toBe("tok_abc");',
+        },
+        ms: 400,
+      },
+      {
+        call: "write_file",
+        input: {
+          path: "tests/refresh-window.test.ts",
+          content:
+            'import { describe, expect, test } from "bun:test";\nimport { isExpired, needsRefresh, refreshSession } from "../src/auth";\n\nconst base = { userId: "u_1", token: "tok_abc", expiresAt: 1_000_000 };\n\ndescribe("the refresh window", () => {\n  test("opens inside the window and not before it", () => {\n    expect(needsRefresh(base, 800_000)).toBe(true);\n    expect(refreshSession(base, 100_000)).toBe(base);\n  });\n\n  test("gives a refreshed session a later expiry and a new token", () => {\n    const next = refreshSession(base, 900_000);\n    expect(next.expiresAt).toBeGreaterThan(base.expiresAt);\n    expect(next.token).not.toBe(base.token);\n  });\n\n  test("treats the expiry instant itself as expired", () => {\n    expect(isExpired(base, 1_000_000)).toBe(true);\n  });\n});\n',
+        },
+        ms: 400,
+      },
+    ],
+    [{ call: "bash", input: { command: "bun test" }, ms: 900 }],
+    [{ say: "Both failures are fixed and the refresh tests now say what they guarantee; `bun test` passes." }],
+  ],
+];
+
 export const SCENARIOS: Record<string, DemoTurn[]> = {
   "fix-auth": [FIX_AUTH_TURN_1, FIX_AUTH_TURN_2],
   errors: ERRORS,
@@ -418,4 +490,5 @@ export const SCENARIOS: Record<string, DemoTurn[]> = {
   payment: PAYMENT,
   destructive: DESTRUCTIVE,
   decision: DECISION,
+  edits: EDITS,
 };

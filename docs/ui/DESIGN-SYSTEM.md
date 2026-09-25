@@ -11,7 +11,8 @@ glyph, border or bordered-fill rules; a colour chosen at run time needs a render
 1. **Flat colour only.** No gradients, shadows, glows or alpha. A terminal cannot blend, so a dialog's
    backdrop is opaque base, never a dim over the screen.
 2. **The palette and nothing else.** Every role in `theme.ts` is one palette token; components never use
-   a raw hex. Warning and error colour text and glyphs, never a surface.
+   a raw hex. Warning and error colour text and glyphs, never a surface, with one exception the owner asked
+   for (2026-09-24): a diff's removed line sits on error-26, as its added line sits on accent-18.
 3. **Hairlines or fills, never both.** A terminal paints a bordered box's fill under its border too, which
    draws a half-cell band outside the line. A bordered panel (composer, dialog, startup) has no fill; a
    filled card (code block, the startup computer card) has no border. Corners are square.
@@ -35,6 +36,8 @@ glyph, border or bordered-fill rules; a colour chosen at run time needs a render
 | accent-16 | `#073020` | 234 | the cursor row in lists |
 | accent-40 | `#056B3B` | 22 | the focused panel's border |
 | white-8 | `#1C1C1C` | 234 | hover on base |
+| accent-18 | `#07341F` | 22 | the band behind an added line of a diff |
+| error-26 | `#481E1E` | 52 | the band behind a removed line of a diff |
 | warning | `#FFB454` | 215 | text and glyphs only |
 | error | `#FF5C5C` | 203 | text and glyphs only |
 
@@ -88,6 +91,14 @@ with `▀` and `▄`.
   label, the input, then model and context left and the keys that matter now right.
 - **Your message**: a prompt line, `$ ` in accent and the text in default.
 - **Tool lines**: status glyph, verb in default, the path in accent, metadata right.
+- **File changes**: the call it was, `● Update(src/auth.ts)` (`Write` for a new file, `Delete`), the path
+  in accent; then `└ Added 12 lines, removed 3 lines`, the counts in accent and error; then the diff: line
+  number, `-` or `+`, the code highlighted like a code block. A removed line is on an error-26 band and an
+  added one on an accent-18 band, each band the width of the log; its number and marker are in error or
+  accent too, so it still reads without colour. A long line wraps inside its band and its marker repeats
+  on every row. Removed lines carry the old file's numbers, added and context lines the new one's. The
+  log shows 24 rows of an edit, 12 of a new file and 8 of a deleted one, then `… +N lines (ctrl+o to
+  expand)`; `ctrl+o` shows all of it. `/diff` lists the changed files with their counts.
 - **Plan**: a live checklist under the log while the agent works (at most five rows around the active
   step), numbered chips and status glyphs; it folds to `✓ Plan 4/4` when the turn ends.
 - **Turn summary**: `─ 2 files +6 −1 · tests ✓ · 42s`, additions in accent, removals in subtle.
