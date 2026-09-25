@@ -12,6 +12,8 @@ import {
   projectMemoryScope,
   readMemoryEntry,
   readMemoryIndex,
+  recallArchivedEntry,
+  recordMemoryUse,
   userMemoryScope,
   writeMemoryEntry,
 } from "../memory/store";
@@ -738,18 +740,31 @@ export function createTools(
           scope === "user"
             ? [userMemoryScope(), projectMemoryScope(memoryRoot())]
             : [projectMemoryScope(memoryRoot()), userMemoryScope()];
-        const result = scopes.map((candidate) => readMemoryEntry(candidate, slug)).find((found) => found.entry) ?? {
-          entry: null,
-        };
-        if (!result.entry) {
+        const found = scopes
+          .map((candidate) => ({ scope: candidate, result: readMemoryEntry(candidate, slug) }))
+          .find((item) => item.result.entry);
+        const entry = found?.result.entry;
+        if (!found || !entry) {
           return {
             success: false,
             output: `No saved memory entry named "${slug}". Check memory_list for valid slugs.`,
           };
         }
+        // Reading a memory is recalling it: it strengthens (doc 18 §4.6), and one that faded comes back.
+        const meta = entry.frontmatter.metadata;
+        const recalled = meta.status === "archived" && recallArchivedEntry(found.scope, slug);
+        if (meta.status === undefined || meta.status === "active") recordMemoryUse(found.scope, [slug]);
+        const note =
+          meta.status === "superseded"
+            ? `\n\n[No longer true: replaced by ${meta.supersededBy ?? "a newer entry"} on ${meta.validUntil?.slice(0, 10) ?? "an earlier date"}.]`
+            : recalled
+              ? "\n\n[This had faded from disuse and is back in memory now.]"
+              : meta.status === "done"
+                ? "\n\n[A reminder already given.]"
+                : "";
         return {
           success: true,
-          output: `${result.entry.frontmatter.description}\n\n${result.entry.body}`,
+          output: `${entry.frontmatter.description}\n\n${entry.body}${note}`,
         };
       },
     });

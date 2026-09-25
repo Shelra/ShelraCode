@@ -185,6 +185,22 @@ describe("automatic memory capture", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps a reminder the user asks for with the cue that brings it up (prospective memory)", () => {
+    const captured = (message: string) =>
+      extractUserDirectives(message).map((candidate) => [candidate.type, candidate.hook, candidate.tags]);
+    expect(captured("Recuérdame actualizar el changelog la próxima vez que toquemos el release.")).toEqual([
+      ["reminder", "Remind the user: Actualizar el changelog (when toquemos el release)", ["reminder", "cue:release"]],
+    ]);
+    expect(captured("Next time we touch the login, remind me to update the session docs.")).toEqual([
+      ["reminder", "Remind the user: Update the session docs (when we touch the login)", ["reminder", "cue:login"]],
+    ]);
+    expect(captured("Remind me to call the vendor.")).toEqual([
+      ["reminder", "Remind the user: Call the vendor (next time)", ["reminder"]],
+    ]);
+    // "Remember that" is a fact, not a reminder.
+    expect(captured("Remember that the API lives in src/api.")[0]?.[0]).toBe("conventions");
+  });
+
   it("sends a preference about how Shelra talks to this person to the user-wide store", () => {
     const [spanish] = extractUserDirectives("Always answer in Spanish.");
     expect(spanish?.tags).toContain("user-wide");

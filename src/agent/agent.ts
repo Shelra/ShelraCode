@@ -59,6 +59,7 @@ import {
 import type { Decision, DecisionProposal } from "../ledger/types";
 import { shutdownWorkspaceLspManager } from "../lsp/runtime";
 import { buildMcpToolSet } from "../mcp/runtime";
+import { consolidateMemory } from "../memory/consolidate";
 import {
   appendEpisode,
   didWork,
@@ -78,11 +79,12 @@ import {
   turnQualifiesForReflection,
   typedText,
 } from "../memory/reflection";
-import type { MemoryContext } from "../memory/retrieval";
+import type { MemoryContext, MemoryTier } from "../memory/retrieval";
 import { proposeProceduresAsSkills } from "../memory/skills";
 import {
   appendReflectionAudit,
   creditMemoryUse,
+  deliverReminder,
   listMemoryRecords,
   projectMemoryScope,
   reconfirmByPassingCommands,
@@ -427,7 +429,7 @@ export interface ProcessMessageMemoryRecall {
   /** Knowledge entries expanded and pointers listed, with the reasons each was chosen. */
   entries: Array<{
     slug: string;
-    tier: "rule" | "knowledge" | "pointer" | "episode";
+    tier: MemoryTier;
     score: number;
     reasons: string[];
   }>;
@@ -2617,8 +2619,13 @@ export class Agent {
     const memoryRoot = this.bash.getRootCwd();
     const memoryScope = projectMemoryScope(memoryRoot);
     const memoryOff = this.ablations.has("memory");
+    // A reminder the user asks for now is for a later request: it is kept after this turn's recall, so its own cue
+    // in this very message does not give it back at once.
+    let remindersAsked: ReturnType<typeof extractUserDirectives> = [];
     try {
-      const directives = memoryOff ? [] : extractUserDirectives(userMessage);
+      const captured = memoryOff ? [] : extractUserDirectives(userMessage);
+      remindersAsked = captured.filter((directive) => directive.type === "reminder");
+      const directives = captured.filter((directive) => directive.type !== "reminder");
       // A preference about how Shelra talks to this person holds in every project.
       const routed: Array<[typeof memoryScope, typeof directives]> = [
         [memoryScope, directives.filter((directive) => !directive.tags?.includes("user-wide"))],
@@ -2640,9 +2647,30 @@ export class Agent {
       // memory capture must never block a turn
       recordSwallowedError("memory.capture", error);
     }
+    // Once a day, before recalling anything: recurring failures become lessons, unused inferences fade (doc 18 §4.6).
+    if (!memoryOff) consolidateMemory(memoryScope);
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
       : memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest);
+    // A reminder is given once, on the request that cued it, as a note crossed off.
+    for (const slug of memoryContext.reminders ?? []) {
+      deliverReminder(memoryScope, slug, `given with the request "${typedText(userMessage).slice(0, 120)}"`);
+    }
+    if (remindersAsked.length > 0) {
+      try {
+        const admitted = admitCandidates(memoryScope, remindersAsked);
+        appendReflectionAudit(memoryScope, {
+          at: new Date().toISOString(),
+          qualified: true,
+          reason: "a reminder the user asked for",
+          candidates: remindersAsked.length,
+          decisions: admitted.decisions,
+          written: admitted.written,
+        });
+      } catch (error) {
+        recordSwallowedError("memory.capture", error);
+      }
+    }
     // "sí, hazlo" then "dale, sigue": both carry on the request before them, which stays the one memory is found for.
     if (!this.previousRequest || previousRequestWeight(typedText(userMessage)) < 0.8) {
       this.previousRequest = typedText(userMessage);

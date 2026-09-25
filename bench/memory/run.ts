@@ -9,6 +9,7 @@
  *   bun run bench/memory/run.ts --label before-m2 --impl src/memory/<old copy>.ts   (any module with the same API)
  *   --split dev|test   runs half the queries: tune thresholds on dev only, report test as held out
  *   --pre-m3-store     builds superseded pairs as the store did before M3 (no "Replaces" line on the newer entry)
+ *   --dataset <file>   another gold set in this folder (dataset-v2.json: held out, written after the tuning)
  *
  * Metrics, per store size, overall and by query kind and language:
  * - recall: share of gold entries whose body reached the model; recallSeen also counts a gold entry listed by title;
@@ -301,7 +302,7 @@ function summarize(results: QueryResult[]) {
 async function run(): Promise<void> {
   const implPath = join(HERE, "..", "..", arg("impl") ?? "src/memory/retrieval.ts");
   const { buildMemoryContext, rankMemories } = (await import(implPath)) as typeof import("../../src/memory/retrieval");
-  const dataset = JSON.parse(readFileSync(join(HERE, "dataset.json"), "utf8")) as Dataset;
+  const dataset = JSON.parse(readFileSync(join(HERE, arg("dataset") ?? "dataset.json"), "utf8")) as Dataset;
   const sizes = (arg("sizes") ?? "0,100,1000,5000").split(",").map(Number);
   const label = arg("label") ?? "run";
   const split = arg("split");

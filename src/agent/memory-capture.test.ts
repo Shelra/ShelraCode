@@ -501,6 +501,23 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     expect(readReflectionAudit(scope).at(-1)?.reason).toContain("dropped after 3 failed attempts");
   });
 
+  it("gives a reminder once, on the request that brings up its cue (doc 18 §4.6)", async () => {
+    const workspace = scratch("shelra-memory-reminder-");
+    const provider = new ScriptedProvider([{ events: [{ type: "text-delta", text: "Ok." }], text: "Ok." }]);
+    const agent = agentIn(workspace, provider);
+    const systemFor = async (message: string) => {
+      await turn(agent, message);
+      return String(provider.requests.at(-1)?.system ?? "");
+    };
+
+    await systemFor("Recuérdame actualizar el changelog la próxima vez que toquemos el release.");
+    expect(await systemFor("arregla el test del login")).not.toContain("Actualizar el changelog");
+    const cued = await systemFor("prepara el release de la versión 2.3");
+    expect(cued).toContain("Reminders the user asked for, due now (tell the user):");
+    expect(cued).toContain("- Actualizar el changelog (when toquemos el release)");
+    expect(await systemFor("prepara el release otra vez")).not.toContain("Actualizar el changelog");
+  });
+
   it("records nothing for a turn that only answered", async () => {
     const workspace = scratch("shelra-memory-chat-");
     await turn(agentIn(workspace, new ScriptedProvider([{ events: [], text: "Hello." }])), "Hi there");

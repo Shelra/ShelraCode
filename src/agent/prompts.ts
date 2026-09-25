@@ -2,8 +2,13 @@ import { formatDecisionsForPrompt } from "../ledger/prompt";
 import { activeDecisions } from "../ledger/store";
 import { isLspToolEnabled } from "../lsp/runtime";
 import { episodeLessons, readEpisodes } from "../memory/episodes";
-import { appendEpisodeLessons, buildMemoryContext, type MemoryContext } from "../memory/retrieval";
-import { listMemoryRecords, listUserMemoryRecords, projectMemoryScope } from "../memory/store";
+import {
+  appendEpisodeLessons,
+  buildMemoryContext,
+  type MemoryContext,
+  noteWhenNothingMatches,
+} from "../memory/retrieval";
+import { listArchivedEntries, listMemoryRecords, listUserMemoryRecords, projectMemoryScope } from "../memory/store";
 import { getModelInfo } from "../models/catalog";
 import { isShuruSupported } from "../tools/bash";
 import type { AgentMode, TaskRequest } from "../types/index";
@@ -222,17 +227,19 @@ export function memoryContextFor(
   previous?: string,
 ): MemoryContext {
   try {
+    const scope = projectMemoryScope(cwd);
     const context = buildMemoryContext(
-      [...listMemoryRecords(projectMemoryScope(cwd)), ...listUserMemoryRecords()],
+      [...listMemoryRecords(scope), ...listUserMemoryRecords()],
       { text: query, paths, ...(previous ? { previous } : {}) },
       cwd,
+      { archived: listArchivedEntries(scope) },
     );
     // What happened the last times a similar request came in: failures and what got past them (doc 18 §4.3).
-    const lessons = episodeLessons(readEpisodes(projectMemoryScope(cwd), 400), {
+    const lessons = episodeLessons(readEpisodes(scope, 400), {
       text: query,
       ...(previous ? { previous } : {}),
     });
-    return appendEpisodeLessons(context, lessons);
+    return noteWhenNothingMatches(appendEpisodeLessons(context, lessons));
   } catch (error) {
     recordSwallowedError("memory.retrieve", error);
     return { text: "", expanded: [], listed: [] };

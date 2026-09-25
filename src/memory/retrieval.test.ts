@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildMemoryContext, detectStaleness, rankMemories } from "./retrieval";
-import { listMemoryRecords, projectMemoryScope, writeMemoryEntry } from "./store";
+import { buildMemoryContext, detectStaleness, noteWhenNothingMatches, rankMemories } from "./retrieval";
+import { listMemoryRecords, projectMemoryScope, recordMemoryUse, writeMemoryEntry } from "./store";
 
 let workspace: string;
 
@@ -244,6 +244,29 @@ describe("memory v2 retrieval (doc 18 §4.3)", () => {
     const context = buildMemoryContext(records, { text: "why does the firebase login fail" }, workspace);
     expect(context.expanded).not.toContain("auth-firebase");
     expect(context.listed).not.toContain("auth-firebase");
+  });
+
+  it("says how sure memory is, and says so when it knows nothing about a request (metamemory)", () => {
+    write("deploy-fly", {
+      title: "Deploys go to Fly.io",
+      hook: "deployments run with fly deploy from main",
+      body: "Run `fly deploy` from main; the release command runs the migrations.",
+    });
+    const scope = projectMemoryScope(workspace);
+    recordMemoryUse(scope, ["deploy-fly"]);
+    const firm = buildMemoryContext(listMemoryRecords(scope), { text: "how do we deploy to fly" }, workspace);
+    expect(firm.text).toMatch(/### Deploys go to Fly\.io \(deploy-fly; conventions; inference 70%; firm\)/u);
+    const later = buildMemoryContext(
+      listMemoryRecords(scope),
+      { text: "how do we deploy to fly", now: Date.now() + 400 * 24 * 60 * 60_000 },
+      workspace,
+    );
+    expect(later.text).toContain("inference 70%; fading");
+    const unrelated = noteWhenNothingMatches(
+      buildMemoryContext(listMemoryRecords(scope), { text: "write a haiku about autumn" }, workspace),
+    );
+    expect(unrelated.text).toContain("Nothing saved matches this request closely");
+    expect(noteWhenNothingMatches(firm).text).not.toContain("Nothing saved matches");
   });
 
   it("gives a rare word more weight than one every entry shares", () => {

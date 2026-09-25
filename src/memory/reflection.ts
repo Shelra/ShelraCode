@@ -56,6 +56,8 @@ export interface ReflectionReport {
 }
 
 const MAX_CANDIDATES = 5;
+/** What a reflection may propose: a reminder is only ever the user's own request. */
+const REFLECTION_TYPES = MEMORY_TYPES.filter((type) => type !== "reminder");
 const MAX_PROMPT_CHARS = 9_000;
 
 /**
@@ -99,6 +101,51 @@ const PERSONAL =
 /** The text the user typed: a request with @-mentions carries the files in an `<attached_files>` block first. */
 export function typedText(message: string): string {
   return message.replace(/<attached_files>[\s\S]*?<\/attached_files>\s*/gu, "").trim();
+}
+
+/** "remind me to X when Y", "recuérdame X la próxima vez que Y": what to remind, then its cue. */
+const REMIND_THEN_CUE =
+  /^(?:please |por favor )?(?:remind me(?: to| that| about)?|recu[eé]rdame(?: que| de)?)\s+(.+?)(?:,?\s+(?:when(?:ever)?|next time(?: that)?|the next time|once|cuando|la pr[oó]xima vez que|en cuanto|apenas)\s+(.+))?$/iu;
+/** "next time we touch Y, remind me to X", "cuando toquemos Y, recuérdame X": the cue first. */
+const CUE_THEN_REMIND =
+  /^(?:when(?:ever)?|next time(?: that)?|the next time|cuando|la pr[oó]xima vez que|en cuanto)\s+(.+?),\s*(?:please |por favor )?(?:remind me(?: to| that| about)?|recu[eé]rdame(?: que| de)?)\s+(.+)$/iu;
+
+/** Verbs that say "when we work on" and name no subject: "when we touch X" is cued by X. */
+const GENERIC_CUE_WORDS = new Set(
+  "touch work change edit open modify toquemo toque tocar trabajemo trabajar cambiemo cambiar editemo abramo modifiquemo vuelva volvamo hagamo".split(
+    " ",
+  ),
+);
+
+/**
+ * A reminder the user asks for (prospective memory): what to remind them of, and the cue that brings it up, such as the
+ * subject of a later request. Without a cue it comes up on the next request. Null when the sentence asks for none.
+ */
+export function reminderOf(
+  sentence: string,
+  today = new Date().toISOString().slice(0, 10),
+): ReflectionCandidate | null {
+  const later = CUE_THEN_REMIND.exec(sentence);
+  const now = later ? null : REMIND_THEN_CUE.exec(sentence);
+  const what = (later ? later[2] : now?.[1])?.trim();
+  const cue = (later ? later[1] : now?.[2])?.trim() ?? "";
+  if (!what || what.length < 4) return null;
+  const cueTerms = searchTerms(cue)
+    .filter((term) => !GENERIC_CUE_WORDS.has(term))
+    .slice(0, 5);
+  const statement = what.charAt(0).toUpperCase() + what.slice(1);
+  return {
+    slug: slugify(statement, "user-remind-"),
+    title: statement.length > 60 ? `${statement.slice(0, 57)}...` : statement,
+    hook: `Remind the user: ${statement}${cue ? ` (when ${cue})` : " (next time)"}`,
+    type: "reminder",
+    description: `Reminder the user asked for on ${today}`,
+    body: `${statement}.\n\nWhen: ${cue || "the next request"}. (Asked by the user on ${today}.)`,
+    source: "human",
+    confidence: 1,
+    importance: 1,
+    tags: ["reminder", ...cueTerms.map((term) => `cue:${term}`)],
+  };
 }
 
 function slugify(text: string, prefix = ""): string {
@@ -167,6 +214,12 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
     // A lead-in to a list ("… so that it tests your ability to reason about:") is not a complete statement.
     // Nor is a question ("should we always use X?").
     if (/[:?]$/u.test(sentence) || sentence.length < 8 || sentence.length > 300) continue;
+    const reminder = document ? null : reminderOf(sentence, today);
+    if (reminder) {
+      if (!seen.has(reminder.slug)) candidates.push(reminder);
+      seen.add(reminder.slug);
+      continue;
+    }
     const directive = directiveOf(sentence, document);
     if (!directive || directive.statement.length < 8) continue;
     const statement = directive.statement.charAt(0).toUpperCase() + directive.statement.slice(1);
@@ -266,7 +319,7 @@ export function buildReflectionPrompt(
     "You extract durable project knowledge from one coding turn so a future session on this repository starts as an expert, not from zero.",
     'Return ONLY a JSON object of the form {"memories":[...]} with at most 5 items. No prose, no markdown fences.',
     'Each item: {"type":<one of ' +
-      MEMORY_TYPES.join("|") +
+      REFLECTION_TYPES.join("|") +
       '>,"slug":<kebab-case>,"title":<short>,"hook":<one line>,"description":<one line>,"body":<markdown, 1-8 lines, exact commands/paths/flags>,"confidence":<0..1>,"relatedFiles":[<workspace-relative paths this depends on>],"tags":[<keywords>],"supersedes":<optional: the slug of an EXISTING entry this turn proved is no longer true>}.',
     "Keep only what is non-obvious, project-specific, and reusable: a command that must be run in a particular way, a trap and its fix, a convention the code enforces, a decision and the alternative rejected, a procedure that took several steps to discover.",
     "Do not store what a fresh reader gets by opening a file (file listings, function signatures), the task itself, credentials, or anything the user only asked once.",
@@ -315,7 +368,7 @@ export const REFLECTION_SCHEMA: Record<string, unknown> = {
       items: {
         type: "object",
         properties: {
-          type: { type: "string", enum: [...MEMORY_TYPES] },
+          type: { type: "string", enum: [...REFLECTION_TYPES] },
           slug: { type: "string" },
           title: { type: "string" },
           hook: { type: "string" },
@@ -372,7 +425,7 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
     const body = asString(record.body);
     const title = asString(record.title) || asString(record.hook);
     const hook = asString(record.hook) || title;
-    if (!(MEMORY_TYPES as readonly string[]).includes(type) || !body || !title) continue;
+    if (!(REFLECTION_TYPES as readonly string[]).includes(type) || !body || !title) continue;
     const confidence =
       typeof record.confidence === "number" ? record.confidence : Number.parseFloat(asString(record.confidence));
     candidates.push({

@@ -162,6 +162,28 @@ the reason it was chosen (matched terms, tier, score components).
 - `shelra memory`: `list`, `show <slug>` (with its history), `why "<request>"` (the ranking and reasons),
   `stats` (the funnel from turns to episodes, reflections, admitted entries, retrievals and credit).
 
+### 4.6 Memory that behaves like a person's (M8, 2026-09-25)
+
+The owner asked for memory "as good and expert as human memory". What cognitive science knows about how people remember,
+and what Shelra does with it (`src/memory/dynamics.ts`, `consolidate.ts`; practices of the `agent-memory-systems`
+skill: decay by recency, frequency and importance, soft deletion, background consolidation, a budget per memory type):
+
+| Human memory | Shelra |
+|---|---|
+| A memory used often and lately comes to mind first; unused, it fades along a power law (ACT-R base-level activation, Anderson and Schooler 1991) | each entry keeps the days it was recalled; its strength is ln Σ t^-0.5 over its creation, recalls and confirmations, and it ranks entries that are otherwise equal |
+| Retrieval strengthens a memory (the testing effect) | every recall a turn makes, and every `memory_read`, is a recall |
+| Salient events are kept longer | `importance`: 1 for what the user said, higher for a failure that recurred; an important, credited or human entry never fades by disuse |
+| Sleep turns the day's experiences into knowledge | once a day, before a turn's recall: a command that failed in several turns, and what got past it each time, becomes one observed lesson with its count; an inference nobody used for months, never credited or important, is archived |
+| Forgetting is not losing: relearning is fast (savings) | an archived entry keeps its file and index line; a request that matches it is offered it ("faded from disuse but matching"), and reading it brings it back as active |
+| Remembering to do something when a cue appears (prospective memory) | "recuérdame X la próxima vez que toquemos Y" keeps a reminder with its cue words; the request that names them gets it, once, and it is marked done |
+| Knowing what one knows (metamemory) | shown entries are labelled firm or fading, and a request memory knows nothing about is told so, so a model does not assume earlier work that never happened |
+
+Measured on a simulated project life (`bench/memory/life.ts`, 240 days, 46 entries; the control replays the same days
+without dynamics): a habit (needed every few days) ranks first over an identical never-used note in 99% of 795 recalls
+(control 0%); all 20 never-used notes fade while all rules, costly lessons, habits and rarely needed entries stay (the
+store goes from 46 to 26); all 20 faded notes are offered back when a request asks about them. On the static retrieval
+benchmarks (no usage history) the dynamics change nothing: v1 recall 91%, held-out v2 83%.
+
 ## 5. What stays from the 2026-09-17 decisions
 
 Repo-local Markdown store; one deterministic write gate in front of every writer; host-assigned provenance with the
@@ -194,7 +216,9 @@ The owner's 18 acceptance criteria map onto three layers of evidence:
 | M4 (done 2026-09-25) | Episode retrieval as lessons; consolidation, utility-based archiving instead of silent drops; fixture hygiene | the two past attempts most like a request are shown as one-line lessons (outcome, what failed, what worked, files), repeated attempts counted once; a full type or index archives its least useful inference instead of refusing, never a human statement; the new test files remove their temp stores. Tests in `episodes.test.ts`, `reflection.test.ts`, `src/agent/memory-capture.test.ts` |
 | M5 (done 2026-09-25) | `shelra memory` CLI (list, show, why, stats) | `src/memory/cli.ts`: `list [--all]`, `show <slug>` (versions, history, what replaced it), `why "<request>" [--previous] [--full]` (the same context a turn builds, each item with its tier, score and reasons), `stats` (turns → reflections → entries → uses → credit); `src/memory/cli.test.ts`; smoke-run on the built CLI path |
 | M6 (done 2026-09-25) | Procedural: validated procedures proposed as skills, promoted on the user's yes | `src/memory/skills.ts`: a procedure credited in two passing turns is proposed under `.shelra/memory/skill-proposals/`; `shelra memory skills / promote / decline`; a declined revision is not proposed again; an update to an approved skill is proposed too. Tests in `reflection.test.ts`, `cli.test.ts`. The terminal UI does not show proposals yet (the UI is another session's area) |
-| M7 | Real-model evaluation on free models | bench/history entries |
+| M7 (one sample, 2026-09-25) | Real-model evaluation on free models | the memory suite on `42da87a`, Nemotron free (`MEM-R3-nemotron-1`): 5/6; with memory both recall tasks passed (37 s and 30 s), without memory one passed (83 s) and one failed with a false completion. One sample, consistent with the 2026-09-17 tally (with 4/6, without 1/9); not proof |
+| M8 (done 2026-09-25) | Memory that behaves like a person's (§4.6) | `dynamics.test.ts`, `consolidate.test.ts`, reminder and metamemory tests, `bench/memory/life.ts` |
+| Held-out check (2026-09-25) | A second dataset written blind after all tuning (`bench/memory/dataset-v2.json`, 3 new projects, 92 queries) | at 5,000 entries per project: the original engine recall 65%, precision 48%, rules 20%, superseded shown 8; round 2 recall 83%, precision 75%, rules 100%, superseded 0, noise 0. Weak: vague requests (43%), superseded subjects (67%) |
 
 ## 7a. Adversarial review of M1 and M2 (round 2, 2026-09-25)
 

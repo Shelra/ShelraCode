@@ -12,6 +12,7 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
+import { withRecall } from "./dynamics";
 import {
   MEMORY_TYPES,
   type MemoryDeleteResult,
@@ -135,7 +136,7 @@ export function isMemorySource(value: unknown): value is MemorySource {
   return typeof value === "string" && (SOURCES as readonly string[]).includes(value);
 }
 
-const STATUSES: readonly MemoryStatus[] = ["active", "superseded", "invalidated", "archived"];
+const STATUSES: readonly MemoryStatus[] = ["active", "superseded", "invalidated", "archived", "done"];
 
 export function isMemoryStatus(value: unknown): value is MemoryStatus {
   return typeof value === "string" && (STATUSES as readonly string[]).includes(value);
@@ -200,6 +201,9 @@ function serializeEntry(frontmatter: MemoryFrontmatter, body: string): string {
   const tags = yamlList(meta.tags);
   if (tags) lines.push(`  tags: ${tags}`);
   if (meta.uses !== undefined) lines.push(`  uses: ${meta.uses}`);
+  const recalls = yamlList(meta.recalls);
+  if (recalls) lines.push(`  recalls: ${recalls}`);
+  if (meta.importance !== undefined) lines.push(`  importance: ${meta.importance}`);
   if (meta.lastUsed) lines.push(`  lastUsed: ${meta.lastUsed}`);
   if (meta.credit !== undefined) lines.push(`  credit: ${meta.credit}`);
   if (meta.supersedes) lines.push(`  supersedes: ${meta.supersedes}`);
@@ -238,6 +242,8 @@ function parseEntryFile(raw: string): MemoryEntry | null {
   const status = readScalar(frontmatterBlock, "status");
   const confidenceRaw = readScalar(frontmatterBlock, "confidence");
   const usesRaw = readScalar(frontmatterBlock, "uses");
+  const importanceRaw = readScalar(frontmatterBlock, "importance");
+  const importance = importanceRaw === undefined ? undefined : Number(importanceRaw);
   const creditRaw = readScalar(frontmatterBlock, "credit");
   const revisionRaw = readScalar(frontmatterBlock, "revision");
   const confidence = confidenceRaw === undefined ? undefined : Number(confidenceRaw);
@@ -259,6 +265,9 @@ function parseEntryFile(raw: string): MemoryEntry | null {
         relatedFiles: parseYamlList(readScalar(frontmatterBlock, "relatedFiles")),
         tags: parseYamlList(readScalar(frontmatterBlock, "tags")),
         uses: uses !== undefined && Number.isFinite(uses) ? uses : undefined,
+        recalls: parseYamlList(readScalar(frontmatterBlock, "recalls")),
+        importance:
+          importance !== undefined && Number.isFinite(importance) ? Math.max(0, Math.min(1, importance)) : undefined,
         lastUsed: readScalar(frontmatterBlock, "lastUsed"),
         credit: credit !== undefined && Number.isFinite(credit) ? credit : undefined,
         supersedes: readScalar(frontmatterBlock, "supersedes"),
@@ -419,6 +428,8 @@ export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): M
       relatedFiles: normalizePaths(input.relatedFiles ?? previous?.frontmatter.metadata.relatedFiles),
       tags: normalizeTags(input.tags ?? previous?.frontmatter.metadata.tags),
       uses: previous?.frontmatter.metadata.uses ?? 0,
+      recalls: previous?.frontmatter.metadata.recalls,
+      importance: input.importance ?? previous?.frontmatter.metadata.importance,
       lastUsed: previous?.frontmatter.metadata.lastUsed,
       credit: previous?.frontmatter.metadata.credit,
       supersedes: input.supersedes ?? previous?.frontmatter.metadata.supersedes,
@@ -490,6 +501,7 @@ export function archiveMemoryEntry(scope: MemoryScope, slug: string, detail: str
     const entry = readMemoryEntry(scope, slug).entry;
     if (!entry) return false;
     const now = new Date().toISOString();
+    const line = readMemoryIndex(scope).entries.find((item) => item.file === `${slug}.md`);
     writeFileAtomic(
       memoryEntryPath(scope, slug),
       serializeEntry(
@@ -497,8 +509,17 @@ export function archiveMemoryEntry(scope: MemoryScope, slug: string, detail: str
         entry.body,
       ),
     );
-    const index = readMemoryIndex(scope).entries.filter((line) => line.file !== `${slug}.md`);
+    const index = readMemoryIndex(scope).entries.filter((item) => item.file !== `${slug}.md`);
     writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
+    // The archive keeps each entry's index line, so a request that matches it can bring it back (recallArchivedEntry).
+    const archived: ArchivedEntry = {
+      slug,
+      title: line?.title ?? slug,
+      hook: line?.hook ?? entry.frontmatter.description,
+      at: now,
+      reason: detail,
+    };
+    appendFileSync(join(ensureMemoryDir(scope), ARCHIVE_FILE), `${JSON.stringify(archived)}\n`, "utf8");
     appendHistory(scope, {
       at: now,
       event: "archived",
@@ -510,6 +531,111 @@ export function archiveMemoryEntry(scope: MemoryScope, slug: string, detail: str
     return true;
   } catch (error) {
     recordSwallowedError("memory.archive", error);
+    return false;
+  }
+}
+
+const ARCHIVE_FILE = "archive.jsonl";
+
+export interface ArchivedEntry {
+  slug: string;
+  title: string;
+  hook: string;
+  at: string;
+  reason: string;
+}
+
+/** The entries archived and not brought back, newest last; one per slug. Never throws. */
+export function listArchivedEntries(scope: MemoryScope): ArchivedEntry[] {
+  try {
+    const path = join(memoryDir(scope), ARCHIVE_FILE);
+    if (!existsSync(path)) return [];
+    const bySlug = new Map<string, ArchivedEntry>();
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const item = JSON.parse(line) as ArchivedEntry;
+        bySlug.delete(item.slug);
+        bySlug.set(item.slug, item);
+      } catch {
+        // a torn line
+      }
+    }
+    return [...bySlug.values()];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Brings an archived entry back when it is recalled: forgetting is not losing, and what was learned once comes back
+ * easily (the "savings" of human memory). The entry returns to the index as active, with this recall counted.
+ * A superseded entry stays history. Returns false when there is nothing archived under that name. Never throws.
+ */
+export function recallArchivedEntry(scope: MemoryScope, slug: string): boolean {
+  try {
+    const entry = readMemoryEntry(scope, slug).entry;
+    if (!entry || entry.frontmatter.metadata.status !== "archived") return false;
+    const archived = listArchivedEntries(scope).find((item) => item.slug === slug);
+    const index = readMemoryIndex(scope).entries.filter((item) => item.file !== `${slug}.md`);
+    const line = {
+      title: archived?.title ?? slug,
+      file: `${slug}.md`,
+      hook: archived?.hook ?? entry.frontmatter.description,
+    };
+    const nextIndex = `${[...index, line].map(buildIndexLine).join("\n")}\n`;
+    if (Buffer.byteLength(nextIndex, "utf8") > MEMORY_INDEX_MAX_BYTES || index.length + 1 > MEMORY_INDEX_MAX_LINES) {
+      return false;
+    }
+    const { validUntil: _until, ...rest } = entry.frontmatter.metadata;
+    writeFileAtomic(
+      memoryEntryPath(scope, slug),
+      serializeEntry(
+        { ...entry.frontmatter, metadata: { ...rest, status: "active", recalls: withRecall(rest.recalls) } },
+        entry.body,
+      ),
+    );
+    writeFileAtomic(memoryIndexPath(scope), nextIndex);
+    const remaining = listArchivedEntries(scope).filter((item) => item.slug !== slug);
+    writeFileAtomic(
+      join(memoryDir(scope), ARCHIVE_FILE),
+      remaining.length > 0 ? `${remaining.map((item) => JSON.stringify(item)).join("\n")}\n` : "",
+    );
+    appendHistory(scope, {
+      at: new Date().toISOString(),
+      event: "recalled",
+      slug,
+      detail: "brought back from the archive",
+    });
+    return true;
+  } catch (error) {
+    recordSwallowedError("memory.recall", error);
+    return false;
+  }
+}
+
+/**
+ * Marks a reminder given: it leaves the index as done, its file kept, like a note crossed off. Returns false when it
+ * is missing. Never throws.
+ */
+export function deliverReminder(scope: MemoryScope, slug: string, detail: string): boolean {
+  try {
+    const entry = readMemoryEntry(scope, slug).entry;
+    if (!entry || entry.frontmatter.metadata.type !== "reminder") return false;
+    const now = new Date().toISOString();
+    writeFileAtomic(
+      memoryEntryPath(scope, slug),
+      serializeEntry(
+        { ...entry.frontmatter, metadata: { ...entry.frontmatter.metadata, status: "done", validUntil: now } },
+        entry.body,
+      ),
+    );
+    const index = readMemoryIndex(scope).entries.filter((item) => item.file !== `${slug}.md`);
+    writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
+    appendHistory(scope, { at: now, event: "delivered", slug, detail });
+    return true;
+  } catch (error) {
+    recordSwallowedError("memory.reminder", error);
     return false;
   }
 }
@@ -595,6 +721,8 @@ export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): v
       if (!entry) continue;
       entry.frontmatter.metadata.uses = (entry.frontmatter.metadata.uses ?? 0) + 1;
       entry.frontmatter.metadata.lastUsed = now;
+      // Each recall strengthens the memory, as rehearsal does (dynamics.ts).
+      entry.frontmatter.metadata.recalls = withRecall(entry.frontmatter.metadata.recalls);
       writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
     } catch (error) {
       recordSwallowedError("memory.use", error);

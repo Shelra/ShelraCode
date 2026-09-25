@@ -2148,7 +2148,7 @@ program
 program
   .command("memory [action] [argument]")
   .description(
-    'What Shelra remembers about this project and you: list, show <entry>, why "<request>" (what that request would be given, and why), stats, skills (proposed from what worked), promote <slug>, decline <slug>',
+    'What Shelra remembers about this project and you: list, show <entry>, why "<request>" (what that request would be given, and why), stats, skills (proposed from what worked), promote <slug>, decline <slug>, consolidate (what sleep does for memory: recurring failures become lessons, unused notes fade)',
   )
   .option("--all", "list: include entries that are no longer current (superseded or archived)")
   .option("--previous <request>", "why: the request before this one, for a follow-up")

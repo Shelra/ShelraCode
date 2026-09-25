@@ -59,3 +59,32 @@ across all queries before the single-rare-term rule was written. The next round 
 Known gaps: a paraphrase that shares no word with the entry
 ("19.990000001 on the invoice" for "store money as integer cents") is missed; a request memory cannot help with can
 still pull one entry through a word that is rare in the store ("a good name for my cat").
+
+## Held-out check
+
+`dataset-v2.json` was written by another blind agent after all the tuning above, with three new projects (a Go CLI on
+SQLite, a Django/Celery clinic scheduler, an Expo driver app) and 92 queries. It has not been used to tune anything.
+At 5,000 entries per project (`results/v2-*.json`):
+
+| engine | recall | seen | precision | MRR | noise | forbidden | rules |
+|---|---|---|---|---|---|---|---|
+| before M2 (`4b10325`) | 65% | 88% | 48% | 0.69 | 1.38 | 8 | 20% |
+| round 2 (`42da87a`) | 83% | 89% | 75% | 0.79 | 0.00 | 0 | 100% |
+| with M8 dynamics | 83% | 90% | 75% | 0.78 | 0.00 | 0 | 100% |
+
+Recall is 8 points below the tuned set (91%), the expected gap. The weakest kinds are vague requests (43%) and
+superseded subjects (67%).
+
+## A project's life
+
+`life.ts` replays 240 days of a project on the retrieval and fading code (M8, doc 18 §4.6), and the same days without
+them as the control. A habit and a never-used note are identical except for their history.
+
+```sh
+bun run bench/memory/life.ts
+```
+
+| | habit first | rules kept | lessons kept | habits kept | rare kept | notes faded | store at end | faded brought back |
+|---|---|---|---|---|---|---|---|---|
+| with dynamics | 99% (795) | 3/3 | 3/3 | 10/10 | 10/10 | 20/20 | 26 | 20/20 |
+| without (control) | 0% (795) | 3/3 | 3/3 | 10/10 | 10/10 | 0/20 | 46 | — |

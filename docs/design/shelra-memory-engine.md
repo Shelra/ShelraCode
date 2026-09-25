@@ -1,5 +1,10 @@
 # Shelra memory engine: persistent learning across sessions
 
+> **Superseded in part (2026-09-25):** memory v2 (`docs/architecture/18-MEMORY-V2.md`) changed capture (every outcome,
+> episodes, deferred reflection), retrieval (standing-rule tier, bilingual terms, follow-ups, episode lessons), time
+> (supersession, versions), skill promotion (now on the user's yes) and observability (`shelra memory`). Where the two
+> disagree, doc 18 and the code are right; the decisions below that doc 18 §5 keeps still hold.
+
 Status: implemented 2026-09-17 (`src/memory/`), integrated into the turn loop (`src/agent/agent.ts`)
 and the `memory_write` tool; proven by the cross-session suite `bench/suites/shelra-memory-v0.1.json`.
 Evidence base: `research/lanes/11-memory-taxonomy.md`, `13-context-retrieval.md`, `14-memory-security.md`

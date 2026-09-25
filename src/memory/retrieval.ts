@@ -1,5 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { importance, strength, strengthLabel } from "./dynamics";
 import { foldText, previousRequestWeight, searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord } from "./types";
 
@@ -58,9 +59,11 @@ export interface MemoryContextOptions {
   relativeCutoff?: number;
   /** Maximum characters of standing rules; the ones past it are listed by their hook. */
   rulesBudgetChars?: number;
+  /** Entries archived for disuse (their index lines): one this request matches well is offered back. */
+  archived?: ReadonlyArray<{ slug: string; title: string; hook: string }>;
 }
 
-export type MemoryTier = "rule" | "knowledge" | "pointer" | "episode";
+export type MemoryTier = "rule" | "knowledge" | "pointer" | "episode" | "reminder" | "faded";
 
 export interface MemoryContext {
   /** Prompt section, or an empty string when the project has no memory. */
@@ -73,6 +76,10 @@ export interface MemoryContext {
   rules?: string[];
   /** Past attempts shown as lessons, by the time they happened. */
   episodes?: string[];
+  /** Reminders the user asked for whose cue this request matched: given now, then marked done. */
+  reminders?: string[];
+  /** Archived entries offered back because this request matches them; memory_read restores one. */
+  faded?: string[];
   /** Why each shown entry was chosen, for the trace and `shelra memory why`. */
   explain?: Array<{ slug: string; tier: MemoryTier; score: number; reasons: string[] }>;
 }
@@ -290,9 +297,10 @@ export function rankMemories(
     let pathOverlap = 0;
     for (const token of related) if (queryPaths.has(token)) pathOverlap += 1;
     const pathBoost = Math.min(0.5, pathOverlap * 0.25);
-    const confirmed = Date.parse(meta.lastConfirmed ?? meta.modified);
-    const ageDays = Math.max(0, (now - confirmed) / DAY_MS);
-    const recency = Number.isFinite(ageDays) ? Math.exp(-ageDays / 90) : 0.5;
+    // How available the memory is, as in human recall: used often and lately, it comes to mind first; unused, it
+    // fades along a power law (dynamics.ts). What mattered when it formed weighs a little more.
+    const available = strength(meta, now);
+    const salience = importance(meta);
     const trust = MEMORY_SOURCE_WEIGHT[meta.source ?? "inference"] * (meta.confidence ?? 0.7);
     // Staleness reads the disk; an entry that matched nothing scores zero whatever it says, and a rule is shown anyway.
     const staleness =
@@ -303,7 +311,12 @@ export function rankMemories(
     // failed a little lower (audit doc 15, M3); bounded so relevance still decides.
     const usefulness = 1 + 0.08 * Math.max(-3, Math.min(5, meta.credit ?? 0));
     const score =
-      (relevance + pathBoost) * (0.6 + 0.4 * trust) * (0.7 + 0.3 * recency) * (staleness.stale ? 0.7 : 1) * usefulness;
+      (relevance + pathBoost) *
+      (0.6 + 0.4 * trust) *
+      (0.7 + 0.3 * available) *
+      (0.9 + 0.1 * salience) *
+      (staleness.stale ? 0.7 : 1) *
+      usefulness;
     const reasons = [
       ...(matched.length > 0 ? [`terms: ${matched.join(", ")}`] : []),
       ...(sharedPaths.length > 0 ? [`files: ${[...new Set(sharedPaths)].slice(0, 3).join(", ")}`] : []),
@@ -339,13 +352,23 @@ export function buildMemoryContext(
   workspace: string,
   options: MemoryContextOptions = {},
 ): MemoryContext {
-  if (records.length === 0) return { text: "", expanded: [], listed: [], rules: [], explain: [] };
+  if (records.length === 0 && (options.archived?.length ?? 0) === 0) {
+    return { text: "", expanded: [], listed: [], rules: [], explain: [] };
+  }
   const budget = options.bodyBudgetChars ?? DEFAULT_BODY_BUDGET;
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const minRelevance = options.minRelevance ?? DEFAULT_MIN_RELEVANCE;
   const rulesBudget = options.rulesBudgetChars ?? DEFAULT_RULES_BUDGET;
   const relativeCutoff = options.relativeCutoff ?? DEFAULT_RELATIVE_CUTOFF;
-  const ranked = rankMemories(records, query, workspace);
+  const now = query.now ?? Date.now();
+  // A reminder is not knowledge: it comes up when its cue does, and only then (prospective memory, doc 18 §4.6).
+  const reminderRecords = records.filter((record) => record.entry.frontmatter.metadata.type === "reminder");
+  const ranked = rankMemories(
+    reminderRecords.length > 0 ? records.filter((record) => !reminderRecords.includes(record)) : records,
+    query,
+    workspace,
+  );
+  const cued = remindersFor(reminderRecords, query);
 
   // Tier 1: standing rules, most relevant first, within their own budget.
   const rules: RankedMemory[] = [];
@@ -392,10 +415,16 @@ export function buildMemoryContext(
   const listed = others.slice(0, maxListed);
   const unlisted = ranked.length - shown.size - listed.length;
 
+  const faded = fadedMatches(options.archived ?? [], query, new Set(ranked.map((item) => item.record.slug)));
+
   const lines: string[] = [
     "PROJECT MEMORY:",
-    "Saved findings from earlier work in this project. Entries below are ranked for this request; trust human and observed sources over inferences, and re-verify anything marked stale. Entries marked user-wide are the user's own preferences and hold in every project. Read others with memory_read before re-investigating from scratch.",
+    "Saved findings from earlier work in this project. Entries below are ranked for this request; trust human and observed sources over inferences, and re-verify anything marked stale or fading. Entries marked user-wide are the user's own preferences and hold in every project. Read others with memory_read before re-investigating from scratch.",
   ];
+  if (cued.length > 0) {
+    lines.push("", "Reminders the user asked for, due now (tell the user):");
+    for (const record of cued) lines.push(`- ${record.index.hook.replace(/^Remind the user: /u, "")}`);
+  }
   if (rules.length > 0) {
     lines.push("", "Standing rules, in the user's own words (they hold for every request):");
     for (const item of rules) {
@@ -406,9 +435,11 @@ export function buildMemoryContext(
     const meta = item.record.entry.frontmatter.metadata;
     const provenance = `${meta.source ?? "inference"}${meta.confidence !== undefined ? ` ${Math.round(meta.confidence * 100)}%` : ""}`;
     const stale = item.stale ? ` — MAY BE STALE: ${item.staleReason}` : "";
+    // Metamemory: how sure memory is of this, as a person knows a firm memory from a fading one.
+    const label = strengthLabel(meta, now);
     lines.push(
       "",
-      `### ${item.record.index.title} (${item.record.slug}; ${meta.type}; ${provenance}${item.record.origin === "user" ? "; user-wide" : ""}${stale})`,
+      `### ${item.record.index.title} (${item.record.slug}; ${meta.type}; ${provenance}${label ? `; ${label}` : ""}${item.record.origin === "user" ? "; user-wide" : ""}${stale})`,
       body,
     );
   }
@@ -421,23 +452,73 @@ export function buildMemoryContext(
     }
     if (unlisted > 0) lines.push(`- … and ${unlisted} more; memory_list shows them all.`);
   }
+  if (faded.length > 0) {
+    lines.push("", "Faded from disuse but matching this request (memory_read brings one back):");
+    for (const item of faded) lines.push(`- ${item.title} (${item.slug}) — ${item.hook}`);
+  }
   const explain = [
-    ...rules.map((item) => ({ item, tier: "rule" as const })),
-    ...expanded.map(({ item }) => ({ item, tier: "knowledge" as const })),
-    ...listed.map((item) => ({ item, tier: "pointer" as const })),
-  ].map(({ item, tier }) => ({
-    slug: item.record.slug,
-    tier,
-    score: Math.round(item.score * 1_000) / 1_000,
-    reasons: item.reasons,
-  }));
+    ...cued.map((record) => ({ slug: record.slug, tier: "reminder" as const, score: 1, reasons: ["cue matched"] })),
+    ...[
+      ...rules.map((item) => ({ item, tier: "rule" as const })),
+      ...expanded.map(({ item }) => ({ item, tier: "knowledge" as const })),
+      ...listed.map((item) => ({ item, tier: "pointer" as const })),
+    ].map(({ item, tier }) => ({
+      slug: item.record.slug,
+      tier,
+      score: Math.round(item.score * 1_000) / 1_000,
+      reasons: item.reasons,
+    })),
+    ...faded.map((item) => ({ slug: item.slug, tier: "faded" as const, score: 0, reasons: ["archived; matches"] })),
+  ];
   return {
     text: lines.join("\n"),
     expanded: expanded.map(({ item }) => item.record.slug),
     listed: listed.map((item) => item.record.slug),
     rules: rules.map((item) => item.record.slug),
+    reminders: cued.map((record) => record.slug),
+    faded: faded.map((item) => item.slug),
     explain,
   };
+}
+
+/**
+ * The reminders this request cues: one whose cue words the request (or the request it follows up) names, or one with
+ * no cue, which is due on the next request.
+ */
+function remindersFor(reminders: readonly MemoryRecord[], query: RetrievalQuery): MemoryRecord[] {
+  if (reminders.length === 0) return [];
+  const terms = new Set(queryTerms(query).keys());
+  return reminders.filter((record) => {
+    const cues = (record.entry.frontmatter.metadata.tags ?? [])
+      .filter((tag) => tag.startsWith("cue:"))
+      .map((tag) => tag.slice(4));
+    return cues.length === 0 || cues.some((cue) => terms.has(cue));
+  });
+}
+
+/**
+ * Archived entries this request matches well: two of its terms, or half of them, in the entry's index line. Offered as
+ * pointers, as a forgotten fact comes back when something recalls it; at most two.
+ */
+function fadedMatches(
+  archived: ReadonlyArray<{ slug: string; title: string; hook: string }>,
+  query: RetrievalQuery,
+  current: ReadonlySet<string>,
+): Array<{ slug: string; title: string; hook: string }> {
+  if (archived.length === 0) return [];
+  const terms = searchTerms(query.text);
+  if (terms.length === 0) return [];
+  return archived
+    .filter((item) => !current.has(item.slug))
+    .map((item) => {
+      const own = new Set(searchTerms(`${item.title} ${item.hook}`));
+      const matched = terms.filter((term) => own.has(term)).length;
+      return { item, matched };
+    })
+    .filter(({ matched }) => matched >= 2 || matched * 2 >= terms.length)
+    .sort((a, b) => b.matched - a.matched)
+    .slice(0, 2)
+    .map(({ item }) => item);
 }
 
 /**
@@ -466,5 +547,23 @@ export function appendEpisodeLessons(
         reasons: [`${lesson.outcome}${lesson.attempts > 1 ? `, ${lesson.attempts} attempts` : ""}`],
       })),
     ],
+  };
+}
+
+/**
+ * Metamemory: when memory holds nothing about a request, the model is told so, as a person knows they have not met
+ * something before. Without it a model given a list of unrelated entries tends to assume earlier work that never
+ * happened.
+ */
+export function noteWhenNothingMatches(context: MemoryContext): MemoryContext {
+  const recalled =
+    context.expanded.length +
+    (context.episodes?.length ?? 0) +
+    (context.reminders?.length ?? 0) +
+    (context.faded?.length ?? 0);
+  if (!context.text || recalled > 0) return context;
+  return {
+    ...context,
+    text: `${context.text}\n\nNothing saved matches this request closely: treat it as new here, and do not assume earlier work on it.`,
   };
 }

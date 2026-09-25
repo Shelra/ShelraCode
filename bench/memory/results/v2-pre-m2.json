@@ -1,0 +1,1713 @@
+{
+  "label": "v2-pre-m2",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "all",
+  "queries": 92,
+  "sizes": {
+    "0": {
+      "storeEntries": {
+        "stockpile": 26,
+        "agenda-clinica": 27,
+        "rutas-app": 27
+      },
+      "overall": {
+        "queries": 92,
+        "recall": 0.6666666666666666,
+        "recallSeen": 0.8928571428571429,
+        "precision": 0.5199530516431926,
+        "mrr": 0.6969101335172766,
+        "noise": 0.875,
+        "forbidden": 8,
+        "ruleRecall": 0.20341614906832306,
+        "ruleSeen": 0.32298136645962733,
+        "chars": 3031,
+        "latencyMs": {
+          "median": 2.110400000000027,
+          "p95": 3.3220999999999776
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 18,
+          "recall": 0.3888888888888889,
+          "recallSeen": 0.8888888888888888,
+          "precision": 0.5416666666666666,
+          "mrr": 0.5811253561253561,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.4047619047619047,
+          "ruleSeen": 0.6428571428571428,
+          "chars": 2961,
+          "latencyMs": {
+            "median": 2.082499999999982,
+            "p95": 3.3220999999999776
+          }
+        },
+        "direct": {
+          "queries": 17,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.4852941176470588,
+          "mrr": 0.9705882352941176,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.06722689075630252,
+          "ruleSeen": 0.20168067226890754,
+          "chars": 3458,
+          "latencyMs": {
+            "median": 2.2753999999999905,
+            "p95": 5.701300000000003
+          }
+        },
+        "follow-up": {
+          "queries": 12,
+          "recall": 0.25,
+          "recallSeen": 0.5833333333333334,
+          "precision": 0.5,
+          "mrr": 0.35486111111111107,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.22619047619047614,
+          "ruleSeen": 0.24999999999999997,
+          "chars": 2751,
+          "latencyMs": {
+            "median": 2.1038999999999533,
+            "p95": 2.1679000000000315
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 0.875,
+          "forbidden": 0,
+          "ruleRecall": 0.26785714285714285,
+          "ruleSeen": 0.28571428571428564,
+          "chars": 2763,
+          "latencyMs": {
+            "median": 2.072200000000066,
+            "p95": 2.5189000000000306
+          }
+        },
+        "paraphrase": {
+          "queries": 15,
+          "recall": 0.9333333333333333,
+          "recallSeen": 1,
+          "precision": 0.4666666666666667,
+          "mrr": 0.8733333333333333,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.05714285714285714,
+          "ruleSeen": 0.1333333333333333,
+          "chars": 3160,
+          "latencyMs": {
+            "median": 2.101599999999962,
+            "p95": 5.141500000000008
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.7777777777777778,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.14285714285714285,
+          "ruleSeen": 0.25396825396825395,
+          "chars": 3499,
+          "latencyMs": {
+            "median": 2.2284000000000788,
+            "p95": 3.23599999999999
+          }
+        },
+        "superseded": {
+          "queries": 6,
+          "recall": 0.6666666666666666,
+          "recallSeen": 0.8333333333333334,
+          "precision": 0.4333333333333333,
+          "mrr": 0.5234848484848484,
+          "noise": null,
+          "forbidden": 5,
+          "ruleRecall": 0.21428571428571427,
+          "ruleSeen": 0.38095238095238093,
+          "chars": 3430,
+          "latencyMs": {
+            "median": 2.1772000000000276,
+            "p95": 4.18870000000004
+          }
+        },
+        "vague": {
+          "queries": 7,
+          "recall": 0.2857142857142857,
+          "recallSeen": 0.8571428571428571,
+          "precision": 0.75,
+          "mrr": 0.4401360544217687,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.2857142857142857,
+          "ruleSeen": 0.4081632653061224,
+          "chars": 2927,
+          "latencyMs": {
+            "median": 2.078200000000038,
+            "p95": 2.1182000000000016
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 47,
+          "recall": 0.8837209302325582,
+          "recallSeen": 0.9534883720930233,
+          "precision": 0.42407407407407405,
+          "mrr": 0.8314276485788114,
+          "noise": 1.75,
+          "forbidden": 4,
+          "ruleRecall": 0.039513677811550144,
+          "ruleSeen": 0.1094224924012158,
+          "chars": 3359,
+          "latencyMs": {
+            "median": 2.118600000000015,
+            "p95": 4.18870000000004
+          }
+        },
+        "es": {
+          "queries": 45,
+          "recall": 0.43902439024390244,
+          "recallSeen": 0.8292682926829268,
+          "precision": 0.685897435897436,
+          "mrr": 0.5558307884527396,
+          "noise": 0,
+          "forbidden": 4,
+          "ruleRecall": 0.37460317460317477,
+          "ruleSeen": 0.5460317460317461,
+          "chars": 2926,
+          "latencyMs": {
+            "median": 2.082499999999982,
+            "p95": 2.678800000000024
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "v2-q-011",
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-012",
+          "missed": ["sp-goose-migrations"]
+        },
+        {
+          "id": "v2-q-018",
+          "missed": ["sp-cobra-commands"]
+        },
+        {
+          "id": "v2-q-019",
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-020",
+          "missed": ["sp-sql-unknown-driver"]
+        },
+        {
+          "id": "v2-q-024",
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-025",
+          "missed": ["sp-grpc-unavailable-socket"]
+        },
+        {
+          "id": "v2-q-030",
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-042",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-043",
+          "missed": ["ac-redis-connection-refused"]
+        },
+        {
+          "id": "v2-q-044",
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-046",
+          "missed": ["ac-migrations"]
+        },
+        {
+          "id": "v2-q-049",
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-050",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-051",
+          "missed": ["ac-celery-task-not-registered"]
+        },
+        {
+          "id": "v2-q-056",
+          "missed": ["ac-redis-connection-refused", "ac-rediss-ssl-cert-reqs"]
+        },
+        {
+          "id": "v2-q-068",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-073",
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-075",
+          "missed": ["ra-supabase-migrations"]
+        },
+        {
+          "id": "v2-q-076",
+          "missed": ["ra-flaky-maestro-camera"]
+        },
+        {
+          "id": "v2-q-077",
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-078",
+          "missed": ["ra-edge-function-deploy"]
+        },
+        {
+          "id": "v2-q-079",
+          "missed": ["ra-outbox-sqlite"]
+        },
+        {
+          "id": "v2-q-081",
+          "missed": ["ra-ios-provisioning-failure"]
+        },
+        {
+          "id": "v2-q-082",
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-086",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-088",
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-092",
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ]
+    },
+    "100": {
+      "storeEntries": {
+        "stockpile": 100,
+        "agenda-clinica": 100,
+        "rutas-app": 100
+      },
+      "overall": {
+        "queries": 92,
+        "recall": 0.6666666666666666,
+        "recallSeen": 0.8928571428571429,
+        "precision": 0.49537037037037046,
+        "mrr": 0.6963800881658025,
+        "noise": 1,
+        "forbidden": 8,
+        "ruleRecall": 0.2018633540372672,
+        "ruleSeen": 0.3059006211180124,
+        "chars": 3053,
+        "latencyMs": {
+          "median": 4.484299999999962,
+          "p95": 6.198199999999929
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 18,
+          "recall": 0.3888888888888889,
+          "recallSeen": 0.8888888888888888,
+          "precision": 0.5416666666666666,
+          "mrr": 0.5811253561253561,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.4047619047619047,
+          "ruleSeen": 0.619047619047619,
+          "chars": 2961,
+          "latencyMs": {
+            "median": 5.016500000000065,
+            "p95": 7.0202999999999065
+          }
+        },
+        "direct": {
+          "queries": 17,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.4754901960784313,
+          "mrr": 0.9705882352941176,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.06722689075630252,
+          "ruleSeen": 0.1680672268907563,
+          "chars": 3458,
+          "latencyMs": {
+            "median": 4.490000000000009,
+            "p95": 7.424200000000042
+          }
+        },
+        "follow-up": {
+          "queries": 12,
+          "recall": 0.25,
+          "recallSeen": 0.5833333333333334,
+          "precision": 0.5,
+          "mrr": 0.35486111111111107,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.22619047619047614,
+          "ruleSeen": 0.24999999999999997,
+          "chars": 2751,
+          "latencyMs": {
+            "median": 4.7314000000001215,
+            "p95": 6.563800000000015
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1,
+          "forbidden": 0,
+          "ruleRecall": 0.26785714285714285,
+          "ruleSeen": 0.28571428571428564,
+          "chars": 2763,
+          "latencyMs": {
+            "median": 4.431100000000015,
+            "p95": 6.088799999999992
+          }
+        },
+        "paraphrase": {
+          "queries": 15,
+          "recall": 0.9333333333333333,
+          "recallSeen": 1,
+          "precision": 0.4,
+          "mrr": 0.8714285714285714,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.04761904761904761,
+          "ruleSeen": 0.11428571428571427,
+          "chars": 3268,
+          "latencyMs": {
+            "median": 4.467100000000073,
+            "p95": 5.358699999999999
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.7685185185185185,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.14285714285714285,
+          "ruleSeen": 0.2222222222222222,
+          "chars": 3499,
+          "latencyMs": {
+            "median": 4.4534000000001015,
+            "p95": 4.810500000000047
+          }
+        },
+        "superseded": {
+          "queries": 6,
+          "recall": 0.6666666666666666,
+          "recallSeen": 0.8333333333333334,
+          "precision": 0.4333333333333333,
+          "mrr": 0.5220959595959596,
+          "noise": null,
+          "forbidden": 5,
+          "ruleRecall": 0.21428571428571427,
+          "ruleSeen": 0.38095238095238093,
+          "chars": 3430,
+          "latencyMs": {
+            "median": 4.358900000000176,
+            "p95": 4.581900000000019
+          }
+        },
+        "vague": {
+          "queries": 7,
+          "recall": 0.2857142857142857,
+          "recallSeen": 0.8571428571428571,
+          "precision": 0.75,
+          "mrr": 0.439047619047619,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.2857142857142857,
+          "ruleSeen": 0.4081632653061224,
+          "chars": 2945,
+          "latencyMs": {
+            "median": 4.3478000000000065,
+            "p95": 5.588700000000017
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 47,
+          "recall": 0.8837209302325582,
+          "recallSeen": 0.9534883720930233,
+          "precision": 0.38768115942028986,
+          "mrr": 0.8307631967515688,
+          "noise": 2,
+          "forbidden": 4,
+          "ruleRecall": 0.03647416413373859,
+          "ruleSeen": 0.08510638297872337,
+          "chars": 3359,
+          "latencyMs": {
+            "median": 4.434500000000071,
+            "p95": 5.575099999999793
+          }
+        },
+        "es": {
+          "queries": 45,
+          "recall": 0.43902439024390244,
+          "recallSeen": 0.8292682926829268,
+          "precision": 0.685897435897436,
+          "mrr": 0.5554417059904864,
+          "noise": 0,
+          "forbidden": 4,
+          "ruleRecall": 0.37460317460317477,
+          "ruleSeen": 0.5365079365079366,
+          "chars": 2928,
+          "latencyMs": {
+            "median": 4.663499999999999,
+            "p95": 6.2753999999999905
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "v2-q-011",
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-012",
+          "missed": ["sp-goose-migrations"]
+        },
+        {
+          "id": "v2-q-018",
+          "missed": ["sp-cobra-commands"]
+        },
+        {
+          "id": "v2-q-019",
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-020",
+          "missed": ["sp-sql-unknown-driver"]
+        },
+        {
+          "id": "v2-q-024",
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-025",
+          "missed": ["sp-grpc-unavailable-socket"]
+        },
+        {
+          "id": "v2-q-030",
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-042",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-043",
+          "missed": ["ac-redis-connection-refused"]
+        },
+        {
+          "id": "v2-q-044",
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-046",
+          "missed": ["ac-migrations"]
+        },
+        {
+          "id": "v2-q-049",
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-050",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-051",
+          "missed": ["ac-celery-task-not-registered"]
+        },
+        {
+          "id": "v2-q-056",
+          "missed": ["ac-redis-connection-refused", "ac-rediss-ssl-cert-reqs"]
+        },
+        {
+          "id": "v2-q-068",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-073",
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-075",
+          "missed": ["ra-supabase-migrations"]
+        },
+        {
+          "id": "v2-q-076",
+          "missed": ["ra-flaky-maestro-camera"]
+        },
+        {
+          "id": "v2-q-077",
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-078",
+          "missed": ["ra-edge-function-deploy"]
+        },
+        {
+          "id": "v2-q-079",
+          "missed": ["ra-outbox-sqlite"]
+        },
+        {
+          "id": "v2-q-081",
+          "missed": ["ra-ios-provisioning-failure"]
+        },
+        {
+          "id": "v2-q-082",
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-086",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-088",
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-092",
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ]
+    },
+    "1000": {
+      "storeEntries": {
+        "stockpile": 1000,
+        "agenda-clinica": 1000,
+        "rutas-app": 1000
+      },
+      "overall": {
+        "queries": 92,
+        "recall": 0.6666666666666666,
+        "recallSeen": 0.8809523809523809,
+        "precision": 0.4895833333333333,
+        "mrr": 0.6951069653450608,
+        "noise": 1.375,
+        "forbidden": 8,
+        "ruleRecall": 0.19875776397515538,
+        "ruleSeen": 0.29037267080745344,
+        "chars": 3107,
+        "latencyMs": {
+          "median": 36.76190000000042,
+          "p95": 39.795700000000124
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 18,
+          "recall": 0.3888888888888889,
+          "recallSeen": 0.8888888888888888,
+          "precision": 0.5416666666666666,
+          "mrr": 0.5796296296296295,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.4047619047619047,
+          "ruleSeen": 0.619047619047619,
+          "chars": 3005,
+          "latencyMs": {
+            "median": 36.77610000000004,
+            "p95": 38.5641999999998
+          }
+        },
+        "direct": {
+          "queries": 17,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.4656862745098039,
+          "mrr": 0.9705882352941176,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.0588235294117647,
+          "ruleSeen": 0.15126050420168066,
+          "chars": 3459,
+          "latencyMs": {
+            "median": 36.99459999999999,
+            "p95": 42.08570000000009
+          }
+        },
+        "follow-up": {
+          "queries": 12,
+          "recall": 0.25,
+          "recallSeen": 0.5833333333333334,
+          "precision": 0.5,
+          "mrr": 0.35486111111111107,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.22619047619047614,
+          "ruleSeen": 0.24999999999999997,
+          "chars": 2752,
+          "latencyMs": {
+            "median": 36.38720000000012,
+            "p95": 38.486399999999776
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.375,
+          "forbidden": 0,
+          "ruleRecall": 0.24999999999999997,
+          "ruleSeen": 0.2678571428571428,
+          "chars": 2893,
+          "latencyMs": {
+            "median": 37.52220000000034,
+            "p95": 39.795700000000124
+          }
+        },
+        "paraphrase": {
+          "queries": 15,
+          "recall": 0.9333333333333333,
+          "recallSeen": 0.9333333333333333,
+          "precision": 0.38333333333333336,
+          "mrr": 0.8691358024691358,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.04761904761904761,
+          "ruleSeen": 0.0857142857142857,
+          "chars": 3272,
+          "latencyMs": {
+            "median": 36.08230000000003,
+            "p95": 41.89989999999989
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.7685185185185185,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.14285714285714285,
+          "ruleSeen": 0.19047619047619047,
+          "chars": 3485,
+          "latencyMs": {
+            "median": 36.51159999999982,
+            "p95": 39.19769999999971
+          }
+        },
+        "superseded": {
+          "queries": 6,
+          "recall": 0.6666666666666666,
+          "recallSeen": 0.8333333333333334,
+          "precision": 0.4333333333333333,
+          "mrr": 0.5181818181818182,
+          "noise": null,
+          "forbidden": 5,
+          "ruleRecall": 0.21428571428571427,
+          "ruleSeen": 0.35714285714285715,
+          "chars": 3431,
+          "latencyMs": {
+            "median": 36.71860000000015,
+            "p95": 37.24240000000009
+          }
+        },
+        "vague": {
+          "queries": 7,
+          "recall": 0.2857142857142857,
+          "recallSeen": 0.8571428571428571,
+          "precision": 0.75,
+          "mrr": 0.4358843537414966,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.2857142857142857,
+          "ruleSeen": 0.38775510204081626,
+          "chars": 2927,
+          "latencyMs": {
+            "median": 37.15229999999974,
+            "p95": 44.11949999999979
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 47,
+          "recall": 0.8837209302325582,
+          "recallSeen": 0.9302325581395349,
+          "precision": 0.37862318840579706,
+          "mrr": 0.8299633936261843,
+          "noise": 2.75,
+          "forbidden": 4,
+          "ruleRecall": 0.030395136778115492,
+          "ruleSeen": 0.06382978723404253,
+          "chars": 3390,
+          "latencyMs": {
+            "median": 36.88789999999972,
+            "p95": 40.20820000000003
+          }
+        },
+        "es": {
+          "queries": 45,
+          "recall": 0.43902439024390244,
+          "recallSeen": 0.8292682926829268,
+          "precision": 0.685897435897436,
+          "mrr": 0.5536721747087601,
+          "noise": 0,
+          "forbidden": 4,
+          "ruleRecall": 0.37460317460317477,
+          "ruleSeen": 0.526984126984127,
+          "chars": 2927,
+          "latencyMs": {
+            "median": 36.47809999999936,
+            "p95": 39.23450000000048
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "v2-q-011",
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-012",
+          "missed": ["sp-goose-migrations"]
+        },
+        {
+          "id": "v2-q-018",
+          "missed": ["sp-cobra-commands"]
+        },
+        {
+          "id": "v2-q-019",
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-020",
+          "missed": ["sp-sql-unknown-driver"]
+        },
+        {
+          "id": "v2-q-024",
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-025",
+          "missed": ["sp-grpc-unavailable-socket"]
+        },
+        {
+          "id": "v2-q-030",
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-042",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-043",
+          "missed": ["ac-redis-connection-refused"]
+        },
+        {
+          "id": "v2-q-044",
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-046",
+          "missed": ["ac-migrations"]
+        },
+        {
+          "id": "v2-q-049",
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-050",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-051",
+          "missed": ["ac-celery-task-not-registered"]
+        },
+        {
+          "id": "v2-q-056",
+          "missed": ["ac-redis-connection-refused", "ac-rediss-ssl-cert-reqs"]
+        },
+        {
+          "id": "v2-q-068",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-073",
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-075",
+          "missed": ["ra-supabase-migrations"]
+        },
+        {
+          "id": "v2-q-076",
+          "missed": ["ra-flaky-maestro-camera"]
+        },
+        {
+          "id": "v2-q-077",
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-078",
+          "missed": ["ra-edge-function-deploy"]
+        },
+        {
+          "id": "v2-q-079",
+          "missed": ["ra-outbox-sqlite"]
+        },
+        {
+          "id": "v2-q-081",
+          "missed": ["ra-ios-provisioning-failure"]
+        },
+        {
+          "id": "v2-q-082",
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-086",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-088",
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-092",
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ]
+    },
+    "5000": {
+      "storeEntries": {
+        "stockpile": 5000,
+        "agenda-clinica": 5000,
+        "rutas-app": 5000
+      },
+      "overall": {
+        "queries": 92,
+        "recall": 0.6547619047619048,
+        "recallSeen": 0.8809523809523809,
+        "precision": 0.48148148148148157,
+        "mrr": 0.6901530841612626,
+        "noise": 1.375,
+        "forbidden": 8,
+        "ruleRecall": 0.1972049689440995,
+        "ruleSeen": 0.2857142857142857,
+        "chars": 3082,
+        "latencyMs": {
+          "median": 179.2754000000059,
+          "p95": 191.3132000000005
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 18,
+          "recall": 0.3888888888888889,
+          "recallSeen": 0.8888888888888888,
+          "precision": 0.5416666666666666,
+          "mrr": 0.5781438415159345,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.4047619047619047,
+          "ruleSeen": 0.611111111111111,
+          "chars": 2981,
+          "latencyMs": {
+            "median": 182.25500000000102,
+            "p95": 296.94840000000113
+          }
+        },
+        "direct": {
+          "queries": 17,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.4509803921568627,
+          "mrr": 0.9705882352941176,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.0588235294117647,
+          "ruleSeen": 0.15126050420168066,
+          "chars": 3460,
+          "latencyMs": {
+            "median": 177.15569999999934,
+            "p95": 191.3132000000005
+          }
+        },
+        "follow-up": {
+          "queries": 12,
+          "recall": 0.25,
+          "recallSeen": 0.5833333333333334,
+          "precision": 0.5,
+          "mrr": 0.35486111111111107,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.22619047619047614,
+          "ruleSeen": 0.24999999999999997,
+          "chars": 2753,
+          "latencyMs": {
+            "median": 178.45430000000124,
+            "p95": 189.74700000000303
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.375,
+          "forbidden": 0,
+          "ruleRecall": 0.24999999999999997,
+          "ruleSeen": 0.2678571428571428,
+          "chars": 2894,
+          "latencyMs": {
+            "median": 183.99139999999898,
+            "p95": 191.64839999999822
+          }
+        },
+        "paraphrase": {
+          "queries": 15,
+          "recall": 0.8666666666666667,
+          "recallSeen": 0.9333333333333333,
+          "precision": 0.36111111111111105,
+          "mrr": 0.8449010654490106,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.03809523809523809,
+          "ruleSeen": 0.07619047619047618,
+          "chars": 3327,
+          "latencyMs": {
+            "median": 178.01929999999993,
+            "p95": 189.4181000000026
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.7685185185185185,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.14285714285714285,
+          "ruleSeen": 0.19047619047619047,
+          "chars": 3498,
+          "latencyMs": {
+            "median": 177.97980000000098,
+            "p95": 192.3269999999975
+          }
+        },
+        "superseded": {
+          "queries": 6,
+          "recall": 0.6666666666666666,
+          "recallSeen": 0.8333333333333334,
+          "precision": 0.4333333333333333,
+          "mrr": 0.5160018552875696,
+          "noise": null,
+          "forbidden": 5,
+          "ruleRecall": 0.21428571428571427,
+          "ruleSeen": 0.35714285714285715,
+          "chars": 3432,
+          "latencyMs": {
+            "median": 179.95880000000034,
+            "p95": 186.37769999999728
+          }
+        },
+        "vague": {
+          "queries": 7,
+          "recall": 0.2857142857142857,
+          "recallSeen": 0.8571428571428571,
+          "precision": 0.75,
+          "mrr": 0.43405849649504474,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.2857142857142857,
+          "ruleSeen": 0.36734693877551017,
+          "chars": 2963,
+          "latencyMs": {
+            "median": 180.04060000000027,
+            "p95": 196.31009999999878
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 47,
+          "recall": 0.8604651162790697,
+          "recallSeen": 0.9302325581395349,
+          "precision": 0.3659420289855073,
+          "mrr": 0.8215094155959082,
+          "noise": 2.75,
+          "forbidden": 4,
+          "ruleRecall": 0.027355623100303945,
+          "ruleSeen": 0.060790273556230984,
+          "chars": 3364,
+          "latencyMs": {
+            "median": 178.01120000000083,
+            "p95": 191.3132000000005
+          }
+        },
+        "es": {
+          "queries": 45,
+          "recall": 0.43902439024390244,
+          "recallSeen": 0.8292682926829268,
+          "precision": 0.685897435897436,
+          "mrr": 0.5523891268029754,
+          "noise": 0,
+          "forbidden": 4,
+          "ruleRecall": 0.37460317460317477,
+          "ruleSeen": 0.5206349206349207,
+          "chars": 2963,
+          "latencyMs": {
+            "median": 180.35420000000158,
+            "p95": 190.69959999999992
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "v2-q-009",
+          "missed": ["sp-deadline-exceeded-import"]
+        },
+        {
+          "id": "v2-q-011",
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-012",
+          "missed": ["sp-goose-migrations"]
+        },
+        {
+          "id": "v2-q-018",
+          "missed": ["sp-cobra-commands"]
+        },
+        {
+          "id": "v2-q-019",
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-020",
+          "missed": ["sp-sql-unknown-driver"]
+        },
+        {
+          "id": "v2-q-024",
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-025",
+          "missed": ["sp-grpc-unavailable-socket"]
+        },
+        {
+          "id": "v2-q-030",
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-042",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-043",
+          "missed": ["ac-redis-connection-refused"]
+        },
+        {
+          "id": "v2-q-044",
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-046",
+          "missed": ["ac-migrations"]
+        },
+        {
+          "id": "v2-q-049",
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-050",
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-051",
+          "missed": ["ac-celery-task-not-registered"]
+        },
+        {
+          "id": "v2-q-056",
+          "missed": ["ac-redis-connection-refused", "ac-rediss-ssl-cert-reqs"]
+        },
+        {
+          "id": "v2-q-068",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-073",
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-075",
+          "missed": ["ra-supabase-migrations"]
+        },
+        {
+          "id": "v2-q-076",
+          "missed": ["ra-flaky-maestro-camera"]
+        },
+        {
+          "id": "v2-q-077",
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-078",
+          "missed": ["ra-edge-function-deploy"]
+        },
+        {
+          "id": "v2-q-079",
+          "missed": ["ra-outbox-sqlite"]
+        },
+        {
+          "id": "v2-q-081",
+          "missed": ["ra-ios-provisioning-failure"]
+        },
+        {
+          "id": "v2-q-082",
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-086",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-088",
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-092",
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ],
+      "perQuery": [
+        {
+          "id": "v2-q-001",
+          "shown": ["sp-database-locked", "sp-sqlite-backup", "sp-deadline-exceeded-import", "sp-sql-unknown-driver"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-002",
+          "shown": ["sp-buf-generate", "sp-golden-files", "sp-windows-socket"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-003",
+          "shown": ["sp-release-goreleaser", "sp-sqlite-modernc"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-004",
+          "shown": ["sp-golden-files"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-005",
+          "shown": ["sp-grpc-max-msg"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-006",
+          "shown": ["sp-lint", "sp-env-config-precedence", "sp-cobra-commands", "sp-architecture-layers"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-007",
+          "shown": [
+            "sp-grpc-unavailable-socket",
+            "sp-sqlite-backup",
+            "sp-decision-socket-auth",
+            "sp-architecture-layers"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-008",
+          "shown": ["sp-stock-adjust-tx", "sp-cobra-commands", "sp-decision-socket-auth"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-009",
+          "shown": ["stockpile-noise-2121", "stockpile-noise-1209", "sp-sqlite-backup", "stockpile-noise-4765"],
+          "missed": ["sp-deadline-exceeded-import"]
+        },
+        {
+          "id": "v2-q-010",
+          "shown": ["sp-sqlite-backup", "stockpile-noise-3037", "stockpile-noise-705", "stockpile-noise-335"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-011",
+          "shown": [],
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-012",
+          "shown": ["sp-grpc-max-msg"],
+          "missed": ["sp-goose-migrations"]
+        },
+        {
+          "id": "v2-q-013",
+          "shown": ["sp-flaky-watch-test"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-014",
+          "shown": ["sp-decision-socket-auth", "sp-grpc-unavailable-socket"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-015",
+          "shown": ["sp-windows-socket"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-016",
+          "shown": ["sp-test-race"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-017",
+          "shown": ["sp-deadline-exceeded-import"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-018",
+          "shown": [],
+          "missed": ["sp-cobra-commands"]
+        },
+        {
+          "id": "v2-q-019",
+          "shown": ["sp-decision-socket-auth"],
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-020",
+          "shown": [],
+          "missed": ["sp-sql-unknown-driver"]
+        },
+        {
+          "id": "v2-q-021",
+          "shown": ["sp-database-locked", "sp-architecture-layers", "sp-test-race", "stockpile-noise-366"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-022",
+          "shown": ["sp-flaky-watch-test", "stockpile-noise-1407", "stockpile-noise-2121", "stockpile-noise-2244"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-023",
+          "shown": ["sp-golden-files", "sp-cobra-commands"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-024",
+          "shown": [],
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-025",
+          "shown": ["sp-release-goreleaser", "sp-sqlite-backup", "sp-deadline-exceeded-import", "sp-golden-files"],
+          "missed": ["sp-grpc-unavailable-socket"]
+        },
+        {
+          "id": "v2-q-026",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-027",
+          "shown": ["sp-sqlite-mattn-old", "sp-database-locked"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-028",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-029",
+          "shown": ["sp-protoc-make-old", "sp-buf-generate", "sp-golden-files"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-030",
+          "shown": ["sp-test-race"],
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-031",
+          "shown": [
+            "ac-celery-task-not-registered",
+            "ac-beat-single-instance",
+            "ac-deploy-fly",
+            "agenda-clinica-noise-4705"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-032",
+          "shown": ["ac-rediss-ssl-cert-reqs", "ac-twilio-webhook", "ac-deploy-fly", "ac-beat-single-instance"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-033",
+          "shown": ["ac-pytest-setup", "ac-naive-datetime-warning", "ac-deploy-fly", "ac-reminders-beat"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-034",
+          "shown": [
+            "ac-double-booking-race",
+            "agenda-clinica-noise-1638",
+            "agenda-clinica-noise-2467",
+            "agenda-clinica-noise-2193"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-035",
+          "shown": ["ac-deploy-fly", "ac-staging-env", "ac-migrations", "ac-rediss-ssl-cert-reqs"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-036",
+          "shown": ["ac-ruff"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-037",
+          "shown": ["ac-beat-single-instance", "ac-reminders-cron-old", "agenda-clinica-noise-4705"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-038",
+          "shown": [
+            "ac-double-booking-race",
+            "agenda-clinica-noise-4585",
+            "agenda-clinica-noise-2625",
+            "ac-beat-single-instance"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-039",
+          "shown": [
+            "ac-twilio-webhook",
+            "agenda-clinica-noise-4585",
+            "agenda-clinica-noise-4269",
+            "agenda-clinica-noise-3508"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-040",
+          "shown": [
+            "ac-decision-slots-precomputed",
+            "agenda-clinica-noise-1388",
+            "agenda-clinica-noise-3940",
+            "agenda-clinica-noise-932"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-041",
+          "shown": ["ac-celery-eager-tests", "ac-staging-env", "ac-reminders-beat", "ac-naive-datetime-warning"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-042",
+          "shown": [],
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-043",
+          "shown": ["ac-celery-setup", "ac-rediss-ssl-cert-reqs"],
+          "missed": ["ac-redis-connection-refused"]
+        },
+        {
+          "id": "v2-q-044",
+          "shown": ["ac-pytest-setup"],
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-045",
+          "shown": ["ac-naive-datetime-warning"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-046",
+          "shown": [],
+          "missed": ["ac-migrations"]
+        },
+        {
+          "id": "v2-q-047",
+          "shown": ["ac-env-settings"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-048",
+          "shown": ["ac-staging-env"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-049",
+          "shown": [],
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-050",
+          "shown": ["ac-reminders-beat", "ac-decision-slots-precomputed"],
+          "missed": ["ac-permissions"]
+        },
+        {
+          "id": "v2-q-051",
+          "shown": [],
+          "missed": ["ac-celery-task-not-registered"]
+        },
+        {
+          "id": "v2-q-052",
+          "shown": ["ac-double-booking-race", "ac-celery-eager-tests", "ac-decision-slots-precomputed"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-053",
+          "shown": ["ac-celery-task-not-registered", "ac-celery-setup", "ac-beat-single-instance"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-054",
+          "shown": ["ac-api-conventions"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-055",
+          "shown": ["ac-naive-datetime-warning", "ac-flaky-dst"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-056",
+          "shown": ["ac-celery-setup"],
+          "missed": ["ac-redis-connection-refused", "ac-rediss-ssl-cert-reqs"]
+        },
+        {
+          "id": "v2-q-057",
+          "shown": ["ac-api-conventions", "ac-naive-datetime-warning"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-058",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-059",
+          "shown": ["ac-deploy-fly", "ac-reminders-beat", "ac-api-conventions"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-060",
+          "shown": ["ac-deploy-fly", "ac-deploy-heroku-old", "ac-staging-env", "ac-reminders-beat"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-061",
+          "shown": ["ac-beat-single-instance", "ac-reminders-beat", "ac-twilio-webhook"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-062",
+          "shown": ["ra-ios-provisioning-failure", "ra-eas-build", "ra-expo-deps-mismatch", "rutas-app-noise-2017"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-063",
+          "shown": ["ra-rls-insert-error", "ra-supabase-rls", "ra-outbox-sqlite", "rutas-app-noise-4933"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-064",
+          "shown": ["ra-auth-session-refresh", "ra-push-notifications", "ra-expo-deps-mismatch"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-065",
+          "shown": ["ra-expo-deps-mismatch", "ra-lint-conventions"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-066",
+          "shown": ["ra-flaky-maestro-camera", "ra-maestro-e2e", "rutas-app-noise-2345", "rutas-app-noise-215"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-067",
+          "shown": ["ra-jest-tests", "ra-rls-insert-error", "ra-expo-deps-mismatch", "rutas-app-noise-1932"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-068",
+          "shown": ["ra-auth-session-refresh", "ra-supabase-rls", "ra-ota-expo-publish-old", "ra-decision-maps"],
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-069",
+          "shown": ["ra-supabase-rls", "rutas-app-noise-1593", "rutas-app-noise-1501", "rutas-app-noise-1474"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-070",
+          "shown": ["ra-proof-photo-upload", "ra-metro-cache", "ra-outbox-asyncstorage-old", "ra-outbox-sqlite"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-071",
+          "shown": ["ra-location-background", "ra-env-expo-public"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-072",
+          "shown": ["ra-decision-maps"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-073",
+          "shown": ["ra-auth-session-refresh", "ra-eas-build"],
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-074",
+          "shown": ["ra-push-notifications", "ra-expo-deps-mismatch"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-075",
+          "shown": ["ra-auth-session-refresh", "ra-edge-function-deploy", "ra-proof-photo-upload"],
+          "missed": ["ra-supabase-migrations"]
+        },
+        {
+          "id": "v2-q-076",
+          "shown": [],
+          "missed": ["ra-flaky-maestro-camera"]
+        },
+        {
+          "id": "v2-q-077",
+          "shown": [],
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-078",
+          "shown": [],
+          "missed": ["ra-edge-function-deploy"]
+        },
+        {
+          "id": "v2-q-079",
+          "shown": ["ra-flaky-maestro-camera"],
+          "missed": ["ra-outbox-sqlite"]
+        },
+        {
+          "id": "v2-q-080",
+          "shown": ["ra-location-background", "ra-ota-eas-update"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-081",
+          "shown": [],
+          "missed": ["ra-ios-provisioning-failure"]
+        },
+        {
+          "id": "v2-q-082",
+          "shown": [],
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-083",
+          "shown": ["ra-auth-session-refresh", "ra-env-expo-public", "ra-architecture", "ra-ota-eas-update"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-084",
+          "shown": ["ra-proof-photo-upload", "ra-rls-insert-error"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-085",
+          "shown": ["ra-proof-photo-upload", "ra-outbox-sqlite", "ra-architecture", "ra-outbox-asyncstorage-old"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-086",
+          "shown": [],
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-087",
+          "shown": ["ra-flaky-maestro-camera", "ra-maestro-e2e"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-088",
+          "shown": [],
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-089",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-090",
+          "shown": ["rutas-app-noise-4218", "rutas-app-noise-2543", "rutas-app-noise-827", "rutas-app-noise-4926"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-091",
+          "shown": [
+            "ra-ota-eas-update",
+            "ra-ota-expo-publish-old",
+            "ra-location-background",
+            "ra-ios-provisioning-failure"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-092",
+          "shown": [],
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ]
+    }
+  }
+}

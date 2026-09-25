@@ -27,7 +27,9 @@ export type MemoryType =
   /** Something that went wrong, why, and what fixed it. */
   | "failure"
   /** A stated user preference, distinct from a project requirement. */
-  | "preference";
+  | "preference"
+  /** Something the user asked to be reminded of when a cue comes up ("remind me to X when we touch Y"). */
+  | "reminder";
 
 export const MEMORY_TYPES: readonly MemoryType[] = [
   "architecture",
@@ -41,6 +43,7 @@ export const MEMORY_TYPES: readonly MemoryType[] = [
   "procedure",
   "failure",
   "preference",
+  "reminder",
 ];
 
 /**
@@ -77,6 +80,10 @@ export interface MemoryFrontmatter {
     tags?: string[];
     /** How many turns retrieval injected this entry. */
     uses?: number;
+    /** The days it was recalled, newest last (at most MAX_RECALLS): its strength grows with them (dynamics.ts). */
+    recalls?: string[];
+    /** 0..1: how much it mattered when it formed; an important memory does not fade by disuse. */
+    importance?: number;
     lastUsed?: string;
     /**
      * Usefulness, not retrieval: +1 for each turn this entry was injected into whose project checks then
@@ -100,7 +107,7 @@ export interface MemoryFrontmatter {
   };
 }
 
-export type MemoryStatus = "active" | "superseded" | "invalidated" | "archived";
+export type MemoryStatus = "active" | "superseded" | "invalidated" | "archived" | "done";
 
 export interface MemoryEntry {
   frontmatter: MemoryFrontmatter;
@@ -150,6 +157,7 @@ export interface MemoryWriteInput {
   relatedFiles?: string[];
   tags?: string[];
   supersedes?: string;
+  importance?: number;
   /** Marks the content as checked against reality now (sets `lastConfirmed`). Defaults to true on write. */
   confirmed?: boolean;
 }
@@ -170,7 +178,16 @@ export type MemoryDeleteResult = { ok: true } | { ok: false; reason: "not_found"
 /** One line of the append-only history log (`history.jsonl`), the event-sourced timeline of the store. */
 export interface MemoryHistoryEvent {
   at: string;
-  event: "created" | "updated" | "confirmed" | "deleted" | "promoted" | "superseded" | "archived";
+  event:
+    | "created"
+    | "updated"
+    | "confirmed"
+    | "deleted"
+    | "promoted"
+    | "superseded"
+    | "archived"
+    | "recalled"
+    | "delivered";
   slug: string;
   source?: MemorySource;
   type?: MemoryType;

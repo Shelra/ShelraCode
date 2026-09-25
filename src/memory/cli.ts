@@ -1,10 +1,12 @@
 import { existsSync, readdirSync } from "node:fs";
 import { memoryContextFor } from "../agent/prompts";
+import { consolidateMemory } from "./consolidate";
 import { pendingReflectionCount, readEpisodes } from "./episodes";
 import { isStandingRule } from "./retrieval";
 import { approveSkillProposal, declineSkillProposal, listSkillProposals } from "./skills";
 import {
   isCurrentMemory,
+  listArchivedEntries,
   listMemoryRecords,
   memoryDir,
   projectMemoryScope,
@@ -22,7 +24,7 @@ import type { MemoryRecord, MemoryScope } from "./types";
  * request would be given and the reasons, `stats` the funnel from turns to lessons.
  */
 
-export const MEMORY_ACTIONS = ["list", "show", "why", "stats", "skills", "promote", "decline"] as const;
+export const MEMORY_ACTIONS = ["list", "show", "why", "stats", "skills", "promote", "decline", "consolidate"] as const;
 
 export interface MemoryCliOptions {
   /** list: include superseded and archived entries. */
@@ -79,7 +81,14 @@ function list(workspace: string, options: MemoryCliOptions): string {
   }
   const sections: string[] = [];
   const rules = project.filter(isStandingRule);
-  const knowledge = project.filter((record) => !isStandingRule(record));
+  const reminders = project.filter((record) => record.entry.frontmatter.metadata.type === "reminder");
+  const knowledge = project.filter((record) => !isStandingRule(record) && !reminders.includes(record));
+  if (reminders.length > 0) {
+    const lines = reminders.map(
+      (record) => `  ${record.slug}  ${record.index.hook.replace(/^Remind the user: /u, "")}`,
+    );
+    sections.push(`Reminders waiting for their cue (${reminders.length}):\n${lines.join("\n")}`);
+  }
   if (rules.length > 0)
     sections.push(`Your rules for this project (${rules.length}):\n${rules.map(describe).join("\n")}`);
   if (knowledge.length > 0)
@@ -211,6 +220,7 @@ function stats(workspace: string): string {
     `  entries a turn was given: ${used}; credited by passing checks: ${credited}`,
     `  yours in every project: ${listMemoryRecords(userMemoryScope()).length}`,
     `  skills waiting for your approval: ${listSkillProposals(scope, workspace).length}`,
+    `  reminders waiting for their cue: ${records.filter((record) => record.entry.frontmatter.metadata.type === "reminder").length}; archived from disuse: ${listArchivedEntries(scope).length}`,
   ].join("\n");
 }
 
@@ -246,6 +256,13 @@ export function runMemoryCommand(
       return why(workspace, argument, options);
     case "stats":
       return { exitCode: 0, output: stats(workspace) };
+    case "consolidate": {
+      const report = consolidateMemory(projectMemoryScope(workspace), { force: true });
+      return {
+        exitCode: 0,
+        output: `Consolidated: ${report.lessons.length} recurring lesson(s)${report.lessons.length > 0 ? ` (${report.lessons.join(", ")})` : ""}, ${report.archived.length} faded entr${report.archived.length === 1 ? "y" : "ies"} archived${report.archived.length > 0 ? ` (${report.archived.join(", ")})` : ""}.`,
+      };
+    }
     case "skills":
       return { exitCode: 0, output: skills(workspace) };
     case "promote": {
