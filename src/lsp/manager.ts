@@ -33,6 +33,9 @@ export interface WorkspaceLspManager {
   close(): Promise<void>;
 }
 
+/** How long a server that failed to start is left alone before a later request tries it again. */
+export const FAILED_START_RETRY_MS = 5 * 60_000;
+
 export function createWorkspaceLspManager(
   cwd: string,
   settings: NormalizedLspSettings,
@@ -40,6 +43,12 @@ export function createWorkspaceLspManager(
 ): WorkspaceLspManager {
   const definitions = createRuntimeLspDefinitions(cwd, settings);
   const clients = new Map<string, Promise<ManagedClient | null>>();
+  /**
+   * When a server last failed to start, by client key. A start is not tried again for FAILED_START_RETRY_MS: seen live
+   * 2026-09-25, a TypeScript server that never answered was started again after every edit, and each edit_file waited
+   * for the 30 s startup timeout.
+   */
+  const failedStarts = new Map<string, number>();
 
   const createClient =
     options.createClient ??
@@ -71,6 +80,8 @@ export function createWorkspaceLspManager(
         const cacheKey = `${definition.id}:${root}`;
         const inflight = clients.get(cacheKey);
         if (inflight) return inflight;
+        const failedAt = failedStarts.get(cacheKey);
+        if (failedAt !== undefined && Date.now() - failedAt < FAILED_START_RETRY_MS) return null;
 
         const next = (async () => {
           const client = await createClient({
@@ -87,11 +98,16 @@ export function createWorkspaceLspManager(
         try {
           const value = await next;
           if (!value) {
+            // No server to start (not installed, an install that failed): not looked for again on every edit.
             clients.delete(cacheKey);
+            failedStarts.set(cacheKey, Date.now());
+          } else {
+            failedStarts.delete(cacheKey);
           }
           return value;
         } catch (err) {
           clients.delete(cacheKey);
+          failedStarts.set(cacheKey, Date.now());
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[lsp] Failed to start ${definition.id} for ${cacheKey}: ${msg}`);
           return null;

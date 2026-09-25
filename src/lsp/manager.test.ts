@@ -112,6 +112,25 @@ describe("createWorkspaceLspManager", () => {
     await manager.close();
   });
 
+  it("does not start a server that failed to start again on the next edit (seen live 2026-09-25)", async () => {
+    const root = await createTempWorkspace();
+    const filePath = path.join(root, "demo.ts");
+    const createClient = vi.fn(async (): Promise<LspClientSession> => {
+      throw new Error("Timed out waiting for the server to initialize");
+    });
+    const manager = createWorkspaceLspManager(root, BASE_SETTINGS, { createClient });
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    for (let edit = 0; edit < 4; edit += 1) {
+      expect(await manager.syncFile(filePath, `const a = ${edit};\n`, true, true)).toEqual([]);
+    }
+
+    // Tried once; every later edit goes on without waiting for another start.
+    expect(createClient).toHaveBeenCalledTimes(1);
+    errors.mockRestore();
+    await manager.close();
+  });
+
   it("reports when no matching server exists", async () => {
     const root = await createTempWorkspace();
     const filePath = path.join(root, "demo.rb");

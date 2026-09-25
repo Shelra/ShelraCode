@@ -4,6 +4,9 @@ import path from "path";
 
 const CACHE_ROOT = path.join(os.homedir(), ".shelra", "cache", "lsp");
 const locks = new Map<string, Promise<unknown>>();
+/** When an install of a package last failed; it is not tried again for FAILED_INSTALL_RETRY_MS. */
+const failedInstalls = new Map<string, number>();
+export const FAILED_INSTALL_RETRY_MS = 10 * 60_000;
 
 function packageDir(pkg: string): string {
   const sanitized =
@@ -38,10 +41,15 @@ export async function lspNpmWhich(pkg: string): Promise<string | null> {
   const bin = await pick();
   if (bin) return path.join(binDir, bin);
 
+  // An install that failed is not tried again on every call: seen live 2026-09-25, each edit_file of a TypeScript
+  // project waited about 30 s for another failing install of typescript-language-server.
+  const failedAt = failedInstalls.get(pkg);
+  if (failedAt !== undefined && Date.now() - failedAt < FAILED_INSTALL_RETRY_MS) return null;
   try {
     await rm(path.join(dir, "package-lock.json"), { force: true });
     await lspNpmAdd(pkg);
   } catch {
+    failedInstalls.set(pkg, Date.now());
     return null;
   }
   const resolved = await pick();

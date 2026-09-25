@@ -28,10 +28,14 @@ describe("lspNpmWhich", () => {
     expect(result).toBe(path.join(dir, "node_modules", ".bin", "multi-bin"));
   });
 
-  it("returns null when the package cannot be installed", async () => {
-    const result = await lspNpmWhich("@nonexistent-scope/totally-fake-package-that-does-not-exist-12345");
-    expect(result).toBeNull();
-  });
+  it("returns null when the package cannot be installed, and does not try again on the next call", async () => {
+    const pkg = "@nonexistent-scope/totally-fake-package-that-does-not-exist-12345";
+    expect(await lspNpmWhich(pkg)).toBeNull();
+    // Seen live 2026-09-25: every edit of a TypeScript file waited ~30 s for another failing install.
+    const started = Date.now();
+    expect(await lspNpmWhich(pkg)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(1_000);
+  }, 60_000);
 });
 
 async function createFakePackageCache(pkg: string, binEntries: Record<string, string>): Promise<string> {
