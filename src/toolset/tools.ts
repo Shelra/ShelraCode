@@ -137,8 +137,9 @@ async function refuseDestructiveCommand(
   cwd: string,
   options: CreateToolsOptions,
   abortSignal?: AbortSignal,
+  ownPids: readonly number[] = [],
 ): Promise<{ refused: "declined" | "blocked"; output: string } | null> {
-  const reason = destructiveCommandReason(command, cwd);
+  const reason = destructiveCommandReason(command, cwd, { ownPids });
   if (!reason) return null;
   const policy = options.destructiveCommandPolicy ?? loadDestructiveCommandPolicy();
   if (policy === "allow") return null;
@@ -223,7 +224,13 @@ export function createTools(
           ),
       }),
       execute: async ({ command, timeout, background }, { abortSignal }) => {
-        const refusal = await refuseDestructiveCommand(command, bash.getCwd(), options, abortSignal);
+        const refusal = await refuseDestructiveCommand(
+          command,
+          bash.getCwd(),
+          options,
+          abortSignal,
+          bash.runningProcesses().map((entry) => entry.pid),
+        );
         if (refusal) return { success: false, ...refusal };
         if (background) {
           return bash.startBackground(command);

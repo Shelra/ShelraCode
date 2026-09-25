@@ -91,6 +91,8 @@ interface Where {
   cwd: string | null;
   project: string;
   variables: Variables;
+  /** Processes this session started, which it may stop. */
+  ownPids: ReadonlySet<number>;
 }
 
 /** Why removing `target` recursively is destructive, or null when it stays inside the project. */
@@ -183,6 +185,47 @@ function isWholeProject(outside: string | null): boolean {
   return outside === "everything in the project" || outside === "the whole project";
 }
 
+/** Programs and cmdlets that stop processes (`kill` is Stop-Process in PowerShell). */
+const PROCESS_STOPPERS = new Set(["stop-process", "spps", "kill", "taskkill", "tskill", "pkill", "killall"]);
+/** Their flags that name processes by program rather than by id. */
+const BY_NAME_FLAGS = new Set(["-name", "-processname", "/im"]);
+/** Their flags that take a value which is not a process. */
+const VALUE_FLAGS_OF_STOPPERS = new Set(["-s", "-n", "/s", "/u", "/p", "/fi", "-signal"]);
+
+/**
+ * Why stopping these processes is destructive. By name it stops every one of them on the machine, the person's own
+ * editor or server included; by id, one this session did not start; and a process chosen at run time (an expression, a
+ * pipe) may be anyone's. Seen live 2026-09-25: three turns in a row, a model found whatever held port 8080 and ran
+ * `Stop-Process -Id <pid> -Force`; it was the person's own server, which the session had started a turn earlier and
+ * which the person then used. `kill %1` and `kill $!` stop a job or process of the same command line, and pass.
+ */
+function stopReason(name: string, rawArgs: readonly string[], ownPids: ReadonlySet<number>): string | null {
+  const args = lower(rawArgs);
+  const runTime = "stops a process chosen when the command runs, which may not be one this session started";
+  if (name === "pkill" || name === "killall" || args.some((arg) => BY_NAME_FLAGS.has(arg))) {
+    const named = rawArgs.find((arg) => !arg.startsWith("-") && !arg.startsWith("/"));
+    return `stops every ${named ? `\`${unquote(named)}\` ` : ""}process on this machine, not only the ones this session started`;
+  }
+  const ids: string[] = [];
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const arg = rawArgs[index] as string;
+    const flag = arg.toLowerCase();
+    if (VALUE_FLAGS_OF_STOPPERS.has(flag)) index += 1;
+    else if (flag === "-id" || flag === "/pid") {
+      const value = rawArgs[index + 1];
+      if (value !== undefined) ids.push(...value.split(","));
+      index += 1;
+    } else if (!arg.startsWith("-") && !arg.startsWith("/")) ids.push(...arg.split(","));
+  }
+  const targets = ids.map((id) => unquote(id.trim())).filter(Boolean);
+  if (targets.length === 0) return name === "stop-process" || name === "spps" ? runTime : null;
+  if (targets.every((id) => /^%\d*$/u.test(id) || id === "$!")) return null;
+  if (targets.some((id) => !/^\d+$/u.test(id))) return runTime;
+  const foreign = targets.filter((id) => !ownPids.has(Number(id)));
+  if (foreign.length === 0) return null;
+  return `stops process ${foreign.join(", ")}, which this session did not start (it may be the person's own program; stop this session's background processes with process_stop)`;
+}
+
 function reasonFor(rawTokens: readonly string[], where: Where, piped: readonly string[]): string | null {
   const tokens = rawTokens.filter((token) => !/^\d?>/u.test(token));
   const name = program(tokens[0]);
@@ -263,6 +306,8 @@ function reasonFor(rawTokens: readonly string[], where: Where, piped: readonly s
 
   if (["shutdown", "reboot", "halt", "poweroff", "restart-computer", "stop-computer"].includes(name))
     return "shuts down or restarts the machine";
+
+  if (PROCESS_STOPPERS.has(name)) return stopReason(name, rawArgs, where.ownPids);
 
   if (name === "reg" && ["delete", "add", "import"].includes(args[0] ?? "")) return "changes the Windows registry";
 
@@ -538,7 +583,14 @@ function lineReason(command: string, start: Where, depth: number, inherited: rea
   return null;
 }
 
-/** Why `command` is destructive (for the approval prompt), or null when it is not. */
-export function destructiveCommandReason(command: string, cwd: string): string | null {
-  return lineReason(command, { cwd, project: cwd, variables: new Map() }, 0, []);
+/**
+ * Why `command` is destructive (for the approval prompt), or null when it is not. `ownPids` are the processes the
+ * session started, which it may stop.
+ */
+export function destructiveCommandReason(
+  command: string,
+  cwd: string,
+  options: { ownPids?: Iterable<number> } = {},
+): string | null {
+  return lineReason(command, { cwd, project: cwd, variables: new Map(), ownPids: new Set(options.ownPids) }, 0, []);
 }

@@ -230,3 +230,32 @@ describe("destructiveCommandReason, the review of its own round-3 rewrite", () =
     }
   });
 });
+
+describe("destructiveCommandReason, stopping processes (audit gap #11, seen live 2026-09-25)", () => {
+  const stops = (command: string, ownPids: number[] = []) => destructiveCommandReason(command, project, { ownPids });
+
+  it("flags a process the session did not start, every process of a name, and one chosen at run time", () => {
+    expect(stops("Stop-Process -Id 26008 -Force")).toContain(
+      "stops process 26008, which this session did not start (it may be the person's own program",
+    );
+    expect(stops("taskkill /F /T /PID 7972")).toContain("stops process 7972");
+    expect(stops("kill -9 27488")).toContain("stops process 27488");
+    expect(stops("Stop-Process -Name node -Force")).toContain("stops every `node` process on this machine");
+    expect(stops("taskkill /F /IM node.exe")).toContain("stops every `node.exe` process");
+    expect(stops("pkill -f vite")).toContain("stops every `vite` process");
+    expect(stops("Stop-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess -Force")).toContain(
+      "stops a process chosen when the command runs",
+    );
+    expect(stops("Get-Process node | Stop-Process -Force")).toContain("stops a process chosen when the command runs");
+    expect(stops("npm run build; Stop-Process -Id 26008")).toContain("stops process 26008");
+  });
+
+  it("lets the session stop its own processes, a job of the same line, and look at processes", () => {
+    expect(stops("Stop-Process -Id 4242 -Force", [4242])).toBeNull();
+    expect(stops("kill 4242 4343", [4242, 4343])).toBeNull();
+    expect(stops("kill %1")).toBeNull();
+    expect(stops("sleep 100 & kill $!")).toBeNull();
+    expect(stops("Get-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess")).toBeNull();
+    expect(stops('tasklist /FI "IMAGENAME eq node.exe"')).toBeNull();
+  });
+});

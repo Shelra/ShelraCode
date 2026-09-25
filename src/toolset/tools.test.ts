@@ -501,6 +501,36 @@ describe("schedule daemon tools", () => {
     await rm(cwd, { recursive: true, force: true });
   });
 
+  it("asks before stopping a process the session did not start, and not for its own (audit gap #11)", async () => {
+    const cwd = await scratchRepo("shelra-destructive-kill-");
+    const bash = new BashTool(cwd);
+    const confirm = vi.fn(async () => false);
+    const tools = createTools(bash, {} as never, "agent", {
+      destructiveCommandPolicy: "ask",
+      confirmDestructiveCommand: confirm,
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+    await bash.startBackground('node -e "setInterval(()=>{},1000)"');
+    const own = bash.runningProcesses()[0]?.pid as number;
+    try {
+      const foreign = (await tools.bash.execute({ command: `kill ${own + 100000}` }, {})) as { output: string };
+      expect(confirm).toHaveBeenCalledWith(
+        `kill ${own + 100000}`,
+        expect.stringContaining("which this session did not start"),
+        undefined,
+      );
+      expect(foreign.output).toContain("The user declined");
+
+      confirm.mockClear();
+      // Signal 0 only asks whether it runs: stopping the shell for real would orphan the process it started.
+      await tools.bash.execute({ command: `kill -0 ${own}` }, {});
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      await bash.cleanup();
+      // Windows holds the folder for a moment after the process tree exits.
+      await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => undefined);
+    }
+  });
+
   it("refuses destructive commands without asking when the settings block them", async () => {
     const cwd = await scratchRepo("shelra-destructive-block-");
     const confirm = vi.fn(async () => true);
