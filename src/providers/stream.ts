@@ -239,3 +239,75 @@ export function isRepeatingToolLoop(steps: ReadonlyArray<LoopStepView>): boolean
     return calls.length > 0 && calls.every((call) => earlier.has(call));
   });
 }
+
+/**
+ * Tools that only look at something. A step that calls any other tool (a file change, a plan, a sub-agent, a memory
+ * write, an MCP tool) is work, whatever it returns.
+ */
+const OBSERVING_TOOLS: ReadonlySet<string> = new Set([
+  "bash",
+  "read_file",
+  "grep",
+  "process_logs",
+  "process_list",
+  "search_web",
+  "open_web",
+  "lsp",
+  "memory_list",
+  "memory_read",
+  "delegation_read",
+  "delegation_list",
+]);
+/** Consecutive steps that only looked and found nothing new, after which a generation is stalled. */
+export const STALL_WINDOW = 12;
+/** A word is three or more letters, digits or underscores, starting with a letter: a changed count or time is not news. */
+const WORD_RE = /[A-Za-z_][A-Za-z0-9_]{2,}/gu;
+
+/** The strings in a tool's output, without JSON quoting (an escaped "\n" before a number would read as a word). */
+function stringsIn(value: unknown, depth = 0): string[] {
+  if (typeof value === "string") return [value];
+  if (depth > 4 || value === null || typeof value !== "object") return [];
+  const values = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>);
+  return values.flatMap((item) => stringsIn(item, depth + 1));
+}
+
+/**
+ * Watches one generation and reports a stall: `STALL_WINDOW` consecutive steps that only looked (read, searched, ran
+ * a command) and whose results held no word the generation had not seen. A piece of a word already seen (a slice cut
+ * mid-word) is not new either. Seen live 2026-09-25 (glm-5.3-flash, a requirement audit): a script failed on
+ * `undefined.toFixed`, and the model read the failing line in slices, then character by character, for 170 steps,
+ * each a different command with a different result, so `isRepeatingToolLoop` never matched; the 15-minute generation
+ * timeout ended it, and one host note sent the model back to work.
+ */
+export function createStallDetector(): (steps: ReadonlyArray<LoopStepView>) => boolean {
+  const known = new Set<string>();
+  let scanned = 0;
+  let idle = 0;
+  const learn = (text: string): boolean => {
+    let learned = false;
+    for (const word of text.match(WORD_RE) ?? []) {
+      if (known.has(word)) continue;
+      learned = true;
+      for (let length = 3; length <= word.length; length += 1) {
+        known.add(word.slice(0, length));
+        known.add(word.slice(-length));
+      }
+    }
+    return learned;
+  };
+  return (steps) => {
+    for (; scanned < steps.length; scanned += 1) {
+      const step = steps[scanned];
+      const calls = step?.toolCalls ?? [];
+      // What the call itself says (a label it prints, the path it reads) is not news when the result echoes it.
+      for (const call of calls) for (const text of stringsIn(call.input)) learn(text);
+      let learned = false;
+      for (const result of step?.toolResults ?? []) {
+        for (const text of stringsIn(result.output ?? result.result)) if (learn(text)) learned = true;
+      }
+      const onlyLooked = calls.length > 0 && calls.every((call) => OBSERVING_TOOLS.has(call.toolName));
+      idle = onlyLooked && !learned ? idle + 1 : 0;
+    }
+    return idle >= STALL_WINDOW;
+  };
+}

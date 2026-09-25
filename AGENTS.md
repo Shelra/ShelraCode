@@ -104,6 +104,10 @@ idle budget after which a silent model stream is aborted and the step retried. O
 160,000 characters, tool results older than the model's last three steps go out as a one-line note, and so does
 the text of an older file write or edit, since the file is on disk (the session keeps them whole; the plan and
 sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
+A generation that stops making progress is ended: six steps that only repeat earlier calls with the same results
+(`isRepeatingToolLoop`), or twelve that only read, search or run commands and return no word the generation had not
+seen (`createStallDetector`, `src/providers/stream.ts`). Once per turn the model is told why and may take another way
+or report; a second stop goes on to the completion gate.
 What the resilience rule swallows (a failing memory write, checkpoint, index update, recap or hook) is appended to
 `~/.shelra/logs/swallowed-errors.jsonl` (`src/utils/diagnostics.ts`; `SHELRA_DIAGNOSTICS_LOG` names another file
 or `off`; Vitest runs with it off). Every turn, in the terminal UI or headless, is recorded in

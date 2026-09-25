@@ -4,6 +4,7 @@ import { generateText, jsonSchema, type ModelMessage, Output, stepCountIs, strea
 import { coerceObjectsForStringParameters, normalizeModelMessages, repairToolInput } from "../providers/messages";
 import { clearStaleToolResults, type ToolResultClearing } from "../providers/stale-tool-results";
 import {
+  createStallDetector,
   isRepeatingToolLoop,
   type LoopStepView,
   normalizeProviderEvents,
@@ -168,6 +169,7 @@ export class LocalProviderAdapter implements ProviderAdapter {
     if (request.signal?.aborted) watchdog.abort(request.signal.reason);
     else request.signal?.addEventListener("abort", () => watchdog.abort(request.signal?.reason), { once: true });
     const clearing: ToolResultClearing = { boundary: 0 };
+    const stalled = createStallDetector();
     const result = streamText({
       model: this.provider(request.modelId),
       system: request.system,
@@ -176,7 +178,17 @@ export class LocalProviderAdapter implements ProviderAdapter {
       stopWhen: [
         stepCountIs(request.maxSteps),
         // A model that keeps re-running what it already ran is finished, not working.
-        ({ steps }) => isRepeatingToolLoop(steps as ReadonlyArray<LoopStepView>),
+        ({ steps }) => {
+          if (!isRepeatingToolLoop(steps as ReadonlyArray<LoopStepView>)) return false;
+          request.onHostStop?.("repeating");
+          return true;
+        },
+        // So is one whose steps only look and find nothing new.
+        ({ steps }) => {
+          if (!stalled(steps as ReadonlyArray<LoopStepView>)) return false;
+          request.onHostStop?.("stalled");
+          return true;
+        },
       ],
       maxRetries: this.maxRetries,
       ...(request.timeout ? { timeout: request.timeout } : {}),

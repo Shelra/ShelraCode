@@ -60,7 +60,14 @@ export interface ProviderStreamRequest {
     servedModelId?: string;
   }) => void;
   onFinish?: (usage: ProviderUsage) => void;
+  /**
+   * The host ended the generation because the model stopped making progress: it kept repeating calls with the same
+   * results, or its steps only looked and found nothing new. The last step's tool calls are its final step.
+   */
+  onHostStop?: (reason: HostStopReason) => void;
 }
+
+export type HostStopReason = "repeating" | "stalled";
 
 export type ProviderEvent =
   | { type: "text-delta"; text: string }

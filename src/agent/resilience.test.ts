@@ -5,8 +5,9 @@ import { APICallError } from "@ai-sdk/provider";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { credentialFallbackChain } from "../providers/credential-fallback";
-import { ProviderStreamIdleError } from "../providers/stream";
+import { ProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
 import type {
+  HostStopReason,
   ProviderAdapter,
   ProviderEvent,
   ProviderModelRuntime,
@@ -117,6 +118,8 @@ interface Round {
   text?: string;
   /** The model the provider says answered the round's step (a router's pick, a server-side fallback). */
   served?: string;
+  /** The provider ended the round because the model stopped making progress. */
+  hostStop?: HostStopReason;
 }
 
 /** Plays one scripted round per model request; the last round repeats. */
@@ -170,6 +173,7 @@ class ScriptedProvider implements ProviderAdapter {
           request.onStepFinish?.({ stepNumber: 0, finishReason: "stop", usage: {}, servedModelId: round.served });
         }
         yield* round.events;
+        if (round.hostStop) request.onHostStop?.(round.hostStop);
       })(),
       response:
         round.fail !== undefined
@@ -277,6 +281,46 @@ describe("a model writing a large file (seen live 2026-09-25)", () => {
     }
     expect(statuses).toContain("Preparing write_file");
     expect(statuses).toContain("Writing index.html · 12.5 KB");
+  });
+});
+
+describe("a model that stops making progress (seen live 2026-09-25)", () => {
+  const readCall = {
+    id: "call-1",
+    type: "function" as const,
+    function: { name: "read_file", arguments: '{"path":"audit.cjs"}' },
+  };
+  const stalled: Round = {
+    events: [
+      { type: "tool-call", toolCall: readCall },
+      { type: "tool-result", toolCall: readCall, output: { success: true, output: "hurtOk.invincible.toFixed(2)" } },
+    ],
+    hostStop: "stalled",
+  };
+
+  it("is told once why the host stopped its round, and answers", async () => {
+    const provider = new ScriptedProvider([stalled, answer("The debug hook does not return invincible.")]);
+    const { text } = await run(provider, "Why does the audit fail?");
+
+    expect(provider.requests).toHaveLength(2);
+    const notes = sentMessages(provider, 1).filter(
+      (message) => message.role === "user" && String(message.content).startsWith("Shelra stopped your last round"),
+    );
+    expect(notes).toHaveLength(1);
+    expect(String(notes[0]?.content)).toContain(
+      `because its last ${STALL_WINDOW} steps only read or ran commands and turned up nothing new`,
+    );
+    expect(text).toContain(`[Shelra stopped the round: its last ${STALL_WINDOW} steps only read or ran commands`);
+    expect(text).toContain("The debug hook does not return invincible.");
+  });
+
+  it("goes on to the gate when the model stalls again, instead of asking forever", async () => {
+    const provider = new ScriptedProvider([stalled]);
+    const { text, chunks } = await run(provider, "Why does the audit fail?");
+
+    expect(provider.requests).toHaveLength(2);
+    expect(text.match(/\[Shelra stopped the round/gu)).toHaveLength(1);
+    expect(chunks.at(-1)).toEqual({ type: "done" });
   });
 });
 

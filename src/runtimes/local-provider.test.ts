@@ -146,6 +146,136 @@ describe("OpenAI-compatible tool protocol", () => {
     expect(JSON.stringify(final.messages)).not.toContain("Cleared from this request");
   });
 
+  it("stops a generation whose steps only look and find nothing new, and says why", async () => {
+    // Live 2026-09-25: a model read one line in slices, then as character codes, for 170 steps; every command and
+    // result differed, so the repeat check never matched.
+    const line = "check('shrink + invincibility', hurtOk ? +hurtOk.invincible.toFixed(2) : null);";
+    let requests = 0;
+    const fetchImpl: typeof fetch = async () => {
+      requests += 1;
+      const start = (requests - 1) * 4;
+      return streamResponse([
+        {
+          id: `response-${requests}`,
+          model: "test-model",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: `call-${requests}`,
+                    function: {
+                      name: "bash",
+                      arguments: JSON.stringify({ command: `node -e "dump(${start}, ${start + 4})"` }),
+                    },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+      ]);
+    };
+    const stops: string[] = [];
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: fetchImpl,
+    });
+    const response = provider.stream({
+      modelId: "test-model",
+      system: "Use tools when needed.",
+      messages: [{ role: "user", content: "why does the audit fail?" }],
+      tools: {
+        bash: tool({
+          inputSchema: z.object({ command: z.string() }),
+          execute: async ({ command }: { command: string }) => {
+            const [from, to] = [...command.matchAll(/\d+/gu)].map((match) => Number(match[0]));
+            // The first step shows the line; every later one shows a few of its characters as codes.
+            return from === 0
+              ? line
+              : [...line.slice(from, to)].map((char) => `${char.charCodeAt(0)} ${JSON.stringify(char)}`).join("\n");
+          },
+        }),
+      },
+      maxSteps: 60,
+      onHostStop: (reason) => stops.push(reason),
+    });
+    for await (const _event of response.events) {
+      // drain
+    }
+    await response.response;
+
+    expect(stops).toEqual(["stalled"]);
+    // One step that learned the line, then STALL_WINDOW (12) that learned nothing.
+    expect(requests).toBe(13);
+  });
+
+  it("lets a generation that keeps finding something new run on", async () => {
+    let requests = 0;
+    const fetchImpl: typeof fetch = async () => {
+      requests += 1;
+      if (requests > 20) {
+        return streamResponse([
+          {
+            id: "response-final",
+            model: "test-model",
+            choices: [{ index: 0, delta: { role: "assistant", content: "done" }, finish_reason: "stop" }],
+          },
+        ]);
+      }
+      return streamResponse([
+        {
+          id: `response-${requests}`,
+          model: "test-model",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                tool_calls: [
+                  { index: 0, id: `call-${requests}`, function: { name: "read_file", arguments: `{"path":"f.ts"}` } },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+      ]);
+    };
+    const stops: string[] = [];
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: fetchImpl,
+    });
+    let page = 0;
+    const response = provider.stream({
+      modelId: "test-model",
+      system: "Read files when needed.",
+      messages: [{ role: "user", content: "read the whole file" }],
+      tools: {
+        read_file: tool({
+          inputSchema: z.object({ path: z.string() }),
+          // The same call every time, and every page holds functions the model has not seen.
+          execute: async () => {
+            page += 1;
+            return `export function handlerNumber${"x".repeat(page)}() {}`;
+          },
+        }),
+      },
+      maxSteps: 60,
+      onHostStop: (reason) => stops.push(reason),
+    });
+    for await (const _event of response.events) {
+      // drain
+    }
+    await response.response;
+
+    expect(stops).toEqual([]);
+    expect(requests).toBe(21);
+  });
+
   it("counts the tokens of the steps a round finished before it was cut short", async () => {
     // Live 2026-09-23: rounds cut by a stall were saved with 0 tokens, because the provider's
     // total never arrives; spend limits and the session's counts missed every step they held.

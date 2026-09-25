@@ -110,8 +110,8 @@ import type { CredentialFallback, CredentialFallbackSource } from "../providers/
 import { describeLimit, limitFromError } from "../providers/limits";
 import { normalizeModelMessages } from "../providers/messages";
 import { createOpenRouterProvider } from "../providers/openrouter";
-import { isProviderStreamIdleError } from "../providers/stream";
-import type { ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
+import { isProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
+import type { HostStopReason, ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { destructiveCommandReason } from "../security/destructive";
 import {
@@ -1965,6 +1965,8 @@ export class Agent {
       let conversation = childMessages;
       let runtime = childRuntime;
       let earlierText = "";
+      /** Why the host ended the sub-agent's generation, when it stopped making progress. */
+      let childHostStop: HostStopReason | null = null;
       const attempts: InterruptionState = {
         withoutProgress: 0,
         onModel: 0,
@@ -2009,6 +2011,9 @@ export class Agent {
           },
           onFinish: (usage) => {
             this.recordUsage(usage, "task", attemptServed ?? attemptModelId);
+          },
+          onHostStop: (reason) => {
+            childHostStop = reason;
           },
         });
         // An interrupted attempt never awaits its response; its rejection must not go unhandled.
@@ -2137,7 +2142,13 @@ export class Agent {
         }
       }
 
-      const output = assistantText.trim() || earlierText.trim() || `Task completed. Last action: ${lastActivity}`;
+      const answer = assistantText.trim() || earlierText.trim();
+      const output = childHostStop
+        ? [
+            `[Stopped by Shelra: the sub-agent ${childHostStop === "stalled" ? `spent ${STALL_WINDOW} steps finding nothing new` : "kept repeating the same calls"}.]`,
+            answer || `Last action: ${lastActivity}`,
+          ].join("\n\n")
+        : answer || `Task completed. Last action: ${lastActivity}`;
       return {
         success: true,
         output,
@@ -2852,6 +2863,8 @@ export class Agent {
     let lastContractResults: ReadonlyMap<string, boolean> | null = null;
     /** After a repair attempt that changed nothing about the failures, later rounds get the model's top effort. */
     let repairEscalated = false;
+    /** The model was told once this turn that the host stopped a round of it for making no progress. */
+    let hostStopNoted = false;
     /** The turn's contract ran and every check passed on the final code. */
     let contractPassed = false;
     const checkRuns: Array<{
@@ -2881,6 +2894,8 @@ export class Agent {
         let lastStepProducedOutput = false;
         let lastStepToolCalls = 0;
         let lastStepFinishReason: ProcessMessageFinishReason | null = null;
+        /** Why the host ended this round's generation, when the model stopped making progress. */
+        let roundHostStop: HostStopReason | null = null;
         const activeToolCalls: ToolCall[] = [];
 
         try {
@@ -3027,6 +3042,9 @@ export class Agent {
             },
             onFinish: (usage) => {
               this.recordUsage(usage, "message", roundServed ?? runtime.modelId);
+            },
+            onHostStop: (reason) => {
+              roundHostStop = reason;
             },
           });
           // An interrupted or cancelled round never awaits its response; its rejection must not
@@ -3396,6 +3414,25 @@ export class Agent {
             this.appendCompletedTurn(userModelMessage, [{ role: "assistant", content: assistantText }]);
             reportStatus("recap", "Saving session state");
             await this.refreshSessionRecap(signal);
+          }
+
+          // A round the host stopped because the model made no progress ended on a tool call, with no answer. Once
+          // per turn the model hears why and may take another way or report; a second stop goes on to the gate.
+          if (streamOk && roundHostStop && !hostStopNoted) {
+            hostStopNoted = true;
+            const why =
+              roundHostStop === "stalled"
+                ? `its last ${STALL_WINDOW} steps only read or ran commands and turned up nothing new`
+                : "it kept repeating calls it had already made, with the same results";
+            yield {
+              type: "content",
+              content: `\n\n[Shelra stopped the round: ${why}. Asking for another approach.]\n\n`,
+            };
+            this.messages.push({ role: "user", content: hostStopContinuation(why) });
+            this.messageSeqs.push(null);
+            this.kernel?.recordObservation(`Round stopped by the host: ${why}.`);
+            this.persistKernelIndex();
+            continue;
           }
 
           // Completion/verification gate (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §9):
@@ -4726,6 +4763,14 @@ const STATUS_MESSAGES: Record<number, string> = {
   503: "The API service is temporarily overloaded. Please try again later.",
   529: "The API service is overloaded. Please try again later.",
 };
+
+/**
+ * Sent once per turn after the host stops a round that made no progress. Seen live 2026-09-25: the one note that
+ * reached a model stuck for 170 steps (an interruption's) sent it straight back to work.
+ */
+function hostStopContinuation(why: string): string {
+  return `Shelra stopped your last round because ${why}. Doing more of the same will not help. Say in one sentence what you are trying to establish, then get there another way: run the failing command and read its whole output, check what the code actually receives, or change the code and test the change. If you cannot make progress, say what you found and what is still open.`;
+}
 
 function interruptionContinuation(reason: string): string {
   return `The connection to the model was interrupted (${reason}). Your completed steps are above and their effects are on disk. Continue the task from where it stopped; do not redo finished work.`;

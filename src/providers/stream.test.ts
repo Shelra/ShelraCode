@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isProviderStreamIdleError, isRepeatingToolLoop, normalizeProviderEvents, withIdleWatchdog } from "./stream";
+import {
+  createStallDetector,
+  isProviderStreamIdleError,
+  isRepeatingToolLoop,
+  normalizeProviderEvents,
+  STALL_WINDOW,
+  withIdleWatchdog,
+} from "./stream";
 
 async function collect(stream: AsyncIterable<unknown>) {
   const events = [];
@@ -158,6 +165,66 @@ describe("repeating tool loop", () => {
   it("ignores text-only steps", () => {
     const steps = Array.from({ length: 8 }, () => ({ toolCalls: [], toolResults: [] }));
     expect(isRepeatingToolLoop(steps)).toBe(false);
+  });
+});
+
+describe("stalled generation", () => {
+  const step = (name: string, input: unknown, output: unknown) => ({
+    toolCalls: [{ toolName: name, input }],
+    toolResults: [{ output }],
+  });
+  const line = "check('shrink + invincibility', hurtOk ? +hurtOk.invincible.toFixed(2) : null);";
+  /** The first step reads the line; each later one prints another piece of it, as a different command. */
+  const slices = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      step(
+        "bash",
+        { command: `node -e "slice(${index * 7}, ${index * 7 + 9})"` },
+        { success: true, output: line.slice(index * 7, index * 7 + 9) },
+      ),
+    );
+
+  it(`stops after ${STALL_WINDOW} steps that only looked and found nothing new`, () => {
+    const steps = [step("read_file", { path: "audit.cjs" }, line), ...slices(STALL_WINDOW)];
+    expect(createStallDetector()(steps.slice(0, STALL_WINDOW))).toBe(false);
+    expect(createStallDetector()(steps)).toBe(true);
+    // The repeat check sees a different call every time.
+    expect(isRepeatingToolLoop(steps)).toBe(false);
+  });
+
+  it("keeps state between calls, as the SDK asks once per step", () => {
+    const steps = [step("read_file", { path: "audit.cjs" }, line), ...slices(STALL_WINDOW)];
+    const detect = createStallDetector();
+    const verdicts = steps.map((_, index) => detect(steps.slice(0, index + 1)));
+    expect(verdicts.indexOf(true)).toBe(STALL_WINDOW);
+  });
+
+  it("never stops across a step that changed something", () => {
+    const steps = [
+      step("read_file", { path: "audit.cjs" }, line),
+      ...slices(STALL_WINDOW - 1),
+      step("edit_file", { path: "audit.cjs" }, { success: true, output: "Edited audit.cjs (+1 -1)" }),
+      ...slices(STALL_WINDOW - 1),
+    ];
+    expect(createStallDetector()(steps)).toBe(false);
+  });
+
+  it("counts a result with a word it had not seen as progress, and a changed number or its own label as nothing new", () => {
+    const run = (output: string) => step("bash", { command: "bun test --label 'suite progress'" }, output);
+    const numbersOnly = [
+      run("12 failed, 3 passed"),
+      ...Array.from({ length: STALL_WINDOW }, (_, index) => run(`${11 - index} failed suite progress in ${index}ms`)),
+    ];
+    expect(createStallDetector()(numbersOnly)).toBe(true);
+    const newWord = [...numbersOnly.slice(0, -1), run("TypeError: cannot read invincible of undefined")];
+    expect(createStallDetector()(newWord)).toBe(false);
+  });
+
+  it("ignores text-only steps and never counts tools outside the observing set as looking", () => {
+    const plans = Array.from({ length: STALL_WINDOW + 2 }, () => step("update_plan_step", { index: 0 }, "ok"));
+    expect(createStallDetector()(plans)).toBe(false);
+    const talk = Array.from({ length: STALL_WINDOW + 2 }, () => ({ toolCalls: [], toolResults: [] }));
+    expect(createStallDetector()(talk)).toBe(false);
   });
 });
 
