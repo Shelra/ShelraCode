@@ -4500,7 +4500,11 @@ ${verdict}`,
             requirementAudit = { mutations: turnMutationEvents, evidence: this.turnVerificationEvidence.length };
             const audit = [
               "Before you finish, audit the request requirement by requirement. It states:",
-              ...requirementChecklist.map((requirement, index) => `${index + 1}. ${requirement}`),
+              // Up to 40 items now that listed features count one each: each is kept to a readable line.
+              ...requirementChecklist.map(
+                (requirement, index) =>
+                  `${index + 1}. ${requirement.length > 240 ? `${requirement.slice(0, 239)}…` : requirement}`,
+              ),
               "For each numbered item, list every distinct behavior it names. For each behavior, name the code that implements it and the test or command that exercised exactly that behavior, with the output you observed. A behavior nothing exercised is unverified: exercise it now with a real run (a scratch script you delete afterwards, or a new test file when the request allows adding tests; never edit existing tests), fix what fails, run again, and only then report. Do not report done while any stated behavior is unverified.",
             ].join("\n");
             this.messages.push({ role: "user", content: audit });

@@ -16,7 +16,15 @@ const OBLIGATION_RE =
 /** Sentences that tell the agent how to work, not what the code must do. */
 const PROCESS_RE =
   /^(run|do not modify|don't modify|please run|then run|use the|make sure to run|ejecuta|corre|no modifiques|no cambies|no toques|usa el|usa la|aseg[uú]rate de ejecutar|luego ejecuta)\b/iu;
-const MAX_REQUIREMENTS = 10;
+/** A request that lists a whole feature set has as many requirements as items (seen live 2026-09-25: 30 and more). */
+const MAX_REQUIREMENTS = 40;
+/** A statement longer than this is split at its commas and semicolons, not dropped. */
+const MAX_LENGTH = 400;
+const CHUNK_LENGTH = 300;
+/** A markdown list item: "- x", "* x", "• x", "1. x", "2) x". */
+const LIST_ITEM_RE = /^\s*(?:[-*•+]|\d{1,2}[.)])\s+(\S.*)$/u;
+/** The longest lead-in an item carries ("Include: Drifting"); a longer one is cut to its end. */
+const LEAD_IN_LENGTH = 80;
 /** Behavior separators inside one obligation sentence: "trim X, move Y, and preserve Z" / "quita X, mueve Y y conserva Z". */
 const BEHAVIOR_SEPARATOR_RE = /,\s+(?:and\s+|y\s+|e\s+)?|;\s+/gu;
 /** The last item of a list joined without a comma: "…, move Y and preserve Z" / "…, mueve Y y conserva Z". */
@@ -30,18 +38,86 @@ function splitSentences(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Obligation-shaped sentences from the request, in order, capped and deduplicated. */
+interface Statement {
+  text: string;
+  /** A list item: it states something wanted without an obligation word ("- Drifting"). */
+  listed: boolean;
+}
+
+/**
+ * A request's statements: its prose, sentence by sentence, and each list item joined to the line that introduces its
+ * list ("Include:" and "- Drifting" read "Include: Drifting"). Seen live 2026-09-25: a racing game's request listed 30
+ * features under "Include:"; with the line breaks collapsed they made one sentence over 400 characters, which was
+ * dropped, and the audit never named them.
+ */
+function statements(prompt: string): Statement[] {
+  const out: Statement[] = [];
+  let prose: string[] = [];
+  let leadIn: string | null = null;
+  let inList = false;
+  const flushProse = () => {
+    for (const sentence of splitSentences(prose.join(" "))) out.push({ text: sentence, listed: false });
+    prose = [];
+  };
+  for (const line of prompt.split(/\r?\n/u)) {
+    const item = LIST_ITEM_RE.exec(line);
+    if (item) {
+      if (!inList) {
+        flushProse();
+        // The sentence right before a list that ends with a colon introduces it, and is said by its items.
+        const last = out.at(-1);
+        leadIn =
+          last && !last.listed && last.text.endsWith(":") ? (out.pop() as Statement).text.slice(0, -1).trim() : null;
+        if (leadIn && leadIn.length > LEAD_IN_LENGTH) leadIn = `…${leadIn.slice(-LEAD_IN_LENGTH).trim()}`;
+        inList = true;
+      }
+      const text = (item[1] as string).trim();
+      out.push({ text: leadIn ? `${leadIn}: ${text}` : text, listed: true });
+    } else if (line.trim()) {
+      inList = false;
+      prose.push(line.trim());
+    } else if (!inList) {
+      flushProse();
+    }
+  }
+  flushProse();
+  return out;
+}
+
+/** A statement too long to read as one requirement, cut at its commas and semicolons into readable pieces. */
+function pieces(text: string): string[] {
+  if (text.length <= MAX_LENGTH) return [text];
+  const chunks: string[] = [];
+  let current = "";
+  for (const part of text.split(/(?<=[,;])\s+/u)) {
+    if (current && current.length + part.length + 1 > CHUNK_LENGTH) {
+      chunks.push(current);
+      current = part;
+    } else current = current ? `${current} ${part}` : part;
+  }
+  if (current) chunks.push(current);
+  return chunks.filter((chunk) => chunk.length <= MAX_LENGTH);
+}
+
+/**
+ * Obligation-shaped sentences and listed items from the request, in order, capped and deduplicated. A list item needs
+ * no obligation word: a request lists what it wants.
+ */
 export function extractRequirements(prompt: string): string[] {
   const seen = new Set<string>();
   const requirements: string[] = [];
-  for (const sentence of splitSentences(prompt)) {
-    if (sentence.length < 12 || sentence.length > 400) continue;
-    if (!OBLIGATION_RE.test(sentence) || PROCESS_RE.test(sentence)) continue;
-    const key = sentence.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    requirements.push(sentence);
-    if (requirements.length >= MAX_REQUIREMENTS) break;
+  for (const statement of statements(prompt)) {
+    const obligation = statement.listed || OBLIGATION_RE.test(statement.text);
+    const own = statement.listed ? statement.text.slice(statement.text.lastIndexOf(": ") + 1).trim() : statement.text;
+    if (!obligation || PROCESS_RE.test(own)) continue;
+    for (const piece of pieces(statement.text)) {
+      if (piece.length < (statement.listed ? 3 : 12)) continue;
+      const key = piece.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      requirements.push(piece);
+      if (requirements.length >= MAX_REQUIREMENTS) return requirements;
+    }
   }
   return requirements;
 }

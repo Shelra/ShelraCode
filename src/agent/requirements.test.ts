@@ -49,7 +49,43 @@ describe("requirement extraction", () => {
   it("caps and deduplicates", () => {
     const sentence = "The parser must reject empty input. ";
     expect(extractRequirements(sentence.repeat(5))).toHaveLength(1);
-    const many = Array.from({ length: 15 }, (_, index) => `Rule ${index} must hold for input ${index}.`).join(" ");
-    expect(extractRequirements(many)).toHaveLength(10);
+    const many = Array.from({ length: 50 }, (_, index) => `Rule ${index} must hold for input ${index}.`).join(" ");
+    expect(extractRequirements(many)).toHaveLength(40);
+  });
+
+  it("reads each item of a listed feature set as a requirement, with the line that introduces it (seen live 2026-09-25)", () => {
+    const request = [
+      "Create a Mario Kart style 3D racing game in the browser with Three.js.",
+      "Include:",
+      "- Drifting",
+      "- Item boxes",
+      "* A lap counter",
+      "1. Three tracks",
+      "",
+      "Controls must use the arrow keys, and Space must jump.",
+      "Features:",
+      "- Pause with Escape",
+      "- run npm install first",
+    ].join("\n");
+
+    expect(extractRequirements(request)).toEqual([
+      "Include: Drifting",
+      "Include: Item boxes",
+      "Include: A lap counter",
+      "Include: Three tracks",
+      "Controls must use the arrow keys, and Space must jump.",
+      "Features: Pause with Escape",
+    ]);
+    expect(isRequirementDense(request)).toBe(true);
+  });
+
+  it("splits a very long statement at its commas instead of dropping it", () => {
+    const features = Array.from({ length: 30 }, (_, index) => `feature number ${index} with its own behavior`).join(
+      ", ",
+    );
+    const requirements = extractRequirements(`The game must include ${features}.`);
+    expect(requirements.length).toBeGreaterThan(3);
+    expect(requirements.every((requirement) => requirement.length <= 400)).toBe(true);
+    expect(requirements.join(" ")).toContain("feature number 29");
   });
 });
