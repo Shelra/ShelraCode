@@ -451,7 +451,7 @@ const APPROVAL_WORDS = new Set(
   (
     "yes yep yeah ok okay sure go ahead do it proceed continue approve approved sounds good great perfect fine " +
     "please thanks thank you lgtm si sí dale vale adelante hazlo procede continúa continua de acuerdo perfecto " +
-    "listo correcto gracias porfa por favor bien bueno claro"
+    "listo correcto gracias porfa por favor bien bueno claro sigue seguí sigamos continuar continúe keep going on"
   ).split(" "),
 );
 

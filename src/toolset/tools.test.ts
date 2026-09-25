@@ -121,13 +121,48 @@ describe("schedule daemon tools", () => {
     expect(result.success).toBe(true);
     expect(result.plan.summary).toBe("slugify works");
     expect(result.plan.acceptanceCriteria).toEqual([
-      { id: "AC1", description: "tests pass", verification: "Run the project's relevant check and observe it pass" },
+      {
+        id: "AC1",
+        description: "tests pass",
+        verification:
+          "no command of its own: Shelra holds the turn to the project's checks and, for a web app, opens the app in a browser; a command that fails now would check this criterion itself",
+      },
       { id: "AC2", description: "lowercases", verification: "bun test" },
     ]);
     expect(result.plan.steps).toEqual([
       { title: "Implement slugify", description: "Implement slugify", satisfies: [], status: "pending" },
       { title: "Run tests", description: "Run tests", satisfies: ["AC1"], status: "pending" },
     ]);
+  });
+
+  it("takes a check a criterion names in backticks as its command, and nothing else (seen live 2026-09-25)", async () => {
+    const tools = createTools(new BashTool("/tmp"), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+    >;
+
+    const result = (await tools.generate_plan.execute(
+      {
+        title: "Kart",
+        goal: "a kart game",
+        acceptanceCriteria: [
+          "`bun test src/kart.test.ts` passes",
+          { description: "The build succeeds", verification: "Run `npm run build` and see no errors" },
+          "The HUD shows `Lap 1` at the start",
+          "Cleanup with `rm -rf dist` works",
+        ],
+        steps: ["Build it"],
+      },
+      {},
+    )) as { plan: { acceptanceCriteria: Array<{ command?: string; verification: string }> } };
+
+    expect(result.plan.acceptanceCriteria.map((criterion) => criterion.command)).toEqual([
+      "bun test src/kart.test.ts",
+      "npm run build",
+      undefined,
+      undefined,
+    ]);
+    expect(result.plan.acceptanceCriteria[0]?.verification).toBe("`bun test src/kart.test.ts` passes");
   });
 
   it("runs each criterion's command before the change, and says when one proves nothing (audit doc 15, 1.3)", async () => {

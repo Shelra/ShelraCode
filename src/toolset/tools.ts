@@ -1,6 +1,7 @@
 import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { RestorePoint } from "../agent/attempt-journal";
+import { isVerificationCommand } from "../agent/verification-evidence";
 import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks } from "../hooks/index";
 import type { DecisionProposal } from "../ledger/types";
 import { isLspToolEnabled, queryLsp } from "../lsp/runtime";
@@ -1314,22 +1315,22 @@ export function createTools(
       }
       const summary = rawSummary?.trim() || goal;
       const requirements = looseStringList(rawRequirements);
-      const acceptanceCriteria: PlanAcceptanceCriterion[] = looseCriteriaList(rawCriteria).map((criterion, index) =>
-        typeof criterion === "string"
-          ? {
-              id: `AC${index + 1}`,
-              description: criterion,
-              verification: "Run the project's relevant check and observe it pass",
-            }
-          : {
-              id: criterion.id?.trim() || `AC${index + 1}`,
-              description: criterion.description,
-              verification: criterion.verification?.trim() || "Run the project's relevant check and observe it pass",
-              ...("command" in criterion && typeof criterion.command === "string" && criterion.command.trim()
-                ? { command: criterion.command.trim() }
-                : {}),
-            },
-      );
+      const acceptanceCriteria: PlanAcceptanceCriterion[] = looseCriteriaList(rawCriteria).map((criterion, index) => {
+        const given =
+          typeof criterion !== "string" && "command" in criterion && typeof criterion.command === "string"
+            ? criterion.command.trim()
+            : "";
+        const description = typeof criterion === "string" ? criterion : criterion.description;
+        const verification = typeof criterion === "string" ? undefined : criterion.verification?.trim();
+        // A check the criterion names in backticks is its command: "`bun test src/slug.test.ts` passes".
+        const command = given || backtickedCheck(description, verification);
+        return {
+          id: (typeof criterion === "string" ? undefined : criterion.id?.trim()) || `AC${index + 1}`,
+          description,
+          verification: verification || (command ? `\`${command}\` passes` : UNCHECKED_CRITERION),
+          ...(command ? { command } : {}),
+        };
+      });
       // A check that already passes before the change cannot show the change works (fail before, pass after).
       const vacuous: string[] = [];
       for (const criterion of acceptanceCriteria) {
@@ -1451,6 +1452,25 @@ export interface ToolHookContext {
 export function commandTimeoutMs(timeout: number | undefined): number | undefined {
   if (timeout === undefined || !Number.isFinite(timeout) || timeout <= 0) return undefined;
   return timeout < 1_000 ? timeout * 1_000 : timeout;
+}
+
+/**
+ * What a criterion with no command is held to, said as it is: it replaced "Run the project's relevant check and observe
+ * it pass", which nothing ran (seen live 2026-09-25: eight criteria sent as plain lines all got that line, and the model
+ * then marked every step complete on its own word).
+ */
+const UNCHECKED_CRITERION =
+  "no command of its own: Shelra holds the turn to the project's checks and, for a web app, opens the app in a browser; a command that fails now would check this criterion itself";
+
+/** The first check a criterion names in backticks ("`bun test src/slug.test.ts` passes"), or undefined. */
+function backtickedCheck(...texts: Array<string | undefined>): string | undefined {
+  for (const text of texts) {
+    for (const match of (text ?? "").matchAll(/`([^`\n]+)`/gu)) {
+      const command = (match[1] ?? "").trim();
+      if (isVerificationCommand(command)) return command;
+    }
+  }
+  return undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -237,13 +237,13 @@ describe("cross-turn acceptance-criteria tracking", () => {
           output: "Created index.html",
           diff: { filePath: "index.html", additions: 1, removals: 0, patch: "", isNew: true },
         }),
-        toolCallEvent("call-curl-1", "bash", { command: "curl http://localhost:8080" }),
+        toolCallEvent("call-curl-1", "bash", { command: "npx vitest run" }),
         toolResultEvent(
           "call-curl-1",
           "bash",
           { success: true, output: "<html></html>" },
           {
-            command: "curl http://localhost:8080",
+            command: "npx vitest run",
           },
         ),
         { type: "text-delta", text: "Verified: the page serves correctly." },
@@ -282,13 +282,13 @@ describe("cross-turn acceptance-criteria tracking", () => {
       [
         toolCallEvent("call-plan-1", "generate_plan", {}),
         toolResultEvent("call-plan-1", "generate_plan", planResult([ac1])),
-        toolCallEvent("call-curl-1", "bash", { command: "curl http://localhost:8080" }),
+        toolCallEvent("call-curl-1", "bash", { command: "npx vitest run" }),
         toolResultEvent(
           "call-curl-1",
           "bash",
           { success: true, output: "ok" },
           {
-            command: "curl http://localhost:8080",
+            command: "npx vitest run",
           },
         ),
         { type: "text-delta", text: "Verified." },
@@ -329,5 +329,42 @@ describe("cross-turn acceptance-criteria tracking", () => {
     expect(notice).toBeDefined();
     expect(notice?.content).toContain("AC9");
     expect(notice?.content).not.toContain("AC1");
+  });
+
+  it("does not hold a new request to an earlier turn's criteria, unless it only says to go on (seen live 2026-09-25)", async () => {
+    const ac1 = { id: "AC1", description: "Clock ticks every second", verification: "run the tests" };
+    const turn1 = [
+      toolCallEvent("call-plan-1", "generate_plan", {}),
+      toolResultEvent("call-plan-1", "generate_plan", planResult([ac1])),
+      toolCallEvent("call-test-1", "bash", { command: "npx vitest run" }),
+      toolResultEvent("call-test-1", "bash", { success: true, output: "ok" }, { command: "npx vitest run" }),
+      { type: "text-delta", text: "Verified." },
+    ] as ProviderEvent[];
+    const unverifiedEdit = [
+      toolCallEvent("call-write-2", "write_file", { path: "theme.py", content: 'BACKGROUND = "blue"' }),
+      toolResultEvent("call-write-2", "write_file", {
+        success: true,
+        output: "Updated theme.py",
+        diff: { filePath: "theme.py", additions: 1, removals: 0, patch: "", isNew: false },
+      }),
+      { type: "text-delta", text: "Done." },
+    ] as ProviderEvent[];
+    const still = [{ type: "text-delta", text: "Still done." }] as ProviderEvent[];
+    const verdictOf = async (request: string) => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const provider = new FullyScriptedProvider([turn1, unverifiedEdit, still, still, still]);
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { cwd: testWorkspace, provider });
+      for await (const _chunk of agent.processMessage("Create a digital clock")) {
+        // drain turn 1
+      }
+      let text = "";
+      for await (const chunk of agent.processMessage(request)) text += (chunk as { content?: string }).content ?? "";
+      return text.slice(text.indexOf("[Not verified"));
+    };
+
+    const unrelated = await verdictOf("Now write down that the background should be blue");
+    expect(unrelated).toContain("No verification action was observed after 1 file(s) changed");
+    expect(unrelated).not.toContain("AC1");
+    expect(await verdictOf("dale, sigue")).toContain("AC1");
   });
 });

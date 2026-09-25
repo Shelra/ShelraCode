@@ -3038,6 +3038,8 @@ export class Agent {
     const circles = createCircleDetector();
     /** The model was told once this turn that a local page its answer names does not answer. */
     let urlRepairAsked = false;
+    /** This turn published the plan whose criteria are active, rather than an earlier turn. */
+    let planPublishedThisTurn = false;
     /** The host's last opening of the app this turn (src/agent/runtime-smoke.ts), with the workspace as it was then. */
     let lastSmoke: { result: SmokeResult; mutationEvents: number; state: WorkspaceState | null } | null = null;
     /** Requests sent this turn to fix an app that does not work in the browser. */
@@ -3327,6 +3329,7 @@ export class Agent {
                 if (tr.success && tr.plan?.acceptanceCriteria?.length) {
                   this.activeAcceptanceCriteria = tr.plan.acceptanceCriteria;
                   this.activePlanSteps = tr.plan.steps;
+                  planPublishedThisTurn = true;
                 }
                 if (tr.success && tr.blocker) turnBlocker = tr.blocker;
                 if (tr.success && tr.planUpdate?.status === "complete") {
@@ -4324,7 +4327,11 @@ ${verdict}`,
             mutatedThisTurn &&
             (documentsOnly || this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)
           ) {
-            const criteria = this.activeAcceptanceCriteria ?? [];
+            // An earlier turn's plan is not what this request asked for: its criteria are listed only when the plan
+            // came from this turn or the request only says to go on (seen live 2026-09-25: turns fixing a blank page
+            // and a 404 were each asked about, and ended on, the first turn's 8 criteria).
+            const criteria =
+              planPublishedThisTurn || isShortFollowUp(userMessage) ? (this.activeAcceptanceCriteria ?? []) : [];
             const criteriaList = criteria
               .map((c) => `- ${c.id}: ${c.description} (verify: ${c.verification})`)
               .join("\n");
