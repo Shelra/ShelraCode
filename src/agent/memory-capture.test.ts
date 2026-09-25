@@ -1,10 +1,10 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
-import { pendingReflectionCount, queuePendingReflection, readEpisodes } from "../memory/episodes";
+import { pendingReflectionCount, queuePendingReflection, readEpisodes, saveLiveEpisode } from "../memory/episodes";
 import {
   listMemoryRecords,
   projectMemoryScope,
@@ -114,6 +114,8 @@ interface Round {
   events: ProviderEvent[];
   fail?: unknown;
   text?: string;
+  /** Runs once the agent has taken every event of the round, before the round ends: a look at the turn mid-way. */
+  during?: () => void;
 }
 
 /** Plays one scripted round per model request (the last repeats) and answers reflection calls from a queue. */
@@ -156,6 +158,7 @@ class ScriptedProvider implements ProviderAdapter {
     return {
       events: (async function* () {
         yield* round.events;
+        round.during?.();
       })(),
       response:
         round.fail !== undefined
@@ -558,5 +561,75 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     await turn(agentIn(workspace, new ScriptedProvider([{ events: [], text: "Hello." }])), "Hi there");
     expect(readEpisodes(projectMemoryScope(workspace))).toEqual([]);
     expect(existsSync(join(workspace, ".shelra", "memory", "pending-reflections.jsonl"))).toBe(false);
+  });
+});
+
+describe("memory kept while a turn works (doc 18 §4.2a)", () => {
+  const liveDir = (workspace: string) => join(workspace, ".shelra", "memory", "live");
+
+  it("saves the turn in progress and the lesson of a failure it got past before the turn ends", async () => {
+    // Seen live 2026-09-25: a 48-minute turn of 292 tool calls wrote nothing to memory until the user cancelled it.
+    const workspace = scratch("shelra-memory-live-");
+    const scope = projectMemoryScope(workspace);
+    const midway: { saved: string[]; lessons: string[] } = { saved: [], lessons: [] };
+    const provider = new ScriptedProvider([
+      {
+        events: [
+          ...bashStep("bun test", false, "error: Cannot find module 'zod'"),
+          ...bashStep("bun install", true, "3 packages installed"),
+          ...bashStep("bun test", true, "4 pass"),
+          { type: "text-delta", text: "Installed the missing dependency; the tests pass." },
+        ],
+        during: () => {
+          midway.saved = existsSync(liveDir(workspace)) ? readdirSync(liveDir(workspace)) : [];
+          midway.lessons = listMemoryRecords(scope)
+            .filter((record) => record.entry.frontmatter.metadata.type === "failure")
+            .map((record) => record.index.title);
+        },
+        text: "Installed the missing dependency; the tests pass.",
+      },
+    ]);
+    const kept: string[] = [];
+    const agent = agentIn(workspace, provider);
+    for await (const _chunk of agent.processMessage("Make the tests pass", {
+      onMemory: (info) => kept.push(info.reason),
+    })) {
+      // drain
+    }
+
+    expect(midway.saved).toHaveLength(1);
+    expect(midway.lessons).toEqual(["bun test failed until bun install"]);
+    expect(kept).toContain("a failure the turn got past, kept as it happened");
+    // Once the turn wrote its episode, its save is gone.
+    expect(existsSync(liveDir(workspace)) ? readdirSync(liveDir(workspace)) : []).toEqual([]);
+    expect(readEpisodes(scope)).toHaveLength(1);
+  });
+
+  it("records a turn whose process ended mid-way as interrupted, from its last save, when the next turn starts", async () => {
+    const workspace = scratch("shelra-memory-interrupted-");
+    const scope = projectMemoryScope(workspace);
+    saveLiveEpisode(scope, "crashed-session", {
+      userMessage: "Build the level loader",
+      assistantText: "Writing the loader.",
+      changedFiles: ["src/loader.ts"],
+      commands: [],
+      verified: false,
+      toolCalls: 14,
+    });
+    // The save of a process that no longer runs.
+    const [file] = readdirSync(liveDir(workspace));
+    const path = join(liveDir(workspace), file ?? "");
+    writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), pid: 2_147_483_000 }));
+
+    await turn(agentIn(workspace, new ScriptedProvider([{ events: [], text: "Hello." }])), "Hi there");
+
+    const [episode] = readEpisodes(scope);
+    expect(episode).toMatchObject({
+      outcome: "interrupted",
+      request: "Build the level loader",
+      files: ["src/loader.ts"],
+      toolCalls: 14,
+    });
+    expect(existsSync(path)).toBe(false);
   });
 });

@@ -192,7 +192,11 @@ the user's standing rules, facts and corrections reach every request; the rest i
 sub-agent brief (lexical, no embeddings: rare words weigh more, Spanish and English meet through `src/memory/terms.ts`,
 a short follow-up is read with the request before it) and the relevant bodies are injected, the next ones as
 pointers. What a turn was given, and why, is in its session trace (`recall`); `bench/memory/` measures retrieval. Every turn that did work records an episode (outcome, files, what failed and what got
-past it), however it ended. After a turn that changed and verified files, worked through a
+past it), however it ended. Memory stays fresh while a turn works (doc 18 §4.2a): a failure lesson is written when
+the turn gets past the failure (the same check passing later, or another program doing the job; never a failure that
+never passed), the turn in progress is saved under `.shelra/memory/live/` and removed when it ends, a save left by a
+process that died becomes an `interrupted` episode on the next turn, and `memory_list` shows recent work and turns in
+progress in other sessions. After a turn that changed and verified files, worked through a
 failure, or investigated substantially, one bounded reflection call proposes durable facts and a
 deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text,
 no inference overwriting a human statement, no near-duplicates). A turn no model could finish (Limited, Paused)

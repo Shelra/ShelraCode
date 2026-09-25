@@ -62,9 +62,12 @@ import { buildMcpToolSet } from "../mcp/runtime";
 import { consolidateMemory } from "../memory/consolidate";
 import {
   appendEpisode,
+  clearLiveEpisode,
   didWork,
   episodeFrom,
   queuePendingReflection,
+  recoverInterruptedTurns,
+  saveLiveEpisode,
   type TurnOutcome,
   takePendingReflection,
   turnOutcome,
@@ -297,6 +300,8 @@ const MAX_INTERRUPTIONS_PER_TURN = 20;
 const INTERRUPTION_BACKOFF_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
 /** A reflection deferred from an earlier turn waits at most this long, after this turn's own (doc 18 §4.2). */
 const DEFERRED_REFLECTION_MS = 30_000;
+/** A turn's live record (doc 18 §4.2a) is saved at its first tool result and then at most this often. */
+const LIVE_SAVE_MS = 20_000;
 /**
  * A sub-agent recovers from a failing model connection on its own, like the main turn, within a
  * tighter bound: the parent waits on it and can still route around a sub-agent no model serves.
@@ -584,6 +589,9 @@ export class Agent {
   private turnMemoryDigest: (() => TurnDigest) | null = null;
   /** Set once the turn's learning ran; a turn that ends any other way records its episode when it closes. */
   private turnLearned = false;
+  /** When the turn last saved its live record (doc 18 §4.2a), and the failure lessons it wrote as they happened. */
+  private liveSavedAt = 0;
+  private readonly turnLessons = new Set<string>();
   /** The session's previous request: a short follow-up ("sí, hazlo") retrieves the memory it needs (doc 18 R2). */
   private previousRequest: string | undefined;
   /** Reminders the running turn's recall found due, crossed off when it closes if a model answered. */
@@ -2552,6 +2560,8 @@ export class Agent {
     } finally {
       this.deliverDueReminders();
       this.recordUnlearnedTurn();
+      // The turn wrote its episode (or had no work to record): its live record is done.
+      if (this.liveSavedAt > 0) clearLiveEpisode(projectMemoryScope(this.bash.getRootCwd()), this.liveSession());
       trace.end();
     }
   }
@@ -2634,6 +2644,10 @@ export class Agent {
     const memoryRoot = this.bash.getRootCwd();
     const memoryScope = projectMemoryScope(memoryRoot);
     const memoryOff = this.ablations.has("memory");
+    // Memory kept while the turn works (doc 18 §4.2a), as episodes are: agent mode only.
+    const liveMemory = !memoryOff && this.mode === "agent";
+    // A turn whose process ended before it did (a closed terminal, a crash) is recorded now, from its last save.
+    if (liveMemory) recoverInterruptedTurns(memoryScope);
     // A reminder the user asks for now is for a later request: it is kept after this turn's recall, so its own cue
     // in this very message does not give it back at once.
     let remindersAsked: ReturnType<typeof extractUserDirectives> = [];
@@ -2718,6 +2732,17 @@ export class Agent {
     let turnText = "";
     let turnToolCalls = 0;
     this.turnLearned = false;
+    this.liveSavedAt = 0;
+    this.turnLessons.clear();
+    // What the turn has done so far, without a workspace scan: saved while it works (doc 18 §4.2a).
+    const liveDigest = (): TurnDigest => ({
+      userMessage,
+      assistantText: turnText.slice(-12_000),
+      changedFiles: this.kernel?.snapshot().mutations ?? [],
+      commands: turnCommands,
+      verified: this.turnVerificationEvidence.length > 0,
+      toolCalls: turnToolCalls,
+    });
     this.turnMemoryDigest = () => ({
       userMessage,
       assistantText: turnText.slice(-12_000),
@@ -3206,6 +3231,9 @@ export class Agent {
                   toolResult: tr,
                   timestamp: Date.now(),
                 });
+                if (liveMemory) {
+                  this.keepMemoryCurrent(memoryScope, liveDigest, digestCommand !== undefined && tr.success, observer);
+                }
                 yield { type: "tool_result", toolCall: tc, toolResult: tr };
                 break;
               }
@@ -4356,6 +4384,49 @@ export class Agent {
     } catch (error) {
       recordSwallowedError("memory.reminder", error);
     }
+  }
+
+  /**
+   * Keeps memory current while a turn works (doc 18 §4.2a): the lesson of a failure the turn just got past is written
+   * at once, and what the turn has done so far is saved at most every LIVE_SAVE_MS, so another session sees it and a
+   * process that dies mid-turn leaves it behind. Never throws.
+   */
+  private keepMemoryCurrent(
+    scope: ReturnType<typeof projectMemoryScope>,
+    digest: () => TurnDigest,
+    commandPassed: boolean,
+    observer?: ProcessMessageObserver,
+  ): void {
+    try {
+      const now = Date.now();
+      if (commandPassed) {
+        const fresh = deterministicFailureCandidates(digest()).filter((lesson) => !this.turnLessons.has(lesson.slug));
+        for (const lesson of fresh) this.turnLessons.add(lesson.slug);
+        if (fresh.length > 0) {
+          const admitted = admitCandidates(scope, fresh);
+          if (admitted.written.length > 0) {
+            notifyObserver(observer?.onMemory, {
+              qualified: true,
+              reason: "a failure the turn got past, kept as it happened",
+              written: admitted.written,
+              decisions: admitted.decisions,
+              timestamp: now,
+            });
+          }
+        }
+      }
+      if (now - this.liveSavedAt >= LIVE_SAVE_MS) {
+        this.liveSavedAt = now;
+        saveLiveEpisode(scope, this.liveSession(), digest(), this.modelId);
+      }
+    } catch (error) {
+      recordSwallowedError("memory.live", error);
+    }
+  }
+
+  /** The name of this session's live record; a run without a saved session goes by its process. */
+  private liveSession(): string {
+    return this.session?.id ?? `process-${process.pid}`;
   }
 
   private recordUnlearnedTurn(): void {

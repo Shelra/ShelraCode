@@ -5,6 +5,7 @@ import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks 
 import type { DecisionProposal } from "../ledger/types";
 import { isLspToolEnabled, queryLsp } from "../lsp/runtime";
 import { LSP_TOOL_OPERATIONS } from "../lsp/types";
+import { describeEpisode, describeLiveEpisode, liveEpisodes, readEpisodes } from "../memory/episodes";
 import { decideMemoryWrite } from "../memory/gate";
 import {
   deleteMemoryEntry,
@@ -707,18 +708,32 @@ export function createTools(
 
     tools.memory_list = tool({
       description:
-        "List this project's saved persistent memory (research findings, architecture decisions, known problems, conventions from earlier turns/sessions). Cheap — an index only. Check this before researching something that may already be answered.",
+        "List this project's saved persistent memory (research findings, architecture decisions, known problems, conventions from earlier turns/sessions), its most recent work and any turn in progress in another session. Cheap — an index only. Check this before researching something that may already be answered.",
       inputSchema: z.object({}),
       execute: async () => {
-        const result = readMemoryIndex(projectMemoryScope(memoryRoot()));
+        const scope = projectMemoryScope(memoryRoot());
+        const result = readMemoryIndex(scope);
         const userEntries = readMemoryIndex(userMemoryScope()).entries;
-        if (result.entries.length === 0 && userEntries.length === 0) {
+        // What the project did lately is memory too (doc 18 §4.2a): the owner asked "what do you have in memory?"
+        // while another session worked, and heard "nothing".
+        const recent = readEpisodes(scope, 3).reverse();
+        const live = liveEpisodes(scope);
+        if (result.entries.length === 0 && userEntries.length === 0 && recent.length === 0 && live.length === 0) {
           return { success: true, output: "No project memory saved yet." };
         }
         const lines = result.entries.map((entry) => `- ${entry.title} (${entry.file}) — ${entry.hook}`);
+        if (lines.length === 0) lines.push("No saved entries yet.");
         if (userEntries.length > 0) {
           lines.push("", "User-wide (holds in every project; read with memory_read scope=user):");
           for (const entry of userEntries) lines.push(`- ${entry.title} (${entry.file}) — ${entry.hook}`);
+        }
+        if (live.length > 0) {
+          lines.push("", "In progress in another session now:");
+          for (const turn of live) lines.push(describeLiveEpisode(turn));
+        }
+        if (recent.length > 0) {
+          lines.push("", "Recent work in this project, newest first:");
+          for (const episode of recent) lines.push(describeEpisode(episode));
         }
         return { success: true, output: lines.join("\n") };
       },

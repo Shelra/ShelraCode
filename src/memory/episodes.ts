@@ -1,4 +1,13 @@
-import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { privateText } from "./gate";
@@ -30,7 +39,9 @@ export type TurnOutcome =
   | "blocked"
   | "cancelled"
   | "error"
-  | "answered";
+  | "answered"
+  /** The process ended during the turn (a closed terminal, a crash): its live record was recovered. */
+  | "interrupted";
 
 export interface EpisodeFailure {
   command: string;
@@ -168,6 +179,106 @@ export function readEpisodes(scope: MemoryScope, limit = 500): Episode[] {
   }
 }
 
+/**
+ * A turn in progress, saved while it works (doc 18 §4.2a): one file per session under `live/`, replaced at each save
+ * and removed when the turn ends and writes its episode. Another session reads it as work in progress; a file whose
+ * process is gone is a turn that never ended, recovered as an "interrupted" episode. Seen live 2026-09-25: a
+ * 48-minute turn of 292 tool calls wrote nothing to memory until the user cancelled it.
+ */
+export interface LiveEpisode extends Omit<Episode, "outcome"> {
+  /** The process running the turn: the record of a process that is gone belongs to a turn that never ended. */
+  pid: number;
+}
+
+const LIVE_DIR = "live";
+
+function livePath(scope: MemoryScope, session: string): string {
+  return join(memoryDir(scope), LIVE_DIR, `${session.replace(/[^A-Za-z0-9_-]/gu, "_") || "session"}.json`);
+}
+
+/** Saves what the turn in progress has done so far, replacing the session's previous save. Never throws. */
+export function saveLiveEpisode(scope: MemoryScope, session: string, digest: TurnDigest, model?: string): void {
+  try {
+    const { outcome: _outcome, ...episode } = episodeFrom(digest, "answered", { session, ...(model ? { model } : {}) });
+    mkdirSync(join(ensureMemoryDir(scope), LIVE_DIR), { recursive: true });
+    const live: LiveEpisode = { ...episode, pid: process.pid };
+    writeFileSync(livePath(scope, session), JSON.stringify(live), "utf8");
+  } catch (error) {
+    recordSwallowedError("memory.live", error);
+  }
+}
+
+/** Removes the session's save once its turn wrote its episode. Never throws. */
+export function clearLiveEpisode(scope: MemoryScope, session: string): void {
+  try {
+    rmSync(livePath(scope, session), { force: true });
+  } catch (error) {
+    recordSwallowedError("memory.live", error);
+  }
+}
+
+function processAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // The process exists but belongs to someone else.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function readLiveEpisodes(scope: MemoryScope): Array<{ path: string; live: LiveEpisode }> {
+  const dir = join(memoryDir(scope), LIVE_DIR);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".json"))
+    .flatMap((name) => {
+      const path = join(dir, name);
+      try {
+        return [{ path, live: JSON.parse(readFileSync(path, "utf8")) as LiveEpisode }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** Turns in progress now in other processes on this project, newest first. Never throws. */
+export function liveEpisodes(scope: MemoryScope): LiveEpisode[] {
+  try {
+    return readLiveEpisodes(scope)
+      .map((item) => item.live)
+      .filter((live) => live.pid !== process.pid && processAlive(live.pid))
+      .sort((a, b) => b.at.localeCompare(a.at));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Records, as an "interrupted" episode, every turn whose process ended before the turn did, and removes its save.
+ * Returns how many it recovered. Never throws.
+ */
+export function recoverInterruptedTurns(scope: MemoryScope): number {
+  let recovered = 0;
+  try {
+    for (const { path, live } of readLiveEpisodes(scope)) {
+      if (live.pid === process.pid || processAlive(live.pid)) continue;
+      const { pid: _pid, ...episode } = live;
+      appendEpisode(scope, {
+        ...episode,
+        outcome: "interrupted",
+        note: "[Interrupted — the process ended during the turn; this is what it had done by its last save.]",
+      });
+      rmSync(path, { force: true });
+      recovered += 1;
+    }
+  } catch (error) {
+    recordSwallowedError("memory.live", error);
+  }
+  return recovered;
+}
+
 function clippedDigest(digest: TurnDigest): TurnDigest {
   return {
     ...digest,
@@ -295,6 +406,21 @@ function lessonLine(episode: Episode, attempts: number): string {
   }
   if (episode.note && episode.outcome !== "verified") parts.push(quote(episode.note, 110));
   return quote(`- ${parts.join(" · ")}`, LESSON_CHARS);
+}
+
+/** One line for a list of recent work: when, how it ended, what was asked, what failed and worked, which files. */
+export function describeEpisode(episode: Episode): string {
+  return lessonLine(episode, 1);
+}
+
+/** One line for a turn in progress in another session: since when, what was asked, how far it got. */
+export function describeLiveEpisode(live: LiveEpisode): string {
+  const request = live.request.length > 90 ? `${live.request.slice(0, 89)}…` : live.request;
+  const files =
+    live.files.length > 0
+      ? ` · files: ${live.files.slice(0, 4).join(", ")}${live.files.length > 4 ? ` +${live.files.length - 4}` : ""}`
+      : "";
+  return `- in progress, saved ${live.at.slice(0, 16).replace("T", " ")} UTC · "${request}" · ${live.toolCalls} tool calls${files}`;
 }
 
 /**

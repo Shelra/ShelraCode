@@ -1,8 +1,9 @@
 import { execFileSync } from "child_process";
-import { mkdtemp, rm, writeFile as writeFsFile } from "fs/promises";
+import { mkdtemp, readFile as readFsFile, rm, writeFile as writeFsFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
+import { appendEpisode, episodeFrom, saveLiveEpisode } from "../memory/episodes";
 import { listMemoryRecords, projectMemoryScope } from "../memory/store";
 import { BashTool } from "../tools/bash";
 import { commandTimeoutMs, createTools, hardenToolSet } from "./tools";
@@ -610,6 +611,37 @@ describe("memory tools", () => {
 
     const result = (await tools.memory_list.execute({}, {})) as { success: boolean; output: string };
     expect(result).toEqual({ success: true, output: "No project memory saved yet." });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("lists the project's recent work and a turn in progress in another session (doc 18 §4.2a)", async () => {
+    // Seen live 2026-09-25: asked what memory held while another session worked, the model heard "nothing".
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-tools-memory-"));
+    const scope = projectMemoryScope(cwd);
+    const digest = (userMessage: string, files: string[]) => ({
+      userMessage,
+      assistantText: "",
+      changedFiles: files,
+      commands: [],
+      verified: false,
+      toolCalls: 9,
+    });
+    appendEpisode(scope, episodeFrom(digest("Create the classic Super Mario game", ["index.html"]), "cancelled"));
+    saveLiveEpisode(scope, "other-session", digest("Add a boss level", ["levels/boss.js"]));
+    // The other session's process: one that is running and is not this one.
+    const livePath = path.join(cwd, ".shelra", "memory", "live", "other-session.json");
+    const saved = JSON.parse(await readFsFile(livePath, "utf8")) as Record<string, unknown>;
+    await writeFsFile(livePath, JSON.stringify({ ...saved, pid: process.ppid }));
+    const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+    >;
+
+    const { output } = (await tools.memory_list.execute({}, {})) as { success: boolean; output: string };
+    expect(output).toContain("In progress in another session now:");
+    expect(output).toContain('"Add a boss level" · 9 tool calls · files: levels/boss.js');
+    expect(output).toContain("Recent work in this project, newest first:");
+    expect(output).toContain('cancelled · "Create the classic Super Mario game"');
     await rm(cwd, { recursive: true, force: true });
   });
 

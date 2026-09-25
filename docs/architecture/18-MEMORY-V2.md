@@ -127,6 +127,26 @@ Principles (from the owner's brief, the skill, and the research):
   personal preferences (language, tone, answer format) go to the user store.
 - Every capture is audited, including the reason a turn did not reflect.
 
+### 4.2a Capture while the turn works (M9, 2026-09-25)
+
+Seen live 2026-09-25: a 48-minute turn of 292 tool calls wrote nothing to memory until the user cancelled it, and a
+second session asked "what do you have in memory?" in the same project and heard "nothing". Memory is now kept fresh
+during the turn, with no model call:
+
+- A failure lesson is written the moment the turn gets past the failure (`Agent.keepMemoryCurrent`), not when it
+  ends; the end of the turn proposes it again and the gate skips the identical entry. A lesson needs what got past the
+  failure (`recoveryOf`, `src/memory/recovery.ts`): the same check passing later, with the commands in between that
+  did something (inspections do not count), or another program given the same first argument (`bun install` for
+  `npm install`, `Set-Location "D:\my game"` for `cd D:\my game`). The same command passing after nothing but edits is
+  the code being fixed, not a trap, and a failure that never passed teaches nothing: the live session had paired an
+  audit script that never passed with an unrelated `Select-String`.
+- What the turn has done so far (request, files, failures, tool calls, model) is saved at its first tool result and
+  then at most every 20 s, one file per session under `.shelra/memory/live/`, and removed once the turn writes its
+  episode. The save names the process; a save whose process is gone is a turn that never ended, and the next turn in
+  the project records it as an `interrupted` episode.
+- `memory_list` shows, after the saved entries, the turns in progress in other sessions and the last three episodes:
+  what the project did lately is memory too.
+
 ### 4.3 Retrieval engine
 
 Tiers, each with its own budget:
@@ -225,6 +245,7 @@ The owner's 18 acceptance criteria map onto three layers of evidence:
 | M6 (done 2026-09-25) | Procedural: validated procedures proposed as skills, promoted on the user's yes | `src/memory/skills.ts`: a procedure credited in two passing turns is proposed under `.shelra/memory/skill-proposals/`; `shelra memory skills / promote / decline`; a declined revision is not proposed again; an update to an approved skill is proposed too. Tests in `reflection.test.ts`, `cli.test.ts`. The terminal UI does not show proposals yet (the UI is another session's area) |
 | M7 (one sample, 2026-09-25) | Real-model evaluation on free models | the memory suite on `42da87a`, Nemotron free (`MEM-R3-nemotron-1`): 5/6; with memory both recall tasks passed (37 s and 30 s), without memory one passed (83 s) and one failed with a false completion. One sample, consistent with the 2026-09-17 tally (with 4/6, without 1/9); not proof |
 | M8 (done 2026-09-25) | Memory that behaves like a person's (§4.6) | `dynamics.test.ts`, `consolidate.test.ts`, reminder and metamemory tests, `bench/memory/life.ts` |
+| M9 (done 2026-09-25) | Capture while the turn works (§4.2a): lessons as they happen, the live save and its recovery, recent work in `memory_list`; lessons only from what got past a failure; index entries always one line | memory-capture tests ("memory kept while a turn works"), `tools.test.ts` (recent work and turns in progress), `reflection.test.ts` and `store.test.ts` (the live 2026-09-25 cases) |
 | Held-out check (2026-09-25) | A second dataset written blind after all tuning (`bench/memory/dataset-v2.json`, 3 new projects, 92 queries) | at 5,000 entries per project: the original engine recall 65%, precision 48%, rules 20%, superseded shown 8; round 2 recall 83%, precision 75%, rules 100%, superseded 0, noise 0. Weak: vague requests (43%), superseded subjects (67%) |
 
 ## 7a. Adversarial review of M1 and M2 (round 2, 2026-09-25)
