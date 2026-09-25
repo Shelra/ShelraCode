@@ -1,0 +1,1364 @@
+{
+  "label": "before-m2",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "all",
+  "queries": 103,
+  "sizes": {
+    "0": {
+      "storeEntries": {
+        "shop-api": 29,
+        "atlas-web": 28,
+        "tidewater-pipeline": 28
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.6105263157894737,
+        "recallSeen": 0.8842105263157894,
+        "precision": 0.4322916666666668,
+        "mrr": 0.6541742366456327,
+        "noise": 1.5,
+        "forbidden": 10,
+        "ruleRecall": 0.14684466019417475,
+        "ruleSeen": 0.3932038834951456,
+        "chars": 3247,
+        "latencyMs": {
+          "median": 4.378600000000006,
+          "p95": 11.632000000000062
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.17391304347826086,
+          "recallSeen": 0.7391304347826086,
+          "precision": 0.40277777777777773,
+          "mrr": 0.37408748571319456,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.3804347826086957,
+          "ruleSeen": 0.6739130434782609,
+          "chars": 2823,
+          "latencyMs": {
+            "median": 4.688599999999951,
+            "p95": 8.586900000000014
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5375,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.10625,
+          "ruleSeen": 0.34375,
+          "chars": 3565,
+          "latencyMs": {
+            "median": 4.649799999999914,
+            "p95": 11.632000000000062
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.07692307692307693,
+          "recallSeen": 0.6153846153846154,
+          "precision": 0.125,
+          "mrr": 0.15104400430487386,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 0.057692307692307696,
+          "ruleSeen": 0.2980769230769231,
+          "chars": 2189,
+          "latencyMs": {
+            "median": 4.233299999999872,
+            "p95": 18.164399999999887
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.5,
+          "forbidden": 0,
+          "ruleRecall": 0.203125,
+          "ruleSeen": 0.421875,
+          "chars": 2973,
+          "latencyMs": {
+            "median": 3.6557999999999993,
+            "p95": 10.593700000000126
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.75,
+          "recallSeen": 1,
+          "precision": 0.328125,
+          "mrr": 0.7679563492063491,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.0234375,
+          "ruleSeen": 0.2109375,
+          "chars": 3802,
+          "latencyMs": {
+            "median": 4.130300000000034,
+            "p95": 16.897000000000048
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.6851851851851851,
+          "mrr": 0.9444444444444444,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.013888888888888888,
+          "ruleSeen": 0.2638888888888889,
+          "chars": 3390,
+          "latencyMs": {
+            "median": 3.556100000000015,
+            "p95": 14.935100000000148
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.75,
+          "recallSeen": 1,
+          "precision": 0.40625,
+          "mrr": 0.6614583333333334,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 0.109375,
+          "ruleSeen": 0.375,
+          "chars": 3501,
+          "latencyMs": {
+            "median": 4.706200000000081,
+            "p95": 7.323499999999967
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.638888888888889,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 0.08333333333333333,
+          "ruleSeen": 0.3541666666666667,
+          "chars": 3407,
+          "latencyMs": {
+            "median": 4.685399999999845,
+            "p95": 8.186400000000049
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.8,
+          "recallSeen": 1,
+          "precision": 0.3107638888888889,
+          "mrr": 0.7819400352733685,
+          "noise": 2.75,
+          "forbidden": 5,
+          "ruleRecall": 0.03316326530612245,
+          "ruleSeen": 0.2423469387755102,
+          "chars": 3789,
+          "latencyMs": {
+            "median": 4.434499999999844,
+            "p95": 16.323200000000043
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.44,
+          "recallSeen": 0.78,
+          "precision": 0.6145833333333334,
+          "mrr": 0.53918501788067,
+          "noise": 0.25,
+          "forbidden": 5,
+          "ruleRecall": 0.25,
+          "ruleSeen": 0.5300925925925926,
+          "chars": 2874,
+          "latencyMs": {
+            "median": 4.378600000000006,
+            "p95": 8.586900000000014
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-013",
+          "missed": ["login-rate-limit-429"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-015",
+          "missed": ["test-db-docker-compose"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-017",
+          "missed": ["password-hashing-bun"]
+        },
+        {
+          "id": "q-019",
+          "missed": ["http-error-shape"]
+        },
+        {
+          "id": "q-020",
+          "missed": ["cursor-pagination"]
+        },
+        {
+          "id": "q-021",
+          "missed": ["hono-over-express"]
+        },
+        {
+          "id": "q-022",
+          "missed": ["stripe-webhook-raw-body"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-024",
+          "missed": ["deploy-flyio"]
+        },
+        {
+          "id": "q-025",
+          "missed": ["checkout-concurrency-flaky-test"]
+        },
+        {
+          "id": "q-026",
+          "missed": ["cors-allowed-origins"]
+        },
+        {
+          "id": "q-049",
+          "missed": ["contact-form-resend"]
+        },
+        {
+          "id": "q-050",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-051",
+          "missed": ["vitest-msw-setup"]
+        },
+        {
+          "id": "q-052",
+          "missed": ["vercel-deploys"]
+        },
+        {
+          "id": "q-053",
+          "missed": ["prisma-neon-migrations"]
+        },
+        {
+          "id": "q-054",
+          "missed": ["sitemap-robots"]
+        },
+        {
+          "id": "q-055",
+          "missed": ["plausible-analytics"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-059",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-060",
+          "missed": ["tailwind-theme-tokens"]
+        },
+        {
+          "id": "q-069",
+          "missed": ["clerk-auth-migration"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-085",
+          "missed": ["backfill-procedure"]
+        },
+        {
+          "id": "q-086",
+          "missed": ["gcs-bucket-layout"]
+        },
+        {
+          "id": "q-088",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-089",
+          "missed": ["local-airflow-compose"]
+        },
+        {
+          "id": "q-090",
+          "missed": ["ruff-mypy"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["gcs-bucket-layout", "dag-integrity-test"]
+        },
+        {
+          "id": "q-092",
+          "missed": ["orders-daily-oom"]
+        },
+        {
+          "id": "q-093",
+          "missed": ["uv-dependencies"]
+        },
+        {
+          "id": "q-094",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-102",
+          "missed": ["uv-dependencies"]
+        }
+      ]
+    },
+    "100": {
+      "storeEntries": {
+        "shop-api": 100,
+        "atlas-web": 100,
+        "tidewater-pipeline": 100
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.6105263157894737,
+        "recallSeen": 0.8736842105263158,
+        "precision": 0.4197916666666667,
+        "mrr": 0.6484370183011154,
+        "noise": 1.5,
+        "forbidden": 9,
+        "ruleRecall": 0.14441747572815533,
+        "ruleSeen": 0.33495145631067963,
+        "chars": 3217,
+        "latencyMs": {
+          "median": 7.591600000000199,
+          "p95": 11.551699999999983
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.17391304347826086,
+          "recallSeen": 0.7391304347826086,
+          "precision": 0.40277777777777773,
+          "mrr": 0.3661194922258257,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.3804347826086957,
+          "ruleSeen": 0.625,
+          "chars": 2813,
+          "latencyMs": {
+            "median": 7.635300000000143,
+            "p95": 9.884500000000116
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5333333333333333,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.1,
+          "ruleSeen": 0.275,
+          "chars": 3402,
+          "latencyMs": {
+            "median": 8.183899999999994,
+            "p95": 11.026800000000094
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.07692307692307693,
+          "recallSeen": 0.6153846153846154,
+          "precision": 0.0625,
+          "mrr": 0.1318539808265606,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.057692307692307696,
+          "ruleSeen": 0.23076923076923078,
+          "chars": 2189,
+          "latencyMs": {
+            "median": 7.717399999999998,
+            "p95": 10.695099999999911
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.5,
+          "forbidden": 0,
+          "ruleRecall": 0.203125,
+          "ruleSeen": 0.390625,
+          "chars": 2955,
+          "latencyMs": {
+            "median": 7.509499999999662,
+            "p95": 11.932000000000244
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.75,
+          "recallSeen": 0.9375,
+          "precision": 0.3125,
+          "mrr": 0.7609374999999999,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.0234375,
+          "ruleSeen": 0.1328125,
+          "chars": 3790,
+          "latencyMs": {
+            "median": 7.143999999999778,
+            "p95": 9.971500000000106
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.6759259259259259,
+          "mrr": 0.9444444444444444,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.013888888888888888,
+          "ruleSeen": 0.2361111111111111,
+          "chars": 3455,
+          "latencyMs": {
+            "median": 9.321800000000167,
+            "p95": 14.20640000000003
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.75,
+          "recallSeen": 1,
+          "precision": 0.40625,
+          "mrr": 0.6614583333333334,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 0.109375,
+          "ruleSeen": 0.328125,
+          "chars": 3501,
+          "latencyMs": {
+            "median": 7.985599999999977,
+            "p95": 13.13720000000012
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5833333333333334,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 0.0625,
+          "ruleSeen": 0.2708333333333333,
+          "chars": 3327,
+          "latencyMs": {
+            "median": 8.432800000000043,
+            "p95": 12.292999999999665
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.8,
+          "recallSeen": 0.9777777777777777,
+          "precision": 0.296875,
+          "mrr": 0.7781746031746031,
+          "noise": 2.75,
+          "forbidden": 5,
+          "ruleRecall": 0.030612244897959183,
+          "ruleSeen": 0.17091836734693877,
+          "chars": 3572,
+          "latencyMs": {
+            "median": 7.5852000000002135,
+            "p95": 10.979100000000017
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.44,
+          "recallSeen": 0.78,
+          "precision": 0.6041666666666667,
+          "mrr": 0.5316731919149761,
+          "noise": 0.25,
+          "forbidden": 4,
+          "ruleRecall": 0.24768518518518517,
+          "ruleSeen": 0.4837962962962963,
+          "chars": 2826,
+          "latencyMs": {
+            "median": 7.647600000000011,
+            "p95": 12.292999999999665
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-013",
+          "missed": ["login-rate-limit-429"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-015",
+          "missed": ["test-db-docker-compose"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-017",
+          "missed": ["password-hashing-bun"]
+        },
+        {
+          "id": "q-019",
+          "missed": ["http-error-shape"]
+        },
+        {
+          "id": "q-020",
+          "missed": ["cursor-pagination"]
+        },
+        {
+          "id": "q-021",
+          "missed": ["hono-over-express"]
+        },
+        {
+          "id": "q-022",
+          "missed": ["stripe-webhook-raw-body"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-024",
+          "missed": ["deploy-flyio"]
+        },
+        {
+          "id": "q-025",
+          "missed": ["checkout-concurrency-flaky-test"]
+        },
+        {
+          "id": "q-026",
+          "missed": ["cors-allowed-origins"]
+        },
+        {
+          "id": "q-049",
+          "missed": ["contact-form-resend"]
+        },
+        {
+          "id": "q-050",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-051",
+          "missed": ["vitest-msw-setup"]
+        },
+        {
+          "id": "q-052",
+          "missed": ["vercel-deploys"]
+        },
+        {
+          "id": "q-053",
+          "missed": ["prisma-neon-migrations"]
+        },
+        {
+          "id": "q-054",
+          "missed": ["sitemap-robots"]
+        },
+        {
+          "id": "q-055",
+          "missed": ["plausible-analytics"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-059",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-060",
+          "missed": ["tailwind-theme-tokens"]
+        },
+        {
+          "id": "q-069",
+          "missed": ["clerk-auth-migration"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-085",
+          "missed": ["backfill-procedure"]
+        },
+        {
+          "id": "q-086",
+          "missed": ["gcs-bucket-layout"]
+        },
+        {
+          "id": "q-088",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-089",
+          "missed": ["local-airflow-compose"]
+        },
+        {
+          "id": "q-090",
+          "missed": ["ruff-mypy"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["gcs-bucket-layout", "dag-integrity-test"]
+        },
+        {
+          "id": "q-092",
+          "missed": ["orders-daily-oom"]
+        },
+        {
+          "id": "q-093",
+          "missed": ["uv-dependencies"]
+        },
+        {
+          "id": "q-094",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-102",
+          "missed": ["uv-dependencies"]
+        }
+      ]
+    },
+    "1000": {
+      "storeEntries": {
+        "shop-api": 1000,
+        "atlas-web": 1000,
+        "tidewater-pipeline": 1000
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.6,
+        "recallSeen": 0.8315789473684211,
+        "precision": 0.4072916666666667,
+        "mrr": 0.6399419765358125,
+        "noise": 1.5,
+        "forbidden": 9,
+        "ruleRecall": 0.1395631067961165,
+        "ruleSeen": 0.3058252427184466,
+        "chars": 3188,
+        "latencyMs": {
+          "median": 75.83570000000145,
+          "p95": 114.83450000000084
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.17391304347826086,
+          "recallSeen": 0.6956521739130435,
+          "precision": 0.40277777777777773,
+          "mrr": 0.3595868477962572,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.3804347826086957,
+          "ruleSeen": 0.6086956521739131,
+          "chars": 2781,
+          "latencyMs": {
+            "median": 73.0536000000011,
+            "p95": 95.73949999999968
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.525,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.0875,
+          "ruleSeen": 0.20625,
+          "chars": 3378,
+          "latencyMs": {
+            "median": 71.43130000000019,
+            "p95": 209.65470000000005
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.07692307692307693,
+          "recallSeen": 0.5384615384615384,
+          "precision": 0.0625,
+          "mrr": 0.11941032688336987,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.057692307692307696,
+          "ruleSeen": 0.23076923076923078,
+          "chars": 2190,
+          "latencyMs": {
+            "median": 86.51440000000002,
+            "p95": 116.21249999999964
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.5,
+          "forbidden": 0,
+          "ruleRecall": 0.203125,
+          "ruleSeen": 0.390625,
+          "chars": 2956,
+          "latencyMs": {
+            "median": 72.1859999999997,
+            "p95": 109.84109999999964
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.75,
+          "recallSeen": 0.8125,
+          "precision": 0.296875,
+          "mrr": 0.7430201680481949,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.0234375,
+          "ruleSeen": 0.1171875,
+          "chars": 3423,
+          "latencyMs": {
+            "median": 88.61440000000039,
+            "p95": 109.8812999999991
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.6759259259259259,
+          "mrr": 0.9444444444444444,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.013888888888888888,
+          "ruleSeen": 0.20833333333333334,
+          "chars": 3273,
+          "latencyMs": {
+            "median": 80.70219999999972,
+            "p95": 108.0676999999996
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.625,
+          "recallSeen": 1,
+          "precision": 0.375,
+          "mrr": 0.6354166666666666,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 0.109375,
+          "ruleSeen": 0.296875,
+          "chars": 3377,
+          "latencyMs": {
+            "median": 81.48280000000159,
+            "p95": 114.83450000000084
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5277777777777778,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 0.020833333333333332,
+          "ruleSeen": 0.1875,
+          "chars": 3340,
+          "latencyMs": {
+            "median": 102.53960000000006,
+            "p95": 190.68009999999958
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.7777777777777778,
+          "recallSeen": 0.9111111111111111,
+          "precision": 0.2864583333333333,
+          "mrr": 0.7644725766929437,
+          "noise": 2.75,
+          "forbidden": 5,
+          "ruleRecall": 0.030612244897959183,
+          "ruleSeen": 0.14795918367346939,
+          "chars": 3408,
+          "latencyMs": {
+            "median": 75.83570000000145,
+            "p95": 180.5631000000003
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.44,
+          "recallSeen": 0.76,
+          "precision": 0.5885416666666666,
+          "mrr": 0.5278644363943941,
+          "noise": 0.25,
+          "forbidden": 4,
+          "ruleRecall": 0.23842592592592593,
+          "ruleSeen": 0.44907407407407407,
+          "chars": 2814,
+          "latencyMs": {
+            "median": 77.03050000000076,
+            "p95": 101.91079999999965
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-013",
+          "missed": ["login-rate-limit-429"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-015",
+          "missed": ["test-db-docker-compose"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-017",
+          "missed": ["password-hashing-bun"]
+        },
+        {
+          "id": "q-019",
+          "missed": ["http-error-shape"]
+        },
+        {
+          "id": "q-020",
+          "missed": ["cursor-pagination"]
+        },
+        {
+          "id": "q-021",
+          "missed": ["hono-over-express"]
+        },
+        {
+          "id": "q-022",
+          "missed": ["stripe-webhook-raw-body"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-024",
+          "missed": ["deploy-flyio"]
+        },
+        {
+          "id": "q-025",
+          "missed": ["checkout-concurrency-flaky-test"]
+        },
+        {
+          "id": "q-026",
+          "missed": ["cors-allowed-origins"]
+        },
+        {
+          "id": "q-049",
+          "missed": ["contact-form-resend"]
+        },
+        {
+          "id": "q-050",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-051",
+          "missed": ["vitest-msw-setup"]
+        },
+        {
+          "id": "q-052",
+          "missed": ["vercel-deploys"]
+        },
+        {
+          "id": "q-053",
+          "missed": ["prisma-neon-migrations"]
+        },
+        {
+          "id": "q-054",
+          "missed": ["sitemap-robots"]
+        },
+        {
+          "id": "q-055",
+          "missed": ["plausible-analytics"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-059",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-060",
+          "missed": ["tailwind-theme-tokens"]
+        },
+        {
+          "id": "q-069",
+          "missed": ["clerk-auth-migration"]
+        },
+        {
+          "id": "q-071",
+          "missed": ["mdx-content-folder"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-085",
+          "missed": ["backfill-procedure"]
+        },
+        {
+          "id": "q-086",
+          "missed": ["gcs-bucket-layout"]
+        },
+        {
+          "id": "q-088",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-089",
+          "missed": ["local-airflow-compose"]
+        },
+        {
+          "id": "q-090",
+          "missed": ["ruff-mypy"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["gcs-bucket-layout", "dag-integrity-test"]
+        },
+        {
+          "id": "q-092",
+          "missed": ["orders-daily-oom"]
+        },
+        {
+          "id": "q-093",
+          "missed": ["uv-dependencies"]
+        },
+        {
+          "id": "q-094",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-102",
+          "missed": ["uv-dependencies"]
+        }
+      ]
+    },
+    "5000": {
+      "storeEntries": {
+        "shop-api": 5000,
+        "atlas-web": 5000,
+        "tidewater-pipeline": 5000
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.6,
+        "recallSeen": 0.8210526315789474,
+        "precision": 0.38958333333333334,
+        "mrr": 0.6379527570002967,
+        "noise": 1.5,
+        "forbidden": 9,
+        "ruleRecall": 0.13470873786407767,
+        "ruleSeen": 0.2949029126213592,
+        "chars": 3083,
+        "latencyMs": {
+          "median": 430.0599000000002,
+          "p95": 645.8652000000002
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.17391304347826086,
+          "recallSeen": 0.6956521739130435,
+          "precision": 0.40277777777777773,
+          "mrr": 0.3578671578083126,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.3804347826086957,
+          "ruleSeen": 0.6032608695652174,
+          "chars": 2782,
+          "latencyMs": {
+            "median": 501.2548999999999,
+            "p95": 617.7189999999973
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.4875,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.06875,
+          "ruleSeen": 0.1875,
+          "chars": 3307,
+          "latencyMs": {
+            "median": 311.25990000000456,
+            "p95": 512.9124000000011
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.07692307692307693,
+          "recallSeen": 0.5384615384615384,
+          "precision": 0.0625,
+          "mrr": 0.1178893093910538,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 0.057692307692307696,
+          "ruleSeen": 0.23076923076923078,
+          "chars": 2191,
+          "latencyMs": {
+            "median": 429.1777000000002,
+            "p95": 596.1803999999975
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.5,
+          "forbidden": 0,
+          "ruleRecall": 0.203125,
+          "ruleSeen": 0.390625,
+          "chars": 2974,
+          "latencyMs": {
+            "median": 291.38249999999243,
+            "p95": 489.046500000004
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.75,
+          "recallSeen": 0.8125,
+          "precision": 0.28125,
+          "mrr": 0.7403257119724012,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.0234375,
+          "ruleSeen": 0.1015625,
+          "chars": 3412,
+          "latencyMs": {
+            "median": 506.9617999999973,
+            "p95": 1118.2468000000008
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.6759259259259259,
+          "mrr": 0.9444444444444444,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 0.013888888888888888,
+          "ruleSeen": 0.20833333333333334,
+          "chars": 3296,
+          "latencyMs": {
+            "median": 348.52730000000156,
+            "p95": 489.03970000000845
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.625,
+          "recallSeen": 0.875,
+          "precision": 0.3333333333333333,
+          "mrr": 0.624599358974359,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 0.109375,
+          "ruleSeen": 0.28125,
+          "chars": 3354,
+          "latencyMs": {
+            "median": 294.49349999999686,
+            "p95": 446.5081999999966
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.513888888888889,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 0,
+          "ruleSeen": 0.14583333333333334,
+          "chars": 3392,
+          "latencyMs": {
+            "median": 412.38730000000214,
+            "p95": 488.5978000000032
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.7777777777777778,
+          "recallSeen": 0.8888888888888888,
+          "precision": 0.28125,
+          "mrr": 0.7612239762928782,
+          "noise": 2.75,
+          "forbidden": 5,
+          "ruleRecall": 0.030612244897959183,
+          "ruleSeen": 0.1377551020408163,
+          "chars": 3391,
+          "latencyMs": {
+            "median": 427.1769000000022,
+            "p95": 784.0553
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.44,
+          "recallSeen": 0.76,
+          "precision": 0.5520833333333333,
+          "mrr": 0.5270086596369733,
+          "noise": 0.25,
+          "forbidden": 4,
+          "ruleRecall": 0.22916666666666666,
+          "ruleSeen": 0.4375,
+          "chars": 2815,
+          "latencyMs": {
+            "median": 443.2972000000009,
+            "p95": 610.3595000000059
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-013",
+          "missed": ["login-rate-limit-429"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-015",
+          "missed": ["test-db-docker-compose"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-017",
+          "missed": ["password-hashing-bun"]
+        },
+        {
+          "id": "q-019",
+          "missed": ["http-error-shape"]
+        },
+        {
+          "id": "q-020",
+          "missed": ["cursor-pagination"]
+        },
+        {
+          "id": "q-021",
+          "missed": ["hono-over-express"]
+        },
+        {
+          "id": "q-022",
+          "missed": ["stripe-webhook-raw-body"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-024",
+          "missed": ["deploy-flyio"]
+        },
+        {
+          "id": "q-025",
+          "missed": ["checkout-concurrency-flaky-test"]
+        },
+        {
+          "id": "q-026",
+          "missed": ["cors-allowed-origins"]
+        },
+        {
+          "id": "q-049",
+          "missed": ["contact-form-resend"]
+        },
+        {
+          "id": "q-050",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-051",
+          "missed": ["vitest-msw-setup"]
+        },
+        {
+          "id": "q-052",
+          "missed": ["vercel-deploys"]
+        },
+        {
+          "id": "q-053",
+          "missed": ["prisma-neon-migrations"]
+        },
+        {
+          "id": "q-054",
+          "missed": ["sitemap-robots"]
+        },
+        {
+          "id": "q-055",
+          "missed": ["plausible-analytics"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-059",
+          "missed": ["playwright-e2e"]
+        },
+        {
+          "id": "q-060",
+          "missed": ["tailwind-theme-tokens"]
+        },
+        {
+          "id": "q-069",
+          "missed": ["clerk-auth-migration"]
+        },
+        {
+          "id": "q-071",
+          "missed": ["mdx-content-folder"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-085",
+          "missed": ["backfill-procedure"]
+        },
+        {
+          "id": "q-086",
+          "missed": ["gcs-bucket-layout"]
+        },
+        {
+          "id": "q-088",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-089",
+          "missed": ["local-airflow-compose"]
+        },
+        {
+          "id": "q-090",
+          "missed": ["ruff-mypy"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["gcs-bucket-layout", "dag-integrity-test"]
+        },
+        {
+          "id": "q-092",
+          "missed": ["orders-daily-oom"]
+        },
+        {
+          "id": "q-093",
+          "missed": ["uv-dependencies"]
+        },
+        {
+          "id": "q-094",
+          "missed": ["dbt-incremental-merge"]
+        },
+        {
+          "id": "q-102",
+          "missed": ["uv-dependencies"]
+        }
+      ]
+    }
+  }
+}

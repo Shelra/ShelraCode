@@ -66,7 +66,7 @@ describe("memory retrieval", () => {
     expect(ranked[0]?.relevance).toBeGreaterThan(ranked[1]?.relevance ?? 0);
   });
 
-  it("expands the relevant bodies within budget and lists the rest as pointers", () => {
+  it("expands the relevant bodies, keeps the user's rules on, and lists a small store whole", () => {
     seed();
     const records = listMemoryRecords(projectMemoryScope(workspace));
     const context = buildMemoryContext(records, { text: "Change how HOST is parsed in src/config.ts" }, workspace, {
@@ -75,9 +75,15 @@ describe("memory retrieval", () => {
     expect(context.text).toContain("PROJECT MEMORY:");
     expect(context.expanded).toEqual(["config-loader-normalizes-host"]);
     expect(context.text).toContain("### Config loader trims HOST");
-    expect(context.text).toContain("Other saved entries:");
-    expect(context.listed).toEqual(expect.arrayContaining(["bun-test-preload", "user-prefers-spanish"]));
-    expect(context.text).toContain("(user-prefers-spanish.md)");
+    // A person's stated preference shares no word with the request and still reaches it (doc 18 R1).
+    expect(context.rules).toEqual(["user-prefers-spanish"]);
+    expect(context.text).toContain("- Answer in Spanish when the user writes in Spanish");
+    expect(context.listed).toEqual(["bun-test-preload"]);
+    expect(context.text).toContain("(bun-test-preload.md)");
+    expect(context.explain?.find((item) => item.slug === "config-loader-normalizes-host")).toMatchObject({
+      tier: "knowledge",
+      reasons: expect.arrayContaining([expect.stringContaining("terms: "), "files: src/config.ts"]),
+    });
   });
 
   it("flags an entry as stale when a related file changed after it was confirmed", () => {
@@ -105,14 +111,111 @@ describe("memory retrieval", () => {
         body: `Decision ${index}: this module keeps its own cache and never shares it with other modules.`,
       });
     }
-    const context = buildMemoryContext(listMemoryRecords(scope), { text: "fix the parser", paths: [] }, workspace, {
+    const context = buildMemoryContext(listMemoryRecords(scope), { text: "fix the cache", paths: [] }, workspace, {
       maxListed: 5,
     });
     expect(context.listed).toHaveLength(5);
     expect(context.text).toContain(`… and ${20 - context.expanded.length - 5} more; memory_list shows them all.`);
+    // In a store this size, entries that share nothing with the request are counted, not listed.
+    const unrelated = buildMemoryContext(listMemoryRecords(scope), { text: "rename the logo file" }, workspace, {
+      maxListed: 5,
+    });
+    expect(unrelated.expanded).toEqual([]);
+    expect(unrelated.listed).toEqual([]);
+    expect(unrelated.text).toContain("Other saved entries: none related to this request.");
+    expect(unrelated.text).toContain("… and 20 more; memory_list shows them all.");
   });
 
   it("returns nothing for an empty store", () => {
-    expect(buildMemoryContext([], { text: "anything" }, workspace)).toEqual({ text: "", expanded: [], listed: [] });
+    expect(buildMemoryContext([], { text: "anything" }, workspace)).toMatchObject({
+      text: "",
+      expanded: [],
+      listed: [],
+    });
+  });
+});
+
+describe("memory v2 retrieval (doc 18 §4.3)", () => {
+  function write(slug: string, fields: Partial<Parameters<typeof writeMemoryEntry>[1]> = {}): void {
+    writeMemoryEntry(projectMemoryScope(workspace), {
+      slug,
+      title: slug,
+      hook: slug,
+      type: "conventions",
+      description: slug,
+      body: slug,
+      source: "inference",
+      confidence: 0.7,
+      ...fields,
+    });
+  }
+
+  it("reads a short follow-up together with the request before it (R2)", () => {
+    write("login-flaky-test", {
+      title: "The login test is flaky",
+      hook: "tests/login.spec.ts fails one run in five on a race with the session cookie",
+      body: "Await `page.waitForResponse('/api/session')` before asserting; the cookie arrives after the redirect.",
+    });
+    const records = listMemoryRecords(projectMemoryScope(workspace));
+    const alone = buildMemoryContext(records, { text: "sí, hazlo" }, workspace);
+    expect(alone.expanded).toEqual([]);
+    const followUp = buildMemoryContext(
+      records,
+      { text: "sí, hazlo", previous: "fix the flaky login test" },
+      workspace,
+    );
+    expect(followUp.expanded).toEqual(["login-flaky-test"]);
+  });
+
+  it("matches a Spanish request with an English memory (R3)", () => {
+    write("config-tests-preload", {
+      title: "Config tests need the preload script",
+      hook: "the configuration tests fail unless bun test runs with --preload ./test/setup.ts",
+      body: "Run `bun test --preload ./test/setup.ts`; without it the fixtures are missing.",
+    });
+    write("deploy-fly", { title: "Deploys go to Fly.io", hook: "deployments run with fly deploy from main" });
+    const context = buildMemoryContext(
+      listMemoryRecords(projectMemoryScope(workspace)),
+      { text: "las pruebas de configuración fallan otra vez" },
+      workspace,
+    );
+    expect(context.expanded[0]).toBe("config-tests-preload");
+    expect(context.expanded).not.toContain("deploy-fly");
+  });
+
+  it("shows a long entry clipped rather than dropping it (R6)", () => {
+    write("release-procedure", {
+      title: "Release procedure",
+      hook: "how a release is cut: version bump, changelog, tag, publish",
+      type: "procedure",
+      body: ["Release steps:", ...Array.from({ length: 100 }, () => "- a careful step that must not be skipped")].join(
+        "\n",
+      ),
+    });
+    const context = buildMemoryContext(
+      listMemoryRecords(projectMemoryScope(workspace)),
+      { text: "cut a release" },
+      workspace,
+    );
+    expect(context.expanded).toEqual(["release-procedure"]);
+    expect(context.text).toContain("(clipped; memory_read release-procedure for the rest)");
+    expect(context.text.length).toBeLessThan(4_500);
+  });
+
+  it("gives a rare word more weight than one every entry shares", () => {
+    for (let index = 0; index < 12; index += 1) {
+      write(`test-note-${index}`, { hook: `test note ${index} about the test suite`, body: "test test" });
+    }
+    write("stripe-webhook-test", {
+      title: "Stripe webhook test",
+      hook: "the stripe webhook test needs STRIPE_WEBHOOK_SECRET set to whsec_test",
+      body: "Set STRIPE_WEBHOOK_SECRET=whsec_test before running it.",
+    });
+    const ranked = rankMemories(
+      listMemoryRecords(projectMemoryScope(workspace)),
+      { text: "the stripe test fails" },
+      workspace,
+    );
+    expect(ranked[0]?.record.slug).toBe("stripe-webhook-test");
   });
 });

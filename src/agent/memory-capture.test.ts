@@ -5,7 +5,13 @@ import { APICallError } from "@ai-sdk/provider";
 import { describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { pendingReflectionCount, readEpisodes } from "../memory/episodes";
-import { listMemoryRecords, projectMemoryScope, readReflectionAudit, userMemoryScope } from "../memory/store";
+import {
+  listMemoryRecords,
+  projectMemoryScope,
+  readReflectionAudit,
+  userMemoryScope,
+  writeMemoryEntry,
+} from "../memory/store";
 import type {
   ProviderAdapter,
   ProviderEvent,
@@ -364,6 +370,31 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
       if (previous === undefined) delete process.env.SHELRA_USER_MEMORY_ROOT;
       else process.env.SHELRA_USER_MEMORY_ROOT = previous;
     }
+  });
+
+  it("gives a short follow-up the memory the request before it needed (doc 18 R2)", async () => {
+    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-follow-up-"));
+    writeMemoryEntry(projectMemoryScope(workspace), {
+      slug: "login-flaky-test",
+      title: "The login test is flaky",
+      hook: "tests/login.spec.ts fails one run in five on a race with the session cookie",
+      type: "known-problems",
+      description: "Why the login test fails at random",
+      body: "Await `page.waitForResponse('/api/session')` before asserting; the cookie arrives after the redirect.",
+      source: "observed",
+      confidence: 0.9,
+    });
+    const agent = agentIn(workspace, new ScriptedProvider([{ events: [], text: "On it." }]));
+    const recalled: string[][] = [];
+    for (const message of ["fix the flaky login test", "sí, hazlo"]) {
+      for await (const _chunk of agent.processMessage(message, {
+        onMemoryRecall: (info) => recalled.push(info.entries.map((entry) => entry.slug)),
+      })) {
+        // drain
+      }
+    }
+    expect(recalled).toEqual([["login-flaky-test"], ["login-flaky-test"]]);
+    expect(agent.getLastMemoryContext()?.expanded).toEqual(["login-flaky-test"]);
   });
 
   it("records nothing for a turn that only answered", async () => {

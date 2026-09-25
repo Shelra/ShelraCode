@@ -189,7 +189,7 @@ The owner's 18 acceptance criteria map onto three layers of evidence:
 | Phase | Delivers | Proof |
 |---|---|---|
 | M1 (done 2026-09-25) | Capture on every exit + episodes + deferred reflection + cross-round digest; directive fingerprint fix, corrections, user-scope preferences; root-keyed store; audit of non-qualifying turns | `src/agent/memory-capture.test.ts` (Limited, drain, re-queue, Stop hook, root after `cd`, user-wide), `src/memory/episodes.test.ts`, directive tests in `src/memory/reflection.test.ts`; §2.1 C3 probe passes |
-| M2 | Retrieval tiers (always-on rules), multilingual tokenizer, follow-up query, file signals, reasons; trace events | offline benchmark v1 (before/after); tests for R1–R4 |
+| M2 (done 2026-09-25) | Retrieval tiers (always-on rules), multilingual tokenizer, follow-up query, file signals, reasons; trace events | `bench/memory/` (blind dataset, 103 queries): at 5,000 entries per project recall 60% → 91%, precision 39% → 68%, rules shown 13% → 100%, Spanish → English 17% → 87%, follow-ups 8% → 81%, 430 → ~100 ms; `src/memory/terms.test.ts`, `retrieval.test.ts`, follow-up test in `src/agent/memory-capture.test.ts`; sub-agent shells keep the session root |
 | M3 | Temporal fields, supersession, correction handling, repository-reality demotion, history of versions | tests: architecture evolution, corrections |
 | M4 | Episode retrieval as lessons; consolidation, utility-based archiving instead of silent drops; fixture hygiene | tests: failure learning, long history; benchmark with 5,000 entries |
 | M5 | `shelra memory` CLI (list, show, why, stats) | CLI tests |

@@ -96,6 +96,27 @@ describe("session trace", () => {
     expect(formatTraceEvent(events[6] as never)).toContain("ok    write_file Created index.html");
   });
 
+  it("records what memory a turn was given and why (doc 18 §4.5)", () => {
+    const dir = traceHere();
+    const trace = startTurnTrace({ sessionId: "mem1", cwd: "/work", model: "m", mode: "agent", request: "fix login" });
+    trace.observe(undefined).onMemoryRecall?.({
+      rules: ["user-rule-never-touch-generated"],
+      entries: [
+        { slug: "login-flaky-test", tier: "knowledge", score: 0.61, reasons: ["terms: login, test", "observed 90%"] },
+        { slug: "session-cookie", tier: "pointer", score: 0.2, reasons: ["terms: login"] },
+      ],
+      chars: 1_840,
+      timestamp: Date.now(),
+    });
+    trace.end();
+
+    const recall = readTrace(listTraces(dir)[0]?.path ?? "").find((event) => event.kind === "recall");
+    expect(recall).toMatchObject({ rules: ["user-rule-never-touch-generated"], chars: 1_840 });
+    expect(formatTraceEvent(recall as never)).toContain(
+      "recall  1 rules · 1 entries · 1 listed · 1840 chars · login-flaky-test (terms: login, test)",
+    );
+  });
+
   it("never writes a key, and is off when SHELRA_TRACE=off", () => {
     const dir = traceHere();
     const trace = startTurnTrace({

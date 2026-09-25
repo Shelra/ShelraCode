@@ -416,8 +416,20 @@ export interface ProcessMessageMemory {
   timestamp: number;
 }
 
+/** What memory a turn was given and why (doc 18 §4.5). */
+export interface ProcessMessageMemoryRecall {
+  /** Standing rules shown in full. */
+  rules: string[];
+  /** Knowledge entries expanded and pointers listed, with the reasons each was chosen. */
+  entries: Array<{ slug: string; tier: "rule" | "knowledge" | "pointer"; score: number; reasons: string[] }>;
+  /** Size of the memory section of the prompt. */
+  chars: number;
+  timestamp: number;
+}
+
 export interface ProcessMessageObserver {
   onMemory?(info: ProcessMessageMemory): void;
+  onMemoryRecall?(info: ProcessMessageMemoryRecall): void;
   onStepStart?(info: ProcessMessageStepStart): void;
   onStepFinish?(info: ProcessMessageStepFinish): void;
   onStatus?(info: ProcessMessageStatus): void;
@@ -560,6 +572,8 @@ export class Agent {
   private turnMemoryDigest: (() => TurnDigest) | null = null;
   /** Set once the turn's learning ran; a turn that ends any other way records its episode when it closes. */
   private turnLearned = false;
+  /** The session's previous request: a short follow-up ("sí, hazlo") retrieves the memory it needs (doc 18 R2). */
+  private previousRequest: string | undefined;
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
@@ -1832,6 +1846,7 @@ export class Agent {
       verifyPreparedRecipe = prepared.profile.recipe;
     }
     const childBash = new BashTool(this.bash.getCwd(), {
+      root: this.bash.getRootCwd(),
       sandboxMode: isVerify ? "shuru" : this.bash.getSandboxMode(),
       sandboxSettings: isVerify
         ? (verifyPreparedSettings ?? { ...this.bash.getSandboxSettings(), ...verifySandboxOverrides })
@@ -1892,6 +1907,7 @@ export class Agent {
         subagents,
         childBash.getSandboxSettings(),
         this.ablations,
+        childBash.getRootCwd(),
       ),
       childRuntime.modelId,
     );
@@ -2617,8 +2633,15 @@ export class Agent {
     }
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
-      : memoryContextFor(memoryRoot, userMessage, contextPacket.files);
+      : memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest);
+    this.previousRequest = userMessage;
     this.lastMemoryContext = memoryContext;
+    notifyObserver(observer?.onMemoryRecall, {
+      rules: memoryContext.rules ?? [],
+      entries: (memoryContext.explain ?? []).filter((item) => item.tier !== "rule"),
+      chars: memoryContext.text.length,
+      timestamp: Date.now(),
+    });
     if (memoryContext.expanded.length > 0) recordMemoryUse(memoryScope, memoryContext.expanded);
     const turnCommands: TurnCommand[] = [];
     // Everything the turn said and every tool it called, across all its rounds: a reflection used to see only the

@@ -214,11 +214,16 @@ ${workspaceLines}`;
  * against the request — the most relevant entries expanded, the rest as pointers. Deterministic and
  * lexical; nothing is embedded. Never throws: a corrupt store reads as no memory.
  */
-export function memoryContextFor(cwd: string, query: string, paths: readonly string[] = []): MemoryContext {
+export function memoryContextFor(
+  cwd: string,
+  query: string,
+  paths: readonly string[] = [],
+  previous?: string,
+): MemoryContext {
   try {
     return buildMemoryContext(
       [...listMemoryRecords(projectMemoryScope(cwd)), ...listUserMemoryRecords()],
-      { text: query, paths },
+      { text: query, paths, ...(previous ? { previous } : {}) },
       cwd,
     );
   } catch (error) {
@@ -248,6 +253,8 @@ export function buildSubagentPrompt(
   subagents?: CustomSubagentConfig[],
   sandboxSettings?: SandboxSettings,
   ablations: Ablations = NO_ABLATIONS,
+  /** The session's workspace, whose memory the brief gets; the shell may have moved into a folder inside it. */
+  memoryRoot: string = cwd,
 ): string {
   const isExplore = request.agent === "explore";
   const isPlan = request.agent === "plan";
@@ -414,7 +421,7 @@ export function buildSubagentPrompt(
       undefined,
       subagents,
       sandboxSettings,
-      ablations.has("memory") ? undefined : memoryContextFor(cwd, `${request.description}\n${request.prompt}`),
+      ablations.has("memory") ? undefined : memoryContextFor(memoryRoot, `${request.description}\n${request.prompt}`),
       ablations,
     ),
   ].join("\n");

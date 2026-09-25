@@ -1,0 +1,1099 @@
+{
+  "label": "m2-dev",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "dev",
+  "queries": 52,
+  "sizes": {
+    "0": {
+      "storeEntries": {
+        "shop-api": 29,
+        "atlas-web": 28,
+        "tidewater-pipeline": 28
+      },
+      "overall": {
+        "queries": 52,
+        "recall": 0.9081632653061225,
+        "recallSeen": 0.9897959183673469,
+        "precision": 0.8404255319148937,
+        "mrr": 0.9030612244897959,
+        "noise": 0,
+        "forbidden": 6,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2556,
+        "latencyMs": {
+          "median": 3.37480000000005,
+          "p95": 12.488999999999919
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 11,
+          "recall": 0.9090909090909091,
+          "recallSeen": 1,
+          "precision": 0.7424242424242423,
+          "mrr": 0.8484848484848484,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2403,
+          "latencyMs": {
+            "median": 3.2193999999999505,
+            "p95": 8.472200000000043
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2513,
+          "latencyMs": {
+            "median": 5.539800000000014,
+            "p95": 29.463899999999967
+          }
+        },
+        "follow-up": {
+          "queries": 6,
+          "recall": 0.5833333333333334,
+          "recallSeen": 0.9166666666666666,
+          "precision": 0.8,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3113,
+          "latencyMs": {
+            "median": 3.90520000000015,
+            "p95": 8.014900000000125
+          }
+        },
+        "irrelevant": {
+          "queries": 3,
+          "recall": null,
+          "recallSeen": null,
+          "precision": null,
+          "mrr": null,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 954,
+          "latencyMs": {
+            "median": 1.2520999999999276,
+            "p95": 1.6313000000000102
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.8333333333333333,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2984,
+          "latencyMs": {
+            "median": 3.53449999999998,
+            "p95": 6.437199999999962
+          }
+        },
+        "path": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1943,
+          "latencyMs": {
+            "median": 4.4430999999999585,
+            "p95": 10.268299999999954
+          }
+        },
+        "superseded": {
+          "queries": 5,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5,
+          "mrr": 0.8,
+          "noise": null,
+          "forbidden": 4,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3096,
+          "latencyMs": {
+            "median": 2.9507999999999583,
+            "p95": 12.199600000000032
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3140,
+          "latencyMs": {
+            "median": 2.9758999999999105,
+            "p95": 3.122100000000046
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 25,
+          "recall": 0.94,
+          "recallSeen": 0.98,
+          "precision": 0.8680555555555555,
+          "mrr": 0.9333333333333332,
+          "noise": null,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2881,
+          "latencyMs": {
+            "median": 3.53449999999998,
+            "p95": 14.914899999999989
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.8115942028985507,
+          "mrr": 0.8715277777777777,
+          "noise": 0,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2403,
+          "latencyMs": {
+            "median": 3.2193999999999505,
+            "p95": 10.268299999999954
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        },
+        {
+          "id": "q-093",
+          "missed": ["uv-dependencies"]
+        }
+      ]
+    },
+    "100": {
+      "storeEntries": {
+        "shop-api": 100,
+        "atlas-web": 100,
+        "tidewater-pipeline": 100
+      },
+      "overall": {
+        "queries": 52,
+        "recall": 0.9285714285714286,
+        "recallSeen": 0.9897959183673469,
+        "precision": 0.7772108843537415,
+        "mrr": 0.8979591836734695,
+        "noise": 0,
+        "forbidden": 6,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2864,
+        "latencyMs": {
+          "median": 6.363500000000158,
+          "p95": 24.05639999999994
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 11,
+          "recall": 0.9090909090909091,
+          "recallSeen": 1,
+          "precision": 0.6439393939393938,
+          "mrr": 0.8333333333333335,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2844,
+          "latencyMs": {
+            "median": 4.833300000000008,
+            "p95": 8.529500000000098
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2864,
+          "latencyMs": {
+            "median": 9.426300000000083,
+            "p95": 44.812599999999975
+          }
+        },
+        "follow-up": {
+          "queries": 6,
+          "recall": 0.75,
+          "recallSeen": 0.9166666666666666,
+          "precision": 0.7083333333333334,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3010,
+          "latencyMs": {
+            "median": 8.959800000000087,
+            "p95": 16.242300000000114
+          }
+        },
+        "irrelevant": {
+          "queries": 3,
+          "recall": null,
+          "recallSeen": null,
+          "precision": null,
+          "mrr": null,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 954,
+          "latencyMs": {
+            "median": 2.9716000000000804,
+            "p95": 13.292699999999968
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.65625,
+          "mrr": 0.84375,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3221,
+          "latencyMs": {
+            "median": 8.058899999999994,
+            "p95": 17.97490000000016
+          }
+        },
+        "path": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1943,
+          "latencyMs": {
+            "median": 5.5271999999999935,
+            "p95": 6.139499999999998
+          }
+        },
+        "superseded": {
+          "queries": 5,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5,
+          "mrr": 0.9,
+          "noise": null,
+          "forbidden": 4,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3210,
+          "latencyMs": {
+            "median": 7.67489999999998,
+            "p95": 17.155599999999822
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3014,
+          "latencyMs": {
+            "median": 4.91599999999994,
+            "p95": 9.136099999999942
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 25,
+          "recall": 0.94,
+          "recallSeen": 0.98,
+          "precision": 0.8,
+          "mrr": 0.93,
+          "noise": null,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2929,
+          "latencyMs": {
+            "median": 7.898899999999912,
+            "p95": 31.91099999999983
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.9166666666666666,
+          "recallSeen": 1,
+          "precision": 0.7534722222222223,
+          "mrr": 0.8645833333333334,
+          "noise": 0,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2546,
+          "latencyMs": {
+            "median": 4.91599999999994,
+            "p95": 17.155599999999822
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ]
+    },
+    "1000": {
+      "storeEntries": {
+        "shop-api": 1000,
+        "atlas-web": 1000,
+        "tidewater-pipeline": 1000
+      },
+      "overall": {
+        "queries": 52,
+        "recall": 0.9285714285714286,
+        "recallSeen": 0.9693877551020408,
+        "precision": 0.7312925170068026,
+        "mrr": 0.8422298789645728,
+        "noise": 0,
+        "forbidden": 6,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2953,
+        "latencyMs": {
+          "median": 29.711299999999937,
+          "p95": 135.44249999999988
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 11,
+          "recall": 0.9090909090909091,
+          "recallSeen": 1,
+          "precision": 0.5227272727272726,
+          "mrr": 0.6645021645021646,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3309,
+          "latencyMs": {
+            "median": 22.420200000000023,
+            "p95": 62.97789999999986
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2858,
+          "latencyMs": {
+            "median": 53.37780000000021,
+            "p95": 264.91129999999976
+          }
+        },
+        "follow-up": {
+          "queries": 6,
+          "recall": 0.75,
+          "recallSeen": 0.9166666666666666,
+          "precision": 0.6805555555555555,
+          "mrr": 0.8666666666666667,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3012,
+          "latencyMs": {
+            "median": 48.06779999999981,
+            "p95": 75.32169999999996
+          }
+        },
+        "irrelevant": {
+          "queries": 3,
+          "recall": null,
+          "recallSeen": null,
+          "precision": null,
+          "mrr": null,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 955,
+          "latencyMs": {
+            "median": 18.79739999999947,
+            "p95": 21.104299999999967
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.59375,
+          "mrr": 0.7616341991341992,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3351,
+          "latencyMs": {
+            "median": 31.771700000000237,
+            "p95": 127.85069999999996
+          }
+        },
+        "path": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2814,
+          "latencyMs": {
+            "median": 25.26000000000022,
+            "p95": 39.25380000000041
+          }
+        },
+        "superseded": {
+          "queries": 5,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.45,
+          "mrr": 0.8666666666666668,
+          "noise": null,
+          "forbidden": 4,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3503,
+          "latencyMs": {
+            "median": 34.08889999999974,
+            "p95": 43.3715000000002
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3047,
+          "latencyMs": {
+            "median": 29.711299999999937,
+            "p95": 48.22159999999985
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 25,
+          "recall": 0.94,
+          "recallSeen": 0.94,
+          "precision": 0.78,
+          "mrr": 0.8970562770562771,
+          "noise": null,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3010,
+          "latencyMs": {
+            "median": 32.45799999999963,
+            "p95": 135.44249999999988
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.9166666666666666,
+          "recallSeen": 1,
+          "precision": 0.6805555555555557,
+          "mrr": 0.7851190476190477,
+          "noise": 0,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2847,
+          "latencyMs": {
+            "median": 24.710700000000088,
+            "p95": 62.97789999999986
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ]
+    },
+    "5000": {
+      "storeEntries": {
+        "shop-api": 5000,
+        "atlas-web": 5000,
+        "tidewater-pipeline": 5000
+      },
+      "overall": {
+        "queries": 52,
+        "recall": 0.9285714285714286,
+        "recallSeen": 0.9693877551020408,
+        "precision": 0.727891156462585,
+        "mrr": 0.8369374476517333,
+        "noise": 0,
+        "forbidden": 6,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2930,
+        "latencyMs": {
+          "median": 107.40820000000167,
+          "p95": 652.8397000000004
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 11,
+          "recall": 0.9090909090909091,
+          "recallSeen": 1,
+          "precision": 0.5227272727272726,
+          "mrr": 0.6477272727272727,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3380,
+          "latencyMs": {
+            "median": 81.33149999999932,
+            "p95": 181.00510000000213
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.95,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2726,
+          "latencyMs": {
+            "median": 180.83699999999953,
+            "p95": 795.1733999999997
+          }
+        },
+        "follow-up": {
+          "queries": 6,
+          "recall": 0.75,
+          "recallSeen": 0.9166666666666666,
+          "precision": 0.6805555555555555,
+          "mrr": 0.8666666666666667,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3060,
+          "latencyMs": {
+            "median": 242.16420000000107,
+            "p95": 332.20969999999943
+          }
+        },
+        "irrelevant": {
+          "queries": 3,
+          "recall": null,
+          "recallSeen": null,
+          "precision": null,
+          "mrr": null,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 956,
+          "latencyMs": {
+            "median": 100.40409999999974,
+            "p95": 101.5512000000017
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.6041666666666666,
+          "mrr": 0.7522835335335335,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3435,
+          "latencyMs": {
+            "median": 105.94590000000062,
+            "p95": 207.40040000000045
+          }
+        },
+        "path": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 0.8888888888888888,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2821,
+          "latencyMs": {
+            "median": 109.15599999999904,
+            "p95": 129.06590000000142
+          }
+        },
+        "superseded": {
+          "queries": 5,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.5,
+          "mrr": 0.8666666666666668,
+          "noise": null,
+          "forbidden": 4,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3048,
+          "latencyMs": {
+            "median": 131.41390000000138,
+            "p95": 195.04559999999947
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3047,
+          "latencyMs": {
+            "median": 223.7536,
+            "p95": 292.1229999999996
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 25,
+          "recall": 0.94,
+          "recallSeen": 0.94,
+          "precision": 0.7633333333333334,
+          "mrr": 0.894064064064064,
+          "noise": null,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2983,
+          "latencyMs": {
+            "median": 130.52070000000094,
+            "p95": 793.7702000000008
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.9166666666666666,
+          "recallSeen": 1,
+          "precision": 0.6909722222222223,
+          "mrr": 0.7774305555555556,
+          "noise": 0,
+          "forbidden": 3,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2848,
+          "latencyMs": {
+            "median": 100.40409999999974,
+            "p95": 242.16420000000107
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ],
+      "perQuery": [
+        {
+          "id": "q-001",
+          "shown": ["stripe-webhook-raw-body", "shop-api-noise-4155"],
+          "missed": []
+        },
+        {
+          "id": "q-003",
+          "shown": ["typecheck-bun-types"],
+          "missed": []
+        },
+        {
+          "id": "q-005",
+          "shown": ["openapi-generation"],
+          "missed": []
+        },
+        {
+          "id": "q-007",
+          "shown": ["inventory-lock-order", "checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-009",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-011",
+          "shown": ["inventory-lock-order", "fly-release-migration-timeout"],
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-013",
+          "shown": ["login-rate-limit-429", "http-error-shape", "test-db-docker-compose"],
+          "missed": []
+        },
+        {
+          "id": "q-015",
+          "shown": ["test-db-docker-compose", "inventory-lock-order", "drizzle-migrations-workflow", "dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-017",
+          "shown": ["password-hashing-bun"],
+          "missed": []
+        },
+        {
+          "id": "q-019",
+          "shown": ["inventory-lock-order", "fly-release-migration-timeout", "http-error-shape"],
+          "missed": []
+        },
+        {
+          "id": "q-021",
+          "shown": ["hono-over-express"],
+          "missed": []
+        },
+        {
+          "id": "q-023",
+          "shown": ["fly-release-migration-timeout", "http-error-shape", "inventory-lock-order"],
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-025",
+          "shown": ["checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-027",
+          "shown": ["inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-029",
+          "shown": ["jwt-refresh-rotation"],
+          "missed": []
+        },
+        {
+          "id": "q-031",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-033",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-035",
+          "shown": ["deploy-flyio", "deploy-heroku"],
+          "missed": []
+        },
+        {
+          "id": "q-037",
+          "shown": ["deploy-flyio", "deploy-heroku"],
+          "missed": []
+        },
+        {
+          "id": "q-039",
+          "shown": ["prisma-pgbouncer-prepared-statement"],
+          "missed": []
+        },
+        {
+          "id": "q-041",
+          "shown": ["og-image-font-loading"],
+          "missed": []
+        },
+        {
+          "id": "q-043",
+          "shown": ["clerk-middleware-matcher"],
+          "missed": []
+        },
+        {
+          "id": "q-045",
+          "shown": ["flaky-pricing-toggle-e2e", "pricing-revalidate-tag", "next-intl-messages", "hero-lcp-budget"],
+          "missed": []
+        },
+        {
+          "id": "q-047",
+          "shown": ["stripe-billing-portal"],
+          "missed": []
+        },
+        {
+          "id": "q-049",
+          "shown": [
+            "contact-form-resend",
+            "flaky-pricing-toggle-e2e",
+            "hydration-mismatch-dates",
+            "mdx-content-folder"
+          ],
+          "missed": []
+        },
+        {
+          "id": "q-051",
+          "shown": ["vitest-msw-setup"],
+          "missed": []
+        },
+        {
+          "id": "q-053",
+          "shown": ["stripe-billing-portal", "next-image-remote-patterns", "prisma-neon-migrations"],
+          "missed": []
+        },
+        {
+          "id": "q-055",
+          "shown": ["pricing-revalidate-tag", "plausible-analytics"],
+          "missed": []
+        },
+        {
+          "id": "q-057",
+          "shown": ["hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-059",
+          "shown": ["playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-061",
+          "shown": ["clerk-auth-migration", "clerk-middleware-matcher"],
+          "missed": []
+        },
+        {
+          "id": "q-063",
+          "shown": ["next-image-remote-patterns", "plausible-analytics"],
+          "missed": []
+        },
+        {
+          "id": "q-065",
+          "shown": ["clerk-auth-migration"],
+          "missed": []
+        },
+        {
+          "id": "q-067",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-069",
+          "shown": ["og-image-font-loading", "stripe-billing-portal", "clerk-auth-migration", "playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-071",
+          "shown": ["mdx-content-folder", "sitemap-robots", "contentful-cms", "playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-073",
+          "shown": ["bq-partition-quota"],
+          "missed": []
+        },
+        {
+          "id": "q-075",
+          "shown": ["dbt-build-commands"],
+          "missed": []
+        },
+        {
+          "id": "q-077",
+          "shown": ["dag-top-level-imports", "airflow-variables-not-dotenv"],
+          "missed": []
+        },
+        {
+          "id": "q-079",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-081",
+          "shown": ["sensor-reschedule-mode"],
+          "missed": []
+        },
+        {
+          "id": "q-083",
+          "shown": ["backfill-procedure", "composer-deploy"],
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-085",
+          "shown": ["backfill-procedure", "orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-087",
+          "shown": ["orders-daily-oom", "pandera-output-schemas", "dbt-build-commands"],
+          "missed": []
+        },
+        {
+          "id": "q-089",
+          "shown": ["airflow-variables-not-dotenv", "local-airflow-compose"],
+          "missed": []
+        },
+        {
+          "id": "q-091",
+          "shown": ["gcs-bucket-layout", "composer-deploy", "orders-daily-oom", "uv-dependencies"],
+          "missed": ["dag-integrity-test"]
+        },
+        {
+          "id": "q-093",
+          "shown": ["uv-dependencies", "poetry-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-095",
+          "shown": ["bq-partition-quota", "warehouse-bigquery"],
+          "missed": []
+        },
+        {
+          "id": "q-097",
+          "shown": ["dag-top-level-imports", "backfill-procedure", "orders-daily-oom", "xcom-dataframe-too-large"],
+          "missed": []
+        },
+        {
+          "id": "q-099",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-101",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-103",
+          "shown": ["warehouse-bigquery"],
+          "missed": []
+        }
+      ]
+    }
+  }
+}

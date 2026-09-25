@@ -184,8 +184,10 @@ Tests: `src/agent/resilience.test.ts`. Background: `docs/architecture/14-AGENT-H
 Shelra must not behave like a stateless agent. `src/memory/` implements project memory under
 `.shelra/memory/` in the session's root folder, whatever folder the shell moved to (index + topic files +
 `history.jsonl` timeline + `reflections.jsonl` audit + `episodes.jsonl` + `pending-reflections.jsonl`):
-retrieval ranks entries against every request and sub-agent brief (lexical, no embeddings) and
-injects the relevant bodies. Every turn that did work records an episode (outcome, files, what failed and what got
+the user's standing rules, facts and corrections reach every request; the rest is ranked against every request and
+sub-agent brief (lexical, no embeddings: rare words weigh more, Spanish and English meet through `src/memory/terms.ts`,
+a short follow-up is read with the request before it) and the relevant bodies are injected, the next ones as
+pointers. What a turn was given, and why, is in its session trace (`recall`); `bench/memory/` measures retrieval. Every turn that did work records an episode (outcome, files, what failed and what got
 past it), however it ended. After a turn that changed and verified files, worked through a
 failure, or investigated substantially, one bounded reflection call proposes durable facts and a
 deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text,

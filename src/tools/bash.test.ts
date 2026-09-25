@@ -383,6 +383,32 @@ describe("cd stays inside the workspace", () => {
   });
 });
 
+describe("a shell that starts inside its workspace", () => {
+  it("keeps the given root, so cd can reach it and nothing above it", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bash-root-"));
+    fs.mkdirSync(path.join(root, "packages", "web"), { recursive: true });
+    const tool = new BashTool(path.join(root, "packages", "web"), { root });
+    expect(tool.getRootCwd()).toBe(path.resolve(root));
+    expect((await tool.execute("cd ../..")).success).toBe(true);
+    expect(tool.getCwd()).toBe(path.resolve(root));
+    const escaped = await tool.execute("cd ..");
+    expect(escaped.success).toBe(false);
+    expect(escaped.error).toContain("outside the workspace root");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("ignores a root the starting folder is not inside", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bash-root-"));
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-bash-other-"));
+    const tool = new BashTool(root, { root: elsewhere });
+    expect(tool.getRootCwd()).toBe(path.resolve(root));
+    const escaped = await tool.execute("cd ..");
+    expect(escaped.success).toBe(false);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+  });
+});
+
 describe("parseStandaloneCd", () => {
   it("recognizes a bare cd with plain or quoted directories", () => {
     expect(parseStandaloneCd("cd src")).toBe("src");

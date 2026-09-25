@@ -95,6 +95,7 @@ export type TraceKind =
   | "tool"
   | "result"
   | "memory"
+  | "recall"
   | "ui"
   | "error"
   | "end";
@@ -297,6 +298,21 @@ export function startTurnTrace(input: {
           );
           observer?.onMemory?.(info);
         },
+        onMemoryRecall: (info) => {
+          guard(() =>
+            write("recall", {
+              rules: info.rules,
+              entries: info.entries.map((entry) => ({
+                slug: entry.slug,
+                tier: entry.tier,
+                score: entry.score,
+                reasons: entry.reasons,
+              })),
+              chars: info.chars,
+            }),
+          );
+          observer?.onMemoryRecall?.(info);
+        },
         onStepStart: (info) => {
           if (verbose) guard(() => write("step", { step: info.stepNumber, phase: "start" }));
           observer?.onStepStart?.(info);
@@ -469,6 +485,12 @@ export function formatTraceEvent(event: TraceEvent, full = false, withSession = 
       return `${clock}  tool    ${String(event.name)} ${field(event.args)}`;
     case "result":
       return `${clock}  ${event.success ? "  ok" : "  FAIL"}    ${String(event.name)}${event.durationMs !== undefined ? ` (${duration(Number(event.durationMs))})` : ""} ${field(event.error ?? event.output)}`;
+    case "recall": {
+      const entries = (event.entries as Array<{ slug: string; tier: string; reasons?: string[] }> | undefined) ?? [];
+      const shown = entries.filter((entry) => entry.tier === "knowledge");
+      const listed = entries.length - shown.length;
+      return `${clock}  recall  ${(event.rules as unknown[] | undefined)?.length ?? 0} rules · ${shown.length} entries${listed > 0 ? ` · ${listed} listed` : ""} · ${String(event.chars ?? 0)} chars${shown.length > 0 ? ` · ${field(shown.map((entry) => `${entry.slug} (${entry.reasons?.[0] ?? "rank"})`).join("; "))}` : ""}`;
+    }
     case "memory":
       return `${clock}  memory  ${event.qualified ? `kept ${(event.written as unknown[] | undefined)?.length ?? 0}` : "nothing kept"} · ${field(event.reason)}`;
     case "ui":

@@ -28,6 +28,12 @@ export interface BackgroundProcess {
 interface BashToolOptions {
   sandboxMode?: SandboxMode;
   sandboxSettings?: SandboxSettings;
+  /**
+   * The workspace root when the shell starts in a folder inside it: a sub-agent starts where its parent's shell is,
+   * but its workspace, and the project memory it reads and writes, is the session's (doc 18 R4). Ignored unless the
+   * starting folder is inside it, so it can never widen where `cd` may go beyond the starting folder's workspace.
+   */
+  root?: string;
 }
 
 /** What running a command came to, unformatted. */
@@ -52,7 +58,10 @@ export class BashTool {
 
   constructor(initialCwd = process.cwd(), options: BashToolOptions = {}) {
     this.cwd = initialCwd;
-    this.rootCwd = path.resolve(initialCwd);
+    const start = path.resolve(initialCwd);
+    const root = options.root ? path.resolve(options.root) : start;
+    const inside = path.relative(root, start);
+    this.rootCwd = inside.startsWith("..") || path.isAbsolute(inside) ? start : root;
     this.sandboxMode = options.sandboxMode ?? "off";
     this.sandboxSettings = options.sandboxSettings ?? {};
   }

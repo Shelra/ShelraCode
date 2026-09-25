@@ -1,0 +1,1104 @@
+{
+  "label": "m2-test",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "test",
+  "queries": 51,
+  "sizes": {
+    "0": {
+      "storeEntries": {
+        "shop-api": 29,
+        "atlas-web": 28,
+        "tidewater-pipeline": 28
+      },
+      "overall": {
+        "queries": 51,
+        "recall": 0.9130434782608695,
+        "recallSeen": 1,
+        "precision": 0.7789115646258503,
+        "mrr": 0.9027777777777778,
+        "noise": 0.8,
+        "forbidden": 4,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2793,
+        "latencyMs": {
+          "median": 3.1538000000000466,
+          "p95": 12.123199999999997
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 12,
+          "recall": 0.8333333333333334,
+          "recallSeen": 1,
+          "precision": 0.7916666666666666,
+          "mrr": 0.8055555555555557,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2861,
+          "latencyMs": {
+            "median": 3.4406000000001313,
+            "p95": 6.1096
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3001,
+          "latencyMs": {
+            "median": 5.69620000000009,
+            "p95": 37.062599999999975
+          }
+        },
+        "follow-up": {
+          "queries": 7,
+          "recall": 0.8571428571428571,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 0.8730158730158729,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3023,
+          "latencyMs": {
+            "median": 4.689399999999978,
+            "p95": 9.486300000000028
+          }
+        },
+        "irrelevant": {
+          "queries": 5,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 0.8,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1430,
+          "latencyMs": {
+            "median": 1.0945999999999003,
+            "p95": 3.7848999999998796
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.71875,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3012,
+          "latencyMs": {
+            "median": 3.042599999999993,
+            "p95": 12.123199999999997
+          }
+        },
+        "path": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8333333333333334,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2392,
+          "latencyMs": {
+            "median": 2.4627000000000407,
+            "p95": 2.565599999999904
+          }
+        },
+        "superseded": {
+          "queries": 3,
+          "recall": 0.6666666666666666,
+          "recallSeen": 1,
+          "precision": 0.5833333333333334,
+          "mrr": 0.75,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3022,
+          "latencyMs": {
+            "median": 3.1538000000000466,
+            "p95": 4.4401000000000295
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8888888888888888,
+          "mrr": 0.8333333333333334,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2045,
+          "latencyMs": {
+            "median": 1.1403000000000247,
+            "p95": 3.3938000000000557
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 24,
+          "recall": 0.95,
+          "recallSeen": 1,
+          "precision": 0.713768115942029,
+          "mrr": 0.9625,
+          "noise": 0.75,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2826,
+          "latencyMs": {
+            "median": 3.042599999999993,
+            "p95": 15.500800000000027
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.8846153846153846,
+          "recallSeen": 1,
+          "precision": 0.8365384615384616,
+          "mrr": 0.8568376068376069,
+          "noise": 1,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2793,
+          "latencyMs": {
+            "median": 3.3938000000000557,
+            "p95": 7.7784999999998945
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-054",
+          "missed": ["sitemap-robots"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        }
+      ]
+    },
+    "100": {
+      "storeEntries": {
+        "shop-api": 100,
+        "atlas-web": 100,
+        "tidewater-pipeline": 100
+      },
+      "overall": {
+        "queries": 51,
+        "recall": 0.9347826086956522,
+        "recallSeen": 1,
+        "precision": 0.6748366013071896,
+        "mrr": 0.8885869565217391,
+        "noise": 1.6,
+        "forbidden": 4,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2951,
+        "latencyMs": {
+          "median": 4.803100000000086,
+          "p95": 24.041300000000092
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 12,
+          "recall": 0.9166666666666666,
+          "recallSeen": 1,
+          "precision": 0.6250000000000001,
+          "mrr": 0.8055555555555557,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3019,
+          "latencyMs": {
+            "median": 6.075900000000047,
+            "p95": 15.894500000000107
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2921,
+          "latencyMs": {
+            "median": 10.654600000000073,
+            "p95": 34.47030000000018
+          }
+        },
+        "follow-up": {
+          "queries": 7,
+          "recall": 0.8571428571428571,
+          "recallSeen": 1,
+          "precision": 0.8571428571428571,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3023,
+          "latencyMs": {
+            "median": 4.803100000000086,
+            "p95": 8.18380000000002
+          }
+        },
+        "irrelevant": {
+          "queries": 5,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.6,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1615,
+          "latencyMs": {
+            "median": 3.4003000000000156,
+            "p95": 4.79320000000007
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.625,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3236,
+          "latencyMs": {
+            "median": 4.519400000000132,
+            "p95": 6.58179999999993
+          }
+        },
+        "path": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8333333333333334,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2424,
+          "latencyMs": {
+            "median": 3.381700000000137,
+            "p95": 7.161499999999933
+          }
+        },
+        "superseded": {
+          "queries": 3,
+          "recall": 0.6666666666666666,
+          "recallSeen": 1,
+          "precision": 0.5833333333333334,
+          "mrr": 0.75,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3022,
+          "latencyMs": {
+            "median": 5.35590000000002,
+            "p95": 8.686599999999999
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8888888888888888,
+          "mrr": 0.8333333333333334,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2402,
+          "latencyMs": {
+            "median": 2.683999999999969,
+            "p95": 7.513400000000047
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 24,
+          "recall": 0.95,
+          "recallSeen": 1,
+          "precision": 0.6111111111111112,
+          "mrr": 0.9291666666666668,
+          "noise": 1.75,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2951,
+          "latencyMs": {
+            "median": 4.79320000000007,
+            "p95": 24.127899999999954
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.9230769230769231,
+          "recallSeen": 1,
+          "precision": 0.7314814814814815,
+          "mrr": 0.8573717948717948,
+          "noise": 1,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2975,
+          "latencyMs": {
+            "median": 5.417300000000068,
+            "p95": 12.777799999999843
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        }
+      ]
+    },
+    "1000": {
+      "storeEntries": {
+        "shop-api": 1000,
+        "atlas-web": 1000,
+        "tidewater-pipeline": 1000
+      },
+      "overall": {
+        "queries": 51,
+        "recall": 0.8913043478260869,
+        "recallSeen": 0.9782608695652174,
+        "precision": 0.6666666666666665,
+        "mrr": 0.8417412617220801,
+        "noise": 1.2,
+        "forbidden": 4,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2890,
+        "latencyMs": {
+          "median": 21.501800000000003,
+          "p95": 116.5037999999995
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 12,
+          "recall": 0.8333333333333334,
+          "recallSeen": 1,
+          "precision": 0.5625000000000001,
+          "mrr": 0.7152777777777777,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3055,
+          "latencyMs": {
+            "median": 18.683199999999943,
+            "p95": 44.87760000000026
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.95,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2882,
+          "latencyMs": {
+            "median": 60.671400000000176,
+            "p95": 180.91810000000032
+          }
+        },
+        "follow-up": {
+          "queries": 7,
+          "recall": 0.8571428571428571,
+          "recallSeen": 1,
+          "precision": 0.8571428571428571,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3009,
+          "latencyMs": {
+            "median": 23.522299999999632,
+            "p95": 46.85350000000017
+          }
+        },
+        "irrelevant": {
+          "queries": 5,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.2,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1616,
+          "latencyMs": {
+            "median": 22.539700000000266,
+            "p95": 27.576600000000326
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.5729166666666666,
+          "mrr": 0.7827205882352941,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3237,
+          "latencyMs": {
+            "median": 21.499700000000303,
+            "p95": 46.377300000000105
+          }
+        },
+        "path": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.611111111111111,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2885,
+          "latencyMs": {
+            "median": 19.125300000000152,
+            "p95": 27.72069999999985
+          }
+        },
+        "superseded": {
+          "queries": 3,
+          "recall": 0.6666666666666666,
+          "recallSeen": 1,
+          "precision": 0.6666666666666666,
+          "mrr": 0.75,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3023,
+          "latencyMs": {
+            "median": 23.328199999999924,
+            "p95": 28.962800000000243
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8888888888888888,
+          "mrr": 0.8333333333333334,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2403,
+          "latencyMs": {
+            "median": 19.350000000000364,
+            "p95": 20.083399999999983
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 24,
+          "recall": 0.9,
+          "recallSeen": 0.95,
+          "precision": 0.6123188405797102,
+          "mrr": 0.8755882352941177,
+          "noise": 1.25,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2882,
+          "latencyMs": {
+            "median": 23.522299999999632,
+            "p95": 172.08439999999973
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.8846153846153846,
+          "recallSeen": 1,
+          "precision": 0.7129629629629629,
+          "mrr": 0.8157051282051282,
+          "noise": 1,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2985,
+          "latencyMs": {
+            "median": 20.083399999999983,
+            "p95": 46.85350000000017
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        }
+      ]
+    },
+    "5000": {
+      "storeEntries": {
+        "shop-api": 5000,
+        "atlas-web": 5000,
+        "tidewater-pipeline": 5000
+      },
+      "overall": {
+        "queries": 51,
+        "recall": 0.8913043478260869,
+        "recallSeen": 0.9565217391304348,
+        "precision": 0.635,
+        "mrr": 0.8118694442969805,
+        "noise": 1.2,
+        "forbidden": 4,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2986,
+        "latencyMs": {
+          "median": 98.53489999999874,
+          "p95": 417.2725999999984
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 12,
+          "recall": 0.8333333333333334,
+          "recallSeen": 0.9166666666666666,
+          "precision": 0.5625000000000001,
+          "mrr": 0.6682692307692308,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3065,
+          "latencyMs": {
+            "median": 94.36679999999978,
+            "p95": 256.5081
+          }
+        },
+        "direct": {
+          "queries": 10,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.825,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3026,
+          "latencyMs": {
+            "median": 150.60260000000017,
+            "p95": 859.0338999999985
+          }
+        },
+        "follow-up": {
+          "queries": 7,
+          "recall": 0.8571428571428571,
+          "recallSeen": 1,
+          "precision": 0.8928571428571429,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2986,
+          "latencyMs": {
+            "median": 103.91569999999956,
+            "p95": 275.0499999999993
+          }
+        },
+        "irrelevant": {
+          "queries": 5,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1.2,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1617,
+          "latencyMs": {
+            "median": 69.77179999999862,
+            "p95": 104.95879999999852
+          }
+        },
+        "paraphrase": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.5,
+          "mrr": 0.6814704585537918,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3352,
+          "latencyMs": {
+            "median": 100.2440000000006,
+            "p95": 188.82120000000032
+          }
+        },
+        "path": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.611111111111111,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2872,
+          "latencyMs": {
+            "median": 110.20969999999943,
+            "p95": 122.01040000000103
+          }
+        },
+        "superseded": {
+          "queries": 3,
+          "recall": 0.6666666666666666,
+          "recallSeen": 1,
+          "precision": 0.6666666666666666,
+          "mrr": 0.75,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3024,
+          "latencyMs": {
+            "median": 82.91290000000117,
+            "p95": 194.21789999999964
+          }
+        },
+        "vague": {
+          "queries": 3,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8888888888888888,
+          "mrr": 0.8333333333333334,
+          "noise": null,
+          "forbidden": 1,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2404,
+          "latencyMs": {
+            "median": 96.0609000000004,
+            "p95": 139.53129999999874
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 24,
+          "recall": 0.9,
+          "recallSeen": 0.95,
+          "precision": 0.532608695652174,
+          "mrr": 0.8350881834215167,
+          "noise": 1.25,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2986,
+          "latencyMs": {
+            "median": 104.95879999999852,
+            "p95": 682.5461999999998
+          }
+        },
+        "es": {
+          "queries": 27,
+          "recall": 0.8846153846153846,
+          "recallSeen": 0.9615384615384616,
+          "precision": 0.7222222222222222,
+          "mrr": 0.794008875739645,
+          "noise": 1,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3010,
+          "latencyMs": {
+            "median": 96.0609000000004,
+            "p95": 275.0499999999993
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        }
+      ],
+      "perQuery": [
+        {
+          "id": "q-002",
+          "shown": ["redis-econnrefused-local", "shop-api-noise-2449", "shop-api-noise-4239", "shop-api-noise-1376"],
+          "missed": []
+        },
+        {
+          "id": "q-004",
+          "shown": ["dev-seed-data", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-006",
+          "shown": ["jwt-refresh-rotation"],
+          "missed": []
+        },
+        {
+          "id": "q-008",
+          "shown": ["dev-seed-data", "bullmq-worker-process", "shop-api-noise-3461", "shop-api-noise-1135"],
+          "missed": []
+        },
+        {
+          "id": "q-010",
+          "shown": ["shop-api-noise-4838", "shop-api-noise-208", "shop-api-noise-572", "shop-api-noise-166"],
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-012",
+          "shown": ["product-images-r2", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-014",
+          "shown": ["shop-api-noise-4838", "shop-api-noise-1407", "shop-api-noise-2244", "shop-api-noise-1209"],
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-016",
+          "shown": [
+            "inventory-lock-order",
+            "checkout-concurrency-flaky-test",
+            "deploy-flyio",
+            "fly-release-migration-timeout"
+          ],
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-018",
+          "shown": ["checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-020",
+          "shown": ["inventory-lock-order", "cursor-pagination", "product-images-r2", "dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-022",
+          "shown": ["stripe-webhook-raw-body"],
+          "missed": []
+        },
+        {
+          "id": "q-024",
+          "shown": ["deploy-flyio"],
+          "missed": []
+        },
+        {
+          "id": "q-026",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-028",
+          "shown": ["cors-allowed-origins", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-030",
+          "shown": ["deploy-flyio", "fly-release-migration-timeout", "deploy-heroku"],
+          "missed": []
+        },
+        {
+          "id": "q-032",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-034",
+          "shown": ["typecheck-bun-types"],
+          "missed": []
+        },
+        {
+          "id": "q-036",
+          "shown": ["fly-release-migration-timeout", "money-integer-cents"],
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-038",
+          "shown": ["hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-040",
+          "shown": ["next-image-remote-patterns"],
+          "missed": []
+        },
+        {
+          "id": "q-042",
+          "shown": ["next-intl-messages"],
+          "missed": []
+        },
+        {
+          "id": "q-044",
+          "shown": ["next-public-env-prefix", "hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-046",
+          "shown": ["pricing-revalidate-tag", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-048",
+          "shown": ["hero-lcp-budget"],
+          "missed": []
+        },
+        {
+          "id": "q-050",
+          "shown": ["playwright-e2e", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-052",
+          "shown": ["vercel-deploys", "sitemap-robots", "prisma-neon-migrations"],
+          "missed": []
+        },
+        {
+          "id": "q-054",
+          "shown": ["vercel-deploys", "sitemap-robots", "og-image-font-loading", "prisma-pgbouncer-prepared-statement"],
+          "missed": []
+        },
+        {
+          "id": "q-056",
+          "shown": ["next15-async-params"],
+          "missed": []
+        },
+        {
+          "id": "q-058",
+          "shown": [
+            "next-image-remote-patterns",
+            "flaky-pricing-toggle-e2e",
+            "hydration-mismatch-dates",
+            "mdx-content-folder"
+          ],
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-060",
+          "shown": ["tailwind-theme-tokens"],
+          "missed": []
+        },
+        {
+          "id": "q-062",
+          "shown": ["pricing-revalidate-tag"],
+          "missed": []
+        },
+        {
+          "id": "q-064",
+          "shown": ["playwright-e2e", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-066",
+          "shown": ["next-image-remote-patterns"],
+          "missed": []
+        },
+        {
+          "id": "q-068",
+          "shown": ["next15-async-params"],
+          "missed": []
+        },
+        {
+          "id": "q-070",
+          "shown": ["mdx-content-folder"],
+          "missed": []
+        },
+        {
+          "id": "q-072",
+          "shown": ["pytest-airflow-db-fixture", "composer-deploy"],
+          "missed": []
+        },
+        {
+          "id": "q-074",
+          "shown": ["pandas-id-float-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-076",
+          "shown": ["xcom-dataframe-too-large"],
+          "missed": []
+        },
+        {
+          "id": "q-078",
+          "shown": ["slack-failure-alerts"],
+          "missed": []
+        },
+        {
+          "id": "q-080",
+          "shown": ["sessionize-timezone-flaky"],
+          "missed": []
+        },
+        {
+          "id": "q-082",
+          "shown": [
+            "shopify-extract-pagination",
+            "airflow-variables-not-dotenv",
+            "bq-partition-quota",
+            "pandas-id-float-merge"
+          ],
+          "missed": []
+        },
+        {
+          "id": "q-084",
+          "shown": ["backfill-procedure", "composer-deploy"],
+          "missed": []
+        },
+        {
+          "id": "q-086",
+          "shown": ["shopify-extract-pagination", "airflow-variables-not-dotenv", "gcs-bucket-layout"],
+          "missed": []
+        },
+        {
+          "id": "q-088",
+          "shown": ["dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-090",
+          "shown": ["ruff-mypy"],
+          "missed": []
+        },
+        {
+          "id": "q-092",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-094",
+          "shown": ["dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-096",
+          "shown": ["sessionize-timezone-flaky", "uv-dependencies", "poetry-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-098",
+          "shown": ["dbt-build-commands", "dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-100",
+          "shown": ["xcom-dataframe-too-large", "uv-dependencies", "ruff-mypy"],
+          "missed": []
+        },
+        {
+          "id": "q-102",
+          "shown": ["uv-dependencies", "poetry-dependencies"],
+          "missed": []
+        }
+      ]
+    }
+  }
+}
