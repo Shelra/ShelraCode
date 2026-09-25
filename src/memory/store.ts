@@ -2,6 +2,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   statSync,
@@ -23,6 +24,7 @@ import {
   type MemoryRecord,
   type MemoryScope,
   type MemorySource,
+  type MemoryStatus,
   type MemoryType,
   type MemoryWriteInput,
   type MemoryWriteResult,
@@ -115,6 +117,18 @@ export function isMemorySource(value: unknown): value is MemorySource {
   return typeof value === "string" && (SOURCES as readonly string[]).includes(value);
 }
 
+const STATUSES: readonly MemoryStatus[] = ["active", "superseded", "invalidated", "archived"];
+
+export function isMemoryStatus(value: unknown): value is MemoryStatus {
+  return typeof value === "string" && (STATUSES as readonly string[]).includes(value);
+}
+
+/** Whether an entry is current truth: an entry with no status is. */
+export function isCurrentMemory(record: MemoryRecord): boolean {
+  const status = record.entry.frontmatter.metadata.status;
+  return status === undefined || status === "active";
+}
+
 function writeFileAtomic(path: string, content: string): void {
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, content, "utf8");
@@ -172,6 +186,9 @@ function serializeEntry(frontmatter: MemoryFrontmatter, body: string): string {
   if (meta.credit !== undefined) lines.push(`  credit: ${meta.credit}`);
   if (meta.supersedes) lines.push(`  supersedes: ${meta.supersedes}`);
   if (meta.revision !== undefined) lines.push(`  revision: ${meta.revision}`);
+  if (meta.status && meta.status !== "active") lines.push(`  status: ${meta.status}`);
+  if (meta.supersededBy) lines.push(`  supersededBy: ${meta.supersededBy}`);
+  if (meta.validUntil) lines.push(`  validUntil: ${meta.validUntil}`);
   lines.push("---", "", body.trimEnd(), "");
   return lines.join("\n");
 }
@@ -200,6 +217,7 @@ function parseEntryFile(raw: string): MemoryEntry | null {
       : "";
 
   const source = readScalar(frontmatterBlock, "source");
+  const status = readScalar(frontmatterBlock, "status");
   const confidenceRaw = readScalar(frontmatterBlock, "confidence");
   const usesRaw = readScalar(frontmatterBlock, "uses");
   const creditRaw = readScalar(frontmatterBlock, "credit");
@@ -227,6 +245,9 @@ function parseEntryFile(raw: string): MemoryEntry | null {
         credit: credit !== undefined && Number.isFinite(credit) ? credit : undefined,
         supersedes: readScalar(frontmatterBlock, "supersedes"),
         revision: revision !== undefined && Number.isFinite(revision) ? revision : undefined,
+        status: isMemoryStatus(status) ? status : undefined,
+        supersededBy: readScalar(frontmatterBlock, "supersededBy"),
+        validUntil: readScalar(frontmatterBlock, "validUntil"),
       },
     },
     body: body.replace(/^\r?\n/, ""),
@@ -361,6 +382,8 @@ export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): M
   mkdirSync(dir, { recursive: true });
   const previous = readMemoryEntry(scope, input.slug).entry;
   const now = new Date().toISOString();
+  // A rewrite keeps what the entry said before, readable as its history (doc 18 §4.4).
+  if (previous && previous.body.trim() !== input.body.trim()) keepVersion(scope, input.slug, previous);
   const revision = (previous?.frontmatter.metadata.revision ?? 0) + 1;
   const confidence =
     input.confidence === undefined ? undefined : Math.max(0, Math.min(1, Math.round(input.confidence * 100) / 100));
@@ -397,6 +420,137 @@ export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): M
   });
 
   return { ok: true, indexBytes, indexLines, revision };
+}
+
+const VERSIONS_DIR = "versions";
+/** Versions kept per entry; the oldest go first. */
+const MAX_VERSIONS = 10;
+
+function keepVersion(scope: MemoryScope, slug: string, entry: MemoryEntry): void {
+  try {
+    const dir = join(memoryDir(scope), VERSIONS_DIR);
+    mkdirSync(dir, { recursive: true });
+    const revision = entry.frontmatter.metadata.revision ?? 1;
+    writeFileAtomic(join(dir, `${slug}.r${revision}.md`), serializeEntry(entry.frontmatter, entry.body));
+    const kept = readdirSync(dir)
+      .filter((name) => name.startsWith(`${slug}.r`) && name.endsWith(".md"))
+      .map((name) => ({ name, revision: Number(name.slice(slug.length + 2, -3)) }))
+      .filter((version) => Number.isFinite(version.revision))
+      .sort((a, b) => a.revision - b.revision);
+    for (const old of kept.slice(0, Math.max(0, kept.length - MAX_VERSIONS))) unlinkSync(join(dir, old.name));
+  } catch (error) {
+    recordSwallowedError("memory.version", error);
+  }
+}
+
+/** Earlier versions of an entry, oldest first: what it said before each rewrite. */
+export function readMemoryVersions(scope: MemoryScope, slug: string): MemoryEntry[] {
+  try {
+    validateIdentifier(slug, "slug");
+    const dir = join(memoryDir(scope), VERSIONS_DIR);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir)
+      .filter((name) => name.startsWith(`${slug}.r`) && name.endsWith(".md"))
+      .map((name) => ({ name, revision: Number(name.slice(slug.length + 2, -3)) }))
+      .filter((version) => Number.isFinite(version.revision))
+      .sort((a, b) => a.revision - b.revision)
+      .flatMap((version) => {
+        const entry = parseEntryFile(readFileSync(join(dir, version.name), "utf8"));
+        return entry ? [entry] : [];
+      });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Moves an entry out of the index as archived, its file kept: room for new knowledge when the store is full, instead
+ * of refusing it (doc 18 §4.4). Returns false when the entry is missing. Never throws.
+ */
+export function archiveMemoryEntry(scope: MemoryScope, slug: string, detail: string): boolean {
+  try {
+    const entry = readMemoryEntry(scope, slug).entry;
+    if (!entry) return false;
+    const now = new Date().toISOString();
+    writeFileAtomic(
+      memoryEntryPath(scope, slug),
+      serializeEntry(
+        { ...entry.frontmatter, metadata: { ...entry.frontmatter.metadata, status: "archived", validUntil: now } },
+        entry.body,
+      ),
+    );
+    const index = readMemoryIndex(scope).entries.filter((line) => line.file !== `${slug}.md`);
+    writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
+    appendHistory(scope, {
+      at: now,
+      event: "archived",
+      slug,
+      source: entry.frontmatter.metadata.source,
+      type: entry.frontmatter.metadata.type,
+      detail,
+    });
+    return true;
+  } catch (error) {
+    recordSwallowedError("memory.archive", error);
+    return false;
+  }
+}
+
+/** The line a newer entry carries about the fact it replaced. */
+export function replacesNote(oldHook: string, until: string): string {
+  return `Replaces: ${oldHook} (true until ${until.slice(0, 10)}).`;
+}
+
+/**
+ * Marks `oldSlug` as no longer true because `bySlug` replaced it: the old entry leaves the index (retrieval stops
+ * seeing it) with its file kept, marked superseded and until when; the newer entry records what it replaced. Returns
+ * false when either entry is missing. Never throws.
+ */
+export function supersedeMemoryEntry(scope: MemoryScope, oldSlug: string, bySlug: string, detail?: string): boolean {
+  try {
+    if (oldSlug === bySlug) return false;
+    const old = readMemoryEntry(scope, oldSlug).entry;
+    const next = readMemoryEntry(scope, bySlug).entry;
+    if (!old || !next) return false;
+    const now = new Date().toISOString();
+    const oldFile = memoryEntryPath(scope, oldSlug);
+    const oldHook =
+      readMemoryIndex(scope).entries.find((entry) => entry.file === `${oldSlug}.md`)?.hook ??
+      old.frontmatter.description;
+    writeFileAtomic(
+      oldFile,
+      serializeEntry(
+        {
+          ...old.frontmatter,
+          metadata: { ...old.frontmatter.metadata, status: "superseded", supersededBy: bySlug, validUntil: now },
+        },
+        old.body,
+      ),
+    );
+    const note = replacesNote(oldHook, now);
+    const nextBody = next.body.includes(note) ? next.body : `${next.body.trimEnd()}\n\n${note}`;
+    writeFileAtomic(
+      memoryEntryPath(scope, bySlug),
+      serializeEntry(
+        { ...next.frontmatter, metadata: { ...next.frontmatter.metadata, supersedes: oldSlug } },
+        nextBody,
+      ),
+    );
+    const index = readMemoryIndex(scope).entries.filter((entry) => entry.file !== `${oldSlug}.md`);
+    writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
+    appendHistory(scope, {
+      at: now,
+      event: "superseded",
+      slug: oldSlug,
+      source: old.frontmatter.metadata.source,
+      type: old.frontmatter.metadata.type,
+      detail: detail ?? `replaced by ${bySlug}`,
+    });
+    return true;
+  } catch (error) {
+    recordSwallowedError("memory.supersede", error);
+    return false;
+  }
 }
 
 function normalizePaths(paths: readonly string[] | undefined): string[] | undefined {

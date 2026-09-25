@@ -1,11 +1,12 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   appendEpisode,
   didWork,
   episodeFrom,
+  episodeLessons,
   failuresOf,
   pendingReflectionCount,
   queuePendingReflection,
@@ -15,6 +16,17 @@ import {
 } from "./episodes";
 import type { TurnDigest } from "./reflection";
 import { projectMemoryScope } from "./store";
+
+/** Temp folders this file made; removed when it ends, so test stores do not pile up (doc 18 §2.3). */
+const made: string[] = [];
+function scratch(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  made.push(dir);
+  return dir;
+}
+afterAll(() => {
+  for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 const digest = (overrides: Partial<TurnDigest> = {}): TurnDigest => ({
   userMessage: "Build the platformer",
@@ -52,7 +64,7 @@ describe("episodes (doc 18 §4.2)", () => {
   });
 
   it("records episodes and never keeps a key in them", () => {
-    const scope = projectMemoryScope(mkdtempSync(join(tmpdir(), "shelra-episodes-")));
+    const scope = projectMemoryScope(scratch("shelra-episodes-"));
     appendEpisode(
       scope,
       episodeFrom(digest({ userMessage: "use sk-or-v1-0123456789abcdef0123456789abcdef here" }), "limited"),
@@ -64,12 +76,51 @@ describe("episodes (doc 18 §4.2)", () => {
   });
 
   it("queues a reflection no model could run, oldest first, until one runs", () => {
-    const scope = projectMemoryScope(mkdtempSync(join(tmpdir(), "shelra-pending-")));
+    const scope = projectMemoryScope(scratch("shelra-pending-"));
     queuePendingReflection(scope, digest({ userMessage: "first" }), "limited");
     queuePendingReflection(scope, digest({ userMessage: "second" }), "paused");
     expect(pendingReflectionCount(scope)).toBe(2);
     expect(takePendingReflection(scope)?.digest.userMessage).toBe("first");
     expect(takePendingReflection(scope)?.outcome).toBe("paused");
     expect(takePendingReflection(scope)).toBeNull();
+  });
+});
+
+describe("episode lessons (doc 18 §4.3)", () => {
+  const episode = (request: string, extra: Partial<ReturnType<typeof episodeFrom>> = {}) => ({
+    ...episodeFrom(digest({ userMessage: request }), "limited"),
+    ...extra,
+  });
+
+  it("turns the most similar past attempt into a lesson with what failed and what worked", () => {
+    const lessons = episodeLessons(
+      [
+        episode("Add a dark mode toggle to the settings page", { failures: [], files: ["src/settings.tsx"] }),
+        episode("Build the platformer game level loader"),
+      ],
+      { text: "the platformer level loader crashes on level 2" },
+    );
+    expect(lessons).toHaveLength(1);
+    expect(lessons[0]?.line).toContain('"Build the platformer game level loader"');
+    expect(lessons[0]?.line).toContain("failed (A positional parameter cannot be found)");
+    expect(lessons[0]?.line).toContain('worked: `Set-Location "D:\\games\\my game"`');
+  });
+
+  it("shows nothing for a request no past attempt resembles, and reads a follow-up with the request before it", () => {
+    const past = [episode("Build the platformer game level loader")];
+    expect(episodeLessons(past, { text: "write a haiku about autumn" })).toEqual([]);
+    expect(episodeLessons(past, { text: "dale", previous: "fix the platformer level loader" })).toHaveLength(1);
+  });
+
+  it("counts attempts at the same request once, newest first", () => {
+    const lessons = episodeLessons(
+      [
+        episode("Build the platformer game level loader", { at: "2026-09-20T10:00:00.000Z" }),
+        episode("Build the platformer game level loader", { at: "2026-09-21T10:00:00.000Z", outcome: "paused" }),
+      ],
+      { text: "platformer level loader" },
+    );
+    expect(lessons).toHaveLength(1);
+    expect(lessons[0]).toMatchObject({ attempts: 2, outcome: "paused", at: "2026-09-21T10:00:00.000Z" });
   });
 });

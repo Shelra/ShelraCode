@@ -60,7 +60,7 @@ export interface MemoryContextOptions {
   rulesBudgetChars?: number;
 }
 
-export type MemoryTier = "rule" | "knowledge" | "pointer";
+export type MemoryTier = "rule" | "knowledge" | "pointer" | "episode";
 
 export interface MemoryContext {
   /** Prompt section, or an empty string when the project has no memory. */
@@ -71,6 +71,8 @@ export interface MemoryContext {
   listed: string[];
   /** Standing rules shown in full whatever the request (tier 1). */
   rules?: string[];
+  /** Past attempts shown as lessons, by the time they happened. */
+  episodes?: string[];
   /** Why each shown entry was chosen, for the trace and `shelra memory why`. */
   explain?: Array<{ slug: string; tier: MemoryTier; score: number; reasons: string[] }>;
 }
@@ -254,11 +256,21 @@ function relevanceOf(
   };
 }
 
+/** Current truth only: a superseded, invalidated or archived entry is history, never a match (doc 18 R7). */
+function currentOnly(records: readonly MemoryRecord[]): readonly MemoryRecord[] {
+  const isCurrent = (record: MemoryRecord) => {
+    const status = record.entry.frontmatter.metadata.status;
+    return status === undefined || status === "active";
+  };
+  return records.every(isCurrent) ? records : records.filter(isCurrent);
+}
+
 export function rankMemories(
-  records: readonly MemoryRecord[],
+  allRecords: readonly MemoryRecord[],
   query: RetrievalQuery,
   workspace: string,
 ): RankedMemory[] {
+  const records = currentOnly(allRecords);
   const now = query.now ?? Date.now();
   const weights = queryTerms(query);
   const frequency = documentFrequency(records);
@@ -376,7 +388,7 @@ export function buildMemoryContext(
   const rest = ranked.filter((item) => !shown.has(item.record.slug) && !isStandingRule(item.record));
   const others = [...overflowRules, ...(rest.length <= maxListed ? rest : rest.filter((item) => item.relevance > 0))];
   const listed = others.slice(0, maxListed);
-  const unlisted = records.length - shown.size - listed.length;
+  const unlisted = ranked.length - shown.size - listed.length;
 
   const lines: string[] = [
     "PROJECT MEMORY:",
@@ -423,5 +435,34 @@ export function buildMemoryContext(
     listed: listed.map((item) => item.record.slug),
     rules: rules.map((item) => item.record.slug),
     explain,
+  };
+}
+
+/**
+ * Adds past attempts at similar requests to a memory context, after the saved entries: lessons are what happened, not
+ * instructions, and a model that sees "last time `npm test` failed, `bun test` worked" plans around it.
+ */
+export function appendEpisodeLessons(
+  context: MemoryContext,
+  lessons: ReadonlyArray<{ at: string; outcome: string; line: string; score: number; attempts: number }>,
+): MemoryContext {
+  if (lessons.length === 0) return context;
+  const section = [
+    "Past attempts at similar requests in this project (what happened then; check it still applies):",
+    ...lessons.map((lesson) => lesson.line),
+  ].join("\n");
+  return {
+    ...context,
+    text: context.text ? `${context.text}\n\n${section}` : `PROJECT MEMORY:\n${section}`,
+    episodes: lessons.map((lesson) => lesson.at),
+    explain: [
+      ...(context.explain ?? []),
+      ...lessons.map((lesson) => ({
+        slug: `episode ${lesson.at}`,
+        tier: "episode" as const,
+        score: Math.round(lesson.score * 1_000) / 1_000,
+        reasons: [`${lesson.outcome}${lesson.attempts > 1 ? `, ${lesson.attempts} attempts` : ""}`],
+      })),
+    ],
   };
 }

@@ -421,7 +421,12 @@ export interface ProcessMessageMemoryRecall {
   /** Standing rules shown in full. */
   rules: string[];
   /** Knowledge entries expanded and pointers listed, with the reasons each was chosen. */
-  entries: Array<{ slug: string; tier: "rule" | "knowledge" | "pointer"; score: number; reasons: string[] }>;
+  entries: Array<{
+    slug: string;
+    tier: "rule" | "knowledge" | "pointer" | "episode";
+    score: number;
+    reasons: string[];
+  }>;
   /** Size of the memory section of the prompt. */
   chars: number;
   timestamp: number;

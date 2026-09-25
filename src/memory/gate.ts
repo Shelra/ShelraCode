@@ -21,6 +21,8 @@ export interface GateDecision {
   reason: string;
   /** When updating a near-duplicate, the record being replaced. */
   existing?: MemoryRecord;
+  /** Set when the candidate was skipped only because its type is full: making room would admit it. */
+  full?: boolean;
 }
 
 export interface GateOptions {
@@ -250,6 +252,7 @@ export function decideMemoryWrite(
       action: "skip",
       slug: candidate.slug,
       reason: `type "${candidate.type}" already holds ${sameType} entries; consolidate before adding`,
+      full: true,
     };
   }
   return { action: "create", slug: candidate.slug, reason: "novel" };

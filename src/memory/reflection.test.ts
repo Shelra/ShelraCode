@@ -114,6 +114,87 @@ describe("automatic memory capture", () => {
     expect(lint?.tags).not.toContain("user-wide");
   });
 
+  it("retires what a user's correction says is no longer true, and nothing else (doc 18 §4.4)", () => {
+    const scope = projectMemoryScope(workspace);
+    const fact = (slug: string, hook: string, type: "procedure" | "failure" | "decisions") => ({
+      slug,
+      title: hook,
+      hook,
+      type,
+      description: hook,
+      body: `${hook}. Seen while deploying on 2026-08-02.`,
+      source: "observed" as const,
+    });
+    admitCandidates(scope, [
+      fact("deploy-heroku", "Deploys go to Heroku with git push heroku main", "procedure"),
+      fact("heroku-r14", "Heroku dynos hit R14 memory errors on big imports", "failure"),
+      fact("fly-migration", "Moving deploys from Heroku to Fly.io", "decisions"),
+    ]);
+
+    const admitted = admitCandidates(scope, extractUserDirectives("We moved from Heroku to Fly.io."));
+
+    expect(admitted.decisions).toContainEqual(
+      expect.objectContaining({ slug: "deploy-heroku", reason: expect.stringContaining("superseded by user-fix-") }),
+    );
+    const current = listMemoryRecords(scope).map((record) => record.slug);
+    expect(current).not.toContain("deploy-heroku");
+    // A past failure and the note about the move itself stay true.
+    expect(current).toEqual(expect.arrayContaining(["heroku-r14", "fly-migration"]));
+    expect(readMemoryEntry(scope, "deploy-heroku").entry?.frontmatter.metadata.status).toBe("superseded");
+  });
+
+  it("archives the least useful entry of a full type instead of refusing what was just learned", () => {
+    const scope = projectMemoryScope(workspace);
+    // Words of their own for each entry, so the gate sees 40 different facts rather than one repeated.
+    const words = (index: number, count: number) =>
+      Array.from({ length: count }, (_, word) => `k${index}x${word}`).join(" ");
+    const testing = (index: number, source: "inference" | "human" = "inference") => ({
+      slug: `testing-note-${index}`,
+      title: words(index, 3),
+      hook: words(index + 100, 4),
+      type: "testing" as const,
+      description: words(index + 200, 3),
+      body: `${words(index + 300, 10)}.`,
+      source,
+      confidence: 0.7,
+    });
+    admitCandidates(
+      scope,
+      Array.from({ length: 40 }, (_, index) => testing(index)),
+    );
+    expect(listMemoryRecords(scope)).toHaveLength(40);
+
+    const admitted = admitCandidates(scope, [testing(40)]);
+
+    expect(admitted.written).toEqual(["testing-note-40"]);
+    expect(admitted.decisions[0]).toMatchObject({ action: "update", reason: expect.stringContaining("archived") });
+    const archived = admitted.decisions[0]?.slug ?? "";
+    expect(readMemoryEntry(scope, archived).entry?.frontmatter.metadata.status).toBe("archived");
+    expect(listMemoryRecords(scope)).toHaveLength(40);
+  }, 30_000);
+
+  it("never lets an inference retire what the user stated", () => {
+    const scope = projectMemoryScope(workspace);
+    admitCandidates(scope, extractUserDirectives("Always deploy from the release branch."));
+    const [rule] = listMemoryRecords(scope);
+    admitCandidates(scope, [
+      {
+        slug: "deploy-from-main",
+        title: "Deploys run from main",
+        hook: "the deploy workflow runs from main since the release branch was removed",
+        type: "procedure",
+        description: "Deploy source branch",
+        body: "The deploy workflow in .github/workflows/deploy.yml triggers on main.",
+        source: "inference",
+        confidence: 0.7,
+        supersedes: rule?.slug,
+      },
+    ]);
+    expect(listMemoryRecords(scope).map((record) => record.slug)).toEqual(
+      expect.arrayContaining([rule?.slug, "deploy-from-main"]),
+    );
+  });
+
   it("keeps each distinct rule the user states, however alike their wording", () => {
     const scope = projectMemoryScope(workspace);
     for (const rule of ["Always write tests first.", "Always write docs first.", "Never touch the generated folder."]) {

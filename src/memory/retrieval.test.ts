@@ -202,6 +202,28 @@ describe("memory v2 retrieval (doc 18 §4.3)", () => {
     expect(context.text.length).toBeLessThan(4_500);
   });
 
+  it("never shows a superseded fact as current (R7)", () => {
+    write("auth-firebase", { title: "Auth uses Firebase", hook: "login goes through Firebase Auth" });
+    write("auth-supabase", { title: "Auth uses Supabase", hook: "login goes through Supabase Auth" });
+    const records = listMemoryRecords(projectMemoryScope(workspace)).map((record) =>
+      record.slug === "auth-firebase"
+        ? {
+            ...record,
+            entry: {
+              ...record.entry,
+              frontmatter: {
+                ...record.entry.frontmatter,
+                metadata: { ...record.entry.frontmatter.metadata, status: "superseded" as const },
+              },
+            },
+          }
+        : record,
+    );
+    const context = buildMemoryContext(records, { text: "why does the firebase login fail" }, workspace);
+    expect(context.expanded).not.toContain("auth-firebase");
+    expect(context.listed).not.toContain("auth-firebase");
+  });
+
   it("gives a rare word more weight than one every entry shares", () => {
     for (let index = 0; index < 12; index += 1) {
       write(`test-note-${index}`, { hook: `test note ${index} about the test suite`, body: "test test" });

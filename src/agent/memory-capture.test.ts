@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { pendingReflectionCount, readEpisodes } from "../memory/episodes";
 import {
@@ -98,6 +98,17 @@ vi.mock("../hooks/index", () => ({
 }));
 
 import { Agent } from "./agent";
+
+/** Temp folders this file made; removed when it ends, so test stores do not pile up (doc 18 §2.3). */
+const made: string[] = [];
+function scratch(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  made.push(dir);
+  return dir;
+}
+afterAll(() => {
+  for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 interface Round {
   events: ProviderEvent[];
@@ -233,7 +244,7 @@ const limitedRound: Round = {
 
 describe("memory capture on every outcome (doc 18, M1)", () => {
   it("records a turn that ended Limited: its episode, its failure lesson and a deferred reflection", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-capture-"));
+    const workspace = scratch("shelra-memory-capture-");
     const provider = new ScriptedProvider([limitedRound]);
     const text = await turn(agentIn(workspace, provider), "Set up the project and build the level loader");
 
@@ -254,7 +265,7 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
   });
 
   it("runs the deferred reflection on the next turn a model answers, and empties the queue", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-drain-"));
+    const workspace = scratch("shelra-memory-drain-");
     const lesson = JSON.stringify({
       memories: [
         {
@@ -293,7 +304,7 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
   });
 
   it("keeps a reflection the model could not run for a later turn instead of losing it", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-requeue-"));
+    const workspace = scratch("shelra-memory-requeue-");
     const provider = new ScriptedProvider(
       [
         {
@@ -310,7 +321,7 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
   });
 
   it("keeps what the host saw of a turn a Stop hook refused, and lets no model infer anything from it", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-withheld-"));
+    const workspace = scratch("shelra-memory-withheld-");
     const provider = new ScriptedProvider([{ events: limitedRound.events, text: "Done." }]);
     const agent = agentIn(workspace, provider);
     executeEventHooksMock.mockImplementation(async (input) =>
@@ -338,7 +349,7 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
   });
 
   it("keeps memory in the session's root folder after the shell moved into a subfolder", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-root-"));
+    const workspace = scratch("shelra-memory-root-");
     mkdirSync(join(workspace, "packages", "web"), { recursive: true });
     const agent = agentIn(workspace, new ScriptedProvider([{ events: [], text: "Noted." }]));
     await (agent as unknown as { bash: BashTool }).bash.execute("cd packages/web");
@@ -354,9 +365,9 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
   });
 
   it("keeps a preference about how Shelra talks to this person in the user-wide store", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-user-"));
+    const workspace = scratch("shelra-memory-user-");
     const previous = process.env.SHELRA_USER_MEMORY_ROOT;
-    process.env.SHELRA_USER_MEMORY_ROOT = mkdtempSync(join(tmpdir(), "shelra-memory-home-"));
+    process.env.SHELRA_USER_MEMORY_ROOT = scratch("shelra-memory-home-");
     try {
       await turn(
         agentIn(workspace, new ScriptedProvider([{ events: [], text: "Entendido." }])),
@@ -373,7 +384,7 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
   });
 
   it("gives a short follow-up the memory the request before it needed (doc 18 R2)", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-follow-up-"));
+    const workspace = scratch("shelra-memory-follow-up-");
     writeMemoryEntry(projectMemoryScope(workspace), {
       slug: "login-flaky-test",
       title: "The login test is flaky",
@@ -397,8 +408,23 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     expect(agent.getLastMemoryContext()?.expanded).toEqual(["login-flaky-test"]);
   });
 
+  it("shows the next similar request what failed last time and what worked (doc 18 M4)", async () => {
+    const workspace = scratch("shelra-memory-lesson-");
+    const provider = new ScriptedProvider([limitedRound, { events: [], text: "On it." }]);
+    const agent = agentIn(workspace, provider);
+    await turn(agent, "Set up the project and build the level loader");
+
+    await turn(agent, "build the level loader again, it still does not load level 2");
+
+    const system = String(provider.requests.at(-1)?.system ?? "");
+    expect(system).toContain("Past attempts at similar requests in this project");
+    expect(system).toContain('"Set up the project and build the level loader"');
+    expect(system).toContain("worked: `bun install`");
+    expect(agent.getLastMemoryContext()?.episodes).toHaveLength(1);
+  });
+
   it("records nothing for a turn that only answered", async () => {
-    const workspace = mkdtempSync(join(tmpdir(), "shelra-memory-chat-"));
+    const workspace = scratch("shelra-memory-chat-");
     await turn(agentIn(workspace, new ScriptedProvider([{ events: [], text: "Hello." }])), "Hi there");
     expect(readEpisodes(projectMemoryScope(workspace))).toEqual([]);
     expect(existsSync(join(workspace, ".shelra", "memory", "pending-reflections.jsonl"))).toBe(false);

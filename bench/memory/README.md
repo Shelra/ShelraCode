@@ -46,12 +46,16 @@ irrelevant, and questions about a fact that was superseded. Each query names the
 |---|---|---|---|---|---|---|---|---|---|---|
 | before M2 (`4b10325`) | 60% | 82% | 39% | 0.64 | 1.50 | 9 | 13% | 17% | 8% | 430 |
 | after M2 | 91% | 96% | 68% | 0.82 | 0.75 | 10 | 100% | 87% | 81% | ~100 |
+| after M3 (`results/after-m3.json`) | 91% | 96% | 70% | 0.82 | 0.75 | 0 | 100% | 87% | 81% | ~65–120 |
+
+M3 is measured with the store's own supersession: a superseded entry is out of the store, and the newer one carries
+its "Replaces: … (true until …)" line (`--pre-m3-store` builds the pairs as before; `results/before-m3.json`).
 
 How M2 was tuned: the relative cutoff (0.6), the single-rare-term rule (0.55) and three lexicon entries ("en mi
 máquina", "reprocesar", "medir") came from the dev half. The test half at 5,000 entries: recall 89%, precision 64%,
 noise 1.2 (`results/m2-test.json`). It is no longer fully held out: the noise failures of the first run were read
 across all queries before the single-rare-term rule was written. The next round adds a fresh blind query set.
 
-Known gaps: superseded facts are still shown as current (M3); a paraphrase that shares no word with the entry
+Known gaps: a paraphrase that shares no word with the entry
 ("19.990000001 on the invoice" for "store money as integer cents") is missed; a request memory cannot help with can
 still pull one entry through a word that is rare in the store ("a good name for my cat").

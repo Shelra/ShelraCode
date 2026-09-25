@@ -11,8 +11,11 @@ import {
   memoryEntryPath,
   projectMemoryScope,
   readMemoryEntry,
+  readMemoryHistory,
   readMemoryIndex,
+  readMemoryVersions,
   reconfirmByPassingCommands,
+  supersedeMemoryEntry,
   writeMemoryEntry,
 } from "./store";
 import type { MemoryRecord } from "./types";
@@ -333,5 +336,53 @@ describe("memory store: re-confirmation by a passing command (audit doc 15, M2)"
     // `bun test` passing says nothing for the entry that insists on the preload flag, and the reverse.
     expect(reconfirmByPassingCommands(scope, ["bun test"])).toEqual(["plain-tests"]);
     expect(reconfirmByPassingCommands(scope, [])).toEqual([]);
+  });
+});
+
+describe("memory store: time (doc 18 §4.4)", () => {
+  const fact = (slug: string, hook: string, body = `${hook}. Checked against the repository.`) => ({
+    slug,
+    title: hook,
+    hook,
+    type: "architecture" as const,
+    description: hook,
+    body,
+    source: "observed" as const,
+  });
+
+  it("retires a superseded fact from the index and keeps it readable, with what replaced it and when", () => {
+    const scope = projectMemoryScope(workspace);
+    writeMemoryEntry(scope, fact("deploy-heroku", "Deploys go to Heroku with git push heroku main"));
+    writeMemoryEntry(scope, fact("deploy-fly", "Deploys go to Fly.io with fly deploy"));
+
+    expect(supersedeMemoryEntry(scope, "deploy-heroku", "deploy-fly", "the user: we moved from Heroku to Fly.io")).toBe(
+      true,
+    );
+
+    expect(listMemoryRecords(scope).map((record) => record.slug)).toEqual(["deploy-fly"]);
+    const old = readMemoryEntry(scope, "deploy-heroku").entry;
+    expect(old?.frontmatter.metadata).toMatchObject({ status: "superseded", supersededBy: "deploy-fly" });
+    expect(old?.frontmatter.metadata.validUntil).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const next = readMemoryEntry(scope, "deploy-fly").entry;
+    expect(next?.frontmatter.metadata.supersedes).toBe("deploy-heroku");
+    expect(next?.body).toContain("Replaces: Deploys go to Heroku with git push heroku main (true until ");
+    expect(readMemoryHistory(scope).at(-1)).toMatchObject({ event: "superseded", slug: "deploy-heroku" });
+    // Twice is once; a missing entry is refused.
+    expect(supersedeMemoryEntry(scope, "deploy-heroku", "deploy-fly")).toBe(true);
+    expect(readMemoryEntry(scope, "deploy-fly").entry?.body.match(/Replaces:/gu)).toHaveLength(1);
+    expect(supersedeMemoryEntry(scope, "nope", "deploy-fly")).toBe(false);
+  });
+
+  it("keeps what an entry said before each rewrite", () => {
+    const scope = projectMemoryScope(workspace);
+    writeMemoryEntry(scope, fact("auth", "Auth uses Firebase", "Login goes through Firebase Auth, see src/auth.ts."));
+    writeMemoryEntry(scope, fact("auth", "Auth uses Supabase", "Login goes through Supabase Auth, see src/auth.ts."));
+    writeMemoryEntry(scope, fact("auth", "Auth uses Supabase", "Login goes through Supabase Auth, see src/auth.ts."));
+
+    const versions = readMemoryVersions(scope, "auth");
+    expect(versions.map((version) => version.body.trim())).toEqual([
+      "Login goes through Firebase Auth, see src/auth.ts.",
+    ]);
+    expect(readMemoryEntry(scope, "auth").entry?.body).toContain("Supabase");
   });
 });

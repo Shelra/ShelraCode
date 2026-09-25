@@ -1,0 +1,1437 @@
+{
+  "label": "before-m3",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "all",
+  "queries": 103,
+  "sizes": {
+    "0": {
+      "storeEntries": {
+        "shop-api": 29,
+        "atlas-web": 28,
+        "tidewater-pipeline": 28
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.9105263157894737,
+        "recallSeen": 0.9947368421052631,
+        "precision": 0.8090277777777778,
+        "mrr": 0.902923976608187,
+        "noise": 0.5,
+        "forbidden": 10,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2691,
+        "latencyMs": {
+          "median": 1.7327999999999975,
+          "p95": 5.8700000000000045
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.8695652173913043,
+          "recallSeen": 1,
+          "precision": 0.7681159420289854,
+          "mrr": 0.8260869565217391,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2850,
+          "latencyMs": {
+            "median": 1.7971999999999753,
+            "p95": 5.8700000000000045
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2556,
+          "latencyMs": {
+            "median": 2.39530000000002,
+            "p95": 17.360599999999977
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.7307692307692307,
+          "recallSeen": 0.9615384615384616,
+          "precision": 0.9090909090909091,
+          "mrr": 0.8739316239316239,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3023,
+          "latencyMs": {
+            "median": 2.0953000000000657,
+            "p95": 3.6147999999999456
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 0.5,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1417,
+          "latencyMs": {
+            "median": 0.9156000000000404,
+            "p95": 1.3598000000000638
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.9375,
+          "recallSeen": 1,
+          "precision": 0.7722222222222223,
+          "mrr": 0.9583333333333334,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3004,
+          "latencyMs": {
+            "median": 1.953300000000013,
+            "p95": 4.984000000000037
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9444444444444444,
+          "mrr": 0.925925925925926,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1956,
+          "latencyMs": {
+            "median": 0.9065999999999121,
+            "p95": 1.7327999999999975
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.53125,
+          "mrr": 0.78125,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3096,
+          "latencyMs": {
+            "median": 1.8269000000000233,
+            "p95": 2.6153000000000475
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9444444444444443,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2402,
+          "latencyMs": {
+            "median": 1.4032999999999447,
+            "p95": 2.8401999999999816
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.9444444444444444,
+          "recallSeen": 0.9888888888888889,
+          "precision": 0.7925531914893617,
+          "mrr": 0.9462962962962963,
+          "noise": 0.75,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2826,
+          "latencyMs": {
+            "median": 1.7080000000000837,
+            "p95": 6.677400000000034
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.88,
+          "recallSeen": 1,
+          "precision": 0.8248299319727891,
+          "mrr": 0.863888888888889,
+          "noise": 0.25,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2691,
+          "latencyMs": {
+            "median": 1.771099999999933,
+            "p95": 4.43139999999994
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-054",
+          "missed": ["sitemap-robots"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        },
+        {
+          "id": "q-093",
+          "missed": ["uv-dependencies"]
+        }
+      ]
+    },
+    "100": {
+      "storeEntries": {
+        "shop-api": 100,
+        "atlas-web": 100,
+        "tidewater-pipeline": 100
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.9315789473684211,
+        "recallSeen": 0.9947368421052631,
+        "precision": 0.725,
+        "mrr": 0.8934210526315789,
+        "noise": 1,
+        "forbidden": 10,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2893,
+        "latencyMs": {
+          "median": 2.81470000000013,
+          "p95": 6.782799999999952
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.9130434782608695,
+          "recallSeen": 1,
+          "precision": 0.6340579710144927,
+          "mrr": 0.818840579710145,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2987,
+          "latencyMs": {
+            "median": 2.534400000000005,
+            "p95": 4.320899999999938
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.95,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2868,
+          "latencyMs": {
+            "median": 3.890999999999849,
+            "p95": 15.513599999999997
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.8076923076923077,
+          "recallSeen": 0.9615384615384616,
+          "precision": 0.7884615384615384,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3010,
+          "latencyMs": {
+            "median": 2.4499000000000706,
+            "p95": 9.210399999999936
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 1,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1430,
+          "latencyMs": {
+            "median": 1.9465999999999894,
+            "p95": 3.538099999999986
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.9375,
+          "recallSeen": 1,
+          "precision": 0.640625,
+          "mrr": 0.8802083333333334,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3221,
+          "latencyMs": {
+            "median": 2.951999999999998,
+            "p95": 6.782799999999952
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9444444444444444,
+          "mrr": 0.925925925925926,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2407,
+          "latencyMs": {
+            "median": 2.0416000000000167,
+            "p95": 4.0914000000000215
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.53125,
+          "mrr": 0.84375,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3210,
+          "latencyMs": {
+            "median": 3.430199999999786,
+            "p95": 4.795499999999947
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9444444444444443,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2808,
+          "latencyMs": {
+            "median": 2.915399999999863,
+            "p95": 5.541400000000067
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.9444444444444444,
+          "recallSeen": 0.9888888888888889,
+          "precision": 0.7074829931972788,
+          "mrr": 0.9296296296296295,
+          "noise": 1.75,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2929,
+          "latencyMs": {
+            "median": 2.992000000000189,
+            "p95": 9.877700000000004
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.92,
+          "recallSeen": 1,
+          "precision": 0.741830065359477,
+          "mrr": 0.8608333333333335,
+          "noise": 0.25,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2846,
+          "latencyMs": {
+            "median": 2.534400000000005,
+            "p95": 5.202400000000125
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ]
+    },
+    "1000": {
+      "storeEntries": {
+        "shop-api": 1000,
+        "atlas-web": 1000,
+        "tidewater-pipeline": 1000
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.9105263157894737,
+        "recallSeen": 0.9736842105263158,
+        "precision": 0.6986531986531987,
+        "mrr": 0.8419932853524184,
+        "noise": 0.75,
+        "forbidden": 10,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2946,
+        "latencyMs": {
+          "median": 14.992600000000493,
+          "p95": 41.11920000000009
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.8695652173913043,
+          "recallSeen": 1,
+          "precision": 0.5434782608695652,
+          "mrr": 0.6909937888198758,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3055,
+          "latencyMs": {
+            "median": 16.79320000000007,
+            "p95": 45.18589999999949
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.975,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2867,
+          "latencyMs": {
+            "median": 19.921299999999974,
+            "p95": 106.94169999999986
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.8076923076923077,
+          "recallSeen": 0.9615384615384616,
+          "precision": 0.7756410256410255,
+          "mrr": 0.8711538461538461,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3010,
+          "latencyMs": {
+            "median": 16.282100000000355,
+            "p95": 41.11920000000009
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 0.75,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1431,
+          "latencyMs": {
+            "median": 12.214199999999892,
+            "p95": 13.854500000000371
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.5833333333333333,
+          "mrr": 0.7721773936847466,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3237,
+          "latencyMs": {
+            "median": 15.47420000000011,
+            "p95": 35.45799999999963
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8703703703703703,
+          "mrr": 0.925925925925926,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2814,
+          "latencyMs": {
+            "median": 11.035200000000259,
+            "p95": 15.20219999999972
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.53125,
+          "mrr": 0.8229166666666667,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3403,
+          "latencyMs": {
+            "median": 14.186999999999898,
+            "p95": 26.579600000000028
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9444444444444443,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3047,
+          "latencyMs": {
+            "median": 16.4359000000004,
+            "p95": 29.660599999999704
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.9222222222222223,
+          "recallSeen": 0.9444444444444444,
+          "precision": 0.6996527777777777,
+          "mrr": 0.887514925161984,
+          "noise": 1.25,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2953,
+          "latencyMs": {
+            "median": 14.186999999999898,
+            "p95": 96.11680000000024
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.9,
+          "recallSeen": 1,
+          "precision": 0.6977124183006534,
+          "mrr": 0.8010238095238096,
+          "noise": 0.25,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2946,
+          "latencyMs": {
+            "median": 15.546100000000024,
+            "p95": 33.48840000000018
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ]
+    },
+    "5000": {
+      "storeEntries": {
+        "shop-api": 5000,
+        "atlas-web": 5000,
+        "tidewater-pipeline": 5000
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.9105263157894737,
+        "recallSeen": 0.9631578947368421,
+        "precision": 0.6809764309764311,
+        "mrr": 0.8247992565536425,
+        "noise": 0.75,
+        "forbidden": 10,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2974,
+        "latencyMs": {
+          "median": 63.45880000000034,
+          "p95": 159.4426000000003
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.8695652173913043,
+          "recallSeen": 0.9565217391304348,
+          "precision": 0.5434782608695652,
+          "mrr": 0.6584448160535118,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3065,
+          "latencyMs": {
+            "median": 55.24360000000161,
+            "p95": 166.1893
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8875,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2866,
+          "latencyMs": {
+            "median": 90.59850000000006,
+            "p95": 469.23079999999936
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.8076923076923077,
+          "recallSeen": 0.9615384615384616,
+          "precision": 0.7948717948717948,
+          "mrr": 0.8711538461538461,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2986,
+          "latencyMs": {
+            "median": 62.266200000000026,
+            "p95": 159.4426000000003
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 0.75,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1432,
+          "latencyMs": {
+            "median": 51.16820000000007,
+            "p95": 132.47450000000026
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.5520833333333334,
+          "mrr": 0.7168769960436627,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3352,
+          "latencyMs": {
+            "median": 73.35000000000036,
+            "p95": 133.66089999999895
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8703703703703703,
+          "mrr": 0.925925925925926,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2821,
+          "latencyMs": {
+            "median": 56.21630000000005,
+            "p95": 93.26800000000003
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.5625,
+          "mrr": 0.8229166666666667,
+          "noise": null,
+          "forbidden": 6,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3048,
+          "latencyMs": {
+            "median": 57.65859999999884,
+            "p95": 134.9386999999988
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9444444444444443,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 2,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3047,
+          "latencyMs": {
+            "median": 87.2528999999995,
+            "p95": 153.02870000000075
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.9222222222222223,
+          "recallSeen": 0.9444444444444444,
+          "precision": 0.6527777777777778,
+          "mrr": 0.8678525615562651,
+          "noise": 1.25,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2983,
+          "latencyMs": {
+            "median": 65.4969000000001,
+            "p95": 393.0180999999993
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.9,
+          "recallSeen": 0.98,
+          "precision": 0.707516339869281,
+          "mrr": 0.7860512820512819,
+          "noise": 0.25,
+          "forbidden": 5,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2921,
+          "latencyMs": {
+            "median": 59.93379999999888,
+            "p95": 159.4426000000003
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ],
+      "perQuery": [
+        {
+          "id": "q-001",
+          "shown": ["stripe-webhook-raw-body", "shop-api-noise-4155"],
+          "missed": []
+        },
+        {
+          "id": "q-002",
+          "shown": ["redis-econnrefused-local", "shop-api-noise-2449", "shop-api-noise-4239", "shop-api-noise-1376"],
+          "missed": []
+        },
+        {
+          "id": "q-003",
+          "shown": ["typecheck-bun-types"],
+          "missed": []
+        },
+        {
+          "id": "q-004",
+          "shown": ["dev-seed-data", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-005",
+          "shown": ["openapi-generation"],
+          "missed": []
+        },
+        {
+          "id": "q-006",
+          "shown": ["jwt-refresh-rotation"],
+          "missed": []
+        },
+        {
+          "id": "q-007",
+          "shown": ["inventory-lock-order", "checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-008",
+          "shown": ["dev-seed-data", "bullmq-worker-process", "shop-api-noise-3461", "shop-api-noise-1135"],
+          "missed": []
+        },
+        {
+          "id": "q-009",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-010",
+          "shown": ["shop-api-noise-4838", "shop-api-noise-208", "shop-api-noise-572", "shop-api-noise-166"],
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "shown": ["inventory-lock-order", "fly-release-migration-timeout"],
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-012",
+          "shown": ["product-images-r2", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-013",
+          "shown": ["login-rate-limit-429", "http-error-shape", "test-db-docker-compose"],
+          "missed": []
+        },
+        {
+          "id": "q-014",
+          "shown": ["shop-api-noise-4838", "shop-api-noise-1407", "shop-api-noise-2244", "shop-api-noise-1209"],
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-015",
+          "shown": ["test-db-docker-compose", "inventory-lock-order", "drizzle-migrations-workflow", "dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-016",
+          "shown": [
+            "inventory-lock-order",
+            "checkout-concurrency-flaky-test",
+            "deploy-flyio",
+            "fly-release-migration-timeout"
+          ],
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-017",
+          "shown": ["password-hashing-bun"],
+          "missed": []
+        },
+        {
+          "id": "q-018",
+          "shown": ["checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-019",
+          "shown": ["inventory-lock-order", "fly-release-migration-timeout", "http-error-shape"],
+          "missed": []
+        },
+        {
+          "id": "q-020",
+          "shown": ["inventory-lock-order", "cursor-pagination", "product-images-r2", "dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-021",
+          "shown": ["hono-over-express"],
+          "missed": []
+        },
+        {
+          "id": "q-022",
+          "shown": ["stripe-webhook-raw-body"],
+          "missed": []
+        },
+        {
+          "id": "q-023",
+          "shown": ["fly-release-migration-timeout", "http-error-shape", "inventory-lock-order"],
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-024",
+          "shown": ["deploy-flyio"],
+          "missed": []
+        },
+        {
+          "id": "q-025",
+          "shown": ["checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-026",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-027",
+          "shown": ["inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-028",
+          "shown": ["cors-allowed-origins", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-029",
+          "shown": ["jwt-refresh-rotation"],
+          "missed": []
+        },
+        {
+          "id": "q-030",
+          "shown": ["deploy-flyio", "fly-release-migration-timeout", "deploy-heroku"],
+          "missed": []
+        },
+        {
+          "id": "q-031",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-032",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-033",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-034",
+          "shown": ["typecheck-bun-types"],
+          "missed": []
+        },
+        {
+          "id": "q-035",
+          "shown": ["deploy-flyio", "deploy-heroku"],
+          "missed": []
+        },
+        {
+          "id": "q-036",
+          "shown": ["fly-release-migration-timeout", "money-integer-cents"],
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-037",
+          "shown": ["deploy-flyio", "deploy-heroku"],
+          "missed": []
+        },
+        {
+          "id": "q-038",
+          "shown": ["hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-039",
+          "shown": ["prisma-pgbouncer-prepared-statement"],
+          "missed": []
+        },
+        {
+          "id": "q-040",
+          "shown": ["next-image-remote-patterns"],
+          "missed": []
+        },
+        {
+          "id": "q-041",
+          "shown": ["og-image-font-loading"],
+          "missed": []
+        },
+        {
+          "id": "q-042",
+          "shown": ["next-intl-messages"],
+          "missed": []
+        },
+        {
+          "id": "q-043",
+          "shown": ["clerk-middleware-matcher"],
+          "missed": []
+        },
+        {
+          "id": "q-044",
+          "shown": ["next-public-env-prefix", "hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-045",
+          "shown": ["flaky-pricing-toggle-e2e", "pricing-revalidate-tag", "next-intl-messages", "hero-lcp-budget"],
+          "missed": []
+        },
+        {
+          "id": "q-046",
+          "shown": ["pricing-revalidate-tag", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-047",
+          "shown": ["stripe-billing-portal"],
+          "missed": []
+        },
+        {
+          "id": "q-048",
+          "shown": ["hero-lcp-budget"],
+          "missed": []
+        },
+        {
+          "id": "q-049",
+          "shown": [
+            "contact-form-resend",
+            "flaky-pricing-toggle-e2e",
+            "hydration-mismatch-dates",
+            "mdx-content-folder"
+          ],
+          "missed": []
+        },
+        {
+          "id": "q-050",
+          "shown": ["playwright-e2e", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-051",
+          "shown": ["vitest-msw-setup"],
+          "missed": []
+        },
+        {
+          "id": "q-052",
+          "shown": ["vercel-deploys", "sitemap-robots", "prisma-neon-migrations"],
+          "missed": []
+        },
+        {
+          "id": "q-053",
+          "shown": ["stripe-billing-portal", "next-image-remote-patterns", "prisma-neon-migrations"],
+          "missed": []
+        },
+        {
+          "id": "q-054",
+          "shown": ["vercel-deploys", "sitemap-robots", "og-image-font-loading", "prisma-pgbouncer-prepared-statement"],
+          "missed": []
+        },
+        {
+          "id": "q-055",
+          "shown": ["pricing-revalidate-tag", "plausible-analytics"],
+          "missed": []
+        },
+        {
+          "id": "q-056",
+          "shown": ["next15-async-params"],
+          "missed": []
+        },
+        {
+          "id": "q-057",
+          "shown": ["hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-058",
+          "shown": [
+            "next-image-remote-patterns",
+            "flaky-pricing-toggle-e2e",
+            "hydration-mismatch-dates",
+            "mdx-content-folder"
+          ],
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-059",
+          "shown": ["playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-060",
+          "shown": ["tailwind-theme-tokens"],
+          "missed": []
+        },
+        {
+          "id": "q-061",
+          "shown": ["clerk-auth-migration", "clerk-middleware-matcher"],
+          "missed": []
+        },
+        {
+          "id": "q-062",
+          "shown": ["pricing-revalidate-tag"],
+          "missed": []
+        },
+        {
+          "id": "q-063",
+          "shown": ["next-image-remote-patterns", "plausible-analytics"],
+          "missed": []
+        },
+        {
+          "id": "q-064",
+          "shown": ["playwright-e2e", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-065",
+          "shown": ["clerk-auth-migration"],
+          "missed": []
+        },
+        {
+          "id": "q-066",
+          "shown": ["next-image-remote-patterns"],
+          "missed": []
+        },
+        {
+          "id": "q-067",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-068",
+          "shown": ["next15-async-params"],
+          "missed": []
+        },
+        {
+          "id": "q-069",
+          "shown": ["og-image-font-loading", "stripe-billing-portal", "clerk-auth-migration", "playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-070",
+          "shown": ["mdx-content-folder"],
+          "missed": []
+        },
+        {
+          "id": "q-071",
+          "shown": ["mdx-content-folder", "sitemap-robots", "contentful-cms", "playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-072",
+          "shown": ["pytest-airflow-db-fixture", "composer-deploy"],
+          "missed": []
+        },
+        {
+          "id": "q-073",
+          "shown": ["bq-partition-quota"],
+          "missed": []
+        },
+        {
+          "id": "q-074",
+          "shown": ["pandas-id-float-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-075",
+          "shown": ["dbt-build-commands"],
+          "missed": []
+        },
+        {
+          "id": "q-076",
+          "shown": ["xcom-dataframe-too-large"],
+          "missed": []
+        },
+        {
+          "id": "q-077",
+          "shown": ["dag-top-level-imports", "airflow-variables-not-dotenv"],
+          "missed": []
+        },
+        {
+          "id": "q-078",
+          "shown": ["slack-failure-alerts"],
+          "missed": []
+        },
+        {
+          "id": "q-079",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-080",
+          "shown": ["sessionize-timezone-flaky"],
+          "missed": []
+        },
+        {
+          "id": "q-081",
+          "shown": ["sensor-reschedule-mode"],
+          "missed": []
+        },
+        {
+          "id": "q-082",
+          "shown": [
+            "shopify-extract-pagination",
+            "airflow-variables-not-dotenv",
+            "bq-partition-quota",
+            "pandas-id-float-merge"
+          ],
+          "missed": []
+        },
+        {
+          "id": "q-083",
+          "shown": ["backfill-procedure", "composer-deploy"],
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-084",
+          "shown": ["backfill-procedure", "composer-deploy"],
+          "missed": []
+        },
+        {
+          "id": "q-085",
+          "shown": ["backfill-procedure", "orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-086",
+          "shown": ["shopify-extract-pagination", "airflow-variables-not-dotenv", "gcs-bucket-layout"],
+          "missed": []
+        },
+        {
+          "id": "q-087",
+          "shown": ["orders-daily-oom", "pandera-output-schemas", "dbt-build-commands"],
+          "missed": []
+        },
+        {
+          "id": "q-088",
+          "shown": ["dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-089",
+          "shown": ["airflow-variables-not-dotenv", "local-airflow-compose"],
+          "missed": []
+        },
+        {
+          "id": "q-090",
+          "shown": ["ruff-mypy"],
+          "missed": []
+        },
+        {
+          "id": "q-091",
+          "shown": ["gcs-bucket-layout", "composer-deploy", "orders-daily-oom", "uv-dependencies"],
+          "missed": ["dag-integrity-test"]
+        },
+        {
+          "id": "q-092",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-093",
+          "shown": ["uv-dependencies", "poetry-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-094",
+          "shown": ["dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-095",
+          "shown": ["bq-partition-quota", "warehouse-bigquery"],
+          "missed": []
+        },
+        {
+          "id": "q-096",
+          "shown": ["sessionize-timezone-flaky", "uv-dependencies", "poetry-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-097",
+          "shown": ["dag-top-level-imports", "backfill-procedure", "orders-daily-oom", "xcom-dataframe-too-large"],
+          "missed": []
+        },
+        {
+          "id": "q-098",
+          "shown": ["dbt-build-commands", "dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-099",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-100",
+          "shown": ["xcom-dataframe-too-large", "uv-dependencies", "ruff-mypy"],
+          "missed": []
+        },
+        {
+          "id": "q-101",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-102",
+          "shown": ["uv-dependencies", "poetry-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-103",
+          "shown": ["warehouse-bigquery"],
+          "missed": []
+        }
+      ]
+    }
+  }
+}

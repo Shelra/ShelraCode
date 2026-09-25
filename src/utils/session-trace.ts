@@ -488,8 +488,9 @@ export function formatTraceEvent(event: TraceEvent, full = false, withSession = 
     case "recall": {
       const entries = (event.entries as Array<{ slug: string; tier: string; reasons?: string[] }> | undefined) ?? [];
       const shown = entries.filter((entry) => entry.tier === "knowledge");
-      const listed = entries.length - shown.length;
-      return `${clock}  recall  ${(event.rules as unknown[] | undefined)?.length ?? 0} rules · ${shown.length} entries${listed > 0 ? ` · ${listed} listed` : ""} · ${String(event.chars ?? 0)} chars${shown.length > 0 ? ` · ${field(shown.map((entry) => `${entry.slug} (${entry.reasons?.[0] ?? "rank"})`).join("; "))}` : ""}`;
+      const lessons = entries.filter((entry) => entry.tier === "episode").length;
+      const listed = entries.filter((entry) => entry.tier === "pointer").length;
+      return `${clock}  recall  ${(event.rules as unknown[] | undefined)?.length ?? 0} rules · ${shown.length} entries${listed > 0 ? ` · ${listed} listed` : ""}${lessons > 0 ? ` · ${lessons} past attempts` : ""} · ${String(event.chars ?? 0)} chars${shown.length > 0 ? ` · ${field(shown.map((entry) => `${entry.slug} (${entry.reasons?.[0] ?? "rank"})`).join("; "))}` : ""}`;
     }
     case "memory":
       return `${clock}  memory  ${event.qualified ? `kept ${(event.written as unknown[] | undefined)?.length ?? 0}` : "nothing kept"} · ${field(event.reason)}`;

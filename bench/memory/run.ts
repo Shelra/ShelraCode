@@ -8,6 +8,7 @@
  *   bun run bench/memory/run.ts --label after-m2 --sizes 0,100,1000,5000
  *   bun run bench/memory/run.ts --label before-m2 --impl src/memory/<old copy>.ts   (any module with the same API)
  *   --split dev|test   runs half the queries: tune thresholds on dev only, report test as held out
+ *   --pre-m3-store     builds superseded pairs as the store did before M3 (no "Replaces" line on the newer entry)
  *
  * Metrics, per store size, overall and by query kind and language:
  * - recall: share of gold entries whose body reached the model; recallSeen also counts a gold entry listed by title;
@@ -21,6 +22,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { replacesNote } from "../../src/memory/store";
 import type { MemoryRecord, MemorySource, MemoryType } from "../../src/memory/types";
 
 interface DatasetEntry {
@@ -344,7 +346,21 @@ async function run(): Promise<void> {
     const results: QueryResult[] = [];
     const stores = new Map<string, MemoryRecord[]>();
     for (const [index, project] of dataset.projects.entries()) {
-      const gold = project.entries.map((entry) => record(entry));
+      // As the store does since M3: the newer entry of a superseded pair says what it replaced, and until when.
+      // `--pre-m3-store` leaves that out, as the store did before.
+      const replaced = new Map(
+        project.entries
+          .filter((entry) => entry.status === "superseded" && entry.supersededBy)
+          .map((entry) => [entry.supersededBy as string, entry]),
+      );
+      const gold = project.entries.map((entry) => {
+        const old = replaced.get(entry.slug);
+        return record(
+          old && !process.argv.includes("--pre-m3-store")
+            ? { ...entry, body: `${entry.body.trimEnd()}\n\n${replacesNote(old.hook, entry.modified)}` }
+            : entry,
+        );
+      });
       const padding = Math.max(0, size - gold.length);
       stores.set(project.id, [...gold, ...distractors(project.id, padding, prng(1_000 + index), noiseFiles)]);
     }

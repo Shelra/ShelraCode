@@ -87,8 +87,20 @@ export interface MemoryFrontmatter {
     supersedes?: string;
     /** Number of times this slug has been rewritten. */
     revision?: number;
+    /**
+     * Whether the entry is current truth. Absent means active. A superseded, invalidated or archived entry leaves the
+     * index, so retrieval no longer sees it, and its file stays readable: what used to be true, and until when
+     * (docs/architecture/18-MEMORY-V2.md §4.4).
+     */
+    status?: MemoryStatus;
+    /** Slug of the entry that replaced this one. */
+    supersededBy?: string;
+    /** ISO timestamp of when this stopped being current. */
+    validUntil?: string;
   };
 }
+
+export type MemoryStatus = "active" | "superseded" | "invalidated" | "archived";
 
 export interface MemoryEntry {
   frontmatter: MemoryFrontmatter;
@@ -158,7 +170,7 @@ export type MemoryDeleteResult = { ok: true } | { ok: false; reason: "not_found"
 /** One line of the append-only history log (`history.jsonl`), the event-sourced timeline of the store. */
 export interface MemoryHistoryEvent {
   at: string;
-  event: "created" | "updated" | "confirmed" | "deleted" | "promoted";
+  event: "created" | "updated" | "confirmed" | "deleted" | "promoted" | "superseded" | "archived";
   slug: string;
   source?: MemorySource;
   type?: MemoryType;

@@ -1,6 +1,14 @@
 import type { ProviderAdapter, ProviderUsage } from "../providers/types";
 import { decideMemoryWrite, type GateDecision } from "./gate";
-import { appendReflectionAudit, listMemoryRecords, writeMemoryEntry } from "./store";
+import {
+  appendReflectionAudit,
+  archiveMemoryEntry,
+  isCurrentMemory,
+  listMemoryRecords,
+  supersedeMemoryEntry,
+  writeMemoryEntry,
+} from "./store";
+import { searchTerms } from "./terms";
 import { MEMORY_TYPES, type MemoryRecord, type MemoryScope, type MemoryType, type MemoryWriteInput } from "./types";
 
 /**
@@ -241,7 +249,7 @@ export function buildReflectionPrompt(
     'Return ONLY a JSON object of the form {"memories":[...]} with at most 5 items. No prose, no markdown fences.',
     'Each item: {"type":<one of ' +
       MEMORY_TYPES.join("|") +
-      '>,"slug":<kebab-case>,"title":<short>,"hook":<one line>,"description":<one line>,"body":<markdown, 1-8 lines, exact commands/paths/flags>,"confidence":<0..1>,"relatedFiles":[<workspace-relative paths this depends on>],"tags":[<keywords>]}.',
+      '>,"slug":<kebab-case>,"title":<short>,"hook":<one line>,"description":<one line>,"body":<markdown, 1-8 lines, exact commands/paths/flags>,"confidence":<0..1>,"relatedFiles":[<workspace-relative paths this depends on>],"tags":[<keywords>],"supersedes":<optional: the slug of an EXISTING entry this turn proved is no longer true>}.',
     "Keep only what is non-obvious, project-specific, and reusable: a command that must be run in a particular way, a trap and its fix, a convention the code enforces, a decision and the alternative rejected, a procedure that took several steps to discover.",
     "Do not store what a fresh reader gets by opening a file (file listings, function signatures), the task itself, credentials, or anything the user only asked once.",
     'If the turn taught nothing durable, return {"memories":[]}.',
@@ -298,6 +306,7 @@ export const REFLECTION_SCHEMA: Record<string, unknown> = {
           confidence: { type: "number" },
           relatedFiles: { type: "array", items: { type: "string" } },
           tags: { type: "array", items: { type: "string" } },
+          supersedes: { type: "string" },
         },
         required: ["type", "slug", "title", "hook", "description", "body", "confidence"],
         additionalProperties: false,
@@ -359,6 +368,7 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.6,
       relatedFiles: asStringArray(record.relatedFiles),
       tags: asStringArray(record.tags),
+      ...(asString(record.supersedes) ? { supersedes: slugify(asString(record.supersedes)) } : {}),
     });
     if (candidates.length >= MAX_CANDIDATES) break;
   }
@@ -366,6 +376,79 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
 }
 
 /** Applies the gate to each candidate and writes the admitted ones. Pure store I/O; no model. */
+/** What a correction says is no longer used: "we don't use X anymore", "use Y instead of X", "ya no usamos X". */
+const CORRECTED_SUBJECT: RegExp[] = [
+  /\b(?:instead of|rather than|en vez de|en lugar de)\s+(.+)$/iu,
+  /\b(?:don't|do not|no longer|dont) use\s+(.+?)(?:\s+(?:anymore|any more))?$/iu,
+  /\bstopped using\s+(.+)$/iu,
+  /\b(?:moved|migrated|switched) (?:away )?from\s+(.+?)(?:\s+to\s+.+)?$/iu,
+  /\bya no (?:usamos|se usa|utilizamos)\s+(.+)$/iu,
+  /\bdejamos de usar\s+(.+)$/iu,
+  /\bmigramos de\s+(.+?)(?:\s+a\s+.+)?$/iu,
+];
+/** Where the named subject ends: the rest of the sentence says what replaced it. */
+const SUBJECT_END = /\s*(?:[,;:.]|\s(?:and|y|but|pero|ahora|now|sino|anymore|to|a)\s).*$/iu;
+/** Entries about something that happened keep their history; a correction does not make them false. */
+const HISTORICAL_TYPES = new Set(["failure", "debugging", "known-problems"]);
+/** An entry that describes the change itself ("moving from npm to bun") agrees with the correction. */
+const DESCRIBES_A_CHANGE =
+  /\b(?:from|replac\w*|instead|migrat\w*|moving|moved|switch\w*|en vez|en lugar|reemplaz\w*|migra\w*|cambi\w*)\b/iu;
+
+/**
+ * The current entries a user's correction says are no longer true: those whose title, hook or tags name the corrected
+ * subject and do not already name what replaced it. Conservative on purpose: only the index line decides, never a
+ * mention deep in a body, and records of past failures are left alone.
+ */
+export function entriesContradictedBy(correction: MemoryWriteInput, records: readonly MemoryRecord[]): string[] {
+  const statement = correction.hook;
+  let subject = "";
+  for (const pattern of CORRECTED_SUBJECT) {
+    const match = pattern.exec(statement);
+    if (match?.[1]) {
+      subject = match[1].replace(SUBJECT_END, "");
+      break;
+    }
+  }
+  const subjectTerms = searchTerms(subject);
+  if (subjectTerms.length === 0 || subjectTerms.length > 3) return [];
+  const otherTerms = searchTerms(statement).filter((term) => !subjectTerms.includes(term) && term !== "use");
+  return records
+    .filter((record) => {
+      if (record.slug === correction.slug || !isCurrentMemory(record)) return false;
+      const meta = record.entry.frontmatter.metadata;
+      if (HISTORICAL_TYPES.has(meta.type) || (meta.tags ?? []).includes("correction")) return false;
+      if (DESCRIBES_A_CHANGE.test(`${record.index.title} ${record.index.hook}`)) return false;
+      const head = new Set(searchTerms(`${record.index.title} ${record.index.hook} ${(meta.tags ?? []).join(" ")}`));
+      return subjectTerms.every((term) => head.has(term)) && !otherTerms.some((term) => head.has(term));
+    })
+    .map((record) => record.slug);
+}
+
+const DAY_MS = 24 * 60 * 60_000;
+
+/** How much an entry has earned its place: credit from passing checks, use, confidence, and recent use. */
+function utility(record: MemoryRecord, now: number): number {
+  const meta = record.entry.frontmatter.metadata;
+  const last = Date.parse(meta.lastUsed ?? meta.lastConfirmed ?? meta.modified);
+  const ageDays = Number.isFinite(last) ? Math.max(0, (now - last) / DAY_MS) : 365;
+  return (
+    (meta.credit ?? 0) * 2 + Math.min(meta.uses ?? 0, 20) * 0.15 + (meta.confidence ?? 0.6) + Math.exp(-ageDays / 60)
+  );
+}
+
+/**
+ * The entry to archive when the store is full: the least useful inference or observation, of the given type when one
+ * is named. What a person stated is never archived to make room (doc 18 §4.4).
+ */
+export function archivableEntry(records: readonly MemoryRecord[], type?: MemoryType, now = Date.now()) {
+  return records
+    .filter((record) => {
+      const meta = record.entry.frontmatter.metadata;
+      return meta.source !== "human" && isCurrentMemory(record) && (type === undefined || meta.type === type);
+    })
+    .sort((a, b) => utility(a, now) - utility(b, now) || a.slug.localeCompare(b.slug))[0];
+}
+
 export function admitCandidates(
   scope: MemoryScope,
   candidates: readonly ReflectionCandidate[],
@@ -374,15 +457,50 @@ export function admitCandidates(
   let current = records ? [...records] : listMemoryRecords(scope);
   const decisions: ReflectionReport["decisions"] = [];
   const written: string[] = [];
+  /** Archives the least useful entry to make room; records the decision. */
+  const makeRoom = (type: MemoryType | undefined, forSlug: string): boolean => {
+    const room = archivableEntry(current, type);
+    if (!room || !archiveMemoryEntry(scope, room.slug, `archived to make room for ${forSlug}`)) return false;
+    decisions.push({ slug: room.slug, action: "update", reason: `archived as the least useful entry, for ${forSlug}` });
+    current = listMemoryRecords(scope);
+    return true;
+  };
   for (const candidate of candidates) {
-    const decision = decideMemoryWrite(candidate, current);
+    let decision = decideMemoryWrite(candidate, current);
+    // A full type makes room instead of refusing what was just learned.
+    if (decision.full && makeRoom(candidate.type, candidate.slug)) decision = decideMemoryWrite(candidate, current);
     decisions.push({ slug: decision.slug, action: decision.action, reason: decision.reason });
     if (decision.action !== "create" && decision.action !== "update") continue;
     try {
-      const result = writeMemoryEntry(scope, { ...candidate, slug: decision.slug });
+      let result = writeMemoryEntry(scope, { ...candidate, slug: decision.slug });
+      if (!result.ok) {
+        const pending = decisions.pop();
+        if (makeRoom(undefined, decision.slug)) result = writeMemoryEntry(scope, { ...candidate, slug: decision.slug });
+        if (pending) decisions.push(pending);
+      }
       if (result.ok) {
         written.push(decision.slug);
         current = listMemoryRecords(scope);
+        // What this entry makes untrue leaves the index (doc 18 §4.4): a slug the reflection named, or what a user's
+        // correction contradicts. An inference never retires what a person stated.
+        const targets = new Set<string>([
+          ...(candidate.supersedes ? [candidate.supersedes] : []),
+          ...(candidate.source === "human" && candidate.tags?.includes("correction")
+            ? entriesContradictedBy({ ...candidate, slug: decision.slug }, current)
+            : []),
+        ]);
+        let retired = false;
+        for (const target of targets) {
+          const old = current.find((record) => record.slug === target);
+          if (!old || target === decision.slug || !isCurrentMemory(old)) continue;
+          if (old.entry.frontmatter.metadata.source === "human" && candidate.source !== "human") continue;
+          const by = candidate.source === "human" ? "the user" : "a reflection";
+          if (supersedeMemoryEntry(scope, target, decision.slug, `${by}: ${candidate.hook}`)) {
+            decisions.push({ slug: target, action: "update", reason: `superseded by ${decision.slug}` });
+            retired = true;
+          }
+        }
+        if (retired) current = listMemoryRecords(scope);
       } else {
         decisions[decisions.length - 1] = {
           slug: decision.slug,
