@@ -110,8 +110,11 @@ the text of an older file write or edit, since the file is on disk (the session 
 sub-agent results are never cleared): `src/providers/stale-tool-results.ts`.
 A generation that stops making progress is ended: six steps that only repeat earlier calls with the same results
 (`isRepeatingToolLoop`), or twelve that only read, search or run commands and return no word the generation had not
-seen (`createStallDetector`, `src/providers/stream.ts`). Once per turn the model is told why and may take another way
-or report; a second stop goes on to the completion gate.
+seen (`createStallDetector`, `src/providers/stream.ts`). So is a turn going in circles, counted across its rounds:
+edits that flip a file between the same two versions twice (whitespace aside), or a check that fails the same way
+four runs in a row while files change between them (`createCircleDetector`, `src/agent/circles.ts`, passed to the
+provider as `hostStops`). Once per turn the model is told why, naming the file and versions or the check and its
+error, and may take another way or report; a second stop goes on to the completion gate.
 A local page the final answer names (`http://localhost…`, `127.0.0.1`), in a turn that changed files or a session
 running a server of its own, is requested by the host when the turn ends and, when it answers with HTML, loaded in a
 headless browser (`observePage`) for uncaught errors, console errors and requests that fail or answer 4xx/5xx; while

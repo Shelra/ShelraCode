@@ -186,6 +186,7 @@ import { buildVerifyDetectPrompt, normalizeVerifyRecipe, prepareVerifySandbox } 
 import { runVerifyOrchestration } from "../verify/orchestrator";
 import { type Ablation, Ablations, ablateTools, NO_ABLATIONS } from "./ablation";
 import { AttemptJournal, type RestorePoint } from "./attempt-journal";
+import { createCircleDetector } from "./circles";
 import {
   appendActiveCriteriaBlock,
   budgetedContextTokens,
@@ -3022,6 +3023,8 @@ export class Agent {
     let repairEscalated = false;
     /** The model was told once this turn that the host stopped a round of it for making no progress. */
     let hostStopNoted = false;
+    /** Edits that go back and forth, and a check that keeps failing the same way, across the turn's rounds. */
+    const circles = createCircleDetector();
     /** The model was told once this turn that a local page its answer names does not answer. */
     let urlRepairAsked = false;
     /** The checks a new project's turn defined were reported passing once. */
@@ -3068,6 +3071,8 @@ export class Agent {
         let lastStepFinishReason: ProcessMessageFinishReason | null = null;
         /** Why the host ended this round's generation, when the model stopped making progress. */
         let roundHostStop: HostStopReason | null = null;
+        /** What went in circles, when `roundHostStop` came from the turn's circle detector. */
+        let roundHostStopDetail: string | null = null;
         const activeToolCalls: ToolCall[] = [];
 
         try {
@@ -3219,9 +3224,11 @@ export class Agent {
             onFinish: (usage) => {
               this.recordUsage(usage, "message", roundServed ?? runtime.modelId);
             },
-            onHostStop: (reason) => {
+            onHostStop: (reason, detail) => {
               roundHostStop = reason;
+              roundHostStopDetail = detail ?? null;
             },
+            hostStops: [circles.round()],
           });
           // An interrupted or cancelled round never awaits its response; its rejection must not
           // surface as an unhandled rejection. Awaiting it below still sees the rejection.
@@ -3617,9 +3624,10 @@ export class Agent {
           if (streamOk && roundHostStop && !hostStopNoted) {
             hostStopNoted = true;
             const why =
-              roundHostStop === "stalled"
+              roundHostStopDetail ??
+              (roundHostStop === "stalled"
                 ? `its last ${STALL_WINDOW} steps only read or ran commands and turned up nothing new`
-                : "it kept repeating calls it had already made, with the same results";
+                : "it kept repeating calls it had already made, with the same results");
             yield {
               type: "content",
               content: `\n\n[Shelra stopped the round: ${why}. Asking for another approach.]\n\n`,

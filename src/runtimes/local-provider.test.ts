@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { createCircleDetector } from "../agent/circles";
 import { createOpenAICompatibleProvider } from "./local-provider";
 
 function streamResponse(chunks: Array<Record<string, unknown>>): Response {
@@ -274,6 +275,70 @@ describe("OpenAI-compatible tool protocol", () => {
 
     expect(stops).toEqual([]);
     expect(requests).toBe(21);
+  });
+
+  it("ends a generation on the caller's own stop condition, with what it saw (audit gap #3)", async () => {
+    // Live 2026-09-25: a model flipped src/tracks/castle.ts between the same two versions for half an hour.
+    let requests = 0;
+    const fetchImpl: typeof fetch = async () => {
+      requests += 1;
+      const [from, to] = requests % 2 === 1 ? ["let a = 1;", "const a = 1;"] : ["const a = 1;", "let a = 1;"];
+      return streamResponse([
+        {
+          id: `response-${requests}`,
+          model: "test-model",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                role: "assistant",
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: `call-${requests}`,
+                    function: {
+                      name: "edit_file",
+                      arguments: JSON.stringify({ path: "src/a.ts", old_string: from, new_string: to }),
+                    },
+                  },
+                ],
+              },
+              finish_reason: "tool_calls",
+            },
+          ],
+        },
+      ]);
+    };
+    const stops: Array<[string, string | undefined]> = [];
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: fetchImpl,
+    });
+    const response = provider.stream({
+      modelId: "test-model",
+      system: "Edit files when needed.",
+      messages: [{ role: "user", content: "fix the track" }],
+      tools: {
+        edit_file: tool({
+          inputSchema: z.object({ path: z.string(), old_string: z.string(), new_string: z.string() }),
+          execute: async () => ({ success: true, output: "+1 -1" }),
+        }),
+      },
+      maxSteps: 60,
+      onHostStop: (reason, detail) => stops.push([reason, detail]),
+      hostStops: [createCircleDetector().round()],
+    });
+    for await (const _event of response.events) {
+      // drain
+    }
+    await response.response;
+
+    expect(requests).toBe(3);
+    expect(stops).toEqual([
+      [
+        "oscillating",
+        'your edits to src/a.ts went back and forth between the same two versions ("let a = 1;" and "const a = 1;"): 2 of them undid the edit before',
+      ],
+    ]);
   });
 
   it("counts the tokens of the steps a round finished before it was cut short", async () => {

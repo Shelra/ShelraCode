@@ -62,12 +62,21 @@ export interface ProviderStreamRequest {
   onFinish?: (usage: ProviderUsage) => void;
   /**
    * The host ended the generation because the model stopped making progress: it kept repeating calls with the same
-   * results, or its steps only looked and found nothing new. The last step's tool calls are its final step.
+   * results, its steps only looked and found nothing new, or a caller's `hostStops` condition matched (with what it
+   * saw as `detail`). The last step's tool calls are its final step.
    */
-  onHostStop?: (reason: HostStopReason) => void;
+  onHostStop?: (reason: HostStopReason, detail?: string) => void;
+  /** The caller's own conditions for ending the generation, checked after each step like the host's. */
+  hostStops?: ReadonlyArray<(steps: ReadonlyArray<HostStopStep>) => { reason: HostStopReason; detail: string } | null>;
 }
 
-export type HostStopReason = "repeating" | "stalled";
+export type HostStopReason = "repeating" | "stalled" | "oscillating" | "plateau";
+
+/** One model step as a stop condition sees it: the tools it called and what they returned. */
+export interface HostStopStep {
+  toolCalls?: ReadonlyArray<{ toolCallId?: string; toolName: string; input: unknown }>;
+  toolResults?: ReadonlyArray<{ toolCallId?: string; output?: unknown; result?: unknown }>;
+}
 
 export type ProviderEvent =
   | { type: "text-delta"; text: string }

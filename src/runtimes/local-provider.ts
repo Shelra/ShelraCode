@@ -12,6 +12,7 @@ import {
   withIdleWatchdog,
 } from "../providers/stream";
 import type {
+  HostStopStep,
   ProviderAdapter,
   ProviderModelRuntime,
   ProviderStream,
@@ -189,6 +190,13 @@ export class LocalProviderAdapter implements ProviderAdapter {
           request.onHostStop?.("stalled");
           return true;
         },
+        // And one the caller sees going in circles (src/agent/circles.ts).
+        ...(request.hostStops ?? []).map((watch) => ({ steps }: { steps: ReadonlyArray<unknown> }) => {
+          const stop = watch(steps as ReadonlyArray<HostStopStep>);
+          if (!stop) return false;
+          request.onHostStop?.(stop.reason, stop.detail);
+          return true;
+        }),
       ],
       maxRetries: this.maxRetries,
       ...(request.timeout ? { timeout: request.timeout } : {}),

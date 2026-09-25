@@ -10,6 +10,7 @@ import { credentialFallbackChain } from "../providers/credential-fallback";
 import { ProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
 import type {
   HostStopReason,
+  HostStopStep,
   ProviderAdapter,
   ProviderEvent,
   ProviderModelRuntime,
@@ -124,6 +125,8 @@ interface Round {
   served?: string;
   /** The provider ended the round because the model stopped making progress. */
   hostStop?: HostStopReason;
+  /** Steps the provider shows the caller's `hostStops`, as stopWhen would; the first stop ends the round. */
+  watch?: HostStopStep[];
   /** The round works until its request is aborted (its budget or the user), then reports the abort. */
   untilAborted?: boolean;
 }
@@ -180,6 +183,13 @@ class ScriptedProvider implements ProviderAdapter {
         }
         yield* round.events;
         if (round.hostStop) request.onHostStop?.(round.hostStop);
+        for (const watch of round.watch ? (request.hostStops ?? []) : []) {
+          const stop = watch(round.watch ?? []);
+          if (stop) {
+            request.onHostStop?.(stop.reason, stop.detail);
+            break;
+          }
+        }
         if (round.untilAborted) {
           await new Promise<void>((resolve) => {
             if (request.signal?.aborted) resolve();
@@ -396,6 +406,51 @@ describe("a model that stops making progress (seen live 2026-09-25)", () => {
     expect(provider.requests).toHaveLength(2);
     expect(text.match(/\[Shelra stopped the round/gu)).toHaveLength(1);
     expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+});
+
+describe("edits that go back and forth (audit gap #3, seen live 2026-09-25)", () => {
+  it("stop the round, and the model hears which file flipped between which versions", async () => {
+    const flips = [
+      ["let a = 1;", "const a = 1;"],
+      ["const a = 1;", "let a = 1;"],
+      ["let a = 1;", "const a = 1;"],
+    ].map(([from, to], index) => {
+      const toolCall = {
+        id: `call-${index}`,
+        type: "function" as const,
+        function: {
+          name: "edit_file",
+          arguments: JSON.stringify({ path: "src/a.ts", old_string: from, new_string: to }),
+        },
+      };
+      return {
+        events: [
+          { type: "tool-call", toolCall },
+          { type: "tool-result", toolCall, output: { success: true, output: "+1 -1" } },
+        ] as ProviderEvent[],
+        step: {
+          toolCalls: [
+            { toolCallId: toolCall.id, toolName: "edit_file", input: JSON.parse(toolCall.function.arguments) },
+          ],
+          toolResults: [{ toolCallId: toolCall.id, output: { success: true, output: "+1 -1" } }],
+        },
+      };
+    });
+    const provider = new ScriptedProvider([
+      { events: flips.flatMap((flip) => flip.events), watch: flips.map((flip) => flip.step) },
+      answer("Both versions fail the same check; the type of `a` is not the problem."),
+    ]);
+    const { text } = await run(provider, "Fix the track");
+
+    const why =
+      'your edits to src/a.ts went back and forth between the same two versions ("let a = 1;" and "const a = 1;"): 2 of them undid the edit before';
+    expect(text).toContain(`[Shelra stopped the round: ${why}. Asking for another approach.]`);
+    const notes = sentMessages(provider, 1).filter(
+      (message) => message.role === "user" && String(message.content).startsWith("Shelra stopped your last round"),
+    );
+    expect(String(notes[0]?.content)).toContain(`Shelra stopped your last round because ${why}.`);
+    expect(text).toContain("the type of `a` is not the problem");
   });
 });
 
