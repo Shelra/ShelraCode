@@ -107,6 +107,29 @@ describe("session trace", () => {
     expect(events.at(-1)).toMatchObject({ verdict: "[Cancelled]" });
   });
 
+  it("records a verdict that lists its criteria over several lines as the turn's verdict (seen live 2026-09-25)", () => {
+    const dir = traceHere();
+    const trace = startTurnTrace({ sessionId: "multi1", cwd: "/w", model: "m", mode: "agent", request: "Build it." });
+    trace.chunk({
+      type: "content",
+      content: "\n\n[Model connection interrupted (no response within the time limit); retrying in 2s.]\n\n",
+    });
+    trace.chunk({
+      type: "content",
+      content:
+        "Done.\n\n[Not verified — No verification action was observed for 2 acceptance criteria after 3 automatic request(s). Run the relevant checks yourself.\n- AC1: Game renders (verify: run it)\n- AC2: Kart steers (verify: run it)]",
+    });
+    trace.end();
+
+    const events = readTrace(listTraces(dir)[0]?.path ?? "");
+    expect(events.at(-1)).toMatchObject({
+      verdict: expect.stringMatching(
+        /^\[Not verified — No verification action[\s\S]*- AC2: Kart steers \(verify: run it\)\]$/u,
+      ),
+    });
+    expect(events.filter((event) => event.kind === "notice")).toHaveLength(2);
+  });
+
   it("records what memory a turn was given and why (doc 18 §4.5)", () => {
     const dir = traceHere();
     const trace = startTurnTrace({ sessionId: "mem1", cwd: "/work", model: "m", mode: "agent", request: "fix login" });

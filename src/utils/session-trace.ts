@@ -157,9 +157,37 @@ const NOOP: TurnTrace = {
   end: () => undefined,
 };
 
-/** A bracketed host note: a fallback, a pause, a verdict ("[Not verified — …]", "[Checked by Shelra …]"). */
+/** Host notes that can run over several lines, such as a verdict that lists its acceptance criteria. */
+const MULTILINE_NOTE_RE =
+  /^\[(?:Not verified|Not marked complete|Checked by Shelra|Verified|Limited|Paused|Stopped)\b/u;
+
+/**
+ * A bracketed host note: a fallback, a pause, a verdict ("[Not verified — …]", "[Checked by Shelra …]"). A verdict
+ * that lists its criteria spans lines; it used to go unrecorded, and a turn's trace ended with an earlier notice as its
+ * last word (seen live 2026-09-25).
+ */
 function noticesIn(text: string): string[] {
-  return [...text.matchAll(/^\[[^\n]*\]$/gmu)].map((match) => match[0]).filter((line) => line.length > 2);
+  const notices: string[] = [];
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = (lines[index] ?? "").replace(/\r$/u, "");
+    if (!line.startsWith("[")) continue;
+    if (line.endsWith("]") && line.length > 2) {
+      notices.push(line);
+      continue;
+    }
+    if (!MULTILINE_NOTE_RE.test(line)) continue;
+    const end = lines.findIndex((next, at) => at > index && next.replace(/\r$/u, "").endsWith("]"));
+    if (end < 0) continue;
+    notices.push(
+      lines
+        .slice(index, end + 1)
+        .map((part) => part.replace(/\r$/u, ""))
+        .join("\n"),
+    );
+    index = end;
+  }
+  return notices;
 }
 
 /** Starts the record of one turn; every call on the result is safe to make and never throws. */
