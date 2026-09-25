@@ -80,80 +80,109 @@ export class ScriptedProvider implements ProviderAdapter {
     let transcript = "";
     let inputTokens = 0;
     let outputTokens = 0;
+    // What a real provider returns for the turn: each step's assistant message and its tool results. The
+    // session saves these, so a demo chat run with SHELRA_DEMO_PERSIST=1 comes back whole with /resume.
+    const responseMessages: unknown[] = [];
+    let finish: (value: { messages: readonly unknown[]; usage: ProviderUsage }) => void = () => {};
+    const response = new Promise<{ messages: readonly unknown[]; usage: ProviderUsage }>((resolve) => {
+      finish = resolve;
+    });
     const nextId = () => `call_${String(++this.callSeq).padStart(3, "0")}`;
 
     const events = (async function* (): AsyncGenerator<ProviderEvent> {
-      for (const [index, step] of turn.entries()) {
-        const stepNumber = index + 1;
-        request.onStepStart?.(stepNumber);
-        let stepHadTools = false;
-        for (const part of step) {
-          if (request.signal?.aborted) return;
-          if ("think" in part) {
-            for (const piece of chunkText(part.think, 10)) {
-              if (request.signal?.aborted) return;
-              yield { type: "reasoning-delta", text: piece };
-              await sleep((part.pace ?? 22) * speed, request.signal);
+      try {
+        for (const [index, step] of turn.entries()) {
+          const stepNumber = index + 1;
+          request.onStepStart?.(stepNumber);
+          let stepHadTools = false;
+          const content: unknown[] = [];
+          const results: unknown[] = [];
+          for (const part of step) {
+            if (request.signal?.aborted) return;
+            if ("think" in part) {
+              for (const piece of chunkText(part.think, 10)) {
+                if (request.signal?.aborted) return;
+                yield { type: "reasoning-delta", text: piece };
+                await sleep((part.pace ?? 22) * speed, request.signal);
+              }
+            } else if ("say" in part) {
+              for (const piece of chunkText(part.say)) {
+                if (request.signal?.aborted) return;
+                yield { type: "text-delta", text: piece };
+                await sleep((part.pace ?? 18) * speed, request.signal);
+              }
+              transcript += part.say;
+              content.push({ type: "text", text: part.say });
+              outputTokens += Math.ceil(part.say.length / 4);
+            } else if ("wait" in part) {
+              await sleep(part.wait * speed, request.signal);
+            } else if ("fail" in part) {
+              yield { type: "error", error: new Error(part.fail) };
+              return;
+            } else if ("approve" in part) {
+              const toolCall: ToolCall = {
+                id: nextId(),
+                type: "function",
+                function: { name: part.approve, arguments: JSON.stringify(part.input) },
+              };
+              yield { type: "tool-approval-request", approvalId: `approval_${toolCall.id}`, toolCall };
+              break;
+            } else {
+              stepHadTools = true;
+              const toolCall: ToolCall = {
+                id: nextId(),
+                type: "function",
+                function: { name: part.call, arguments: JSON.stringify(part.input) },
+              };
+              yield { type: "tool-call", toolCall };
+              content.push({ type: "tool-call", toolCallId: toolCall.id, toolName: part.call, input: part.input });
+              await sleep((part.ms ?? 450) * speed, request.signal);
+              const tool = tools[part.call];
+              let output: unknown;
+              try {
+                output = tool?.execute
+                  ? await tool.execute(part.input, {
+                      toolCallId: toolCall.id,
+                      messages: [],
+                      abortSignal: request.signal,
+                    })
+                  : { success: false, error: `Tool ${part.call} is unavailable in this mode.` };
+              } catch (error) {
+                output = { success: false, error: error instanceof Error ? error.message : String(error) };
+              }
+              yield { type: "tool-result", toolCall, output };
+              results.push({
+                type: "tool-result",
+                toolCallId: toolCall.id,
+                toolName: part.call,
+                output: { type: "json", value: output ?? null },
+              });
+              inputTokens += 900 + Math.ceil(JSON.stringify(part.input).length / 4);
             }
-          } else if ("say" in part) {
-            for (const piece of chunkText(part.say)) {
-              if (request.signal?.aborted) return;
-              yield { type: "text-delta", text: piece };
-              await sleep((part.pace ?? 18) * speed, request.signal);
-            }
-            transcript += part.say;
-            outputTokens += Math.ceil(part.say.length / 4);
-          } else if ("wait" in part) {
-            await sleep(part.wait * speed, request.signal);
-          } else if ("fail" in part) {
-            yield { type: "error", error: new Error(part.fail) };
-            return;
-          } else if ("approve" in part) {
-            const toolCall: ToolCall = {
-              id: nextId(),
-              type: "function",
-              function: { name: part.approve, arguments: JSON.stringify(part.input) },
-            };
-            yield { type: "tool-approval-request", approvalId: `approval_${toolCall.id}`, toolCall };
-            break;
-          } else {
-            stepHadTools = true;
-            const toolCall: ToolCall = {
-              id: nextId(),
-              type: "function",
-              function: { name: part.call, arguments: JSON.stringify(part.input) },
-            };
-            yield { type: "tool-call", toolCall };
-            await sleep((part.ms ?? 450) * speed, request.signal);
-            const tool = tools[part.call];
-            let output: unknown;
-            try {
-              output = tool?.execute
-                ? await tool.execute(part.input, { toolCallId: toolCall.id, messages: [], abortSignal: request.signal })
-                : { success: false, error: `Tool ${part.call} is unavailable in this mode.` };
-            } catch (error) {
-              output = { success: false, error: error instanceof Error ? error.message : String(error) };
-            }
-            yield { type: "tool-result", toolCall, output };
-            inputTokens += 900 + Math.ceil(JSON.stringify(part.input).length / 4);
           }
+          if (content.length > 0) responseMessages.push({ role: "assistant", content });
+          if (results.length > 0) responseMessages.push({ role: "tool", content: results });
+          const usage: ProviderUsage = { inputTokens: inputTokens + 4200, outputTokens };
+          request.onStepFinish?.({
+            stepNumber,
+            finishReason: stepHadTools && index < turn.length - 1 ? "tool-calls" : "stop",
+            usage,
+            responseMessages: [...responseMessages],
+          });
         }
-        const usage: ProviderUsage = { inputTokens: inputTokens + 4200, outputTokens };
-        request.onStepFinish?.({
-          stepNumber,
-          finishReason: stepHadTools && index < turn.length - 1 ? "tool-calls" : "stop",
-          usage,
+        request.onFinish?.({ inputTokens: inputTokens + 4200, outputTokens });
+      } finally {
+        finish({
+          messages:
+            responseMessages.length > 0 ? responseMessages : [{ role: "assistant", content: transcript || "Done." }],
+          usage: { inputTokens: inputTokens + 4200, outputTokens },
         });
       }
-      request.onFinish?.({ inputTokens: inputTokens + 4200, outputTokens });
     })();
 
     return {
       events,
-      response: Promise.resolve({
-        messages: [{ role: "assistant", content: transcript || "Done." }],
-        usage: { inputTokens: inputTokens + 4200, outputTokens },
-      }),
+      response,
     };
   }
 

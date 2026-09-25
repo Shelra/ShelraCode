@@ -81,7 +81,8 @@ const provider = new ScriptedProvider({ turns, model: MODEL, speed: Number(proce
 // SHELRA_DEMO_NO_KEY=1 starts without a provider, as a first run without an API key does.
 const agent = new Agent(undefined, undefined, MODEL.id, 24, {
   provider: process.env.SHELRA_DEMO_NO_KEY === "1" ? undefined : provider,
-  persistSession: false,
+  // SHELRA_DEMO_PERSIST=1 saves the chat under HOME, so a second run in the same HOME can /resume it.
+  persistSession: process.env.SHELRA_DEMO_PERSIST === "1",
   cwd: dir,
   sandboxMode: "off",
 });
