@@ -199,5 +199,9 @@ standing rules, facts and corrections from the user ("always …", "never …", 
 captured without a model call; a preference about how Shelra talks to the person goes to the user-wide store. A project entry gains credit when the
 host runs the checks a project states and they pass with it in context, and loses it when they fail (a
 project that states no checks gives no credit); a procedure that was part of
-two passing turns is promoted to `.agents/skills/<slug>/SKILL.md`. Design and evidence: `docs/design/shelra-memory-engine.md`;
-proof suite: `bench/suites/shelra-memory-v0.1.json`.
+two passing turns is proposed as a skill and written to `.agents/skills/<slug>/SKILL.md` only on the user's yes
+(`shelra memory promote`). A fact a correction or a newer fact replaced leaves the index as superseded, its file kept,
+and the newer entry says what it replaced; a full store archives its least useful inference instead of refusing.
+`shelra memory` lists, shows, explains (`why "<request>"`) and counts it. Design and evidence:
+`docs/architecture/18-MEMORY-V2.md` (current) and `docs/design/shelra-memory-engine.md`; proof suite:
+`bench/suites/shelra-memory-v0.1.json`; retrieval benchmark: `bench/memory/`.

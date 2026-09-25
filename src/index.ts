@@ -2146,6 +2146,32 @@ program
   });
 
 program
+  .command("memory [action] [argument]")
+  .description(
+    'What Shelra remembers about this project and you: list, show <entry>, why "<request>" (what that request would be given, and why), stats, skills (proposed from what worked), promote <slug>, decline <slug>',
+  )
+  .option("--all", "list: include entries that are no longer current (superseded or archived)")
+  .option("--previous <request>", "why: the request before this one, for a follow-up")
+  .option("--full", "why: print the memory section exactly as the model would get it")
+  .action(
+    async (
+      action: string | undefined,
+      argument: string | undefined,
+      options: { all?: boolean; previous?: string; full?: boolean },
+    ) => {
+      const { runMemoryCommand } = await import("./memory/cli");
+      const directory =
+        program.getOptionValueSource("directory") === "cli"
+          ? stringOption(program.opts<CliOptions>().directory)
+          : undefined;
+      const result = runMemoryCommand(directory ?? process.cwd(), action, argument, options);
+      if (result.exitCode === 0) console.log(result.output);
+      else console.error(result.output);
+      process.exitCode = result.exitCode;
+    },
+  );
+
+program
   .command("trace [session]")
   .description(
     "Show what a session did, turn by turn, from its local trace (~/.shelra/logs/sessions): the latest session by default",

@@ -78,7 +78,7 @@ import {
   turnQualifiesForReflection,
 } from "../memory/reflection";
 import type { MemoryContext } from "../memory/retrieval";
-import { promoteProceduresToSkills } from "../memory/skills";
+import { proposeProceduresAsSkills } from "../memory/skills";
 import {
   appendReflectionAudit,
   creditMemoryUse,
@@ -4169,9 +4169,10 @@ export class Agent {
       // run, the model answers now, so one deferred reflection from an earlier turn runs too.
       if (report.qualified && report.error) queuePendingReflection(scope, digest, outcome);
       else if (!signal.aborted) await this.reflectDeferred(scope, modelId, signal);
-      const promotion = promoteProceduresToSkills(scope, this.bash.getRootCwd(), listMemoryRecords(scope));
-      if (promotion.promoted.length > 0) {
-        this.kernel?.recordObservation(`Skills: promoted ${promotion.promoted.join(", ")}`);
+      // A procedure that earned it is proposed as a skill; only the user's yes writes it (doc 18 §8).
+      const proposal = proposeProceduresAsSkills(scope, this.bash.getRootCwd(), listMemoryRecords(scope));
+      if (proposal.proposed.length > 0) {
+        this.kernel?.recordObservation(`Skills proposed for approval: ${proposal.proposed.join(", ")}`);
       }
     } catch (error) {
       // learning must never fail the turn

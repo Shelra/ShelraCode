@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -13,7 +13,13 @@ import {
   type TurnDigest,
   turnQualifiesForReflection,
 } from "./reflection";
-import { promoteProceduresToSkills, skillPathFor } from "./skills";
+import {
+  approveSkillProposal,
+  declineSkillProposal,
+  listSkillProposals,
+  proposeProceduresAsSkills,
+  skillPathFor,
+} from "./skills";
 import {
   creditMemoryUse,
   listMemoryRecords,
@@ -379,7 +385,7 @@ describe("automatic memory capture", () => {
     expect(provider.requests).toHaveLength(0);
   });
 
-  it("promotes a procedure to a project skill once it was part of two passing turns, not for being retrieved", () => {
+  it("proposes a procedure as a skill once it was part of two passing turns, and writes it only on the user's yes", () => {
     const scope = projectMemoryScope(workspace);
     admitCandidates(scope, [
       {
@@ -393,20 +399,55 @@ describe("automatic memory capture", () => {
         confidence: 0.9,
       },
     ]);
-    const before = promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope));
-    expect(before.promoted).toEqual([]);
+    const propose = () => proposeProceduresAsSkills(scope, workspace, listMemoryRecords(scope)).proposed;
+    expect(propose()).toEqual([]);
     // Retrieved twice, helped nobody yet (audit doc 15, M3): no skill.
     recordMemoryUse(scope, ["regenerate-api-client"]);
     recordMemoryUse(scope, ["regenerate-api-client"]);
-    expect(promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope)).promoted).toEqual([]);
+    expect(propose()).toEqual([]);
     creditMemoryUse(scope, ["regenerate-api-client"], 1);
     creditMemoryUse(scope, ["regenerate-api-client"], 1);
-    const after = promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope));
-    expect(after.promoted).toEqual(["regenerate-api-client"]);
+    expect(propose()).toEqual(["regenerate-api-client"]);
+    // A skill changes how Shelra works: nothing is written until the user approves (doc 18 §8).
+    expect(existsSync(skillPathFor(workspace, "regenerate-api-client"))).toBe(false);
+    expect(propose()).toEqual([]);
+    expect(listSkillProposals(scope, workspace).map((proposal) => proposal.slug)).toEqual(["regenerate-api-client"]);
+
+    expect(approveSkillProposal(scope, workspace, "regenerate-api-client").ok).toBe(true);
     const skill = readFileSync(skillPathFor(workspace, "regenerate-api-client"), "utf8");
     expect(skill).toContain("name: regenerate-api-client");
     expect(skill).toContain("bun run codegen");
-    expect(promoteProceduresToSkills(scope, workspace, listMemoryRecords(scope)).promoted).toEqual([]);
+    expect(propose()).toEqual([]);
+    expect(listSkillProposals(scope, workspace)).toEqual([]);
     expect(readMemoryHistory(scope).some((event) => event.event === "promoted")).toBe(true);
+  });
+
+  it("does not propose a declined skill again until the procedure changes", () => {
+    const scope = projectMemoryScope(workspace);
+    const procedure = (body: string) => ({
+      slug: "release-steps",
+      title: "Cut a release",
+      hook: "release: bump the version, update the changelog, tag and push",
+      type: "procedure" as const,
+      description: "Release procedure",
+      body,
+      source: "observed" as const,
+      confidence: 0.9,
+    });
+    const steps = [
+      "1. bun run version:bump",
+      "2. Update CHANGELOG.md with the merged pull requests",
+      "3. git tag and git push --tags",
+    ].join("\n");
+    admitCandidates(scope, [procedure(steps)]);
+    creditMemoryUse(scope, ["release-steps"], 1);
+    creditMemoryUse(scope, ["release-steps"], 1);
+    const propose = () => proposeProceduresAsSkills(scope, workspace, listMemoryRecords(scope)).proposed;
+    expect(propose()).toEqual(["release-steps"]);
+    const revision = listMemoryRecords(scope)[0]?.entry.frontmatter.metadata.revision ?? 1;
+    expect(declineSkillProposal(scope, workspace, "release-steps", revision).ok).toBe(true);
+    expect(propose()).toEqual([]);
+    admitCandidates(scope, [procedure(`${steps}\n4. Announce the release in the changelog discussion thread`)]);
+    expect(propose()).toEqual(["release-steps"]);
   });
 });

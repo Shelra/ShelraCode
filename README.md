@@ -184,6 +184,28 @@ but ran no real check is asked to verify, and is marked "Not verified" if it
 never does. The existing Plan-mode view renders the same fields; plans without
 questions are retained when switching from Plan to Agent mode.
 
+**Project memory:**
+
+```bash
+shelra memory                                   # your rules, what Shelra learned here, and yours in every project
+shelra memory why "the login test fails again"  # what that request would be given, and why
+shelra memory show deploy-fly                   # one entry, what it replaced, its history
+shelra memory stats                             # from turns that did work to what was kept
+shelra memory skills                            # procedures proposed as skills; promote <slug> or decline <slug>
+```
+
+Shelra remembers a project as it works on it, in `.shelra/memory/` at the
+project's root: the rules, facts and corrections you state ("always …", "we
+don't use npm anymore") in your own words, what it learned from turns that
+changed and checked code, and a one-line episode of every turn that did work,
+however it ended, including what failed and what got past it. Your rules reach
+every request; the rest is ranked for each request, in English or Spanish, and
+the past attempts most like it are shown as short lessons. A correction retires
+the facts it contradicts, which stay readable as what used to be true. A
+preference about how Shelra talks to you is kept in `~/.shelra/memory/` for
+every project. A procedure that helped two turns pass the project's checks is
+proposed as a skill and written only when you promote it.
+
 **Project decisions:**
 
 ```bash
