@@ -121,6 +121,8 @@ interface Round {
   served?: string;
   /** The provider ended the round because the model stopped making progress. */
   hostStop?: HostStopReason;
+  /** The round works until its request is aborted (its budget or the user), then reports the abort. */
+  untilAborted?: boolean;
 }
 
 /** Plays one scripted round per model request; the last round repeats. */
@@ -175,6 +177,13 @@ class ScriptedProvider implements ProviderAdapter {
         }
         yield* round.events;
         if (round.hostStop) request.onHostStop?.(round.hostStop);
+        if (round.untilAborted) {
+          await new Promise<void>((resolve) => {
+            if (request.signal?.aborted) resolve();
+            request.signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+          yield { type: "abort" } as ProviderEvent;
+        }
       })(),
       response:
         round.fail !== undefined
@@ -384,6 +393,40 @@ describe("a model that stops making progress (seen live 2026-09-25)", () => {
     expect(provider.requests).toHaveLength(2);
     expect(text.match(/\[Shelra stopped the round/gu)).toHaveLength(1);
     expect(chunks.at(-1)).toEqual({ type: "done" });
+  });
+});
+
+describe("a round that uses up its time budget (seen live 2026-09-25)", () => {
+  it("goes on at once, keeping its steps, and is not reported as a model that stopped answering", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const provider = new ScriptedProvider([
+      { events: [], completedSteps: toolStep, untilAborted: true, fail: abortError() },
+      answer("Finished the track."),
+    ]);
+    const agent = new Agent(undefined, undefined, "primary-model", undefined, {
+      cwd: testWorkspace,
+      provider,
+      interruptionBackoffMs: [5_000],
+      modelTimeout: { totalMs: 200, stepMs: 60_000, chunkMs: 60_000 },
+    });
+    const started = Date.now();
+    let text = "";
+    for await (const chunk of agent.processMessage("Build the race track")) {
+      if (chunk.type === "content") text += chunk.content ?? "";
+    }
+
+    expect(provider.requests).toHaveLength(2);
+    expect(text).toContain(
+      "[This round reached its 1-minute budget; its completed steps are kept and the turn goes on.]",
+    );
+    expect(text).not.toContain("Model connection interrupted");
+    expect(text).toContain("Finished the track.");
+    // No retry pause: the 5 s backoff a failing model gets was not waited.
+    expect(Date.now() - started).toBeLessThan(4_000);
+    // The next round carries the completed step and says why the last one ended.
+    const sent = JSON.stringify(sentMessages(provider, 1));
+    expect(sent).toContain("export const a = 1;");
+    expect(sent).toContain("This round ended: the round reached its 1-minute budget.");
   });
 });
 

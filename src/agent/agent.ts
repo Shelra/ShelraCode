@@ -1443,6 +1443,25 @@ export class Agent {
       this.messages.push({ role: "user", content: interruptionContinuation(reason) });
       this.messageSeqs.push(null);
     }
+    // A round its own budget ended after doing work is not a model failing (seen live 2026-09-25: a working turn was
+    // reported "not answering" every 15 minutes, counted as a silence and paused 2 s each time). It goes on at once;
+    // only the per-turn bound on interruptions still applies.
+    if (isRoundBudget(reason) && args.completedSteps.length > 0) {
+      state.total += 1;
+      this.kernel?.recordObservation(`Round budget reached (${reason}); continuing.`);
+      this.persistKernelIndex();
+      if (state.total > MAX_INTERRUPTIONS_PER_TURN) {
+        return {
+          action: "pause",
+          message: `The turn reached its bound of ${MAX_INTERRUPTIONS_PER_TURN} rounds cut short.`,
+        };
+      }
+      yield {
+        type: "content",
+        content: `\n\n[This round reached its ${reason.replace("the round reached its ", "")}; its completed steps are kept and the turn goes on.]\n\n`,
+      };
+      return { action: "retry" };
+    }
     state.withoutProgress += 1;
     state.onModel += 1;
     state.total += 1;
@@ -2944,6 +2963,8 @@ export class Agent {
     let repairEscalated = false;
     /** The model was told once this turn that the host stopped a round of it for making no progress. */
     let hostStopNoted = false;
+    /** The current round's total budget (`modelTimeout.totalMs`), replaced at each round. */
+    let roundBudget: ReturnType<typeof generationBudget> | undefined;
     /** The model was asked once this turn to apply memory it was given and did not act on (doc 18 §4.2b). */
     let memoryApplyNudged = false;
     /**
@@ -3088,7 +3109,11 @@ export class Agent {
           const turnReasoningEffort = repairEscalated
             ? (getSupportedReasoningEfforts(runtime.modelId).at(-1) ?? this.resolveReasoningEffort(runtime.modelId))
             : this.resolveReasoningEffort(runtime.modelId);
-          const modelSignal = withAbortTimeout(signal, this.modelTimeout.totalMs);
+          // The round's budget ends it with its own reason, so a round that used up its time while the model was
+          // answering is told apart from a model that went silent (seen live 2026-09-25).
+          roundBudget?.dispose();
+          roundBudget = generationBudget(this.modelTimeout.totalMs);
+          const modelSignal = combineAbortSignals(signal, roundBudget.signal);
           const stream = provider.stream({
             modelId: runtime.modelId,
             system: requestSystem,
@@ -3472,6 +3497,11 @@ export class Agent {
             return;
           }
 
+          // However the cut surfaced (an abort part, an error part, a rejected response), a round its budget ended
+          // was not a silence.
+          if (interruption && roundBudget?.signal?.aborted && !signal.aborted) {
+            interruption = { reason: roundBudgetReason(this.modelTimeout.totalMs), error: interruption.error };
+          }
           if (interruption) {
             const outcome = yield* this.recoverFromInterruption({
               ...interruption,
@@ -4948,7 +4978,36 @@ function hostStopContinuation(why: string): string {
 }
 
 function interruptionContinuation(reason: string): string {
-  return `The connection to the model was interrupted (${reason}). Your completed steps are above and their effects are on disk. Continue the task from where it stopped; do not redo finished work.`;
+  const what = isRoundBudget(reason)
+    ? `This round ended: ${reason}.`
+    : `The connection to the model was interrupted (${reason}).`;
+  return `${what} Your completed steps are above and their effects are on disk. Continue the task from where it stopped; do not redo finished work.`;
+}
+
+/** Aborts one generation when its total budget runs out, with a reason of its own. */
+class RoundBudgetExceeded extends Error {
+  constructor(totalMs: number) {
+    super(roundBudgetReason(totalMs));
+    this.name = "RoundBudgetExceeded";
+  }
+}
+
+/** The total budget of one generation (`totalMs`); the timer never holds the process open. */
+function generationBudget(totalMs: number | undefined): { signal: AbortSignal | undefined; dispose(): void } {
+  if (totalMs === undefined || !Number.isFinite(totalMs) || totalMs <= 0) return { signal: undefined, dispose() {} };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new RoundBudgetExceeded(totalMs)), totalMs);
+  timer.unref?.();
+  return { signal: controller.signal, dispose: () => clearTimeout(timer) };
+}
+
+function roundBudgetReason(totalMs: number | undefined): string {
+  return `the round reached its ${Math.max(1, Math.round((totalMs ?? 0) / 60_000))}-minute budget`;
+}
+
+/** A round its own budget ended, while the model was working: not a failure of the model. */
+function isRoundBudget(reason: string): boolean {
+  return reason.startsWith("the round reached its");
 }
 
 /** A short, user-facing cause for a failed model round. */
