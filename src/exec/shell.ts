@@ -328,6 +328,29 @@ export async function killProcessTree(pid: number | undefined, graceMs = 2_000):
   signalGroup("SIGKILL");
 }
 
+/**
+ * Windows: stops what a stopped shell was still starting. `taskkill /T` lists the tree once, so a child the shell was
+ * creating at that moment outlives it, orphaned (seen 2026-09-25: one test server left running after each full test
+ * run). The orphan's parent id still names the shell. Only processes started since `since` are stopped, and nothing
+ * when a live process has taken that id again. Never throws.
+ */
+export async function stopOrphansOf(pid: number | undefined, since: Date): Promise<void> {
+  if (!isWindows || !pid || pid <= 0) return;
+  const script = [
+    `if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { return }`,
+    `$since = [datetime]::Parse('${since.toISOString()}').ToLocalTime()`,
+    `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | Where-Object { $_.CreationDate -ge $since } | ForEach-Object { taskkill /pid $_.ProcessId /T /F | Out-Null }`,
+  ].join("; ");
+  await new Promise<void>((resolve) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { windowsHide: true, timeout: 15_000 },
+      () => resolve(),
+    );
+  });
+}
+
 /** Synchronous tree kill, for `process.on("exit")` handlers where async work never runs. */
 export function killProcessTreeSync(pid: number | undefined): void {
   if (!pid || pid <= 0) return;

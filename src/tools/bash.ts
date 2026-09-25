@@ -4,7 +4,7 @@ import { mkdtemp, rm, stat, unlink } from "fs/promises";
 import os from "os";
 import path from "path";
 import { runCommand } from "../exec/command";
-import { buildShellInvocation, killProcessTree, powerShellParseHint, spawnOptions } from "../exec/shell";
+import { buildShellInvocation, killProcessTree, powerShellParseHint, spawnOptions, stopOrphansOf } from "../exec/shell";
 import { executeEventHooks } from "../hooks/index";
 import type { CwdChangedHookInput } from "../hooks/types";
 import type { ToolResult } from "../types/index";
@@ -483,6 +483,7 @@ async function stopTree(entry: BackgroundProcess): Promise<void> {
   });
   await killProcessTree(entry.pid, 2_000);
   await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 3_000))]);
+  await stopOrphansOf(entry.pid, entry.startedAt);
   entry.child.stdout?.destroy();
   entry.child.stderr?.destroy();
   entry.alive = false;
