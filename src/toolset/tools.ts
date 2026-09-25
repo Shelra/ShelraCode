@@ -50,7 +50,14 @@ import {
 } from "../tools/file";
 import { executeGrep } from "../tools/grep";
 import type { ScheduleDaemonStatus, ScheduleManager, StoredSchedule } from "../tools/schedule";
-import type { AgentMode, PlanAcceptanceCriterion, TaskRequest, ToolResult } from "../types/index";
+import type {
+  AgentMode,
+  PlanAcceptanceCriterion,
+  PlanStepStatus,
+  PlanStepUpdate,
+  TaskRequest,
+  ToolResult,
+} from "../types/index";
 import {
   type CustomSubagentConfig,
   type DestructiveCommandPolicy,
@@ -126,6 +133,11 @@ interface CreateToolsOptions {
    * approval question); without it there is no propose_decision.
    */
   proposeDecision?: (proposal: Omit<DecisionProposal, "source">) => Promise<ToolResult>;
+  /**
+   * Called on each plan step update: returns the check Shelra saw pass since the step started (for `complete`), or
+   * null when it saw none, which records the step as `claimed`. Without it a `complete` is taken as given.
+   */
+  planStepCheck?: (index: number, status: PlanStepStatus) => string | null;
 }
 
 /**
@@ -1414,10 +1426,23 @@ export function createTools(
           output: "No plan is published in this session, so there is no step to update. Nothing changed.",
         };
       }
-      const update = { index: index - 1, status, ...(evidence?.trim() ? { evidence: evidence.trim() } : {}) };
+      // A step is complete on a check Shelra saw pass since it started, not on the model's word (audit gap #8).
+      const checkedBy = options.planStepCheck ? options.planStepCheck(index - 1, status) : undefined;
+      const recorded: PlanStepStatus = status === "complete" && checkedBy === null ? "claimed" : status;
+      const update: PlanStepUpdate = {
+        index: index - 1,
+        status: recorded,
+        ...(evidence?.trim() ? { evidence: evidence.trim() } : {}),
+        ...(recorded === "complete" && checkedBy ? { checkedBy } : {}),
+      };
       return {
         success: true,
-        output: `Plan step ${index} is ${status}${update.evidence ? `: ${update.evidence}` : "."}`,
+        output:
+          recorded === "claimed"
+            ? `Plan step ${index} is recorded as claimed, not complete: Shelra has seen no check pass since the step started. Run a check that exercises it, then mark it complete again.`
+            : `Plan step ${index} is ${status}${update.evidence ? `: ${update.evidence}` : "."}${
+                update.checkedBy ? ` (checked by: ${update.checkedBy})` : ""
+              }`,
         planUpdate: update,
       };
     },

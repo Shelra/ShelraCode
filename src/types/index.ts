@@ -18,14 +18,23 @@ export interface PlanStep {
   /** Runtime-owned execution state, updated through update_plan_step. */
   status?: PlanStepStatus;
   evidence?: string;
+  /** The check Shelra saw pass since the step started, which makes a `complete` the host's and not the model's word. */
+  checkedBy?: string;
 }
 
-export type PlanStepStatus = "pending" | "working" | "complete" | "failed";
+/**
+ * `claimed`: the model marked the step complete, and Shelra has seen no check pass since the step started (audit gap
+ * #8, seen live 2026-09-25: all 14 steps of a plan were marked complete, "verified by running the application", in a
+ * turn Shelra ended not verified while the page answered 500). Only a step with a check behind it is `complete`.
+ */
+export type PlanStepStatus = "pending" | "working" | "complete" | "claimed" | "failed";
 
 export interface PlanStepUpdate {
   index: number;
   status: PlanStepStatus;
   evidence?: string;
+  /** For `complete`, the check Shelra saw pass since the step started. */
+  checkedBy?: string;
 }
 
 export interface PlanAcceptanceCriterion {

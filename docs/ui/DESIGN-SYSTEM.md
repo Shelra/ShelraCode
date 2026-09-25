@@ -100,7 +100,10 @@ with `▀` and `▄`.
   log shows 24 rows of an edit, 12 of a new file and 8 of a deleted one, then `… +N lines (ctrl+o to
   expand)`; `ctrl+o` shows all of it. `/diff` lists the changed files with their counts.
 - **Plan**: a live checklist under the log while the agent works (at most five rows around the active
-  step), numbered chips and status glyphs; it folds to `✓ Plan 4/4` when the turn ends.
+  step), numbered chips and status glyphs; it folds to `✓ Plan 4/4` when the turn ends. A step the model marked
+  complete with no check Shelra saw pass since it started is `claimed`: `·` subtle and the word `claimed` in warning,
+  counted apart (`[ PLAN 1/3 ] · 2 claimed`), and a plan that ends with claimed steps folds to
+  `· Plan 1/3 checked · 2 claimed, not checked`, never to a tick.
 - **Turn summary**: `─ 2 files +6 −1 · tests ✓ · 42s`, additions in accent, removals in subtle.
 - **Views** (`/plan` `/diff` `/checks` `/context`, `alt+2…5`): a tab row `Log Plan Changes Checks Context`
   with the active tab in accent and dark text, a hairline under it, `esc back` on the right.

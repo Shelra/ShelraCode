@@ -281,13 +281,28 @@ describe("ThoughtView", () => {
   });
 });
 
-const planOf = (statuses: Array<"pending" | "working" | "complete" | "failed">): Plan => ({
+const planOf = (statuses: Array<"pending" | "working" | "complete" | "claimed" | "failed">): Plan => ({
   title: "Fix",
   summary: "Fix it",
   steps: statuses.map((status, index) => ({ title: `Step ${index + 1}`, description: `Do ${index + 1}`, status })),
 });
 
 describe("PlanBlock", () => {
+  it("never ticks a step the model only claimed, and says so on the row and in the count (audit gap #8)", async () => {
+    const live = await frameOf(
+      <PlanBlock t={dark} plan={planOf(["claimed", "claimed", "working", "pending"])} width={90} detailed={false} />,
+    );
+    expect(live).toContain("[ PLAN 0/4 ] · 2 claimed");
+    expect(live).toContain("· Step 1  claimed");
+    expect(live).not.toContain("✓");
+
+    const ended = await frameOf(
+      <PlanBlock t={dark} plan={planOf(["claimed", "claimed", "complete"])} width={90} detailed={false} />,
+    );
+    expect(ended).toContain("· Plan 1/3 checked · 2 claimed, not checked");
+    expect(ended).not.toContain("✓ Plan");
+  });
+
   it("shows the steps around the active one while the plan is unfinished", async () => {
     const frame = await frameOf(
       <PlanBlock t={dark} plan={planOf(["complete", "complete", "working", "pending"])} width={90} detailed={false} />,

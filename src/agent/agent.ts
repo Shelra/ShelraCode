@@ -3104,6 +3104,12 @@ export class Agent {
     let urlRepairAsked = false;
     /** This turn published the plan whose criteria are active, rather than an earlier turn. */
     let planPublishedThisTurn = false;
+    /**
+     * How much evidence the turn had when each plan step started (or when the plan was published): a check that passed
+     * after that is what makes the step's `complete` the host's word rather than the model's (audit gap #8).
+     */
+    const stepStartEvidence = new Map<number, number>();
+    let planStartEvidence = 0;
     /** The host's last opening of the app this turn (src/agent/runtime-smoke.ts), with the workspace as it was then. */
     let lastSmoke: { result: SmokeResult; mutationEvents: number; state: WorkspaceState | null } | null = null;
     /** Requests sent this turn to fix an app that does not work in the browser. */
@@ -3211,6 +3217,15 @@ export class Agent {
             planState: this.planState,
             toolGroups: loadToolGroupSettings(),
             ...this.destructiveCommandOption(),
+            planStepCheck: (index, status) => {
+              if (status === "working" || status === "pending") {
+                stepStartEvidence.set(index, this.turnVerificationEvidence.length);
+                return null;
+              }
+              if (status !== "complete") return null;
+              const since = stepStartEvidence.get(index) ?? planStartEvidence;
+              return this.turnVerificationEvidence.slice(since).at(-1) ?? null;
+            },
             // A plan criterion's command runs once when the plan is published, to prove it fails before the
             // change; once the turn has changed anything, "before" is gone and it is not run.
             probeCriterionCommand: async (command, abortSignal) => {
@@ -3406,6 +3421,8 @@ export class Agent {
                   this.activeAcceptanceCriteria = tr.plan.acceptanceCriteria;
                   this.activePlanSteps = tr.plan.steps;
                   planPublishedThisTurn = true;
+                  planStartEvidence = this.turnVerificationEvidence.length;
+                  stepStartEvidence.clear();
                 }
                 if (tr.success && tr.blocker) turnBlocker = tr.blocker;
                 if (tr.success && tr.planUpdate?.status === "complete") {

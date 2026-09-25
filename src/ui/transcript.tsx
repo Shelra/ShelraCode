@@ -42,6 +42,9 @@ export function planStepLook(
       return { glyph: GLYPH.active, glyphColor: t.brand, titleColor: t.text };
     case "complete":
       return { glyph: GLYPH.done, glyphColor: t.success, titleColor: t.textMuted };
+    // Marked complete by the model with no check behind it: not a tick (audit gap #8). The row also says "claimed".
+    case "claimed":
+      return { glyph: GLYPH.quiet, glyphColor: t.textDim, titleColor: t.textMuted };
     case "failed":
       return { glyph: GLYPH.failed, glyphColor: t.danger, titleColor: t.danger };
     default:
@@ -302,14 +305,29 @@ export function TranscriptActivityView({
 
 /**
  * The plan as a checklist in the log. Unfinished, it shows the steps around the one being worked on
- * (at most five, like a to-do list); finished, it folds to one line. Detail mode shows every step.
+ * (at most five, like a to-do list); finished, it folds to one line. Detail mode shows every step. A step the model
+ * marked complete with no check behind it is "claimed" (audit gap #8): it never counts as done, and a plan that ends
+ * with claimed steps folds to a quiet line that says so, never to a tick.
  */
 export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; width: number; detailed: boolean }) {
   const steps = plan.steps;
   const total = steps.length;
   const done = steps.filter((step) => step.status === "complete").length;
+  const claimed = steps.filter((step) => step.status === "claimed").length;
   if (done === total && !detailed) {
     return <ActivityLine t={t} tone="success" verb={`Plan ${done}/${total}`} width={width} glyph={GLYPH.done} />;
+  }
+  if (claimed > 0 && done + claimed === total && !detailed) {
+    return (
+      <ActivityLine
+        t={t}
+        tone="neutral"
+        verb={`Plan ${done}/${total} checked · ${claimed} claimed, not checked`}
+        width={width}
+        quiet
+        glyph={GLYPH.quiet}
+      />
+    );
   }
 
   const current = steps.findIndex((step) => step.status === "working" || step.status === "failed");
@@ -333,12 +351,14 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
         <span style={{ fg: t.brand }}>{"[ PLAN"}</span>
         <span style={{ fg: t.textMuted }}>{` ${done}/${total}`}</span>
         <span style={{ fg: t.brand }}>{" ]"}</span>
+        {claimed > 0 ? <span style={{ fg: t.textMuted }}>{" · "}</span> : null}
+        {claimed > 0 ? <span style={{ fg: t.warning }}>{`${claimed} claimed`}</span> : null}
       </text>
       {start > 0 ? <text fg={t.textDim}>{`  ${start} earlier`}</text> : null}
       {visible.map((step, offset) => {
         const status = step.status ?? "pending";
         const { glyph, glyphColor, titleColor } = planStepLook(status, t);
-        const title = truncateText(step.title, room);
+        const title = truncateText(step.title, status === "claimed" ? Math.max(12, room - 9) : room);
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: plan steps are ordered and titles may repeat
           <box key={`${start + offset}:${step.title}`} flexDirection="column" flexShrink={0}>
@@ -353,9 +373,13 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
               ) : (
                 <span style={{ fg: titleColor }}>{title}</span>
               )}
+              {status === "claimed" ? <span style={{ fg: t.warning }}>{"  claimed"}</span> : null}
             </text>
             {detailed && step.description ? (
               <text fg={t.textMuted} wrapMode="none">{`  ${truncateText(step.description, room)}`}</text>
+            ) : null}
+            {detailed && step.checkedBy ? (
+              <text fg={t.textMuted} wrapMode="none">{`  checked: ${truncateText(step.checkedBy, room - 9)}`}</text>
             ) : null}
           </box>
         );

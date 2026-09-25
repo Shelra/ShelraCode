@@ -21,7 +21,12 @@ export function resolvePlanResults(results: ReadonlyArray<ToolResult | null | un
       ...plan,
       steps: plan.steps.map((step, index) =>
         index === update.index
-          ? { ...step, status: update.status, ...(update.evidence ? { evidence: update.evidence } : {}) }
+          ? {
+              ...step,
+              status: update.status,
+              ...(update.evidence ? { evidence: update.evidence } : {}),
+              ...(update.checkedBy ? { checkedBy: update.checkedBy } : {}),
+            }
           : step,
       ),
     };
