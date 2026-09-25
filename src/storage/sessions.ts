@@ -80,7 +80,7 @@ export class SessionStore {
       SELECT id, workspace_id, title, recap_text, recap_model, recap_updated_at, model, mode, cwd_at_start, cwd_last, status, created_at, updated_at
       FROM sessions
       WHERE workspace_id = ?
-      ORDER BY updated_at DESC
+      ORDER BY updated_at DESC, rowid DESC
       LIMIT 1
     `)
       .get(this.workspace.id) as SessionRow | undefined;
@@ -100,7 +100,7 @@ export class SessionStore {
         (SELECT m.message_json FROM messages m WHERE m.session_id = s.id AND m.role = 'user' ORDER BY m.seq LIMIT 1) AS first_user
       FROM sessions s JOIN workspaces w ON w.id = s.workspace_id
       WHERE EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)${options.all ? "" : " AND s.workspace_id = @workspace_id"}
-      ORDER BY s.updated_at DESC
+      ORDER BY s.updated_at DESC, s.rowid DESC
       LIMIT @limit
     `)
       .all({ workspace_id: this.workspace.id, limit: options.limit ?? 20 }) as Array<{
