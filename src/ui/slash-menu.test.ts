@@ -21,4 +21,11 @@ describe("filterSlashMenuItems", () => {
   it("finds the recaps command from singular aliases", () => {
     expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "recap")[0]?.id).toBe("recaps");
   });
+
+  it("lists /resume with the other commands, and finds it by the words people use for earlier chats", () => {
+    expect(SLASH_MENU_ITEMS.map((item) => item.id)).toContain("resume");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "/resume")[0]?.id).toBe("resume");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "sessions")[0]?.id).toBe("resume");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "history")[0]?.id).toBe("resume");
+  });
 });

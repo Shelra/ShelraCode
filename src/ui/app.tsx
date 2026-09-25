@@ -25,6 +25,8 @@ import {
   getSupportedReasoningEfforts,
   normalizeModelId,
 } from "../models/catalog";
+import { SessionStore } from "../storage/index";
+import type { SessionListing } from "../storage/sessions";
 import { createTelegramBridge, type TelegramBridgeHandle } from "../telegram/bridge";
 import { approvePairingCode } from "../telegram/pairing";
 import { createTurnCoordinator } from "../telegram/turn-coordinator";
@@ -37,6 +39,7 @@ import type {
   Plan,
   PlanQuestion,
   ReasoningEffort,
+  SessionSnapshot,
   SubagentStatus,
   ToolCall,
   ToolResult,
@@ -128,6 +131,8 @@ import {
   type PlanQuestionsState,
   PlanView,
 } from "./plan";
+import { parseResumeCommand } from "./resume";
+import { ResumePickerModal } from "./resume-picker";
 import { THOUGHT_DWELL_MS, useDwell, usePacedText } from "./reveal";
 import { buildScheduleBrowseRows, ScheduleBrowserModal } from "./schedule-modal";
 import {
@@ -668,6 +673,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [sandboxSettingsEditing, setSandboxSettingsEditing] = useState<string | null>(null);
   const [sandboxSettingsEditBuffer, setSandboxSettingsEditBuffer] = useState("");
   const [showRecapPicker, setShowRecapPicker] = useState(false);
+  /** /resume: the saved chats listed, the cursor, whether they span every folder, and why one would not open. */
+  const [resumePicker, setResumePicker] = useState<{
+    chats: SessionListing[];
+    index: number;
+    all: boolean;
+    error: string | null;
+  } | null>(null);
   const [recapsEnabled, setRecapsEnabledState] = useState(() => agent.getRecapsEnabled());
   const [showMotionPicker, setShowMotionPicker] = useState(false);
   const [showEffortPicker, setShowEffortPicker] = useState(false);
@@ -2588,35 +2600,87 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     };
   }, [interruptActiveRun, renderer]);
 
-  const resetToNewSession = useCallback(() => {
-    const snapshot = agent.startNewSession();
-    setMessages(snapshot?.entries ?? []);
-    setExpandedMessages(new Set());
-    activeTurnRef.current = null;
-    clearLiveTurnUi();
-    setSessionTitle(snapshot?.session.title ?? null);
-    setSessionId(snapshot?.session.id ?? agent.getSessionId());
-    setSessionRecap(agent.getSessionRecap());
-    setActivePlan(null);
-    setPublishedPlan(null);
-    setKernelState(null);
-    setActivityEvents([]);
-    setTurnThoughts([]);
-    setTurnRecalls([]);
-    setHookIssues([]);
-    setMissionTab("log");
-    setTurnError(null);
-    setToolDurations(new Map());
-    setUsageSummary(summarizeSessionUsage(agent.getSessionUsage()));
-    sessionStartedAtRef.current = snapshot?.session.createdAt.getTime() ?? Date.now();
-    setNowTick(Date.now());
-    setShowInspector(false);
-    setInspectorTab("overview");
-    setPqs(initialPlanQuestionsState());
-    replacePasteBlocks([]);
-    queuedMessagesRef.current = [];
-    setQueuedMessages([]);
-  }, [agent, clearLiveTurnUi, replacePasteBlocks]);
+  /** Shows the session the agent now runs: a new one, or a saved one /resume continued. */
+  const showSession = useCallback(
+    (snapshot: SessionSnapshot | null) => {
+      const entries = snapshot?.entries ?? [];
+      setMessages(entries);
+      setExpandedMessages(new Set());
+      activeTurnRef.current = null;
+      clearLiveTurnUi();
+      setSessionTitle(snapshot?.session.title ?? null);
+      setSessionId(snapshot?.session.id ?? agent.getSessionId());
+      setSessionRecap(agent.getSessionRecap());
+      setModeState(agent.getMode());
+      setActivePlan(null);
+      // As at startup: the plan a saved chat last published comes back with it.
+      setPublishedPlan(findLatestPlan(entries));
+      setKernelState(null);
+      setActivityEvents([]);
+      setTurnThoughts([]);
+      setTurnRecalls([]);
+      setHookIssues([]);
+      setMissionTab("log");
+      setTurnError(null);
+      setToolDurations(new Map());
+      setUsageSummary(summarizeSessionUsage(agent.getSessionUsage()));
+      sessionStartedAtRef.current = snapshot?.session.createdAt.getTime() ?? Date.now();
+      setNowTick(Date.now());
+      setShowInspector(false);
+      setInspectorTab("overview");
+      setPqs(initialPlanQuestionsState());
+      replacePasteBlocks([]);
+      queuedMessagesRef.current = [];
+      setQueuedMessages([]);
+    },
+    [agent, clearLiveTurnUi, replacePasteBlocks],
+  );
+
+  const resetToNewSession = useCallback(() => showSession(agent.startNewSession()), [agent, showSession]);
+
+  /** /resume: the chats saved in this folder, or every folder, newest first; the one open now is left out. */
+  const openResumePicker = useCallback(
+    (all: boolean) => {
+      let chats: SessionListing[] = [];
+      let error: string | null = null;
+      try {
+        const current = agent.getSessionId();
+        chats = new SessionStore(agent.getCwd()).listSessions({ all, limit: 50 }).filter((chat) => chat.id !== current);
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : "The saved chats could not be read.";
+      }
+      setResumePicker({ chats, index: 0, all, error });
+    },
+    [agent],
+  );
+
+  /** Continues the chosen chat in place; the picker stays open with the reason when it cannot. */
+  const continueSavedChat = useCallback(
+    (chat: SessionListing) => {
+      if (isProcessingRef.current) {
+        setResumePicker((picker) => picker && { ...picker, error: "Continue it after this turn (esc stops it)." });
+        return;
+      }
+      try {
+        const snapshot = agent.openSavedSession(chat.id);
+        if (!snapshot) {
+          setResumePicker(
+            (picker) => picker && { ...picker, error: "This session does not save chats, so it cannot continue one." },
+          );
+          return;
+        }
+        showSession(snapshot);
+        setResumePicker(null);
+        // The header already names the chat; the notice only confirms the switch, short enough for 80 columns.
+        showNotice("Chat continued", 3200);
+        setTimeout(scrollToBottom, 50);
+      } catch (cause) {
+        const error = cause instanceof Error ? cause.message : "The chat could not be opened.";
+        setResumePicker((picker) => picker && { ...picker, error });
+      }
+    },
+    [agent, showNotice, showSession, scrollToBottom],
+  );
 
   const processMessage = useCallback(
     async (text: string, displayText?: string) => {
@@ -2940,6 +3004,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         resetToNewSession();
         return true;
       }
+      const resume = parseResumeCommand(c);
+      if (resume) {
+        openResumePicker(resume.all);
+        return true;
+      }
       if (c === "/status") {
         setInspectorTab("overview");
         setShowInspector(true);
@@ -3089,6 +3158,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       runHostVerification,
       subAgents,
       toggleModelMode,
+      openResumePicker,
     ],
   );
 
@@ -3099,6 +3169,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       switch (item.id) {
         case "new":
           resetToNewSession();
+          break;
+        case "resume":
+          openResumePicker(false);
           break;
         case "models":
           setShowModelPicker(true);
@@ -3209,6 +3282,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       startupConfig.version,
       toggleModelMode,
       openKnowledge,
+      openResumePicker,
     ],
   );
 
@@ -3221,6 +3295,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     showMcpModal ||
     showSandboxPicker ||
     showRecapPicker ||
+    !!resumePicker ||
     showMotionPicker ||
     showEffortPicker ||
     showWalletPicker ||
@@ -3879,6 +3954,35 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
         return;
       }
+      if (resumePicker) {
+        if (isEscapeKey(key)) {
+          setResumePicker(null);
+          return;
+        }
+        if (key.name === "up" || key.name === "down") {
+          const step = key.name === "up" ? -1 : 1;
+          setResumePicker((picker) =>
+            picker
+              ? {
+                  ...picker,
+                  index: Math.max(0, Math.min(picker.chats.length - 1, picker.index + step)),
+                  error: null,
+                }
+              : picker,
+          );
+          return;
+        }
+        if (key.name === "tab") {
+          openResumePicker(!resumePicker.all);
+          return;
+        }
+        if (key.name === "return") {
+          const chat = resumePicker.chats[resumePicker.index];
+          if (chat) continueSavedChat(chat);
+          return;
+        }
+        return;
+      }
       if (showModelPicker) {
         if (isEscapeKey(key)) {
           setShowModelPicker(false);
@@ -4377,6 +4481,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       knowledgeIndex,
       knowledgePendingDelete,
       knowledgeTab,
+      continueSavedChat,
+      openResumePicker,
+      resumePicker,
     ],
   );
   useKeyboard(handleKey);
@@ -5046,6 +5153,18 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         />
       )}
       {showRecapPicker && <RecapPickerModal t={t} enabled={recapsEnabled} width={width} height={height} />}
+      {resumePicker && (
+        <ResumePickerModal
+          t={t}
+          chats={resumePicker.chats}
+          selectedIndex={resumePicker.index}
+          all={resumePicker.all}
+          width={width}
+          height={height}
+          error={resumePicker.error}
+          now={new Date()}
+        />
+      )}
       {showMotionPicker && <MotionPickerModal t={t} motion={motionPreference} width={width} height={height} />}
       {showEffortPicker && (
         <EffortPickerModal t={t} modelId={model} effort={reasoningEffort} width={width} height={height} />

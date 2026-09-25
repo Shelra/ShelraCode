@@ -33,6 +33,12 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
     aliases: ["reasoning"],
   },
   { id: "new", label: "new session", description: "Start a new session" },
+  {
+    id: "resume",
+    label: "resume",
+    description: "Continue an earlier chat (--all: every folder)",
+    aliases: ["sessions", "history", "chats"],
+  },
   { id: "commit-push", label: "commit & push", description: "Commit and push" },
   { id: "commit-pr", label: "commit & pr", description: "Commit and open a PR" },
   { id: "btw", label: "btw", description: "Ask a side question" },
