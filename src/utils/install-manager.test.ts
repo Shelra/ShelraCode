@@ -10,6 +10,7 @@ import {
   getScriptInstallDir,
   loadScriptInstallMetadata,
   parseChecksumsFile,
+  replaceBinaryInPlace,
   saveScriptInstallMetadata,
 } from "./install-manager";
 
@@ -210,4 +211,63 @@ describe("buildScriptUninstallPlan", () => {
     const plan = buildScriptUninstallPlan({ keepConfig: true, keepData: true }, homeDir);
     expect(plan?.removePaths).toContain(path.join(homeDir, ".shelra", "active.json"));
   });
+});
+
+describe("replacing the installed binary (seen 2026-09-25: an update that said it updated and did not)", () => {
+  const scratch = () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-replace-"));
+    tempDirs.push(dir);
+    return dir;
+  };
+
+  it("puts the new binary in place, moves the old one aside, and clears what an earlier update left", () => {
+    const dir = scratch();
+    const target = path.join(dir, "shelra.exe");
+    fs.writeFileSync(target, "old");
+    fs.writeFileSync(`${target}.old-1`, "older");
+    const download = path.join(dir, "download.exe");
+    fs.writeFileSync(download, "new");
+
+    expect(replaceBinaryInPlace(download, target).success).toBe(true);
+
+    expect(fs.readFileSync(target, "utf8")).toBe("new");
+    const aside = fs.readdirSync(dir).filter((name) => name.startsWith("shelra.exe.old-"));
+    expect(aside).toHaveLength(1);
+    expect(aside[0]).not.toBe("shelra.exe.old-1");
+  });
+
+  it("keeps the installed binary and says so when the new one cannot be put in place", () => {
+    const dir = scratch();
+    const target = path.join(dir, "shelra.exe");
+    fs.writeFileSync(target, "old");
+
+    const result = replaceBinaryInPlace(path.join(dir, "missing.exe"), target);
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("the installed version is unchanged");
+    expect(fs.readFileSync(target, "utf8")).toBe("old");
+  });
+
+  it.skipIf(process.platform !== "win32")(
+    "replaces an executable while it is running",
+    async () => {
+      const dir = scratch();
+      const target = path.join(dir, "shelra.exe");
+      fs.copyFileSync(path.join(process.env.SystemRoot ?? "C:Windows", "System32", "cmd.exe"), target);
+      const download = path.join(dir, "download.exe");
+      fs.writeFileSync(download, "new");
+      const { spawn } = await import("node:child_process");
+      const running = spawn(target, ["/c", "ping -n 20 127.0.0.1 > nul"], { stdio: "ignore", windowsHide: true });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        expect(() => fs.rmSync(target)).toThrow();
+        expect(replaceBinaryInPlace(download, target).success).toBe(true);
+        expect(fs.readFileSync(target, "utf8")).toBe("new");
+      } finally {
+        running.kill();
+        await new Promise((resolve) => running.once("exit", resolve));
+      }
+    },
+    30_000,
+  );
 });

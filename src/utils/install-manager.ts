@@ -1,4 +1,3 @@
-import { spawn } from "child_process";
 import { createHash } from "crypto";
 import fs from "fs";
 import os from "os";
@@ -258,7 +257,7 @@ export async function runScriptManagedUpdate(currentVersion: string): Promise<Sc
     fs.mkdirSync(path.dirname(context.binaryPath), { recursive: true, mode: 0o700 });
 
     if (process.platform === "win32") {
-      return applyWindowsUpdate(tempDir, downloadedPath, context, release);
+      return applyWindowsUpdate(downloadedPath, context, release);
     }
 
     const staging = `${context.binaryPath}.new`;
@@ -276,7 +275,7 @@ export async function runScriptManagedUpdate(currentVersion: string): Promise<Sc
   } catch (error) {
     return { success: false, output: error instanceof Error ? error.message : String(error) };
   } finally {
-    if (process.platform !== "win32") fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
@@ -452,31 +451,54 @@ async function confirm(prompt: string): Promise<boolean> {
 }
 
 function applyWindowsUpdate(
-  tempDir: string,
   downloadedPath: string,
   context: ScriptInstallContext,
   release: ReleaseDownload,
 ): ScriptUpdateRunResult {
-  const script = [
-    "$ErrorActionPreference = 'Stop'",
-    "Start-Sleep -Seconds 2",
-    `Move-Item -LiteralPath '${esc(downloadedPath)}' -Destination '${esc(context.binaryPath)}' -Force`,
-  ].join("\n");
-
-  const scriptPath = path.join(tempDir, "apply-update.ps1");
-  fs.writeFileSync(scriptPath, script);
-
+  const replaced = replaceBinaryInPlace(downloadedPath, context.binaryPath);
+  if (!replaced.success) return replaced;
   saveScriptInstallMetadata({ ...context.metadata, version: release.version, installedAt: new Date().toISOString() });
-
-  const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
-
   return { success: true, output: `Updated ShelraCode to ${release.version}. Restart the CLI to use the new version.` };
 }
 
-function esc(s: string): string {
-  return s.replace(/'/g, "''");
+/**
+ * Puts `downloadedPath` where `target` is, while `target` may be running. Windows refuses to delete or overwrite a
+ * running executable but lets it be renamed, so the old one is moved aside (`<target>.old-<time>`, removed by the next
+ * update) and the new one copied in. Seen 2026-09-25: the update wrote its new version into the install record, then
+ * left the swap to a detached PowerShell that overwrote the file two seconds later; with the CLI still open elsewhere,
+ * or the process that launched it gone, the swap never happened and nothing said so. Now the swap happens here, and a
+ * failure puts the old binary back and says why. Never throws.
+ */
+export function replaceBinaryInPlace(downloadedPath: string, target: string): ScriptUpdateRunResult {
+  const dir = path.dirname(target);
+  const base = path.basename(target);
+  for (const name of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
+    if (!name.startsWith(`${base}.old-`)) continue;
+    try {
+      fs.rmSync(path.join(dir, name), { force: true });
+    } catch {
+      // Still running in another open CLI: it goes at a later update.
+    }
+  }
+  const aside = `${target}.old-${Date.now()}`;
+  let movedAside = false;
+  try {
+    if (fs.existsSync(target)) {
+      fs.renameSync(target, aside);
+      movedAside = true;
+    }
+    fs.copyFileSync(downloadedPath, target);
+    return { success: true, output: `Replaced ${target}.` };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    try {
+      if (movedAside && !fs.existsSync(target)) fs.renameSync(aside, target);
+    } catch {
+      return { success: false, output: `Could not replace ${target} (${reason}); the previous binary is at ${aside}.` };
+    }
+    return {
+      success: false,
+      output: `Could not replace ${target} (${reason}); the installed version is unchanged. Close every running ShelraCode and run the update again.`,
+    };
+  }
 }
