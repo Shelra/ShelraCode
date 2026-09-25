@@ -25,6 +25,15 @@ const QUERY_WORDS = 32;
 
 /** A request about Shelra's own memory is answered from memory, not from the web. */
 const ABOUT_MEMORY_RE = /\b(?:memoria|memory|memories|recu[eé]rdame|remind me|remember)\b/iu;
+/** A question about memory is short ("¿Qué tienes en la memoria?"); a longer request that mentions memory is work. */
+const MEMORY_QUESTION_WORDS = 12;
+/**
+ * A request that asks for a search gets one, whatever else it mentions. Seen live 2026-09-25: "…si necesitas contexto
+ * realiza una búsqueda profunda en google, documentación… puedes consultar la memoria" was not researched, because it
+ * mentioned memory, and the model went straight to editing.
+ */
+const ASKS_FOR_SEARCH_RE =
+  /\b(?:busca|buscar|b[uú]squeda|investiga|investigar|googl\w*|documentaci[oó]n|search|research|look\s+up)\b/iu;
 
 /** `SHELRA_RESEARCH=off` turns the search before the work off. */
 export function researchEnabled(): boolean {
@@ -34,7 +43,9 @@ export function researchEnabled(): boolean {
 /** Whether a request is work worth researching: not a greeting, an approval, or a question about memory. */
 export function wantsResearch(request: string): boolean {
   const text = request.trim();
-  if (!text || isShortFollowUp(text) || ABOUT_MEMORY_RE.test(text)) return false;
+  if (!text || isShortFollowUp(text)) return false;
+  if (ASKS_FOR_SEARCH_RE.test(text)) return true;
+  if (ABOUT_MEMORY_RE.test(text) && text.split(/\s+/u).length <= MEMORY_QUESTION_WORDS) return false;
   return searchTerms(text).length >= 3;
 }
 

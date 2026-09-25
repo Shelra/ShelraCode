@@ -18,6 +18,16 @@ describe("research before the work (owner, 2026-09-25)", () => {
     expect(wantsResearch("sí, continúa")).toBe(false);
     expect(wantsResearch("¿Qué tienes en la memoria documentado?")).toBe(false);
     expect(wantsResearch("Remember that we use bun, not npm.")).toBe(false);
+    expect(wantsResearch("Que tienes en la memoria del proyecto guardado?")).toBe(false);
+  });
+
+  it("researches a request that asks for a search, even when it mentions memory (seen live 2026-09-25)", () => {
+    expect(
+      wantsResearch(
+        "continuemos el proyecto verifica que todo funcione correcto, arregla lo necesario y deja el localhost activo para testear y probar. si necesitas contexto realiza una busqueda profunda en google documentacion y todo lo necesario puedes consultar la memoria y buscar errores",
+      ),
+    ).toBe(true);
+    expect(wantsResearch("Revisa la memoria y luego investiga cómo migrar el proyecto a Vite 6")).toBe(true);
   });
 
   it("searches the request's first sentences, without code or markup, in at most 32 words", () => {
