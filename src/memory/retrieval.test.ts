@@ -269,6 +269,34 @@ describe("memory v2 retrieval (doc 18 §4.3)", () => {
     expect(noteWhenNothingMatches(firm).text).not.toContain("Nothing saved matches");
   });
 
+  it("gives only the user's own project reminders, on a specific cue (review round 3)", () => {
+    const scope = projectMemoryScope(workspace);
+    const reminder = (slug: string, source: "human" | "inference", tags: string[]) =>
+      writeMemoryEntry(scope, {
+        slug,
+        title: slug,
+        hook: `Remind the user: ${slug}`,
+        type: "reminder",
+        description: "Reminder",
+        body: `${slug}. When: later.`,
+        source,
+        tags: ["reminder", ...tags],
+      });
+    reminder("rotate-keys", "human", ["cue:auth"]);
+    reminder("model-wrote-this", "inference", []);
+    const records = listMemoryRecords(scope);
+    const unrelated = buildMemoryContext(records, { text: "fix the module resolution error in vite" }, workspace);
+    expect(unrelated.reminders).toEqual([]);
+    expect(unrelated.text).not.toContain("model-wrote-this");
+    const cued = buildMemoryContext(records, { text: "the auth module rejects expired tokens" }, workspace);
+    expect(cued.reminders).toEqual(["rotate-keys"]);
+    // A user-wide reminder is never given: no project could cross it off.
+    const userWide = { ...records.find((record) => record.slug === "rotate-keys"), origin: "user" as const };
+    expect(buildMemoryContext([userWide as (typeof records)[number]], { text: "auth" }, workspace).reminders).toEqual(
+      [],
+    );
+  });
+
   it("gives a rare word more weight than one every entry shares", () => {
     for (let index = 0; index < 12; index += 1) {
       write(`test-note-${index}`, { hook: `test note ${index} about the test suite`, body: "test test" });

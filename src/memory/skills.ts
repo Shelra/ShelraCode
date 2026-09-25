@@ -61,7 +61,9 @@ function renderSkill(record: MemoryRecord): string {
     "",
     "## Provenance",
     "",
-    `Promoted from project memory \`${record.slug}\` with the user's approval (source: ${meta.source ?? "inference"}, confidence ${Math.round((meta.confidence ?? 0.6) * 100)}%, credited in ${meta.credit ?? 0} passing turns${meta.lastConfirmed ? `, last confirmed ${meta.lastConfirmed.slice(0, 10)}` : ""}).`,
+    // Only what the procedure says: a counter that grows with every passing turn would make an approved skill look
+    // changed and be proposed again (doc 18 review, round 3).
+    `Promoted from project memory \`${record.slug}\` (${meta.source ?? "inference"}) with the user's approval, after it helped the project's checks pass.`,
     "If this procedure stops working, correct the memory entry with memory_write; the new version is proposed again.",
     "",
   ].join("\n");

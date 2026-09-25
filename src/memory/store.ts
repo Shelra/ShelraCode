@@ -710,6 +710,29 @@ function normalizeTags(tags: readonly string[] | undefined): string[] | undefine
 }
 
 /**
+ * A memory put to use: the model read it (memory_read), or the turn ran and passed the command it names. That is the
+ * rehearsal that strengthens a memory (dynamics.ts), as retrieval practice does for a person; being shown is not.
+ * Never throws.
+ */
+export function recordRecall(scope: MemoryScope, slugs: readonly string[]): void {
+  for (const slug of slugs) {
+    try {
+      const { entry } = readMemoryEntry(scope, slug);
+      if (!entry) continue;
+      entry.frontmatter.metadata.recalls = withRecall(entry.frontmatter.metadata.recalls);
+      writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
+    } catch (error) {
+      recordSwallowedError("memory.recall", error);
+    }
+  }
+}
+
+/** The commands an entry names in backticks, normalized: what "using" it means for a turn that runs one. */
+export function namedCommands(text: string): string[] {
+  return [...text.matchAll(/`([^`\n]+)`/gu)].map((match) => (match[1] ?? "").trim().replace(/\s+/gu, " "));
+}
+
+/**
  * Rewrites only the usage counters of entries retrieval injected this turn. Cheap and mechanical;
  * a failure to touch a file never affects the turn.
  */
@@ -721,8 +744,8 @@ export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): v
       if (!entry) continue;
       entry.frontmatter.metadata.uses = (entry.frontmatter.metadata.uses ?? 0) + 1;
       entry.frontmatter.metadata.lastUsed = now;
-      // Each recall strengthens the memory, as rehearsal does (dynamics.ts).
-      entry.frontmatter.metadata.recalls = withRecall(entry.frontmatter.metadata.recalls);
+      // Being shown is exposure, not recall: an entry strengthens when it is used (recordRecall), or two look-alike
+      // entries shown together would strengthen alike (doc 18 review, round 3).
       writeFileAtomic(memoryEntryPath(scope, slug), serializeEntry(entry.frontmatter, entry.body));
     } catch (error) {
       recordSwallowedError("memory.use", error);
@@ -776,12 +799,12 @@ export function reconfirmByPassingCommands(scope: MemoryScope, commands: readonl
   if (passed.size === 0) return [];
   const confirmed: string[] = [];
   for (const record of listMemoryRecords(scope)) {
-    const named = [...`${record.index.hook}\n${record.entry.body}`.matchAll(/`([^`\n]+)`/gu)].map((match) =>
-      normalize(match[1] ?? ""),
-    );
+    const named = namedCommands(`${record.index.hook}\n${record.entry.body}`);
     const command = named.find((candidate) => passed.has(candidate));
     if (command && confirmMemoryEntry(scope, record.slug, `\`${command}\` passed`)) confirmed.push(record.slug);
   }
+  // The turn used what these entries say: that strengthens them (recordRecall).
+  recordRecall(scope, confirmed);
   return confirmed;
 }
 
@@ -824,6 +847,9 @@ const REFLECTIONS_FILE = "reflections.jsonl";
 
 export interface ReflectionAuditRecord {
   at: string;
+  /** What wrote it: a turn's reflection, the user's words, a reminder, the daily consolidation, a dropped deferred
+   * reflection, or a turn that ended without its learning step. Older records have none. */
+  kind?: "reflection" | "directive" | "reminder" | "consolidation" | "dropped" | "unlearned";
   qualified: boolean;
   reason: string;
   /** Model output, clipped; the evidence for why memory did or did not change. */

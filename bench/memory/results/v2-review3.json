@@ -1,0 +1,745 @@
+{
+  "label": "v2-review3",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "all",
+  "queries": 92,
+  "sizes": {
+    "5000": {
+      "storeEntries": {
+        "stockpile": 5000,
+        "agenda-clinica": 5000,
+        "rutas-app": 5000
+      },
+      "overall": {
+        "queries": 92,
+        "recall": 0.8333333333333334,
+        "recallSeen": 0.9047619047619048,
+        "precision": 0.7531645569620254,
+        "mrr": 0.7843327726933441,
+        "noise": 0,
+        "forbidden": 0,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2679,
+        "latencyMs": {
+          "median": 43.85080000000016,
+          "p95": 155.1914999999999
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 18,
+          "recall": 0.7777777777777778,
+          "recallSeen": 0.8888888888888888,
+          "precision": 0.6157407407407408,
+          "mrr": 0.7811865928838406,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2781,
+          "latencyMs": {
+            "median": 42.12729999999988,
+            "p95": 111.51479999999992
+          }
+        },
+        "direct": {
+          "queries": 17,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9019607843137254,
+          "mrr": 0.9705882352941176,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2729,
+          "latencyMs": {
+            "median": 55.85189999999966,
+            "p95": 499.3086000000003
+          }
+        },
+        "follow-up": {
+          "queries": 12,
+          "recall": 0.75,
+          "recallSeen": 0.8333333333333334,
+          "precision": 0.6333333333333333,
+          "mrr": 0.819491712358984,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2820,
+          "latencyMs": {
+            "median": 42.50290000000041,
+            "p95": 89.20319999999992
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": null,
+          "mrr": null,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 831,
+          "latencyMs": {
+            "median": 40.29740000000038,
+            "p95": 54.43789999999899
+          }
+        },
+        "paraphrase": {
+          "queries": 15,
+          "recall": 0.9333333333333333,
+          "recallSeen": 0.9333333333333333,
+          "precision": 0.8,
+          "mrr": 0.8032472613458528,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2757,
+          "latencyMs": {
+            "median": 44.03679999999986,
+            "p95": 171.07480000000032
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.9629629629629629,
+          "mrr": 0.8148148148148148,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2722,
+          "latencyMs": {
+            "median": 49.71599999999944,
+            "p95": 122.01920000000064
+          }
+        },
+        "superseded": {
+          "queries": 6,
+          "recall": 0.6666666666666666,
+          "recallSeen": 0.8333333333333334,
+          "precision": 0.7666666666666667,
+          "mrr": 0.6036062378167641,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2660,
+          "latencyMs": {
+            "median": 43.8213999999989,
+            "p95": 155.1914999999999
+          }
+        },
+        "vague": {
+          "queries": 7,
+          "recall": 0.42857142857142855,
+          "recallSeen": 0.7142857142857143,
+          "precision": 0.45,
+          "mrr": 0.35500200080032007,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2613,
+          "latencyMs": {
+            "median": 37.715799999999945,
+            "p95": 88.72699999999986
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 47,
+          "recall": 0.9534883720930233,
+          "recallSeen": 0.9767441860465116,
+          "precision": 0.8158914728682171,
+          "mrr": 0.861044172008797,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2757,
+          "latencyMs": {
+            "median": 49.487999999999374,
+            "p95": 384.3791999999994
+          }
+        },
+        "es": {
+          "queries": 45,
+          "recall": 0.7073170731707317,
+          "recallSeen": 0.8292682926829268,
+          "precision": 0.6782407407407407,
+          "mrr": 0.7038793538990881,
+          "noise": 0,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2613,
+          "latencyMs": {
+            "median": 41.88889999999992,
+            "p95": 111.51479999999992
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "v2-q-011",
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-019",
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-024",
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-030",
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-040",
+          "missed": ["ac-decision-slots-precomputed"]
+        },
+        {
+          "id": "v2-q-044",
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-049",
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-055",
+          "missed": ["ac-naive-datetime-warning", "ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-073",
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-077",
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-082",
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-086",
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-088",
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-092",
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ],
+      "perQuery": [
+        {
+          "id": "v2-q-001",
+          "shown": ["sp-database-locked"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-002",
+          "shown": ["sp-buf-generate"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-003",
+          "shown": ["sp-release-goreleaser"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-004",
+          "shown": ["sp-golden-files"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-005",
+          "shown": ["sp-grpc-max-msg"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-006",
+          "shown": ["sp-lint", "stockpile-noise-1512"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-007",
+          "shown": [
+            "sp-grpc-unavailable-socket",
+            "sp-decision-socket-auth",
+            "sp-sqlite-backup",
+            "sp-architecture-layers"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-008",
+          "shown": ["sp-stock-adjust-tx"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-009",
+          "shown": ["sp-deadline-exceeded-import"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-010",
+          "shown": ["sp-sqlite-backup"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-011",
+          "shown": ["sp-sqlite-backup", "sp-goose-migrations", "sp-architecture-layers", "sp-sql-unknown-driver"],
+          "missed": ["sp-env-config-precedence"]
+        },
+        {
+          "id": "v2-q-012",
+          "shown": ["sp-goose-migrations"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-013",
+          "shown": ["sp-flaky-watch-test"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-014",
+          "shown": ["sp-decision-socket-auth"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-015",
+          "shown": ["sp-windows-socket", "sp-test-race"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-016",
+          "shown": ["sp-test-race"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-017",
+          "shown": ["sp-deadline-exceeded-import"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-018",
+          "shown": ["sp-cobra-commands", "sp-grpc-max-msg", "sp-goose-migrations"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-019",
+          "shown": ["sp-decision-socket-auth"],
+          "missed": ["sp-release-goreleaser"]
+        },
+        {
+          "id": "v2-q-020",
+          "shown": ["sp-sql-unknown-driver", "sp-sqlite-backup", "sp-goose-migrations", "sp-architecture-layers"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-021",
+          "shown": ["sp-database-locked", "sp-architecture-layers"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-022",
+          "shown": ["sp-flaky-watch-test"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-023",
+          "shown": ["sp-golden-files", "sp-cobra-commands"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-024",
+          "shown": ["stockpile-noise-4429", "stockpile-noise-968", "stockpile-noise-1864", "stockpile-noise-4547"],
+          "missed": ["sp-database-locked"]
+        },
+        {
+          "id": "v2-q-025",
+          "shown": [
+            "sp-deadline-exceeded-import",
+            "sp-grpc-unavailable-socket",
+            "sp-cobra-commands",
+            "sp-release-goreleaser"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-026",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-027",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-028",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-029",
+          "shown": ["sp-buf-generate"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-030",
+          "shown": ["sp-test-race"],
+          "missed": ["sp-sqlite-modernc"]
+        },
+        {
+          "id": "v2-q-031",
+          "shown": ["ac-celery-task-not-registered", "ac-reminders-beat"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-032",
+          "shown": ["ac-rediss-ssl-cert-reqs"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-033",
+          "shown": ["ac-pytest-setup", "ac-staging-env", "ac-celery-setup"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-034",
+          "shown": ["ac-double-booking-race"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-035",
+          "shown": ["ac-deploy-fly", "ac-staging-env"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-036",
+          "shown": ["ac-ruff"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-037",
+          "shown": ["ac-beat-single-instance"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-038",
+          "shown": ["ac-beat-single-instance", "ac-double-booking-race"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-039",
+          "shown": ["ac-twilio-webhook"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-040",
+          "shown": [
+            "agenda-clinica-noise-1388",
+            "agenda-clinica-noise-932",
+            "agenda-clinica-noise-3099",
+            "agenda-clinica-noise-3940"
+          ],
+          "missed": ["ac-decision-slots-precomputed"]
+        },
+        {
+          "id": "v2-q-041",
+          "shown": ["ac-celery-eager-tests"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-042",
+          "shown": ["ac-permissions"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-043",
+          "shown": ["ac-celery-setup", "ac-redis-connection-refused"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-044",
+          "shown": [
+            "agenda-clinica-noise-3524",
+            "agenda-clinica-noise-751",
+            "agenda-clinica-noise-4274",
+            "agenda-clinica-noise-3621"
+          ],
+          "missed": ["ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-045",
+          "shown": ["ac-naive-datetime-warning"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-046",
+          "shown": [
+            "ac-migrations",
+            "agenda-clinica-noise-1319",
+            "agenda-clinica-noise-3313",
+            "agenda-clinica-noise-4650"
+          ],
+          "missed": []
+        },
+        {
+          "id": "v2-q-047",
+          "shown": ["ac-env-settings", "ac-rediss-ssl-cert-reqs"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-048",
+          "shown": ["ac-staging-env", "ac-migrations"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-049",
+          "shown": [],
+          "missed": ["ac-beat-single-instance"]
+        },
+        {
+          "id": "v2-q-050",
+          "shown": ["ac-permissions", "ac-reminders-beat"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-051",
+          "shown": ["ac-celery-task-not-registered"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-052",
+          "shown": ["ac-double-booking-race", "ac-celery-eager-tests", "ac-celery-task-not-registered"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-053",
+          "shown": ["ac-celery-task-not-registered", "ac-celery-setup"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-054",
+          "shown": ["ac-api-conventions"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-055",
+          "shown": [
+            "agenda-clinica-noise-2906",
+            "agenda-clinica-noise-938",
+            "agenda-clinica-noise-1629",
+            "agenda-clinica-noise-579"
+          ],
+          "missed": ["ac-naive-datetime-warning", "ac-flaky-dst"]
+        },
+        {
+          "id": "v2-q-056",
+          "shown": ["ac-celery-setup", "ac-rediss-ssl-cert-reqs", "ac-redis-connection-refused"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-057",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-058",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-059",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-060",
+          "shown": ["ac-deploy-fly"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-061",
+          "shown": ["ac-beat-single-instance", "ac-reminders-beat", "ac-twilio-webhook"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-062",
+          "shown": ["ra-ios-provisioning-failure"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-063",
+          "shown": ["ra-rls-insert-error"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-064",
+          "shown": ["ra-auth-session-refresh"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-065",
+          "shown": ["ra-expo-deps-mismatch"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-066",
+          "shown": ["ra-flaky-maestro-camera", "ra-maestro-e2e"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-067",
+          "shown": ["ra-jest-tests"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-068",
+          "shown": ["ra-location-background", "ra-supabase-rls"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-069",
+          "shown": ["ra-supabase-rls"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-070",
+          "shown": ["ra-proof-photo-upload"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-071",
+          "shown": ["ra-location-background", "ra-env-expo-public"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-072",
+          "shown": ["ra-decision-maps"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-073",
+          "shown": ["ra-env-expo-public", "ra-auth-session-refresh", "ra-eas-build", "ra-architecture"],
+          "missed": ["ra-metro-cache"]
+        },
+        {
+          "id": "v2-q-074",
+          "shown": ["ra-push-notifications", "ra-maestro-e2e", "ra-expo-deps-mismatch"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-075",
+          "shown": ["ra-supabase-migrations"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-076",
+          "shown": ["ra-flaky-maestro-camera", "ra-maestro-e2e"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-077",
+          "shown": ["ra-expo-deps-mismatch"],
+          "missed": ["ra-eas-build"]
+        },
+        {
+          "id": "v2-q-078",
+          "shown": ["ra-edge-function-deploy", "ra-architecture"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-079",
+          "shown": ["ra-outbox-sqlite", "ra-architecture"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-080",
+          "shown": ["ra-location-background", "ra-ota-eas-update", "ra-eas-build", "ra-ios-provisioning-failure"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-081",
+          "shown": ["ra-ios-provisioning-failure"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-082",
+          "shown": [],
+          "missed": ["ra-ota-eas-update"]
+        },
+        {
+          "id": "v2-q-083",
+          "shown": ["ra-auth-session-refresh"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-084",
+          "shown": ["ra-rls-insert-error", "ra-proof-photo-upload"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-085",
+          "shown": ["ra-architecture", "ra-proof-photo-upload", "ra-outbox-sqlite"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-086",
+          "shown": [],
+          "missed": ["ra-location-background"]
+        },
+        {
+          "id": "v2-q-087",
+          "shown": ["ra-flaky-maestro-camera"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-088",
+          "shown": [],
+          "missed": ["ra-proof-photo-upload", "ra-rls-insert-error"]
+        },
+        {
+          "id": "v2-q-089",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-090",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "v2-q-091",
+          "shown": ["ra-ota-eas-update", "ra-location-background"],
+          "missed": []
+        },
+        {
+          "id": "v2-q-092",
+          "shown": [],
+          "missed": ["ra-outbox-sqlite"]
+        }
+      ]
+    }
+  }
+}

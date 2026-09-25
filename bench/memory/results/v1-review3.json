@@ -1,0 +1,765 @@
+{
+  "label": "v1-review3",
+  "at": "2026-09-25T12:00:00.000Z",
+  "split": "all",
+  "queries": 103,
+  "sizes": {
+    "5000": {
+      "storeEntries": {
+        "shop-api": 5000,
+        "atlas-web": 5000,
+        "tidewater-pipeline": 5000
+      },
+      "overall": {
+        "queries": 103,
+        "recall": 0.9105263157894737,
+        "recallSeen": 0.9736842105263158,
+        "precision": 0.7202380952380953,
+        "mrr": 0.8500657479399254,
+        "noise": 0.75,
+        "forbidden": 0,
+        "ruleRecall": 1,
+        "ruleSeen": 1,
+        "chars": 2933,
+        "latencyMs": {
+          "median": 40.10599999999977,
+          "p95": 109.12119999999993
+        }
+      },
+      "byKind": {
+        "cross-language": {
+          "queries": 23,
+          "recall": 0.8695652173913043,
+          "recallSeen": 1,
+          "precision": 0.5398550724637681,
+          "mrr": 0.7439613526570049,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3283,
+          "latencyMs": {
+            "median": 39.60620000000017,
+            "p95": 92.26080000000002
+          }
+        },
+        "direct": {
+          "queries": 20,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.95,
+          "mrr": 1,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2884,
+          "latencyMs": {
+            "median": 60.476300000000265,
+            "p95": 406.06590000000006
+          }
+        },
+        "follow-up": {
+          "queries": 13,
+          "recall": 0.8076923076923077,
+          "recallSeen": 0.9615384615384616,
+          "precision": 0.8194444444444443,
+          "mrr": 0.875,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3038,
+          "latencyMs": {
+            "median": 35.33649999999989,
+            "p95": 117.28620000000001
+          }
+        },
+        "irrelevant": {
+          "queries": 8,
+          "recall": null,
+          "recallSeen": null,
+          "precision": 0,
+          "mrr": null,
+          "noise": 0.75,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 1437,
+          "latencyMs": {
+            "median": 36.080799999999726,
+            "p95": 39.2497000000003
+          }
+        },
+        "paraphrase": {
+          "queries": 16,
+          "recall": 0.875,
+          "recallSeen": 0.875,
+          "precision": 0.578125,
+          "mrr": 0.740841767282197,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3110,
+          "latencyMs": {
+            "median": 48.26389999999992,
+            "p95": 88.2480999999998
+          }
+        },
+        "path": {
+          "queries": 9,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 0.8888888888888888,
+          "mrr": 0.925925925925926,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2869,
+          "latencyMs": {
+            "median": 34.985999999999876,
+            "p95": 49.59089999999924
+          }
+        },
+        "superseded": {
+          "queries": 8,
+          "recall": 0.875,
+          "recallSeen": 1,
+          "precision": 0.7604166666666666,
+          "mrr": 0.8229166666666667,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3050,
+          "latencyMs": {
+            "median": 38.30610000000161,
+            "p95": 88.66259999999966
+          }
+        },
+        "vague": {
+          "queries": 6,
+          "recall": 1,
+          "recallSeen": 1,
+          "precision": 1,
+          "mrr": 0.9166666666666666,
+          "noise": null,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 3118,
+          "latencyMs": {
+            "median": 56.613100000000486,
+            "p95": 84.94760000000042
+          }
+        }
+      },
+      "byLanguage": {
+        "en": {
+          "queries": 49,
+          "recall": 0.9222222222222223,
+          "recallSeen": 0.9444444444444444,
+          "precision": 0.6840277777777777,
+          "mrr": 0.876373369107744,
+          "noise": 1.25,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2999,
+          "latencyMs": {
+            "median": 45.23319999999967,
+            "p95": 339.33759999999893
+          }
+        },
+        "es": {
+          "queries": 54,
+          "recall": 0.9,
+          "recallSeen": 1,
+          "precision": 0.755,
+          "mrr": 0.8263888888888888,
+          "noise": 0.25,
+          "forbidden": 0,
+          "ruleRecall": 1,
+          "ruleSeen": 1,
+          "chars": 2907,
+          "latencyMs": {
+            "median": 37.29039999999986,
+            "p95": 99.02829999999994
+          }
+        }
+      },
+      "misses": [
+        {
+          "id": "q-010",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-014",
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-016",
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-023",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-036",
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-058",
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-083",
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-091",
+          "missed": ["dag-integrity-test"]
+        }
+      ],
+      "perQuery": [
+        {
+          "id": "q-001",
+          "shown": ["stripe-webhook-raw-body"],
+          "missed": []
+        },
+        {
+          "id": "q-002",
+          "shown": ["redis-econnrefused-local"],
+          "missed": []
+        },
+        {
+          "id": "q-003",
+          "shown": ["typecheck-bun-types"],
+          "missed": []
+        },
+        {
+          "id": "q-004",
+          "shown": ["dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-005",
+          "shown": ["openapi-generation"],
+          "missed": []
+        },
+        {
+          "id": "q-006",
+          "shown": ["jwt-refresh-rotation"],
+          "missed": []
+        },
+        {
+          "id": "q-007",
+          "shown": ["inventory-lock-order", "checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-008",
+          "shown": ["dev-seed-data", "bullmq-worker-process", "shop-api-noise-1135", "shop-api-noise-3461"],
+          "missed": []
+        },
+        {
+          "id": "q-009",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-010",
+          "shown": ["shop-api-noise-208", "shop-api-noise-1466", "shop-api-noise-4498", "shop-api-noise-4838"],
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-011",
+          "shown": ["inventory-lock-order", "fly-release-migration-timeout"],
+          "missed": ["money-integer-cents"]
+        },
+        {
+          "id": "q-012",
+          "shown": ["product-images-r2", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-013",
+          "shown": ["login-rate-limit-429", "http-error-shape", "test-db-docker-compose", "stripe-webhook-raw-body"],
+          "missed": []
+        },
+        {
+          "id": "q-014",
+          "shown": ["shop-api-noise-4838", "shop-api-noise-1407", "shop-api-noise-2244", "shop-api-noise-2218"],
+          "missed": ["bun-test-preload-setup"]
+        },
+        {
+          "id": "q-015",
+          "shown": ["test-db-docker-compose", "drizzle-migrations-workflow", "inventory-lock-order", "dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-016",
+          "shown": [
+            "inventory-lock-order",
+            "deploy-flyio",
+            "checkout-concurrency-flaky-test",
+            "fly-release-migration-timeout"
+          ],
+          "missed": ["stripe-cli-local-webhooks"]
+        },
+        {
+          "id": "q-017",
+          "shown": ["password-hashing-bun"],
+          "missed": []
+        },
+        {
+          "id": "q-018",
+          "shown": ["checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-019",
+          "shown": ["inventory-lock-order", "fly-release-migration-timeout", "http-error-shape"],
+          "missed": []
+        },
+        {
+          "id": "q-020",
+          "shown": ["cursor-pagination", "inventory-lock-order", "product-images-r2", "dev-seed-data"],
+          "missed": []
+        },
+        {
+          "id": "q-021",
+          "shown": ["hono-over-express"],
+          "missed": []
+        },
+        {
+          "id": "q-022",
+          "shown": ["stripe-webhook-raw-body"],
+          "missed": []
+        },
+        {
+          "id": "q-023",
+          "shown": ["http-error-shape", "fly-release-migration-timeout", "inventory-lock-order"],
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-024",
+          "shown": ["deploy-flyio"],
+          "missed": []
+        },
+        {
+          "id": "q-025",
+          "shown": ["checkout-concurrency-flaky-test"],
+          "missed": []
+        },
+        {
+          "id": "q-026",
+          "shown": ["cors-allowed-origins", "deploy-flyio"],
+          "missed": []
+        },
+        {
+          "id": "q-027",
+          "shown": ["inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-028",
+          "shown": ["cors-allowed-origins", "inventory-lock-order"],
+          "missed": []
+        },
+        {
+          "id": "q-029",
+          "shown": ["jwt-refresh-rotation"],
+          "missed": []
+        },
+        {
+          "id": "q-030",
+          "shown": ["deploy-flyio", "fly-release-migration-timeout"],
+          "missed": []
+        },
+        {
+          "id": "q-031",
+          "shown": ["cors-allowed-origins"],
+          "missed": []
+        },
+        {
+          "id": "q-032",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-033",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-034",
+          "shown": ["typecheck-bun-types"],
+          "missed": []
+        },
+        {
+          "id": "q-035",
+          "shown": ["deploy-flyio"],
+          "missed": []
+        },
+        {
+          "id": "q-036",
+          "shown": ["fly-release-migration-timeout", "money-integer-cents"],
+          "missed": ["drizzle-migrations-workflow"]
+        },
+        {
+          "id": "q-037",
+          "shown": ["deploy-flyio"],
+          "missed": []
+        },
+        {
+          "id": "q-038",
+          "shown": ["hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-039",
+          "shown": ["prisma-pgbouncer-prepared-statement"],
+          "missed": []
+        },
+        {
+          "id": "q-040",
+          "shown": ["next-image-remote-patterns"],
+          "missed": []
+        },
+        {
+          "id": "q-041",
+          "shown": ["og-image-font-loading"],
+          "missed": []
+        },
+        {
+          "id": "q-042",
+          "shown": ["next-intl-messages"],
+          "missed": []
+        },
+        {
+          "id": "q-043",
+          "shown": ["clerk-middleware-matcher"],
+          "missed": []
+        },
+        {
+          "id": "q-044",
+          "shown": ["next-public-env-prefix"],
+          "missed": []
+        },
+        {
+          "id": "q-045",
+          "shown": ["flaky-pricing-toggle-e2e", "next-intl-messages", "pricing-revalidate-tag", "hero-lcp-budget"],
+          "missed": []
+        },
+        {
+          "id": "q-046",
+          "shown": ["pricing-revalidate-tag", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-047",
+          "shown": ["stripe-billing-portal"],
+          "missed": []
+        },
+        {
+          "id": "q-048",
+          "shown": ["hero-lcp-budget"],
+          "missed": []
+        },
+        {
+          "id": "q-049",
+          "shown": [
+            "contact-form-resend",
+            "flaky-pricing-toggle-e2e",
+            "mdx-content-folder",
+            "hydration-mismatch-dates"
+          ],
+          "missed": []
+        },
+        {
+          "id": "q-050",
+          "shown": ["playwright-e2e", "flaky-pricing-toggle-e2e", "clerk-auth-migration"],
+          "missed": []
+        },
+        {
+          "id": "q-051",
+          "shown": ["vitest-msw-setup"],
+          "missed": []
+        },
+        {
+          "id": "q-052",
+          "shown": ["vercel-deploys", "prisma-neon-migrations", "sitemap-robots"],
+          "missed": []
+        },
+        {
+          "id": "q-053",
+          "shown": ["stripe-billing-portal", "next-image-remote-patterns", "prisma-neon-migrations"],
+          "missed": []
+        },
+        {
+          "id": "q-054",
+          "shown": ["vercel-deploys", "sitemap-robots", "prisma-pgbouncer-prepared-statement", "og-image-font-loading"],
+          "missed": []
+        },
+        {
+          "id": "q-055",
+          "shown": ["pricing-revalidate-tag", "plausible-analytics"],
+          "missed": []
+        },
+        {
+          "id": "q-056",
+          "shown": ["next15-async-params"],
+          "missed": []
+        },
+        {
+          "id": "q-057",
+          "shown": ["hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-058",
+          "shown": [],
+          "missed": ["next-intl-messages"]
+        },
+        {
+          "id": "q-059",
+          "shown": ["playwright-e2e", "prisma-neon-migrations", "clerk-auth-migration", "hydration-mismatch-dates"],
+          "missed": []
+        },
+        {
+          "id": "q-060",
+          "shown": ["tailwind-theme-tokens"],
+          "missed": []
+        },
+        {
+          "id": "q-061",
+          "shown": ["clerk-auth-migration", "clerk-middleware-matcher"],
+          "missed": []
+        },
+        {
+          "id": "q-062",
+          "shown": ["pricing-revalidate-tag"],
+          "missed": []
+        },
+        {
+          "id": "q-063",
+          "shown": ["next-image-remote-patterns", "plausible-analytics"],
+          "missed": []
+        },
+        {
+          "id": "q-064",
+          "shown": ["playwright-e2e", "flaky-pricing-toggle-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-065",
+          "shown": ["clerk-auth-migration"],
+          "missed": []
+        },
+        {
+          "id": "q-066",
+          "shown": ["next-image-remote-patterns"],
+          "missed": []
+        },
+        {
+          "id": "q-067",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-068",
+          "shown": ["next15-async-params"],
+          "missed": []
+        },
+        {
+          "id": "q-069",
+          "shown": ["og-image-font-loading", "stripe-billing-portal", "clerk-auth-migration", "playwright-e2e"],
+          "missed": []
+        },
+        {
+          "id": "q-070",
+          "shown": ["mdx-content-folder"],
+          "missed": []
+        },
+        {
+          "id": "q-071",
+          "shown": ["mdx-content-folder", "sitemap-robots", "vercel-deploys"],
+          "missed": []
+        },
+        {
+          "id": "q-072",
+          "shown": ["pytest-airflow-db-fixture", "composer-deploy"],
+          "missed": []
+        },
+        {
+          "id": "q-073",
+          "shown": ["bq-partition-quota"],
+          "missed": []
+        },
+        {
+          "id": "q-074",
+          "shown": ["pandas-id-float-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-075",
+          "shown": ["dbt-build-commands", "warehouse-bigquery"],
+          "missed": []
+        },
+        {
+          "id": "q-076",
+          "shown": ["xcom-dataframe-too-large"],
+          "missed": []
+        },
+        {
+          "id": "q-077",
+          "shown": ["dag-top-level-imports", "airflow-variables-not-dotenv"],
+          "missed": []
+        },
+        {
+          "id": "q-078",
+          "shown": ["slack-failure-alerts"],
+          "missed": []
+        },
+        {
+          "id": "q-079",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-080",
+          "shown": ["sessionize-timezone-flaky"],
+          "missed": []
+        },
+        {
+          "id": "q-081",
+          "shown": ["sensor-reschedule-mode"],
+          "missed": []
+        },
+        {
+          "id": "q-082",
+          "shown": [
+            "shopify-extract-pagination",
+            "airflow-variables-not-dotenv",
+            "pandas-id-float-merge",
+            "bq-partition-quota"
+          ],
+          "missed": []
+        },
+        {
+          "id": "q-083",
+          "shown": ["composer-deploy", "backfill-procedure"],
+          "missed": ["airflow-variables-not-dotenv"]
+        },
+        {
+          "id": "q-084",
+          "shown": ["composer-deploy", "backfill-procedure"],
+          "missed": []
+        },
+        {
+          "id": "q-085",
+          "shown": ["backfill-procedure", "orders-daily-oom", "shopify-extract-pagination", "dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-086",
+          "shown": ["shopify-extract-pagination", "airflow-variables-not-dotenv", "gcs-bucket-layout"],
+          "missed": []
+        },
+        {
+          "id": "q-087",
+          "shown": ["pandera-output-schemas", "orders-daily-oom", "dbt-build-commands"],
+          "missed": []
+        },
+        {
+          "id": "q-088",
+          "shown": ["dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-089",
+          "shown": ["airflow-variables-not-dotenv", "local-airflow-compose"],
+          "missed": []
+        },
+        {
+          "id": "q-090",
+          "shown": ["ruff-mypy"],
+          "missed": []
+        },
+        {
+          "id": "q-091",
+          "shown": ["gcs-bucket-layout", "uv-dependencies", "composer-deploy", "orders-daily-oom"],
+          "missed": ["dag-integrity-test"]
+        },
+        {
+          "id": "q-092",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-093",
+          "shown": ["uv-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-094",
+          "shown": ["dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-095",
+          "shown": ["bq-partition-quota", "warehouse-bigquery"],
+          "missed": []
+        },
+        {
+          "id": "q-096",
+          "shown": ["sessionize-timezone-flaky", "uv-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-097",
+          "shown": ["dag-top-level-imports", "backfill-procedure", "orders-daily-oom", "xcom-dataframe-too-large"],
+          "missed": []
+        },
+        {
+          "id": "q-098",
+          "shown": ["dbt-build-commands", "dbt-incremental-merge"],
+          "missed": []
+        },
+        {
+          "id": "q-099",
+          "shown": ["orders-daily-oom"],
+          "missed": []
+        },
+        {
+          "id": "q-100",
+          "shown": ["xcom-dataframe-too-large", "uv-dependencies", "ruff-mypy"],
+          "missed": []
+        },
+        {
+          "id": "q-101",
+          "shown": [],
+          "missed": []
+        },
+        {
+          "id": "q-102",
+          "shown": ["uv-dependencies"],
+          "missed": []
+        },
+        {
+          "id": "q-103",
+          "shown": ["warehouse-bigquery"],
+          "missed": []
+        }
+      ]
+    }
+  }
+}

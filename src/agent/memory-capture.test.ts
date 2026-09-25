@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
@@ -516,6 +516,41 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     expect(cued).toContain("Reminders the user asked for, due now (tell the user):");
     expect(cued).toContain("- Actualizar el changelog (when toquemos el release)");
     expect(await systemFor("prepara el release otra vez")).not.toContain("Actualizar el changelog");
+  });
+
+  it("keeps a due reminder when no model answered the turn, and never logs the request (review round 3)", async () => {
+    const workspace = scratch("shelra-memory-reminder-limited-");
+    const answer = { events: [{ type: "text-delta" as const, text: "Ok." }], text: "Ok." };
+    const provider = new ScriptedProvider([answer, { events: [], fail: quotaSpent() }, answer]);
+    const agent = agentIn(workspace, provider);
+    const systemFor = async (message: string) => {
+      await turn(agent, message);
+      return String(provider.requests.at(-1)?.system ?? "");
+    };
+
+    await systemFor("Remind me to rotate the staging key when we deploy.");
+    // The deploy turn is cut Limited: nobody saw the reminder, so it stays.
+    await systemFor("deploy the app to staging with sk-or-v1-0123456789abcdef0123456789abcdef");
+    expect(await systemFor("deploy the app to staging again")).toContain("- Rotate the staging key (when we deploy)");
+    const history = readFileSync(join(workspace, ".shelra", "memory", "history.jsonl"), "utf8");
+    expect(history).toContain('"event":"delivered"');
+    expect(history).not.toContain("0123456789abcdef");
+    expect(history).not.toContain("deploy the app");
+  });
+
+  it("takes a reminder's cue from the conversation when it only points at it (review round 3)", async () => {
+    const workspace = scratch("shelra-memory-reminder-context-");
+    const provider = new ScriptedProvider([{ events: [{ type: "text-delta", text: "Ok." }], text: "Ok." }]);
+    const agent = agentIn(workspace, provider);
+    const systemFor = async (message: string) => {
+      await turn(agent, message);
+      return String(provider.requests.at(-1)?.system ?? "");
+    };
+
+    await systemFor("refactor the billing export to stream rows");
+    await systemFor("Remind me to update the docs when we work on it again.");
+    expect(await systemFor("rename the helper in utils.ts")).not.toContain("Update the docs");
+    expect(await systemFor("the billing export times out on big months")).toContain("- Update the docs");
   });
 
   it("records nothing for a turn that only answered", async () => {

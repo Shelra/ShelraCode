@@ -14,6 +14,7 @@ import {
   readMemoryIndex,
   recallArchivedEntry,
   recordMemoryUse,
+  recordRecall,
   userMemoryScope,
   writeMemoryEntry,
 } from "../memory/store";
@@ -753,7 +754,10 @@ export function createTools(
         // Reading a memory is recalling it: it strengthens (doc 18 §4.6), and one that faded comes back.
         const meta = entry.frontmatter.metadata;
         const recalled = meta.status === "archived" && recallArchivedEntry(found.scope, slug);
-        if (meta.status === undefined || meta.status === "active") recordMemoryUse(found.scope, [slug]);
+        if (meta.status === undefined || meta.status === "active") {
+          recordMemoryUse(found.scope, [slug]);
+          recordRecall(found.scope, [slug]);
+        }
         const note =
           meta.status === "superseded"
             ? `\n\n[No longer true: replaced by ${meta.supersededBy ?? "a newer entry"} on ${meta.validUntil?.slice(0, 10) ?? "an earlier date"}.]`
@@ -776,7 +780,9 @@ export function createTools(
         slug: z.string().describe("Kebab-case identifier, e.g. 'better-auth-organization-plugin'"),
         title: z.string().describe("Human-readable title for the memory index"),
         hook: z.string().describe("One-line summary shown in the index"),
-        type: z.enum(MEMORY_TYPES as [MemoryType, ...MemoryType[]]).describe("Category of this memory entry"),
+        type: z
+          .enum(MEMORY_TYPES.filter((type) => type !== "reminder") as [MemoryType, ...MemoryType[]])
+          .describe("Category of this memory entry (a reminder is only ever the user's own request)"),
         description: z.string().describe("One-line description, slightly more detail than the hook"),
         body: z.string().describe("Full markdown body — the actual findings, decision, or notes"),
         related_files: z

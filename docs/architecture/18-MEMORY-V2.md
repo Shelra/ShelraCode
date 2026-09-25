@@ -171,7 +171,7 @@ skill: decay by recency, frequency and importance, soft deletion, background con
 | Human memory | Shelra |
 |---|---|
 | A memory used often and lately comes to mind first; unused, it fades along a power law (ACT-R base-level activation, Anderson and Schooler 1991) | each entry keeps the days it was recalled; its strength is ln Σ t^-0.5 over its creation, recalls and confirmations, and it ranks entries that are otherwise equal |
-| Retrieval strengthens a memory (the testing effect) | every recall a turn makes, and every `memory_read`, is a recall |
+| Using a memory strengthens it (the testing effect); merely seeing it does not | an entry strengthens when it is used: the model reads it (`memory_read`), or the turn runs and passes the command it names (`reconfirmByPassingCommands`). Being shown to the model is exposure only (`uses`), so two look-alike entries shown together do not strengthen alike |
 | Salient events are kept longer | `importance`: 1 for what the user said, higher for a failure that recurred; an important, credited or human entry never fades by disuse |
 | Sleep turns the day's experiences into knowledge | once a day, before a turn's recall: a command that failed in several turns, and what got past it each time, becomes one observed lesson with its count; an inference nobody used for months, never credited or important, is archived |
 | Forgetting is not losing: relearning is fast (savings) | an archived entry keeps its file and index line; a request that matches it is offered it ("faded from disuse but matching"), and reading it brings it back as active |
@@ -179,10 +179,17 @@ skill: decay by recency, frequency and importance, soft deletion, background con
 | Knowing what one knows (metamemory) | shown entries are labelled firm or fading, and a request memory knows nothing about is told so, so a model does not assume earlier work that never happened |
 
 Measured on a simulated project life (`bench/memory/life.ts`, 240 days, 46 entries; the control replays the same days
-without dynamics): a habit (needed every few days) ranks first over an identical never-used note in 99% of 795 recalls
-(control 0%); all 20 never-used notes fade while all rules, costly lessons, habits and rarely needed entries stay (the
-store goes from 46 to 26); all 20 faded notes are offered back when a request asks about them. On the static retrieval
-benchmarks (no usage history) the dynamics change nothing: v1 recall 91%, held-out v2 83%.
+without dynamics). The simulation does what the product does: every request goes through `buildMemoryContext`, being
+shown is exposure only, the agent can use a procedure only when it was shown, and using it (running the command it
+names) strengthens every entry that names that command, by the store's own rule. A habit (needed every few days) ranks
+above a look-alike note with the same index line in 99% of 795 requests (control 0%); all 20 never-used notes fade while
+all rules, costly lessons, habits and rarely needed entries stay (the store goes from 46 to 26); all 20 faded notes are
+offered back when a request asks about them. On the static retrieval benchmarks (no usage history) the dynamics change
+nothing: v1 recall 91%, held-out v2 83%.
+
+A first version of this simulation handed each recall to the entry it knew was needed, which the product cannot know;
+the round-3 review caught it (with the product's signal as it then was, "habit first" fell to 0%). The fix was in the
+product, not the simulation: a memory now strengthens when it is used, not when it is shown.
 
 ## 5. What stays from the 2026-09-17 decisions
 
@@ -243,6 +250,26 @@ each with a test that pins it:
 
 The memory benchmark after the fixes: recall 91%, precision 70%, MRR 0.83, superseded shown 0, rules 100%, 35 ms p50 at
 5,000 entries per project (`bench/memory/results/after-review2.json`).
+
+## 7b. Adversarial review of M3 to M8 (round 3, 2026-09-25)
+
+The same method as §7a over 817d357..f9add04: two reviewers, one skeptic per finding. All 13 findings held; all are
+fixed, each with a test:
+
+| Finding | Fix |
+|---|---|
+| The life simulation handed each recall to the entry it knew was needed; with the product's signal (every shown entry recalled) its result did not hold | a memory strengthens when it is used (`memory_read`, or the turn passes the command it names), not when it is shown; the simulation replays exactly that |
+| The model could write a "reminder" with `memory_write`; shown as the user's own, and one in the user-wide store came back on every request | `memory_write` cannot write reminders; only the user's own project reminders are given |
+| A cued reminder was crossed off before any model answered, so a turn cut Limited lost it | it is crossed off when the turn closes, and only if a model answered |
+| One generic cue word ("module") fired a reminder; "when we work on it again" fired on the next unrelated request | generic words are not cues, a request must name half of the cue words, and a cue that only points at the conversation takes its words from the request before |
+| The history kept the raw request a reminder was given with, keys included | it keeps the time only |
+| Knowledge entries passed only the gate's narrow secret check; a password could end up in a lesson's file name | the gate refuses anything the redactor would change; what the host builds (statements, observed failures) is redacted before its name is made; a model's proposal with a secret is refused |
+| The redactor missed Slack and Discord webhooks, npm tokens, `whsec_`, `glpat-`, `hf_`, SendGrid, Basic auth, signed-URL parameters, `mysql -p…` and PGP keys | all added |
+| "Use Biome instead of ESLint" retired the Biome entries and the user's own Biome rule (the lexicon folds both into "lint"); "we don't use npm anymore, we use bun" retired nothing | a correction is matched on the words as written (`rawTerms`), and "anymore" is not part of its subject |
+| "Never deploy on Fridays" then "Always deploy on Fridays" left both as standing rules | a rule whose sense, language or indentation is turned around replaces the old one; two rules that differ in any other word both stand |
+| Consolidation made a test that went red then green into a permanent "keeps failing" lesson | the same command passing later is not a way around; consolidated lessons stay below the importance that never fades |
+| An approved skill was proposed again after every passing turn | the skill file no longer carries counters that grow |
+| `shelra memory stats` counted consolidations and reminders as reflections, archivals as writes | audit records carry their kind |
 
 ## 8. Decisions taken for the owner, and assumptions
 

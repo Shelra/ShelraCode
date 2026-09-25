@@ -60,7 +60,7 @@ describe("memory consolidation, like sleep (doc 18 §4.6)", () => {
     const lesson = listMemoryRecords(scope)[0];
     expect(lesson?.index.hook).toBe("`npm test` failed in 3 turns; what worked: `bun test`");
     expect(lesson?.entry.frontmatter.metadata).toMatchObject({ type: "failure", source: "observed" });
-    expect(lesson?.entry.frontmatter.metadata.importance).toBeCloseTo(0.8);
+    expect(lesson?.entry.frontmatter.metadata.importance).toBeCloseTo(0.65);
     // Once a day at most.
     expect(consolidateMemory(scope).ran).toBe(false);
   });
@@ -104,5 +104,31 @@ describe("memory consolidation, like sleep (doc 18 §4.6)", () => {
     expect(listMemoryRecords(scope).map((record) => record.slug)).toContain("reports-csv-bom");
     expect(readMemoryEntry(scope, "reports-csv-bom").entry?.frontmatter.metadata.status ?? "active").toBe("active");
     expect(listArchivedEntries(scope)).toEqual([]);
+  });
+});
+
+describe("what consolidation must not learn (review round 3)", () => {
+  it("does not turn a test that went red then green into a failure lesson", () => {
+    const scope = projectMemoryScope(workspace);
+    const redGreen = (request: string, at: string) => ({
+      ...episodeFrom(
+        {
+          userMessage: request,
+          assistantText: "Fixed.",
+          changedFiles: ["src/a.ts"],
+          commands: [
+            { command: "bun test src/a.test.ts", success: false, output: "1 fail" },
+            { command: "bun test src/a.test.ts", success: true, output: "3 pass" },
+          ],
+          verified: true,
+          toolCalls: 5,
+        },
+        "verified",
+      ),
+      at,
+    });
+    appendEpisode(scope, redGreen("Fix the parser", "2026-09-20T10:00:00.000Z"));
+    appendEpisode(scope, redGreen("Fix the lexer", "2026-09-22T10:00:00.000Z"));
+    expect(consolidateMemory(scope, { force: true }).lessons).toEqual([]);
   });
 });

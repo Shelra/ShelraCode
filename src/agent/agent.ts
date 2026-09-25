@@ -71,6 +71,7 @@ import {
 } from "../memory/episodes";
 import {
   admitCandidates,
+  cueTermsOf,
   deterministicFailureCandidates,
   extractUserDirectives,
   reflectOnTurn,
@@ -585,6 +586,8 @@ export class Agent {
   private turnLearned = false;
   /** The session's previous request: a short follow-up ("sí, hazlo") retrieves the memory it needs (doc 18 R2). */
   private previousRequest: string | undefined;
+  /** Reminders the running turn's recall found due, crossed off when it closes if a model answered. */
+  private turnDueReminders: { scope: ReturnType<typeof projectMemoryScope>; slugs: string[] } | null = null;
   private subagentStatusListeners = new Set<(status: SubagentStatus | null) => void>();
   private sendTelegramFile: ((filePath: string) => Promise<ToolResult>) | null = null;
   private confirmDestructiveCommand: DestructiveCommandConfirm | null = null;
@@ -2536,6 +2539,7 @@ export class Agent {
       trace.error(error);
       throw error;
     } finally {
+      this.deliverDueReminders();
       this.recordUnlearnedTurn();
       trace.end();
     }
@@ -2635,6 +2639,7 @@ export class Agent {
         if (list.length === 0) continue;
         const admitted = admitCandidates(scope, list);
         appendReflectionAudit(scope, {
+          kind: "directive",
           at: new Date().toISOString(),
           qualified: true,
           reason: "the user's own words",
@@ -2652,14 +2657,27 @@ export class Agent {
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
       : memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest);
-    // A reminder is given once, on the request that cued it, as a note crossed off.
-    for (const slug of memoryContext.reminders ?? []) {
-      deliverReminder(memoryScope, slug, `given with the request "${typedText(userMessage).slice(0, 120)}"`);
-    }
+    // A reminder due now is crossed off when the turn closes, and only if a model answered it (deliverDueReminders): a
+    // turn cut Limited never showed it to anyone.
+    this.turnDueReminders = { scope: memoryScope, slugs: memoryContext.reminders ?? [] };
     if (remindersAsked.length > 0) {
       try {
-        const admitted = admitCandidates(memoryScope, remindersAsked);
+        // "cuando toquemos esto": the cue is what the conversation is about, the request before this one.
+        const contextCues = cueTermsOf(this.previousRequest ?? "");
+        const reminders = remindersAsked.map((reminder) =>
+          reminder.tags?.includes("cue-from-context")
+            ? {
+                ...reminder,
+                tags: [
+                  ...reminder.tags.filter((tag) => tag !== "cue-from-context"),
+                  ...contextCues.map((term) => `cue:${term}`),
+                ],
+              }
+            : reminder,
+        );
+        const admitted = admitCandidates(memoryScope, reminders);
         appendReflectionAudit(memoryScope, {
+          kind: "reminder",
           at: new Date().toISOString(),
           qualified: true,
           reason: "a reminder the user asked for",
@@ -4238,6 +4256,7 @@ export class Agent {
     // A reflection that keeps failing is dropped after a few tries, with a record of why.
     if (report.error && !queuePendingReflection(scope, pending.digest, pending.outcome, (pending.attempts ?? 0) + 1)) {
       appendReflectionAudit(scope, {
+        kind: "dropped",
         at: new Date().toISOString(),
         qualified: true,
         reason: `deferred reflection dropped after ${(pending.attempts ?? 0) + 1} failed attempts`,
@@ -4254,6 +4273,27 @@ export class Agent {
    * no-evidence gate) still did work: its episode and the lessons that need no model are recorded now, and its
    * reflection is queued for when a model answers (doc 18 §2.1 C1). Never throws.
    */
+  /**
+   * Crosses off the reminders this turn's recall gave the model, once the model answered: a turn that ended Limited,
+   * Paused, in an error or cancelled keeps them for the next time their cue comes up (doc 18 review, round 3).
+   * Never throws.
+   */
+  private deliverDueReminders(): void {
+    const due = this.turnDueReminders;
+    this.turnDueReminders = null;
+    if (!due || due.slugs.length === 0) return;
+    try {
+      const digest = this.turnMemoryDigest?.();
+      const outcome = turnOutcome(this.turnEndNotes.at(-1), digest?.verified ?? false);
+      const answered = (digest?.assistantText.trim().length ?? 0) > 0;
+      if (!answered || ["limited", "paused", "error", "cancelled"].includes(outcome)) return;
+      for (const slug of due.slugs)
+        deliverReminder(due.scope, slug, `given on ${new Date().toISOString().slice(0, 16)}`);
+    } catch (error) {
+      recordSwallowedError("memory.reminder", error);
+    }
+  }
+
   private recordUnlearnedTurn(): void {
     const digestOf = this.turnMemoryDigest;
     this.turnMemoryDigest = null;
@@ -4280,6 +4320,7 @@ export class Agent {
           ? "; no reflection on this exit"
           : "";
       appendReflectionAudit(scope, {
+        kind: "unlearned",
         at: new Date().toISOString(),
         qualified: qualification.qualified,
         reason: `ended ${outcome}: ${qualification.reason}${why}`,

@@ -1,5 +1,5 @@
 import type { ProviderAdapter, ProviderUsage } from "../providers/types";
-import { decideMemoryWrite, type GateDecision } from "./gate";
+import { decideMemoryWrite, type GateDecision, privateText } from "./gate";
 import {
   appendReflectionAudit,
   archiveMemoryEntry,
@@ -8,7 +8,7 @@ import {
   supersedeMemoryEntry,
   writeMemoryEntry,
 } from "./store";
-import { foldText, searchTerms } from "./terms";
+import { foldText, rawTerms, searchTerms } from "./terms";
 import { MEMORY_TYPES, type MemoryRecord, type MemoryScope, type MemoryType, type MemoryWriteInput } from "./types";
 
 /**
@@ -110,12 +110,24 @@ const REMIND_THEN_CUE =
 const CUE_THEN_REMIND =
   /^(?:when(?:ever)?|next time(?: that)?|the next time|cuando|la pr[oó]xima vez que|en cuanto)\s+(.+?),\s*(?:please |por favor )?(?:remind me(?: to| that| about)?|recu[eé]rdame(?: que| de)?)\s+(.+)$/iu;
 
-/** Verbs that say "when we work on" and name no subject: "when we touch X" is cued by X. */
+/**
+ * Words that say "when we work on some part" and name no subject: "when we touch the auth module" is cued by auth, not
+ * by module, which half of all requests name.
+ */
 const GENERIC_CUE_WORDS = new Set(
-  "touch work change edit open modify toquemo toque tocar trabajemo trabajar cambiemo cambiar editemo abramo modifiquemo vuelva volvamo hagamo".split(
-    " ",
-  ),
+  (
+    "touch work change edit open modify toquemo toque tocar trabajemo trabajar cambiemo cambiar editemo abramo " +
+    "modifiquemo vuelva volvamo hagamo again otra vez module modulo file folder code codigo project proyecto app part " +
+    "parte section seccion feature funcionalidad component componente page function funcion class clase thing"
+  ).split(" "),
 );
+
+/** The specific words of a cue: what a later request must name for the reminder to come up. At most three. */
+export function cueTermsOf(text: string): string[] {
+  return searchTerms(text)
+    .filter((term) => !GENERIC_CUE_WORDS.has(term))
+    .slice(0, 3);
+}
 
 /**
  * A reminder the user asks for (prospective memory): what to remind them of, and the cue that brings it up, such as the
@@ -130,9 +142,10 @@ export function reminderOf(
   const what = (later ? later[2] : now?.[1])?.trim();
   const cue = (later ? later[1] : now?.[2])?.trim() ?? "";
   if (!what || what.length < 4) return null;
-  const cueTerms = searchTerms(cue)
-    .filter((term) => !GENERIC_CUE_WORDS.has(term))
-    .slice(0, 5);
+  const cueTerms = cueTermsOf(cue);
+  // "when we work on it again", "cuando toquemos esto": the cue points at what the conversation is about, which the
+  // turn fills in when it keeps the reminder (cue-from-context), instead of firing on the next unrelated request.
+  const fromContext = cue.length > 0 && cueTerms.length === 0;
   const statement = what.charAt(0).toUpperCase() + what.slice(1);
   return {
     slug: slugify(statement, "user-remind-"),
@@ -144,7 +157,7 @@ export function reminderOf(
     source: "human",
     confidence: 1,
     importance: 1,
-    tags: ["reminder", ...cueTerms.map((term) => `cue:${term}`)],
+    tags: ["reminder", ...cueTerms.map((term) => `cue:${term}`), ...(fromContext ? ["cue-from-context"] : [])],
   };
 }
 
@@ -207,7 +220,8 @@ function directiveOf(sentence: string, document: boolean): { kind: DirectiveKind
 export function extractUserDirectives(message: string): ReflectionCandidate[] {
   const candidates: ReflectionCandidate[] = [];
   const seen = new Set<string>();
-  const userMessage = typedText(message);
+  // A key or a home folder the user typed stays out of what is kept, names included (doc 18 review, round 3).
+  const userMessage = privateText(typedText(message));
   const document = /^#{1,6}\s/mu.test(userMessage);
   const today = new Date().toISOString().slice(0, 10);
   for (const sentence of sentencesOf(userMessage)) {
@@ -270,10 +284,16 @@ export function turnQualifiesForReflection(digest: TurnDigest): { qualified: boo
 export function deterministicFailureCandidates(digest: TurnDigest): ReflectionCandidate[] {
   const candidates: ReflectionCandidate[] = [];
   const seen = new Set<string>();
-  for (let index = 0; index < digest.commands.length; index += 1) {
-    const failed = digest.commands[index];
+  // What a lesson keeps of the commands and their output goes through the redactor first, its name included.
+  const commands = digest.commands.map((command) => ({
+    ...command,
+    command: privateText(command.command),
+    output: privateText(command.output),
+  }));
+  for (let index = 0; index < commands.length; index += 1) {
+    const failed = commands[index];
     if (!failed || failed.success) continue;
-    const recovered = digest.commands.slice(index + 1).find((command) => command.success);
+    const recovered = commands.slice(index + 1).find((command) => command.success);
     if (!recovered) continue;
     const slug = slugify(`${failed.command.split(/\s+/u).slice(0, 4).join(" ")} failed`, "failure-");
     if (seen.has(slug)) continue;
@@ -429,7 +449,7 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
     const confidence =
       typeof record.confidence === "number" ? record.confidence : Number.parseFloat(asString(record.confidence));
     candidates.push({
-      slug: slugify(asString(record.slug) || title),
+      slug: slugify(privateText(asString(record.slug) || title)),
       title: title.slice(0, 80),
       hook: hook.slice(0, 160),
       type,
@@ -470,26 +490,37 @@ const DESCRIBES_A_CHANGE =
  * subject and do not already name what replaced it. Conservative on purpose: only the index line decides, never a
  * mention deep in a body, and records of past failures are left alone.
  */
+/** The words of a correction that say "we switched", not what to: they name nothing an entry could be about. */
+const CORRECTION_FILLER = new Set(
+  (
+    "use usa usamos utiliza utilizamos instead rather anymore more longer don't dont stopped using moved migrated " +
+    "switched away ya dejamos usar migramos en vez lugar ahora now"
+  ).split(" "),
+);
+
 export function entriesContradictedBy(correction: MemoryWriteInput, records: readonly MemoryRecord[]): string[] {
   const statement = correction.hook;
   let subject = "";
   for (const pattern of CORRECTED_SUBJECT) {
     const match = pattern.exec(statement);
     if (match?.[1]) {
-      subject = match[1].replace(SUBJECT_END, "");
+      // "we don't use npm anymore, we use bun": the subject is npm, whatever follows it.
+      subject = match[1].replace(/\s+(?:anymore|any more)\b.*$/iu, "").replace(SUBJECT_END, "");
       break;
     }
   }
-  const subjectTerms = searchTerms(subject);
+  // The words as written: the lexicon folds "biome" and "eslint" into one term, and then a correction naming one would
+  // retire the other (doc 18 review, round 3).
+  const subjectTerms = rawTerms(subject);
   if (subjectTerms.length === 0 || subjectTerms.length > 3) return [];
-  const otherTerms = searchTerms(statement).filter((term) => !subjectTerms.includes(term) && term !== "use");
+  const otherTerms = rawTerms(statement).filter((term) => !subjectTerms.includes(term) && !CORRECTION_FILLER.has(term));
   return records
     .filter((record) => {
       if (record.slug === correction.slug || !isCurrentMemory(record)) return false;
       const meta = record.entry.frontmatter.metadata;
       if (HISTORICAL_TYPES.has(meta.type) || (meta.tags ?? []).includes("correction")) return false;
       if (DESCRIBES_A_CHANGE.test(`${record.index.title} ${record.index.hook}`)) return false;
-      const head = new Set(searchTerms(`${record.index.title} ${record.index.hook} ${(meta.tags ?? []).join(" ")}`));
+      const head = new Set(rawTerms(`${record.index.title} ${record.index.hook} ${(meta.tags ?? []).join(" ")}`));
       return subjectTerms.every((term) => head.has(term)) && !otherTerms.some((term) => head.has(term));
     })
     .map((record) => record.slug);
@@ -528,6 +559,20 @@ export function admitCandidates(
   let current = records ? [...records] : listMemoryRecords(scope);
   const decisions: ReflectionReport["decisions"] = [];
   const written: string[] = [];
+  // What the host built from the turn (the user's statements, observed failures) is blanked of secrets before it is
+  // kept, so the lesson survives without them. A model's proposal is not: one that carries a secret is refused by the
+  // gate, since what is left of "the key is ***" teaches nothing (doc 18 review, round 3).
+  const cleaned = candidates.map((candidate) =>
+    candidate.source === "inference" || candidate.source === undefined
+      ? candidate
+      : {
+          ...candidate,
+          title: privateText(candidate.title),
+          hook: privateText(candidate.hook),
+          description: privateText(candidate.description),
+          body: privateText(candidate.body),
+        },
+  );
   /** Archives the least useful entry to make room; records the decision. */
   const makeRoom = (type: MemoryType | undefined, forSlug: string): boolean => {
     const room = archivableEntry(current, type);
@@ -536,7 +581,7 @@ export function admitCandidates(
     current = listMemoryRecords(scope);
     return true;
   };
-  for (const candidate of candidates) {
+  for (const candidate of cleaned) {
     let decision = decideMemoryWrite(candidate, current);
     // A full type makes room instead of refusing what was just learned.
     if (decision.full && makeRoom(candidate.type, candidate.slug)) decision = decideMemoryWrite(candidate, current);
@@ -610,6 +655,7 @@ export async function reflectOnTurn(options: ReflectOptions): Promise<Reflection
   if (!qualification.qualified) {
     // Why a turn taught nothing is part of the audit too (doc 18 §2.2 R8): before, only qualifying turns left a record.
     appendReflectionAudit(options.scope, {
+      kind: "reflection",
       at: new Date().toISOString(),
       qualified: false,
       reason: qualification.reason,
@@ -707,6 +753,7 @@ ${candidate.body}`
   report.decisions = admitted.decisions;
   report.written = admitted.written;
   appendReflectionAudit(options.scope, {
+    kind: "reflection",
     at: new Date().toISOString(),
     qualified: report.qualified,
     reason: report.reason,

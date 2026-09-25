@@ -362,13 +362,18 @@ export function buildMemoryContext(
   const relativeCutoff = options.relativeCutoff ?? DEFAULT_RELATIVE_CUTOFF;
   const now = query.now ?? Date.now();
   // A reminder is not knowledge: it comes up when its cue does, and only then (prospective memory, doc 18 §4.6).
+  // Only the user's own reminders, kept in this project, are given: one a model wrote, or one in the user-wide store
+  // that no project can cross off, would speak in the user's name (doc 18 review, round 3). Neither is knowledge either.
   const reminderRecords = records.filter((record) => record.entry.frontmatter.metadata.type === "reminder");
+  const ownReminders = reminderRecords.filter(
+    (record) => record.entry.frontmatter.metadata.source === "human" && record.origin !== "user",
+  );
   const ranked = rankMemories(
     reminderRecords.length > 0 ? records.filter((record) => !reminderRecords.includes(record)) : records,
     query,
     workspace,
   );
-  const cued = remindersFor(reminderRecords, query);
+  const cued = remindersFor(ownReminders, query);
 
   // Tier 1: standing rules, most relevant first, within their own budget.
   const rules: RankedMemory[] = [];
@@ -482,8 +487,8 @@ export function buildMemoryContext(
 }
 
 /**
- * The reminders this request cues: one whose cue words the request (or the request it follows up) names, or one with
- * no cue, which is due on the next request.
+ * The reminders this request cues: one when the request (or the request it follows up) names at least half of its
+ * cue words, or one with no cue, which is due on the next request.
  */
 function remindersFor(reminders: readonly MemoryRecord[], query: RetrievalQuery): MemoryRecord[] {
   if (reminders.length === 0) return [];
@@ -492,7 +497,8 @@ function remindersFor(reminders: readonly MemoryRecord[], query: RetrievalQuery)
     const cues = (record.entry.frontmatter.metadata.tags ?? [])
       .filter((tag) => tag.startsWith("cue:"))
       .map((tag) => tag.slice(4));
-    return cues.length === 0 || cues.some((cue) => terms.has(cue));
+    if (cues.length === 0) return true;
+    return cues.filter((cue) => terms.has(cue)).length * 2 >= cues.length;
   });
 }
 

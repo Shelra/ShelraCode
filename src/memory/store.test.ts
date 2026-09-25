@@ -15,6 +15,7 @@ import {
   readMemoryIndex,
   readMemoryVersions,
   reconfirmByPassingCommands,
+  recordMemoryUse,
   supersedeMemoryEntry,
   writeMemoryEntry,
 } from "./store";
@@ -384,5 +385,25 @@ describe("memory store: time (doc 18 §4.4)", () => {
       "Login goes through Firebase Auth, see src/auth.ts.",
     ]);
     expect(readMemoryEntry(scope, "auth").entry?.body).toContain("Supabase");
+  });
+});
+
+describe("memory store: what strengthens a memory (review round 3)", () => {
+  it("counts being shown as exposure, and using what an entry says as a recall", () => {
+    const scope = projectMemoryScope(workspace);
+    writeMemoryEntry(scope, {
+      slug: "seed-first",
+      title: "Seed before the tests",
+      hook: "run `make seed` before `bun test`",
+      type: "procedure",
+      description: "Seed first",
+      body: "Run `make seed` before `bun test`; the tests read the seeded rows.",
+      source: "observed",
+    });
+    recordMemoryUse(scope, ["seed-first"]);
+    expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata).toMatchObject({ uses: 1 });
+    expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata.recalls).toBeUndefined();
+    expect(reconfirmByPassingCommands(scope, ["make seed"])).toEqual(["seed-first"]);
+    expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata.recalls).toHaveLength(1);
   });
 });

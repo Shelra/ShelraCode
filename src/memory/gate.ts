@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { redact } from "../utils/session-trace";
 import { searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord, type MemorySource, type MemoryWriteInput } from "./types";
 
@@ -120,6 +122,12 @@ function overlap(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
 
 /** A number, a version or a size: what changes when a rule is restated with a new value ("Node 18" → "Node 20"). */
 const VALUE = /^(?:v?\d[\d.x]*|\d+(?:ms|s|m|h|kb|mb|gb|px|%))$/u;
+/** Words of which a rule holds one at a time: its sense, the language it asks for, tabs or spaces. */
+const EXCLUSIVE: ReadonlyArray<ReadonlySet<string>> = [
+  new Set(["always", "never", "siempre", "nunca", "jamas"]),
+  new Set(["spanish", "english", "espanol", "ingle", "castellano", "french", "frances", "portuguese", "portugue"]),
+  new Set(["tab", "space", "espacio", "tabulacion", "tabulador"]),
+];
 
 function shortHash(text: string): string {
   let hash = 0x811c9dc5;
@@ -157,11 +165,18 @@ function relationToUserStatements(candidate: MemoryWriteInput, records: readonly
     const onlyMine = [...mine].filter((term) => !theirs.has(term));
     const onlyTheirs = [...theirs].filter((term) => !mine.has(term));
     const shared = mine.size - onlyMine.length;
+    // The same rule with its sense or its setting turned around: "never deploy on Fridays" then "always deploy on
+    // Fridays", "answer me in Spanish" then "in English" (doc 18 review, round 3). Two rules that differ in any other
+    // word ("write tests first", "write docs first") are two rules, and both stand.
+    const swapped =
+      onlyMine.length === 1 &&
+      onlyTheirs.length === 1 &&
+      EXCLUSIVE.some((set) => set.has(onlyMine[0] ?? "") && set.has(onlyTheirs[0] ?? ""));
     const newValue =
       shared >= 2 &&
       onlyMine.length > 0 &&
       onlyTheirs.length > 0 &&
-      [...onlyMine, ...onlyTheirs].every((term) => VALUE.test(term));
+      ([...onlyMine, ...onlyTheirs].every((term) => VALUE.test(term)) || swapped);
     if (newValue) {
       const slug = records.some((record) => record.slug === candidate.slug)
         ? `${candidate.slug.slice(0, 57)}-${shortHash(candidate.hook)}`
@@ -201,8 +216,9 @@ function fingerprint(input: { title: string; hook: string; body: string }): stri
   return tokenize(`${input.title} ${input.hook} ${input.body.slice(0, 1_500)}`);
 }
 
+/** Anything the redactor would blank is a secret the gate refuses to keep (doc 18 review, round 3). */
 export function containsSecret(text: string): boolean {
-  return SECRET_PATTERNS.some((pattern) => pattern.test(text));
+  return SECRET_PATTERNS.some((pattern) => pattern.test(text)) || redactSecrets(redact(text)) !== text;
 }
 
 /**
@@ -211,7 +227,24 @@ export function containsSecret(text: string): boolean {
  * password in a connection URL.
  */
 const REDACTIONS: Array<[RegExp, string]> = [
-  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/gu, "***PRIVATE KEY***"],
+  [
+    /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----|$)/gu,
+    "***PRIVATE KEY***",
+  ],
+  [/(https:\/\/hooks\.slack\.com\/services\/)[A-Za-z0-9/_-]+/gu, "$1***"],
+  [/(https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/)[A-Za-z0-9/_-]+/gu, "$1***"],
+  [/\bnpm_[A-Za-z0-9]{20,}/gu, "***"],
+  [/(:_authToken=)\S+/gu, "$1***"],
+  [/\bwhsec_[A-Za-z0-9]{8,}/gu, "***"],
+  [/\bglpat-[A-Za-z0-9_-]{16,}/gu, "***"],
+  [/\bhf_[A-Za-z0-9]{20,}/gu, "***"],
+  [/\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/gu, "***"],
+  [/(\bAuthorization:\s*Basic\s+)\S+/giu, "$1***"],
+  [
+    /([?&](?:sig|signature|X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token|auth|token|access_token|api_key|apikey|key)=)[^&\s"']+/giu,
+    "$1***",
+  ],
+  [/(\b(?:mysql|mariadb|mysqldump)\b[^\n]*?\s-p)(?!\s)\S+/gu, "$1***"],
   [/\b(sk|rk|pk)[-_](live|test|or|ant|proj)[-_][A-Za-z0-9_-]{12,}/gu, "***"],
   [/\bsk-[A-Za-z0-9_-]{16,}/gu, "***"],
   [/\bAKIA[0-9A-Z]{16}\b/gu, "***"],
@@ -233,6 +266,20 @@ export function redactSecrets(text: string): string {
   let clean = text;
   for (const [pattern, replacement] of REDACTIONS) clean = clean.replace(pattern, replacement);
   return clean;
+}
+
+const HOME = homedir();
+const HOME_PATTERN = HOME
+  ? new RegExp(HOME.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/(?:\\\\|\/)+/gu, "[\\\\/]+"), "giu")
+  : null;
+
+/**
+ * What memory keeps of a turn's own text: no key, token, password or private key (the trace's shapes and the gate's,
+ * with the env-file lines around them; doc 18 reviews, rounds 2 and 3), and no personal home folder.
+ */
+export function privateText(text: string): string {
+  const clean = redactSecrets(redact(text));
+  return HOME_PATTERN ? clean.replace(HOME_PATTERN, "~") : clean;
 }
 
 export function looksInjectionShaped(text: string): boolean {

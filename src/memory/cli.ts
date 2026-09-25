@@ -191,9 +191,17 @@ function stats(workspace: string): string {
   const outcomes = new Map<string, number>();
   for (const episode of episodes) outcomes.set(episode.outcome, (outcomes.get(episode.outcome) ?? 0) + 1);
   const audit = readReflectionAudit(scope, 100_000);
-  const reflected = audit.filter((record) => record.qualified && record.reason !== "the user's own words");
+  // Only a turn's own reflection counts as one; older records carry no kind and are judged by their reason.
+  const reflected = audit.filter(
+    (record) =>
+      record.qualified &&
+      (record.kind === "reflection" || (record.kind === undefined && record.reason !== "the user's own words")),
+  );
   const failed = reflected.filter((record) => record.error).length;
-  const written = audit.reduce((sum, record) => sum + record.written.length, 0);
+  const written = audit.reduce(
+    (sum, record) => sum + record.written.filter((slug) => !slug.startsWith("archived:")).length,
+    0,
+  );
   const records = listMemoryRecords(scope);
   const bySource = new Map<string, number>();
   for (const record of records) {

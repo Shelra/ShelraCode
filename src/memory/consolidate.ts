@@ -56,6 +56,9 @@ export function recurringLessons(scope: MemoryScope): ReflectionCandidate[] {
   for (const episode of readEpisodes(scope, EPISODES_READ)) {
     for (const failure of episode.failures) {
       if (!failure.fixedBy) continue;
+      // The same command passing later is a test that went red then green after an edit, not a trap with a way
+      // around it (doc 18 review, round 3).
+      if (head(failure.fixedBy).toLowerCase() === head(failure.command).toLowerCase()) continue;
       const key = `${head(failure.command).toLowerCase()} => ${head(failure.fixedBy).toLowerCase()}`;
       const group = groups.get(key) ?? {
         command: failure.command,
@@ -91,7 +94,8 @@ export function recurringLessons(scope: MemoryScope): ReflectionCandidate[] {
       ].join("\n"),
       source: "observed",
       confidence: 0.9,
-      importance: Math.min(0.95, 0.5 + 0.1 * count),
+      // Below IMPORTANT: a recurring lesson stays because turns use it and pass (credit, recalls), not by its count.
+      importance: Math.min(0.65, 0.4 + 0.1 * count),
       tags: ["consolidated", "recurring"],
     });
   }
@@ -135,6 +139,7 @@ export function consolidateMemory(
     }
 
     appendReflectionAudit(scope, {
+      kind: "consolidation",
       at: new Date(now).toISOString(),
       qualified: true,
       reason: `consolidation: ${report.lessons.length} recurring lesson(s), ${report.archived.length} faded`,

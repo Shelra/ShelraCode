@@ -128,7 +128,10 @@ describe("shelra memory (doc 18 §4.5)", () => {
 
   it("counts the funnel from turns to entries", () => {
     seed();
+    // A consolidation is not a reflection (review round 3).
+    runMemoryCommand(workspace, "consolidate");
     const counted = runMemoryCommand(workspace, "stats").output;
+    expect(counted).toContain("reflections: 0;");
     expect(counted).toContain("statements of yours kept: 2");
     expect(counted).toContain("no longer current: 1");
     expect(runMemoryCommand(workspace, "nonsense")).toMatchObject({ exitCode: 2 });

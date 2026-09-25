@@ -202,8 +202,9 @@ project that states no checks gives no credit); a procedure that was part of
 two passing turns is proposed as a skill and written to `.agents/skills/<slug>/SKILL.md` only on the user's yes
 (`shelra memory promote`). A fact a correction or a newer fact replaced leaves the index as superseded, its file kept,
 and the newer entry says what it replaced; a full store archives its least useful inference instead of refusing.
-Memory behaves like a person's (doc 18 §4.6, `src/memory/dynamics.ts`): an entry recalled often and lately ranks
-above an equal one, and an unused inference fades; once a day a consolidation pass turns a failure repeated across
+Memory behaves like a person's (doc 18 §4.6, `src/memory/dynamics.ts`): an entry used often and lately (read with
+`memory_read`, or its command run and passed; being shown is not use) ranks above an equal one, and an unused inference
+fades; once a day a consolidation pass turns a failure repeated across
 turns into one lesson and archives what faded (never the user's words, an important or a credited entry), and a
 request that matches an archived entry is offered it back; "recuérdame X cuando Y" keeps a reminder given once, on
 the request that names its cue. `shelra memory` lists, shows, explains (`why "<request>"`) and counts it. Design and evidence:

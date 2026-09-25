@@ -1,13 +1,13 @@
 import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
-import { redact } from "../utils/session-trace";
-import { redactSecrets } from "./gate";
+import { privateText } from "./gate";
 import { type TurnDigest, typedText } from "./reflection";
 import { ensureMemoryDir, memoryDir } from "./store";
 import { previousRequestWeight, searchTerms } from "./terms";
 import type { MemoryScope } from "./types";
+
+export { privateText };
 
 /**
  * Episodic memory: what happened in each turn that did work, written by the host on every outcome, with no model
@@ -70,20 +70,6 @@ const PENDING_FILE = "pending-reflections.jsonl";
 const EPISODES_MAX_BYTES = 4 * 1024 * 1024;
 /** A pending queue that never drains (a model that never answers) keeps its newest entries only. */
 const MAX_PENDING = 20;
-
-const HOME = homedir();
-const HOME_PATTERN = HOME
-  ? new RegExp(HOME.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/(?:\\\\|\/)+/gu, "[\\\\/]+"), "giu")
-  : null;
-
-/**
- * What memory keeps of a turn's own text: no key, token, password or private key (the gate's shapes and the env-file
- * lines around them; doc 18 review, round 2), and no personal home folder.
- */
-export function privateText(text: string): string {
-  const clean = redactSecrets(redact(text));
-  return HOME_PATTERN ? clean.replace(HOME_PATTERN, "~") : clean;
-}
 
 function clip(text: string, max: number): string {
   const clean = privateText(text).replace(/\s+/gu, " ").trim();

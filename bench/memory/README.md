@@ -78,13 +78,19 @@ superseded subjects (67%).
 ## A project's life
 
 `life.ts` replays 240 days of a project on the retrieval and fading code (M8, doc 18 §4.6), and the same days without
-them as the control. A habit and a never-used note are identical except for their history.
+them as the control. It does what the product does: every request goes through `buildMemoryContext`, being shown is
+exposure only, the agent uses a procedure only when memory showed it, and using it (running the command it names)
+strengthens the entries that name that command. A habit and a look-alike note share their index line; only the habit
+names a command.
 
 ```sh
 bun run bench/memory/life.ts
 ```
 
-| | habit first | rules kept | lessons kept | habits kept | rare kept | notes faded | store at end | faded brought back |
-|---|---|---|---|---|---|---|---|---|
-| with dynamics | 99% (795) | 3/3 | 3/3 | 10/10 | 10/10 | 20/20 | 26 | 20/20 |
-| without (control) | 0% (795) | 3/3 | 3/3 | 10/10 | 10/10 | 0/20 | 46 | — |
+| | habit first | needed and shown | rules kept | lessons kept | habits kept | rare kept | notes faded | other faded | store at end | faded brought back |
+|---|---|---|---|---|---|---|---|---|---|---|
+| with dynamics | 99% (795) | 100% | 3/3 | 3/3 | 10/10 | 10/10 | 20/20 | 0 | 26 | 20/20 |
+| without (control) | 0% (795) | 100% | 3/3 | 3/3 | 10/10 | 10/10 | 0/20 | 0 | 46 | — |
+
+A first version gave each recall to the entry the simulation knew was needed; the round-3 review (doc 18 §7b) showed
+the product could not match it, and the product changed: a memory strengthens when it is used, not when it is shown.

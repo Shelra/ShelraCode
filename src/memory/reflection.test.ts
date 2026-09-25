@@ -267,6 +267,102 @@ describe("automatic memory capture", () => {
     expect(listMemoryRecords(scope)).toHaveLength(40);
   }, 30_000);
 
+  it("retires only what a correction names, word for word (review round 3)", () => {
+    const scope = projectMemoryScope(workspace);
+    const fact = (slug: string, hook: string, source: "inference" | "human" = "inference") => ({
+      slug,
+      title: hook,
+      hook,
+      type: "conventions" as const,
+      description: hook,
+      body: `${hook}. Seen in this repository's setup.`,
+      source,
+      ...(source === "human" ? { tags: ["user-directive"] } : {}),
+    });
+    admitCandidates(scope, [
+      fact("lint-with-biome", "bun run lint runs Biome over src"),
+      fact("user-rule-biome", "Always run biome check before committing", "human"),
+      fact("eslint-config", "ESLint config lives in .eslintrc.json"),
+      fact("postgres-pool", "Postgres pool size is 10"),
+      fact("sqlite-file", "the SQLite database file is data/app.db"),
+      fact("install-npm", "Install dependencies with npm install before starting"),
+    ]);
+    for (const correction of [
+      "Use Biome instead of ESLint.",
+      "Use Postgres instead of SQLite.",
+      "We don't use npm anymore, we use bun.",
+    ]) {
+      admitCandidates(scope, extractUserDirectives(correction));
+    }
+    const current = listMemoryRecords(scope).map((record) => record.slug);
+    expect(current).toEqual(expect.arrayContaining(["lint-with-biome", "user-rule-biome", "postgres-pool"]));
+    for (const retired of ["eslint-config", "sqlite-file", "install-npm"]) expect(current).not.toContain(retired);
+  });
+
+  it("lets a turned-around rule replace the old one, and keeps two different rules (review round 3)", () => {
+    const scope = projectMemoryScope(workspace);
+    for (const pair of [
+      ["Never deploy on Fridays.", "Always deploy on Fridays."],
+      ["Always use tabs for indentation.", "Always use spaces for indentation."],
+      ["Always write tests first.", "Always write docs first."],
+    ]) {
+      for (const message of pair) admitCandidates(scope, extractUserDirectives(message));
+    }
+    expect(
+      listMemoryRecords(scope)
+        .map((record) => record.index.hook)
+        .sort(),
+    ).toEqual([
+      "Always deploy on Fridays",
+      "Always use spaces for indentation",
+      "Always write docs first",
+      "Always write tests first",
+    ]);
+  });
+
+  it("keeps a lesson from a command that leaked a password, without the password (review round 3)", () => {
+    const scope = projectMemoryScope(workspace);
+    const leaky: TurnDigest = {
+      ...digest,
+      commands: [
+        {
+          command: "PGPASSWORD=hunter2x psql -h db.internal -c 'select 1'",
+          success: false,
+          output: "connection to postgres://app:S3cr3tPw@db.internal:5432/app failed; db_password=pa55word",
+        },
+        { command: "docker compose up -d db", success: true, output: "started" },
+      ],
+    };
+    admitCandidates(scope, deterministicFailureCandidates(leaky));
+    const [lesson] = listMemoryRecords(scope);
+    const kept = `${lesson?.slug} ${lesson?.index.hook} ${lesson?.entry.body}`;
+    expect(lesson).toBeDefined();
+    for (const secret of ["hunter2x", "S3cr3tPw", "pa55word"]) expect(kept).not.toContain(secret);
+  });
+
+  it("does not propose an approved skill again when only its credit grew (review round 3)", () => {
+    const scope = projectMemoryScope(workspace);
+    admitCandidates(scope, [
+      {
+        slug: "regen-client",
+        title: "Regenerate the API client",
+        hook: "after editing openapi.yaml run bun run codegen then bun test",
+        type: "procedure",
+        description: "Codegen",
+        body: "1. Edit openapi.yaml\n2. Run `bun run codegen` (writes src/generated/)\n3. Run `bun test` and commit the client.",
+        source: "observed",
+        confidence: 0.9,
+      },
+    ]);
+    creditMemoryUse(scope, ["regen-client"], 1);
+    creditMemoryUse(scope, ["regen-client"], 1);
+    const propose = () => proposeProceduresAsSkills(scope, workspace, listMemoryRecords(scope)).proposed;
+    expect(propose()).toEqual(["regen-client"]);
+    expect(approveSkillProposal(scope, workspace, "regen-client").ok).toBe(true);
+    creditMemoryUse(scope, ["regen-client"], 1);
+    expect(propose()).toEqual([]);
+  });
+
   it("never lets an inference retire what the user stated", () => {
     const scope = projectMemoryScope(workspace);
     admitCandidates(scope, extractUserDirectives("Always deploy from the release branch."));

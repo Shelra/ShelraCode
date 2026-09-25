@@ -371,6 +371,11 @@ export function foldText(text: string): string {
 /** Plural and verb-form folding for words the lexicon does not know; the same on the request and the entry side. */
 /** Words that end in s without being plurals. */
 const NOT_PLURAL = new Set([
+  "always",
+  "sometimes",
+  "perhaps",
+  "towards",
+  "besides",
   "news",
   "alias",
   "status",
@@ -486,6 +491,22 @@ export function searchTerms(text: string): string[] {
       continue;
     }
     add(LEXICON[stem(token)] ?? stem(token));
+  }
+  return terms;
+}
+
+/**
+ * A text's words as written: accents folded, plurals folded, stopwords dropped, but no lexicon, so "biome" and
+ * "eslint" (both "lint" to searchTerms) stay two words. What a correction says it replaces is matched on these
+ * (doc 18 review, round 3: "use Biome instead of ESLint" retired the Biome entries).
+ */
+export function rawTerms(text: string): string[] {
+  const terms: string[] = [];
+  for (const raw of foldText(text).split(/[^\p{L}\p{N}_./-]+/u)) {
+    const token = raw.replace(/^[./-]+|[./-]+$/gu, "");
+    if (token.length < 2 || STOPWORDS.has(token)) continue;
+    const term = /[./_\d-]/u.test(token) ? token : singular(token);
+    if (!terms.includes(term)) terms.push(term);
   }
   return terms;
 }

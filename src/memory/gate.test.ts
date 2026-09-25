@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideMemoryWrite, jaccard, tokenize } from "./gate";
+import { containsSecret, decideMemoryWrite, jaccard, privateText, tokenize } from "./gate";
 import type { MemoryRecord, MemoryWriteInput } from "./types";
 
 function record(slug: string, overrides: Partial<MemoryWriteInput> & { uses?: number } = {}): MemoryRecord {
@@ -136,5 +136,27 @@ describe("memory write gate", () => {
       "src/app",
     ]);
     expect(jaccard(["a", "b"], ["b", "c"])).toBeCloseTo(1 / 3);
+  });
+});
+
+describe("secrets memory never keeps (review round 3)", () => {
+  it("blanks and refuses the shapes a turn's output carries", () => {
+    const leaks = [
+      "curl -X POST https://hooks.slack.com/services/T0001/B0002/XXXXabcdef1234",
+      "npm config set //registry.npmjs.org/:_authToken npm_abcdefghijklmnopqrstuvwxyz0123456789",
+      "mysql -u app -pS3cretPass -h db",
+      "PGPASSWORD=hunter2x psql -h db.internal",
+      "connection to postgres://app:S3cr3tPw@db.internal:5432/app failed",
+      "Authorization: Basic dXNlcjpwYXNz",
+      "https://x.blob.core.windows.net/c?sv=1&sig=abcDEF123",
+      "-----BEGIN PGP PRIVATE KEY BLOCK-----\nabc\n-----END PGP PRIVATE KEY BLOCK-----",
+      "STRIPE_WEBHOOK_SECRET=whsec_abcdef123456",
+    ];
+    for (const leak of leaks) {
+      expect(containsSecret(leak), leak).toBe(true);
+      expect(privateText(leak), leak).toContain("***");
+    }
+    expect(containsSecret("run bun test --preload ./test/setup.ts")).toBe(false);
+    expect(privateText("run bun test --preload ./test/setup.ts")).toBe("run bun test --preload ./test/setup.ts");
   });
 });

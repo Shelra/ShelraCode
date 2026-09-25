@@ -192,6 +192,7 @@ shelra memory why "the login test fails again"  # what that request would be giv
 shelra memory show deploy-fly                   # one entry, what it replaced, its history
 shelra memory stats                             # from turns that did work to what was kept
 shelra memory skills                            # procedures proposed as skills; promote <slug> or decline <slug>
+shelra memory consolidate                       # what a night of sleep does: recurring failures become lessons
 ```
 
 Shelra remembers a project as it works on it, in `.shelra/memory/` at the
@@ -205,6 +206,13 @@ the facts it contradicts, which stay readable as what used to be true. A
 preference about how Shelra talks to you is kept in `~/.shelra/memory/` for
 every project. A procedure that helped two turns pass the project's checks is
 proposed as a skill and written only when you promote it.
+
+Memory also behaves the way a person's does. What is used often and lately comes
+to mind first, and a note nobody uses fades into an archive: never your own
+words, and it comes back when a request asks about it. Once a day, a failure
+that recurred across turns becomes one lesson with its count. Ask "recuérdame
+actualizar el changelog la próxima vez que toquemos el release" and the reminder
+comes up once, with the request about the release.
 
 **Project decisions:**
 
