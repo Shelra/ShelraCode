@@ -88,6 +88,7 @@ import { TextArea } from "./components/text-area";
 import { DiffView } from "./diff-view";
 import { GLYPH } from "./glyphs";
 import { HelpModal } from "./help-modal";
+import { useHiddenScrollbar } from "./hooks/use-hidden-scrollbar";
 import { type TypeaheadState, useTypeahead } from "./hooks/useTypeahead.js";
 import { buildKnowledge, type KnowledgeTab } from "./knowledge";
 import { KnowledgeModal, knowledgeRowsFor } from "./knowledge-modal";
@@ -785,6 +786,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const apiKeyInputRef = useRef<TextareaRenderable>(null);
   const inputRef = useRef<TextareaRenderable>(null);
   const scrollRef = useRef<ScrollBoxRenderable>(null);
+  useHiddenScrollbar(scrollRef);
   const { width, height } = useTerminalDimensions();
   const processedInitial = useRef(false);
   const contentAccRef = useRef("");
