@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } fro
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { privateText } from "./gate";
+import { recoveryOf } from "./recovery";
 import { type TurnDigest, typedText } from "./reflection";
 import { ensureMemoryDir, memoryDir } from "./store";
 import { previousRequestWeight, searchTerms } from "./terms";
@@ -90,12 +91,13 @@ export function turnOutcome(note: string | undefined, verified: boolean): TurnOu
   return "answered";
 }
 
-/** Each failed command with the command that succeeded next, the way the turn got past it. */
+/** Each failed command with the way the turn got past it, when it did (`recoveryOf`). */
 export function failuresOf(digest: TurnDigest): EpisodeFailure[] {
   const failures: EpisodeFailure[] = [];
   digest.commands.forEach((command, index) => {
     if (command.success) return;
-    const fixedBy = digest.commands.slice(index + 1).find((later) => later.success)?.command;
+    const recovery = recoveryOf(digest.commands, index);
+    const fixedBy = recovery ? (recovery.between[0] ?? recovery.passed.command) : undefined;
     failures.push({
       command: clip(command.command, 240),
       error: clip(command.output, 300),

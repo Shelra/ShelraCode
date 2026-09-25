@@ -77,6 +77,59 @@ describe("memory store: write then read round-trip", () => {
     expect(entry.entry?.body).toContain("--no-file-parallelism");
   });
 
+  it("keeps an entry whose title or hook holds a line break on one index line (seen live 2026-09-25)", () => {
+    const scope = projectMemoryScope(workspace);
+    writeMemoryEntry(scope, {
+      slug: "audit-failed",
+      title: "node .\\audit.cjs 2>&1 | Out\n...[clipped] failed",
+      hook: "`node .\\audit.cjs` failed\n(PASS R1 stage is 1-1)",
+      type: "failure",
+      description: "An observed failure",
+      body: "Body.",
+    });
+    const index = readMemoryIndex(scope);
+    expect(index.raw.trim().split("\n")).toHaveLength(1);
+    expect(index.entries).toEqual([
+      {
+        title: "node .\\audit.cjs 2>&1 | Out ...[clipped] failed",
+        file: "audit-failed.md",
+        hook: "`node .\\audit.cjs` failed (PASS R1 stage is 1-1)",
+      },
+    ]);
+  });
+
+  it("reads back an index an earlier version broke across lines, and the next write repairs it", () => {
+    const scope = projectMemoryScope(workspace);
+    writeMemoryEntry(scope, {
+      slug: "failure-node-audit",
+      title: "placeholder",
+      hook: "placeholder",
+      type: "failure",
+      description: "An observed failure",
+      body: "Body.",
+    });
+    // The index as the live 2026-09-25 session left it: one entry over three lines.
+    writeFileSync(
+      join(workspace, ".shelra", "memory", "MEMORY.md"),
+      "- [node .\\audit-scratch.cjs 2>&1 | Out\n...[clipped] failed until Select-String -Path .\\ind\n...[clipped]](failure-node-audit.md) — `node .\\audit-scratch.cjs` failed (PASS R1)\n...[clipped]` then succeeded\n",
+    );
+    const [entry] = readMemoryIndex(scope).entries;
+    expect(entry?.file).toBe("failure-node-audit.md");
+    expect(entry?.title).toBe(
+      "node .\\audit-scratch.cjs 2>&1 | Out ...[clipped] failed until Select-String -Path .\\ind ...[clipped]",
+    );
+    expect(listMemoryRecords(scope).map((record) => record.slug)).toEqual(["failure-node-audit"]);
+    writeMemoryEntry(scope, {
+      slug: "another",
+      title: "Another",
+      hook: "another entry",
+      type: "conventions",
+      description: "Another",
+      body: "Body.",
+    });
+    expect(readMemoryIndex(scope).raw.trim().split("\n")).toHaveLength(2);
+  });
+
   it("re-writing the same slug replaces its index entry rather than duplicating it", () => {
     const scope = projectMemoryScope(workspace);
     writeMemoryEntry(scope, {

@@ -1,5 +1,6 @@
 import type { ProviderAdapter, ProviderUsage } from "../providers/types";
 import { decideMemoryWrite, type GateDecision, privateText } from "./gate";
+import { recoveryOf } from "./recovery";
 import {
   appendReflectionAudit,
   archiveMemoryEntry,
@@ -277,9 +278,10 @@ export function turnQualifiesForReflection(digest: TurnDigest): { qualified: boo
 }
 
 /**
- * Machine-observed fallback: a command that failed and a later command that succeeded is a fact
- * worth keeping even when the model's extraction returns nothing — the exact shape of the
- * "trap discovered the hard way" that a future session pays for again without memory.
+ * Machine-observed fallback: a command that failed and what got the turn past it (`recoveryOf`: the same check
+ * passing after a prerequisite, or another program doing the job) is a fact worth keeping even when the model's
+ * extraction returns nothing: the "trap discovered the hard way" that a future session pays for again without memory.
+ * The same command passing after nothing but file edits is the code being fixed, not a trap, and teaches nothing here.
  */
 export function deterministicFailureCandidates(digest: TurnDigest): ReflectionCandidate[] {
   const candidates: ReflectionCandidate[] = [];
@@ -292,9 +294,10 @@ export function deterministicFailureCandidates(digest: TurnDigest): ReflectionCa
   }));
   for (let index = 0; index < commands.length; index += 1) {
     const failed = commands[index];
-    if (!failed || failed.success) continue;
-    const recovered = commands.slice(index + 1).find((command) => command.success);
-    if (!recovered) continue;
+    const recovery = recoveryOf(commands, index);
+    if (!failed || !recovery) continue;
+    const { passed: recovered, between } = recovery;
+    if (between.length === 0 && inline(recovered.command, 400) === inline(failed.command, 400)) continue;
     const slug = slugify(`${failed.command.split(/\s+/u).slice(0, 4).join(" ")} failed`, "failure-");
     if (seen.has(slug)) continue;
     seen.add(slug);
@@ -303,19 +306,25 @@ export function deterministicFailureCandidates(digest: TurnDigest): ReflectionCa
         .trim()
         .split(/\r?\n/u)
         .find((line) => line.trim()) ?? "(no output)";
+    const fix = between[0] ?? recovered.command;
     candidates.push({
       slug,
-      title: `${clip(failed.command, 50)} failed until ${clip(recovered.command, 40)}`,
-      hook: `\`${clip(failed.command, 60)}\` failed (${clip(errorHead, 80)}); \`${clip(recovered.command, 60)}\` then succeeded`,
+      title: `${inline(failed.command, 50)} failed until ${inline(fix, 40)}`,
+      hook:
+        between.length > 0
+          ? `\`${inline(failed.command, 60)}\` failed (${inline(errorHead, 80)}); it passed after ${between.map((command) => `\`${inline(command, 60)}\``).join(" and ")}`
+          : `\`${inline(failed.command, 60)}\` failed (${inline(errorHead, 80)}); \`${inline(recovered.command, 60)}\` passed`,
       type: "failure",
-      description: `Observed on ${new Date().toISOString().slice(0, 10)}: a command failed and later work succeeded`,
+      description: `Observed on ${new Date().toISOString().slice(0, 10)}: a check failed and later passed`,
       body: [
-        `Running \`${clip(failed.command, 200)}\` failed with:`,
+        `Running \`${inline(failed.command, 200)}\` failed with:`,
         "```",
         clip(failed.output, 400),
         "```",
-        `Later, \`${clip(recovered.command, 200)}\` succeeded${recovered.output.trim() ? ` (${clip(recovered.output.trim().split(/\r?\n/u)[0] ?? "", 120)})` : ""}.`,
-        "Check whether the second command (or a step between them) is a prerequisite before repeating the first.",
+        between.length > 0
+          ? `After running ${between.map((command) => `\`${inline(command, 200)}\``).join(" and ")}, \`${inline(recovered.command, 200)}\` passed.`
+          : `\`${inline(recovered.command, 200)}\` passed.`,
+        between.length > 0 ? "Run that first next time." : "Use the invocation that passed.",
       ].join("\n"),
       source: "observed",
       confidence: 0.6,
@@ -329,6 +338,12 @@ export function deterministicFailureCandidates(digest: TurnDigest): ReflectionCa
 function clip(text: string, max: number): string {
   const trimmed = text.trim();
   return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 15)}\n...[clipped]`;
+}
+
+/** One line, for a title, a hook or a command quoted in a sentence: whitespace runs become one space. */
+function inline(text: string, max: number): string {
+  const flat = text.replace(/\s+/gu, " ").trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 }
 
 export function buildReflectionPrompt(
@@ -746,7 +761,8 @@ ${candidate.body}`
     );
   };
   const fallback = deterministicFailureCandidates(options.digest).filter((candidate) => {
-    const recovered = candidate.body.match(/Later, `([^`]+)` succeeded/u)?.[1];
+    // The step that got past the failure, as the title names it.
+    const recovered = candidate.title.split(" failed until ")[1]?.replace(/…$/u, "");
     return !recovered || !covered(recovered);
   });
   const admitted = admitCandidates(options.scope, [...report.candidates, ...fallback], records);

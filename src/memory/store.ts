@@ -281,16 +281,33 @@ function parseEntryFile(raw: string): MemoryEntry | null {
   };
 }
 
-function buildIndexLine(entry: MemoryIndexEntry): string {
-  return `- [${entry.title}](${entry.file}) — ${entry.hook}`;
+/** An index entry is one line: a title or hook that holds a line break would hide the entry from every reader. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/gu, " ").trim();
 }
 
+function buildIndexLine(entry: MemoryIndexEntry): string {
+  return `- [${oneLine(entry.title).replace(/\]\(/gu, "] (")}](${entry.file}) — ${oneLine(entry.hook)}`;
+}
+
+/**
+ * Reads the index one entry per line. An entry a writer broke across lines (seen live 2026-09-25: a lesson whose
+ * title held a clip marker's line break, so `memory_list` said "No project memory saved yet") is joined back.
+ */
 function parseIndex(raw: string): MemoryIndexEntry[] {
-  const entries: MemoryIndexEntry[] = [];
+  const blocks: string[] = [];
   for (const line of raw.split(/\r?\n/u)) {
-    const match = line.match(INDEX_LINE_PATTERN);
-    if (!match) continue;
-    entries.push({ title: match[1], file: match[2], hook: match[3] });
+    const last = blocks.length - 1;
+    if (/^-\s*\[/u.test(line)) blocks.push(line);
+    // Only an entry that does not parse yet takes the next line: a line after a whole entry is not part of it.
+    else if (last >= 0 && line.trim() && !INDEX_LINE_PATTERN.test(blocks[last] ?? "")) {
+      blocks[last] = `${blocks[last]} ${line.trim()}`;
+    }
+  }
+  const entries: MemoryIndexEntry[] = [];
+  for (const block of blocks) {
+    const match = block.match(INDEX_LINE_PATTERN);
+    if (match) entries.push({ title: oneLine(match[1]), file: match[2], hook: oneLine(match[3]) });
   }
   return entries;
 }

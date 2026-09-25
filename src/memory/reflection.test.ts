@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeProvider } from "../providers/fake";
 import type { ProviderTextRequest, ProviderTextResult } from "../providers/types";
+import { failuresOf } from "./episodes";
 import {
   admitCandidates,
   deterministicFailureCandidates,
@@ -331,6 +332,7 @@ describe("automatic memory capture", () => {
           output: "connection to postgres://app:S3cr3tPw@db.internal:5432/app failed; db_password=pa55word",
         },
         { command: "docker compose up -d db", success: true, output: "started" },
+        { command: "PGPASSWORD=hunter2x psql -h db.internal -c 'select 1'", success: true, output: "1" },
       ],
     };
     admitCandidates(scope, deterministicFailureCandidates(leaky));
@@ -398,6 +400,51 @@ describe("automatic memory capture", () => {
     // The same statement said again is still one entry.
     admitCandidates(scope, extractUserDirectives("Always write tests first!"));
     expect(listMemoryRecords(scope)).toHaveLength(3);
+  });
+
+  it("keeps no lesson when the failed command never passed, whatever succeeded after it (seen live 2026-09-25)", () => {
+    const audit: TurnDigest = {
+      ...digest,
+      commands: [
+        {
+          command: "node .\\audit-scratch.cjs 2>&1 | Out-String -Width 200",
+          success: false,
+          output: "PASS R1 stage is 1-1\nFAIL R3 touching idle shell kicks it",
+        },
+        { command: 'Select-String -Path .\\index.html -Pattern "shell"', success: true, output: "LineNumber Line" },
+        { command: "node .\\audit-scratch.cjs", success: false, output: "FAIL R3 pit death" },
+      ],
+    };
+    expect(deterministicFailureCandidates(audit)).toEqual([]);
+    expect(failuresOf(audit).every((failure) => failure.fixedBy === undefined)).toBe(true);
+  });
+
+  it("names the step that got a check past its failure, and skips an inspection in between", () => {
+    const trap: TurnDigest = {
+      ...digest,
+      commands: [
+        { command: "bun test", success: false, output: "error: Cannot find module 'zod'" },
+        { command: "Get-Content package.json", success: true, output: "{}" },
+        { command: "bun install", success: true, output: "3 packages installed" },
+        { command: "bun test", success: true, output: "4 pass" },
+      ],
+    };
+    const [lesson] = deterministicFailureCandidates(trap);
+    expect(lesson?.title).toBe("bun test failed until bun install");
+    expect(lesson?.hook).toBe("`bun test` failed (error: Cannot find module 'zod'); it passed after `bun install`");
+    expect(lesson?.body).toContain("After running `bun install`, `bun test` passed.");
+    expect(failuresOf(trap)[0]?.fixedBy).toBe("bun install");
+  });
+
+  it("keeps no lesson when the same command passed after nothing but edits: that is the code being fixed", () => {
+    const fixed: TurnDigest = {
+      ...digest,
+      commands: [
+        { command: "bun test", success: false, output: "1 fail: expected 3, got 2" },
+        { command: "bun test", success: true, output: "4 pass" },
+      ],
+    };
+    expect(deterministicFailureCandidates(fixed)).toEqual([]);
   });
 
   it("records a failed-then-recovered command deterministically when the model extracts nothing", async () => {
