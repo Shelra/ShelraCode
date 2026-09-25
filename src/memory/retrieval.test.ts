@@ -167,6 +167,28 @@ describe("memory v2 retrieval (doc 18 §4.3)", () => {
     expect(followUp.expanded).toEqual(["login-flaky-test"]);
   });
 
+  it("lets a short new request find its own memory, not the previous request's (review round 2)", () => {
+    write("login-session-cookie", {
+      title: "Login bug: the session cookie",
+      hook: "login fails when the session cookie is set after the redirect",
+      body: "Set the session cookie before redirecting in src/auth/login.ts.",
+    });
+    write("stripe-webhook-signature", {
+      title: "Stripe webhook signatures",
+      hook: "the stripe webhook handler must verify signatures with the raw body",
+      body: "Read the raw body before JSON parsing, then call stripe.webhooks.constructEvent.",
+    });
+    const context = buildMemoryContext(
+      listMemoryRecords(projectMemoryScope(workspace)),
+      {
+        text: "fix the login bug",
+        previous: "update the stripe webhook handler to verify signatures with the raw body",
+      },
+      workspace,
+    );
+    expect(context.expanded).toEqual(["login-session-cookie"]);
+  });
+
   it("matches a Spanish request with an English memory (R3)", () => {
     write("config-tests-preload", {
       title: "Config tests need the preload script",

@@ -8,7 +8,7 @@ import {
   supersedeMemoryEntry,
   writeMemoryEntry,
 } from "./store";
-import { searchTerms } from "./terms";
+import { foldText, searchTerms } from "./terms";
 import { MEMORY_TYPES, type MemoryRecord, type MemoryScope, type MemoryType, type MemoryWriteInput } from "./types";
 
 /**
@@ -65,25 +65,41 @@ const MAX_PROMPT_CHARS = 9_000;
  *
  * - a rule: a sentence that starts with always, never, from now on, going forward, prefer (and the Spanish forms);
  * - a fact: "remember that …", "we use …", "this project uses …";
- * - a correction: "no, we use …", "actually, …", "we don't use X anymore", "use Y instead of X".
+ * - a correction: "no, we use …", "actually, we deploy with …", "we don't use X anymore", "use Y instead of X".
+ *
+ * Only the text the user typed counts: a file attached with @ is the repository's text, not the user's words (doc 18
+ * review, round 2: a README line became a standing human rule). A sentence about the task at hand ("no, the bug is in
+ * src/auth.ts, fix it", "note that the output above is cut") is not a lasting statement either.
  */
 const RULE_START =
   /^(?:always|never|from now on|going forward|prefer|en adelante|a partir de ahora|siempre|nunca|jam[aá]s|prefiero)\b/iu;
-const REMEMBER_START =
-  /^(?:remember that|keep in mind that|note that|recuerda que|ten en cuenta que|toma en cuenta que)\s+/iu;
-const FACT_START =
-  /^(?:we use|we're using|we are using|this project uses|the project uses|usamos|el proyecto usa|en este proyecto usamos)\b/iu;
-// "No problem, it is fine" is not a correction: a bare "no" needs its comma, and the rest must state a project fact.
+const REMEMBER_START = /^(?:remember that|recuerda que)\s+/iu;
+const FACT_START = /^(?:we use|this project uses|the project uses|usamos|el proyecto usa|en este proyecto usamos)\b/iu;
+// "No problem, it is fine" is not a correction: a bare "no" needs its comma, and the rest must state a convention.
 const CORRECTION_START =
   /^(?:(?:no|nope|wrong|incorrect)\s*[,.:;!]|(?:actually|en realidad|te equivocas|that's wrong|eso est[aá] mal)\b[,.:;!]?)\s*/iu;
+/** What a correction must state: how this project does something, not where today's bug is. */
 const CORRECTION_STATEMENT =
-  /\b(?:we(?:'re| are)? (?:use|using|run|build|deploy|test|keep|store|call)|this project|the project|usamos|el proyecto|se usa|lives in|is in|is at|est[aá] en|vive en)\b/iu;
+  /\b(?:we (?:use|run|build|deploy|test|keep|store|call|write|name|format)|usamos|se usa|corremos|desplegamos|compilamos)\b/iu;
 const NO_LONGER =
-  /\b(?:we (?:don't|do not|no longer) use|we stopped using|we (?:moved|migrated) (?:away )?from|ya no usamos|dejamos de usar|migramos de)\b/iu;
-const INSTEAD = /\b(?:use|usa|utiliza|usamos)\b.{2,80}\b(?:instead of|rather than|en vez de|en lugar de)\b/iu;
-/** A preference about how Shelra talks to this person holds in every project: it goes to the user-wide store. */
+  /^(?:we (?:don't|do not|no longer) use|we stopped using|we (?:moved|migrated) (?:away )?from|ya no usamos|dejamos de usar|migramos de)\b/iu;
+const INSTEAD =
+  /^(?:please |por favor )?(?:use|usa|utiliza|usamos)\b.{2,80}\b(?:instead of|rather than|en vez de|en lugar de)\b/iu;
+/** A sentence about the task at hand: what is broken here, what to do now, what was said above. */
+const ABOUT_THIS_TASK =
+  /\b(?:fix it|fix this|arr[eé]glalo|the (?:output|text|message|log|logs|code|error|errors|result|results|file|diff|trace|example) (?:above|below)|(?:above|below)\s*$|de (?:arriba|abajo)\s*$|this (?:function|file|bug|error|line|test|output|one|time)|the (?:bug|error|output|crash)|el (?:bug|error)|la l[ií]nea|line \d+|l[ií]nea \d+|i asked|te ped[ií]|you (?:did|wrote|made|said)|hiciste|escribiste|dijiste|for now|por ahora|today|hoy|right now|ahora mismo)\b/iu;
+/**
+ * A preference about how Shelra talks to this person holds in every project and goes to the user-wide store: only when
+ * Shelra is the one addressed ("answer me in Spanish", "respond in English", "háblame en español"), never a rule about
+ * the project's own text ("make the API respond in English").
+ */
 const PERSONAL =
-  /\b(?:answer|respond|reply|write to me|talk to me|explain|responde|contesta|h[aá]blame|escr[ií]beme|expl[ií]came)\b.{0,40}\b(?:in|en)\s+(?:spanish|english|espa[nñ]ol|ingl[eé]s|castellano)\b|\b(?:my|mi)\s+(?:language|idioma)\b/iu;
+  /^(?:(?:always|siempre|please|por favor)\s+)?(?:(?:answer|respond|reply|talk|write|explain)(?:\s+(?:to\s+)?me)?|responde(?:me)?|cont[eé]sta(?:me)?|h[aá]bla(?:me)?|escr[ií]be(?:me)?|expl[ií]ca(?:me)?)\s+(?:(?:always|siempre)\s+)?(?:in|en)\s+(?:spanish|english|espa[nñ]ol|ingl[eé]s|castellano)\b|\b(?:my|mi)\s+(?:language|idioma)\b/iu;
+
+/** The text the user typed: a request with @-mentions carries the files in an `<attached_files>` block first. */
+export function typedText(message: string): string {
+  return message.replace(/<attached_files>[\s\S]*?<\/attached_files>\s*/gu, "").trim();
+}
 
 function slugify(text: string, prefix = ""): string {
   const base = text
@@ -114,6 +130,7 @@ type DirectiveKind = "rule" | "fact" | "correction";
 /** What a sentence states as lasting, and the statement itself; null when it states nothing lasting. */
 function directiveOf(sentence: string, document: boolean): { kind: DirectiveKind; statement: string } | null {
   if (/^(never mind|always wondered|never thought)/iu.test(sentence)) return null;
+  if (ABOUT_THIS_TASK.test(sentence)) return null;
   if (RULE_START.test(sentence)) {
     // A structured document (a spec with "#" headings) states what this task should do: its "prefer" lines are the
     // task's requirements, not standing rules (seen live 2026-09-24).
@@ -140,9 +157,10 @@ function directiveOf(sentence: string, document: boolean): { kind: DirectiveKind
  * Ordinary prose ("never mind", "I always wondered") is not captured; a lead-in to a list is not a complete rule;
  * a preference about how Shelra talks to this person is tagged `user-wide` for the user's own store.
  */
-export function extractUserDirectives(userMessage: string): ReflectionCandidate[] {
+export function extractUserDirectives(message: string): ReflectionCandidate[] {
   const candidates: ReflectionCandidate[] = [];
   const seen = new Set<string>();
+  const userMessage = typedText(message);
   const document = /^#{1,6}\s/mu.test(userMessage);
   const today = new Date().toISOString().slice(0, 10);
   for (const sentence of sentencesOf(userMessage)) {
@@ -156,7 +174,7 @@ export function extractUserDirectives(userMessage: string): ReflectionCandidate[
     const slug = slugify(statement, prefix);
     if (seen.has(slug)) continue;
     seen.add(slug);
-    const personal = PERSONAL.test(sentence);
+    const personal = PERSONAL.test(foldText(sentence));
     candidates.push({
       slug,
       title: statement.length > 60 ? `${statement.slice(0, 57)}...` : statement,
@@ -485,6 +503,7 @@ export function admitCandidates(
         // correction contradicts. An inference never retires what a person stated.
         const targets = new Set<string>([
           ...(candidate.supersedes ? [candidate.supersedes] : []),
+          ...(decision.supersedes ? [decision.supersedes] : []),
           ...(candidate.source === "human" && candidate.tags?.includes("correction")
             ? entriesContradictedBy({ ...candidate, slug: decision.slug }, current)
             : []),
@@ -604,7 +623,10 @@ export async function reflectOnTurn(options: ReflectOptions): Promise<Reflection
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   }
-  if (options.digest.endedUnverified) {
+  // A change nothing checked teaches at most a hypothesis, whichever way the turn ended (a deferred reflection of a
+  // turn cut Limited has no verdict of its own; doc 18 review, round 2).
+  const unchecked = options.digest.changedFiles.length > 0 && !options.digest.verified;
+  if (options.digest.endedUnverified || unchecked) {
     report.candidates = report.candidates.map((candidate) => ({
       ...candidate,
       confidence: Math.min(candidate.confidence ?? UNVERIFIED_CONFIDENCE_CAP, UNVERIFIED_CONFIDENCE_CAP),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foldText, searchTerms } from "./terms";
+import { foldText, isFollowUp, previousRequestWeight, searchTerms } from "./terms";
 
 describe("memory search terms (doc 18 R3)", () => {
   it("keeps Spanish words whole and folds their accents", () => {
@@ -23,6 +23,34 @@ describe("memory search terms (doc 18 R3)", () => {
   it("folds plurals and verb forms the lexicon does not list, the same on both sides", () => {
     expect(searchTerms("invoices totals")).toEqual(searchTerms("invoice total"));
     expect(searchTerms("rendering")).toEqual(searchTerms("rendered"));
+  });
+
+  it("does not fold everyday words onto coding terms, and meets singular with plural (review round 2)", () => {
+    expect(searchTerms("no estoy seguro de que funcione")).not.toContain("security");
+    expect(searchTerms("ayúdame con la programación del módulo de pagos")).not.toContain("schedule");
+    expect(searchTerms("sobre el tema de la autenticación")).not.toContain("theme");
+    expect(searchTerms("página de registro de usuarios")).not.toContain("log");
+    expect(searchTerms("reporte de ingresos mensuales")).not.toContain("login");
+    expect(searchTerms("rerun the failing tests")).not.toContain("backfill");
+    expect(searchTerms("news feed")).toContain("news");
+    for (const [one, many] of [
+      ["warning", "warnings"],
+      ["mapping", "mappings"],
+      ["alias", "aliases"],
+      ["commit", "committing"],
+    ]) {
+      expect(searchTerms(many), many).toEqual(searchTerms(one ?? ""));
+    }
+  });
+
+  it("carries the previous request for a follow-up, part of it for a qualified one, none for a new request", () => {
+    expect(previousRequestWeight("sí, hazlo")).toBe(0.8);
+    expect(previousRequestWeight("go ahead and fix it")).toBe(0.8);
+    expect(previousRequestWeight("ok, now in prod")).toBe(0.4);
+    expect(previousRequestWeight("rebuild it from scratch then")).toBe(0.4);
+    expect(previousRequestWeight("fix the login bug")).toBe(0);
+    expect(previousRequestWeight("run the tests")).toBe(0);
+    expect(isFollowUp("dale, sigue")).toBe(true);
   });
 
   it("drops the words of a bare follow-up", () => {

@@ -76,6 +76,7 @@ import {
   type TurnCommand,
   type TurnDigest,
   turnQualifiesForReflection,
+  typedText,
 } from "../memory/reflection";
 import type { MemoryContext } from "../memory/retrieval";
 import { proposeProceduresAsSkills } from "../memory/skills";
@@ -88,6 +89,7 @@ import {
   recordMemoryUse,
   userMemoryScope,
 } from "../memory/store";
+import { previousRequestWeight } from "../memory/terms";
 import {
   type BudgetLimits,
   type BudgetScope,
@@ -290,6 +292,8 @@ const MAX_INTERRUPTIONS_WITHOUT_PROGRESS = 8;
 /** Bound on interruptions in one turn even while steps keep completing. */
 const MAX_INTERRUPTIONS_PER_TURN = 20;
 const INTERRUPTION_BACKOFF_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+/** A reflection deferred from an earlier turn waits at most this long, after this turn's own (doc 18 §4.2). */
+const DEFERRED_REFLECTION_MS = 30_000;
 /**
  * A sub-agent recovers from a failing model connection on its own, like the main turn, within a
  * tighter bound: the parent waits on it and can still route around a sub-agent no model serves.
@@ -2639,7 +2643,10 @@ export class Agent {
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
       : memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest);
-    this.previousRequest = userMessage;
+    // "sí, hazlo" then "dale, sigue": both carry on the request before them, which stays the one memory is found for.
+    if (!this.previousRequest || previousRequestWeight(typedText(userMessage)) < 0.8) {
+      this.previousRequest = typedText(userMessage);
+    }
     this.lastMemoryContext = memoryContext;
     notifyObserver(observer?.onMemoryRecall, {
       rules: memoryContext.rules ?? [],
@@ -4095,6 +4102,8 @@ export class Agent {
             message: friendly,
             timestamp: Date.now(),
           });
+          // Memory records how the turn ended: an error, not the last check it happened to pass.
+          this.turnEndNotes.push(`[Error — ${friendly}]`);
           yield {
             type: "error",
             content: friendly,
@@ -4165,10 +4174,11 @@ export class Agent {
         decisions: report.decisions,
         timestamp: Date.now(),
       });
-      // A reflection the model could not run (a 429, a timeout) is deferred, not lost (doc 18 §2.1 C6); when it did
-      // run, the model answers now, so one deferred reflection from an earlier turn runs too.
+      // A reflection the model could not run (a 429, a timeout) is deferred, not lost (doc 18 §2.1 C6). One deferred
+      // from an earlier turn runs only after this turn's own reflection called the model and it answered: a turn that
+      // reflected nothing does not wait for an old one.
       if (report.qualified && report.error) queuePendingReflection(scope, digest, outcome);
-      else if (!signal.aborted) await this.reflectDeferred(scope, modelId, signal);
+      else if (report.qualified && !signal.aborted) await this.reflectDeferred(scope, modelId, signal);
       // A procedure that earned it is proposed as a skill; only the user's yes writes it (doc 18 §8).
       const proposal = proposeProceduresAsSkills(scope, this.bash.getRootCwd(), listMemoryRecords(scope));
       if (proposal.proposed.length > 0) {
@@ -4193,11 +4203,22 @@ export class Agent {
       provider: this.provider,
       modelId,
       digest: pending.digest,
-      signal: withAbortTimeout(signal, 45_000),
-      timeoutMs: 45_000,
+      signal: withAbortTimeout(signal, DEFERRED_REFLECTION_MS),
+      timeoutMs: DEFERRED_REFLECTION_MS,
     });
     if (report.usage) this.recordUsage(report.usage, "other", modelId);
-    if (report.error) queuePendingReflection(scope, pending.digest, pending.outcome);
+    // A reflection that keeps failing is dropped after a few tries, with a record of why.
+    if (report.error && !queuePendingReflection(scope, pending.digest, pending.outcome, (pending.attempts ?? 0) + 1)) {
+      appendReflectionAudit(scope, {
+        at: new Date().toISOString(),
+        qualified: true,
+        reason: `deferred reflection dropped after ${(pending.attempts ?? 0) + 1} failed attempts`,
+        candidates: 0,
+        decisions: [],
+        written: [],
+        error: report.error,
+      });
+    }
   }
 
   /**

@@ -1,10 +1,12 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { redact } from "../utils/session-trace";
-import type { TurnDigest } from "./reflection";
-import { memoryDir } from "./store";
-import { searchTerms } from "./terms";
+import { redactSecrets } from "./gate";
+import { type TurnDigest, typedText } from "./reflection";
+import { ensureMemoryDir, memoryDir } from "./store";
+import { previousRequestWeight, searchTerms } from "./terms";
 import type { MemoryScope } from "./types";
 
 /**
@@ -55,7 +57,12 @@ export interface PendingReflection {
   at: string;
   outcome: TurnOutcome;
   digest: TurnDigest;
+  /** Reflections tried on it that failed; it is dropped after MAX_ATTEMPTS. */
+  attempts?: number;
 }
+
+/** A pending reflection that failed this many times is dropped: a model that never answers must not hold every turn. */
+export const MAX_ATTEMPTS = 3;
 
 const EPISODES_FILE = "episodes.jsonl";
 const PENDING_FILE = "pending-reflections.jsonl";
@@ -64,8 +71,22 @@ const EPISODES_MAX_BYTES = 4 * 1024 * 1024;
 /** A pending queue that never drains (a model that never answers) keeps its newest entries only. */
 const MAX_PENDING = 20;
 
+const HOME = homedir();
+const HOME_PATTERN = HOME
+  ? new RegExp(HOME.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/(?:\\\\|\/)+/gu, "[\\\\/]+"), "giu")
+  : null;
+
+/**
+ * What memory keeps of a turn's own text: no key, token, password or private key (the gate's shapes and the env-file
+ * lines around them; doc 18 review, round 2), and no personal home folder.
+ */
+export function privateText(text: string): string {
+  const clean = redactSecrets(redact(text));
+  return HOME_PATTERN ? clean.replace(HOME_PATTERN, "~") : clean;
+}
+
 function clip(text: string, max: number): string {
-  const clean = redact(text).replace(/\s+/gu, " ").trim();
+  const clean = privateText(text).replace(/\s+/gu, " ").trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
 
@@ -78,7 +99,7 @@ export function turnOutcome(note: string | undefined, verified: boolean): TurnOu
   if (/^\[Cancelled\b/u.test(text)) return "cancelled";
   if (/^\[Not verified\b/u.test(text)) return "unverified";
   if (/^\[Not marked complete\b/u.test(text)) return "blocked";
-  if (/^\[No response\b/u.test(text)) return "error";
+  if (/^\[(?:No response|Error)\b/u.test(text)) return "error";
   if (/^\[Checked by Shelra\b/u.test(text) || verified) return "verified";
   return "answered";
 }
@@ -112,7 +133,7 @@ export function episodeFrom(
     at: new Date().toISOString(),
     ...(extra.session ? { session: extra.session } : {}),
     outcome,
-    request: clip(digest.userMessage, 600),
+    request: clip(typedText(digest.userMessage), 600),
     summary: clip(digest.assistantText.slice(-1_500), 600),
     files: digest.changedFiles.slice(0, 25),
     failures: failuresOf(digest),
@@ -122,8 +143,7 @@ export function episodeFrom(
   };
 }
 
-function appendLine(path: string, dir: string, line: string, maxBytes: number): void {
-  mkdirSync(dir, { recursive: true });
+function appendLine(path: string, line: string, maxBytes: number): void {
   if (existsSync(path) && statSync(path).size > maxBytes) {
     const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
     writeFileSync(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`, "utf8");
@@ -134,8 +154,7 @@ function appendLine(path: string, dir: string, line: string, maxBytes: number): 
 /** Records an episode. Never throws: memory must not fail a turn. */
 export function appendEpisode(scope: MemoryScope, episode: Episode): void {
   try {
-    const dir = memoryDir(scope);
-    appendLine(join(dir, EPISODES_FILE), dir, JSON.stringify(episode), EPISODES_MAX_BYTES);
+    appendLine(join(ensureMemoryDir(scope), EPISODES_FILE), JSON.stringify(episode), EPISODES_MAX_BYTES);
   } catch (error) {
     recordSwallowedError("memory.episode", error);
   }
@@ -164,13 +183,13 @@ export function readEpisodes(scope: MemoryScope, limit = 500): Episode[] {
 function clippedDigest(digest: TurnDigest): TurnDigest {
   return {
     ...digest,
-    userMessage: redact(digest.userMessage).slice(0, 4_000),
-    assistantText: redact(digest.assistantText).slice(-4_000),
+    userMessage: privateText(typedText(digest.userMessage)).slice(0, 4_000),
+    assistantText: privateText(digest.assistantText).slice(-4_000),
     changedFiles: digest.changedFiles.slice(0, 50),
     commands: digest.commands.slice(-24).map((command) => ({
-      command: redact(command.command).slice(0, 400),
+      command: privateText(command.command).slice(0, 400),
       success: command.success,
-      output: redact(command.output).slice(0, 800),
+      output: privateText(command.output).slice(0, 800),
     })),
   };
 }
@@ -189,13 +208,23 @@ function readPending(path: string): PendingReflection[] {
     });
 }
 
-/** Queues a turn whose reflection could not run now. Never throws. */
-export function queuePendingReflection(scope: MemoryScope, digest: TurnDigest, outcome: TurnOutcome): void {
+/**
+ * Queues a turn whose reflection could not run now; one that already failed MAX_ATTEMPTS times is dropped instead.
+ * Never throws.
+ */
+export function queuePendingReflection(
+  scope: MemoryScope,
+  digest: TurnDigest,
+  outcome: TurnOutcome,
+  attempts = 0,
+): boolean {
+  if (attempts >= MAX_ATTEMPTS) return false;
   try {
-    const dir = memoryDir(scope);
-    const path = join(dir, PENDING_FILE);
-    mkdirSync(dir, { recursive: true });
-    const queued = [...readPending(path), { at: new Date().toISOString(), outcome, digest: clippedDigest(digest) }];
+    const path = join(ensureMemoryDir(scope), PENDING_FILE);
+    const queued = [
+      ...readPending(path),
+      { at: new Date().toISOString(), outcome, digest: clippedDigest(digest), ...(attempts > 0 ? { attempts } : {}) },
+    ];
     writeFileSync(
       path,
       `${queued
@@ -204,8 +233,10 @@ export function queuePendingReflection(scope: MemoryScope, digest: TurnDigest, o
         .join("\n")}\n`,
       "utf8",
     );
+    return true;
   } catch (error) {
     recordSwallowedError("memory.pending", error);
+    return false;
   }
 }
 
@@ -289,7 +320,8 @@ export function episodeLessons(
   max = MAX_LESSONS,
 ): EpisodeLesson[] {
   const own = searchTerms(query.text);
-  const terms = new Set(own.length < 4 && query.previous ? [...own, ...searchTerms(query.previous)] : own);
+  const carried = query.previous !== undefined && previousRequestWeight(query.text) > 0;
+  const terms = new Set(carried ? [...own, ...searchTerms(query.previous ?? "")] : own);
   if (terms.size === 0 || episodes.length === 0) return [];
   // Newest first, and one per request: a task resumed three times is one lesson with its attempts counted.
   const byRequest = new Map<string, { episode: Episode; attempts: number }>();

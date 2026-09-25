@@ -1,5 +1,5 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
@@ -8,6 +8,7 @@ import {
   episodeFrom,
   episodeLessons,
   failuresOf,
+  MAX_ATTEMPTS,
   pendingReflectionCount,
   queuePendingReflection,
   readEpisodes,
@@ -122,5 +123,63 @@ describe("episode lessons (doc 18 §4.3)", () => {
     );
     expect(lessons).toHaveLength(1);
     expect(lessons[0]).toMatchObject({ attempts: 2, outcome: "paused", at: "2026-09-21T10:00:00.000Z" });
+  });
+});
+
+describe("what episodes keep (review round 2)", () => {
+  it("keeps no secret, no home folder and no attached file on disk", () => {
+    const scope = projectMemoryScope(scratch("shelra-episodes-secrets-"));
+    const home = homedir();
+    const leaky = digest({
+      userMessage: `<attached_files>\n<file path="${home}/app/.env">\nSTRIPE_SECRET_KEY=sk_live_51HxAbCdEfGhIjKlMn\n</file>\n</attached_files>\n\nwhy does deploy fail?`,
+      commands: [
+        {
+          command: "cat .env",
+          success: true,
+          output: [
+            "STRIPE_SECRET_KEY=sk_live_51HxAbCdEfGhIjKlMnOp",
+            "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+            "DB_PASSWORD=hunter2",
+            "DATABASE_URL=postgres://app:s3cretpass@db.internal:5432/app",
+            "-----BEGIN RSA PRIVATE KEY-----",
+            "MIIEowIBAAKCAQEA",
+            "-----END RSA PRIVATE KEY-----",
+            "JWT=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N",
+          ].join("\n"),
+        },
+        { command: `node ${home}/app/connect.js`, success: false, output: "DB_PASSWORD=hunter2 rejected" },
+        { command: "bun test", success: true, output: "4 pass" },
+      ],
+    });
+    appendEpisode(scope, episodeFrom(leaky, "limited"));
+    queuePendingReflection(scope, leaky, "limited");
+    const dir = join(scope.workspace, ".shelra", "memory");
+    const written = [
+      readFileSync(join(dir, "episodes.jsonl"), "utf8"),
+      readFileSync(join(dir, "pending-reflections.jsonl"), "utf8"),
+    ].join("\n");
+    for (const secret of [
+      "sk_live_51Hx",
+      "AKIAIOSFODNN7EXAMPLE",
+      "hunter2",
+      "s3cretpass",
+      "MIIEowIBAAKCAQEA",
+      "eyJhbGciOi",
+    ]) {
+      expect(written, secret).not.toContain(secret);
+    }
+    expect(written).not.toContain(JSON.stringify(home).slice(1, -1));
+    expect(readEpisodes(scope)[0]?.request).toBe("why does deploy fail?");
+    // The folder keeps itself out of version control.
+    expect(readFileSync(join(dir, ".gitignore"), "utf8")).toContain("*");
+  });
+
+  it("names an error exit, and drops a reflection that failed too often", () => {
+    expect(turnOutcome("[Error — The API key was rejected]", true)).toBe("error");
+    const scope = projectMemoryScope(scratch("shelra-episodes-attempts-"));
+    expect(queuePendingReflection(scope, digest(), "limited", 2)).toBe(true);
+    expect(takePendingReflection(scope)?.attempts).toBe(2);
+    expect(queuePendingReflection(scope, digest(), "limited", MAX_ATTEMPTS)).toBe(false);
+    expect(pendingReflectionCount(scope)).toBe(0);
   });
 });

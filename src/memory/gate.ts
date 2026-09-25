@@ -1,3 +1,4 @@
+import { searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord, type MemorySource, type MemoryWriteInput } from "./types";
 
 /**
@@ -23,6 +24,8 @@ export interface GateDecision {
   existing?: MemoryRecord;
   /** Set when the candidate was skipped only because its type is full: making room would admit it. */
   full?: boolean;
+  /** An entry this write makes no longer true: the user stated a new value for the same rule. */
+  supersedes?: string;
 }
 
 export interface GateOptions {
@@ -103,6 +106,87 @@ export function tokenize(text: string): string[] {
     .filter((token) => token.length >= 2 && !STOPWORDS.has(token));
 }
 
+/** A rule's own words, without the date and boilerplate its body carries. */
+function statementTerms(input: { title: string; hook: string }): Set<string> {
+  return new Set(searchTerms(`${input.title} ${input.hook}`));
+}
+
+function overlap(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const term of a) if (b.has(term)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+
+/** A number, a version or a size: what changes when a rule is restated with a new value ("Node 18" → "Node 20"). */
+const VALUE = /^(?:v?\d[\d.x]*|\d+(?:ms|s|m|h|kb|mb|gb|px|%))$/u;
+
+function shortHash(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36).slice(0, 6);
+}
+
+/**
+ * How a new statement of the user's relates to the ones stored (doc 18 review, round 2): the same statement, reworded,
+ * updates it; the same rule with a new value supersedes it; a different statement whose name collides with a stored
+ * one gets a name of its own. Anything else is a new rule, kept beside the others.
+ */
+function relationToUserStatements(candidate: MemoryWriteInput, records: readonly MemoryRecord[]): GateDecision | null {
+  const mine = statementTerms(candidate);
+  let best: { record: MemoryRecord; score: number; theirs: Set<string> } | null = null;
+  for (const record of records) {
+    if (record.entry.frontmatter.metadata.source !== "human") continue;
+    const theirs = statementTerms({ title: record.index.title, hook: record.index.hook });
+    const score = overlap(mine, theirs);
+    if (!best || score > best.score) best = { record, score, theirs };
+  }
+  if (best && best.score >= SAME_HUMAN_STATEMENT) {
+    return {
+      action: "update",
+      slug: best.record.slug,
+      reason: `restates the user's "${best.record.slug}"`,
+      existing: best.record,
+    };
+  }
+  if (best) {
+    const theirs = best.theirs;
+    const onlyMine = [...mine].filter((term) => !theirs.has(term));
+    const onlyTheirs = [...theirs].filter((term) => !mine.has(term));
+    const shared = mine.size - onlyMine.length;
+    const newValue =
+      shared >= 2 &&
+      onlyMine.length > 0 &&
+      onlyTheirs.length > 0 &&
+      [...onlyMine, ...onlyTheirs].every((term) => VALUE.test(term));
+    if (newValue) {
+      const slug = records.some((record) => record.slug === candidate.slug)
+        ? `${candidate.slug.slice(0, 57)}-${shortHash(candidate.hook)}`
+        : candidate.slug;
+      return {
+        action: "create",
+        slug,
+        reason: `a new value for the user's "${best.record.slug}"`,
+        supersedes: best.record.slug,
+      };
+    }
+  }
+  const collision = records.find((record) => record.slug === candidate.slug);
+  // Only a name the capture made up can collide by accident; a person naming an entry of theirs revises it.
+  const madeUpName = (candidate.tags ?? []).includes("user-directive");
+  if (madeUpName && collision && collision.entry.frontmatter.metadata.source === "human") {
+    return {
+      action: "create",
+      slug: `${candidate.slug.slice(0, 57)}-${shortHash(candidate.hook)}`,
+      reason: `a different statement whose name collides with "${collision.slug}"`,
+    };
+  }
+  return null;
+}
+
 export function jaccard(a: readonly string[], b: readonly string[]): number {
   if (a.length === 0 || b.length === 0) return 0;
   const setA = new Set(a);
@@ -119,6 +203,36 @@ function fingerprint(input: { title: string; hook: string; body: string }): stri
 
 export function containsSecret(text: string): boolean {
   return SECRET_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/**
+ * What the gate would reject, blanked instead, for text memory keeps as a record rather than admits as knowledge
+ * (episodes, deferred reflections): key shapes, `SECRET=value` lines of an env file, private key blocks, JWTs and the
+ * password in a connection URL.
+ */
+const REDACTIONS: Array<[RegExp, string]> = [
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/gu, "***PRIVATE KEY***"],
+  [/\b(sk|rk|pk)[-_](live|test|or|ant|proj)[-_][A-Za-z0-9_-]{12,}/gu, "***"],
+  [/\bsk-[A-Za-z0-9_-]{16,}/gu, "***"],
+  [/\bAKIA[0-9A-Z]{16}\b/gu, "***"],
+  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/gu, "***"],
+  [/\bgithub_pat_[A-Za-z0-9_]{20,}/gu, "***"],
+  [/\bxox[abpr]-[A-Za-z0-9-]{10,}/gu, "***"],
+  [/\bgsk_[A-Za-z0-9]{16,}/gu, "***"],
+  [/\bAIza[0-9A-Za-z_-]{20,}/gu, "***"],
+  [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/gu, "***"],
+  [/(\bBearer\s+)[A-Za-z0-9._~+/-]{12,}=*/gu, "$1***"],
+  [/(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/giu, "$1***@"],
+  [
+    /\b([A-Za-z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CREDENTIALS?)[A-Za-z0-9_]*\s*[=:]\s*)["']?[^\s"']{4,}["']?/giu,
+    "$1***",
+  ],
+];
+
+export function redactSecrets(text: string): string {
+  let clean = text;
+  for (const [pattern, replacement] of REDACTIONS) clean = clean.replace(pattern, replacement);
+  return clean;
 }
 
 export function looksInjectionShaped(text: string): boolean {
@@ -165,6 +279,10 @@ export function decideMemoryWrite(
   }
 
   const candidateSource = candidate.source ?? "inference";
+  if (candidateSource === "human") {
+    const relation = relationToUserStatements(candidate, records);
+    if (relation) return relation;
+  }
   const exact = records.find((record) => record.slug === candidate.slug);
   if (exact) {
     const existingSource = exact.entry.frontmatter.metadata.source;
@@ -207,11 +325,12 @@ export function decideMemoryWrite(
     );
     if (!best || score > best.score) best = { record, score };
   }
+  // Two statements of the user's were compared above, on their words alone; only an identical one merges.
   const bothHuman = candidateSource === "human" && best?.record.entry.frontmatter.metadata.source === "human";
   // Two different sentences the user stated are two statements unless they are practically the same: "Always write
   // docs for new code" used to replace "Always write tests for new code" (doc 18 §2.1 C3). A contradiction between
   // them is resolved by supersession, never by one silently overwriting the other.
-  if (best && best.score >= duplicateThreshold && !(bothHuman && best.score < SAME_HUMAN_STATEMENT)) {
+  if (best && best.score >= duplicateThreshold && !bothHuman) {
     const existingMeta = best.record.entry.frontmatter.metadata;
     const existingSource = existingMeta.source;
     if (existingSource === "human" && candidateSource !== "human") {

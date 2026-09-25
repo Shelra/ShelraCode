@@ -254,7 +254,7 @@ const LEXICON: Record<string, string> = Object.fromEntries(
         "deploy deploys deployed deploying deployment deployments despliegue despliegues desplegar despliega publicar",
       ],
       ["auth", "auth authentication authenticate autenticacion autenticar authorization autorizacion"],
-      ["login", "login logins signin sign-in ingresar ingreso"],
+      ["login", "login logins signin sign-in"],
       ["database", "database databases db bd postgres postgresql mysql sqlite"],
       [
         "fail",
@@ -279,9 +279,9 @@ const LEXICON: Record<string, string> = Object.fromEntries(
       ["email", "email emails mail mails correo correos"],
       ["payment", "payment payments pago pagos checkout cobro cobros"],
       ["user", "user users usuario usuarios"],
-      ["password", "password passwords contrasena contrasenas clave"],
+      ["password", "password passwords contrasena contrasenas"],
       ["env", "env environment environments entorno entornos dotenv"],
-      ["log", "log logs logging logger registro registros bitacora"],
+      ["log", "log logs logging logger bitacora"],
       ["table", "table tables tabla tablas"],
       ["query", "query queries consulta consultas"],
       ["lint", "lint linter linting eslint biome"],
@@ -295,7 +295,7 @@ const LEXICON: Record<string, string> = Object.fromEntries(
       ["shipping", "shipping shipment envio envios"],
       ["notification", "notification notifications notificacion notificaciones"],
       ["search", "search searches searching busqueda busquedas buscar buscador"],
-      ["schedule", "schedule schedules scheduled scheduler cron programar programado programacion"],
+      ["schedule", "schedule schedules scheduled scheduler cron"],
       ["job", "job jobs tarea tareas task tasks"],
       ["data", "data datos dato"],
       ["clean", "clean cleanup limpiar limpieza"],
@@ -311,10 +311,10 @@ const LEXICON: Record<string, string> = Object.fromEntries(
       ["form", "form forms formulario formularios"],
       ["header", "header headers cabecera cabeceras encabezado"],
       ["menu", "menu menus navbar navigation navegacion"],
-      ["theme", "theme themes tema temas"],
+      ["theme", "theme themes"],
       ["translation", "translation translations traduccion traducciones i18n locale locales idioma idiomas"],
       ["date", "date dates fecha fechas"],
-      ["security", "security secure seguridad seguro vulnerability vulnerabilidad"],
+      ["security", "security secure seguridad vulnerability vulnerabilidad"],
       ["permission", "permission permissions permiso permisos role roles rol"],
       ["token", "token tokens jwt"],
       ["secret", "secret secrets secreto secretos credential credentials credencial credenciales"],
@@ -349,14 +349,11 @@ const LEXICON: Record<string, string> = Object.fromEntries(
       ["webhook", "webhook webhooks"],
       ["queue", "queue queues cola colas"],
       ["worker", "worker workers trabajador"],
-      ["backfill", "backfill backfills backfilling reprocess reprocessing reprocesar reprocesa rerun"],
+      ["backfill", "backfill backfills backfilling reprocess reprocessing reprocesar reprocesa"],
       ["analytics", "analytics analitica analiticas medir mide metrics metricas tracking"],
       ["production", "production prod produccion"],
       ["staging", "staging preproduccion"],
-      [
-        "crypto",
-        "hash hashing hashed hashes encrypt encrypted encryption cifrar cifran cifrado cifra encriptar encriptado",
-      ],
+      ["crypto", "hash hashing hashed hashes encrypt encrypted encryption cifrar cifran cifrado encriptar encriptado"],
       ["algorithm", "algorithm algorithms algoritmo algoritmos"],
       ["framework", "framework frameworks"],
     ] as Array<[string, string]>
@@ -372,20 +369,83 @@ export function foldText(text: string): string {
 }
 
 /** Plural and verb-form folding for words the lexicon does not know; the same on the request and the entry side. */
-function stem(word: string): string {
-  if (/[./_\d-]/u.test(word)) return word;
+/** Words that end in s without being plurals. */
+const NOT_PLURAL = new Set([
+  "news",
+  "alias",
+  "status",
+  "canvas",
+  "atlas",
+  "bonus",
+  "focus",
+  "virus",
+  "series",
+  "chaos",
+]);
+
+function singular(word: string): string {
+  if (NOT_PLURAL.has(word)) return word;
   // A short plural ("dags", "bots") folds too; "bus", "gas" and the like end in a vowel before the s.
-  if (word.length === 4 && /[^aeiousy]s$/u.test(word)) return word.slice(0, -1);
+  if (word.length === 4) return /[^aeiousy]s$/u.test(word) ? word.slice(0, -1) : word;
   if (word.length < 5) return word;
   if (word.endsWith("ies") && word.length > 5) return `${word.slice(0, -3)}y`;
   if (word.endsWith("ciones")) return `${word.slice(0, -6)}cion`;
-  if (word.endsWith("ing") && word.length > 6) return word.slice(0, -3);
-  if (word.endsWith("ed") && word.length > 5) return word.slice(0, -2);
-  if (word.endsWith("es") && /[sxz]es$|ches$|shes$/u.test(word)) return word.slice(0, -2);
-  if (word.endsWith("s") && !word.endsWith("ss") && !word.endsWith("us") && !word.endsWith("is")) {
-    return word.slice(0, -1);
-  }
+  if (/(?:[sxz]|ch|sh)es$/u.test(word)) return word.slice(0, -2);
+  if (word.endsWith("s") && !/(?:ss|us|is)$/u.test(word)) return word.slice(0, -1);
   return word;
+}
+
+/**
+ * Plural and verb-form folding for words the lexicon does not know; the same on the request and the entry side. The
+ * plural goes first, so "warnings" and "warning" reach the same term.
+ */
+function stem(word: string): string {
+  if (/[./_\d-]/u.test(word)) return word;
+  const one = singular(word);
+  if (one.length < 5) return one;
+  // "committing" and "commit" meet: the consonant a suffix doubled goes with it ("mapped", "running").
+  const undouble = (root: string) => root.replace(/([bcdfgkmnprtvz])\1$/u, "$1");
+  if (one.endsWith("ing") && one.length > 6) return undouble(one.slice(0, -3));
+  if (one.endsWith("ed") && one.length > 5) return undouble(one.slice(0, -2));
+  return one;
+}
+
+/**
+ * Words that carry on the request before them rather than start a new one: "sí, hazlo", "ok continue", "go ahead and
+ * fix it", "y ahora el otro". Checked after stopwords and the lexicon, so they are the terms searchTerms gives.
+ */
+const CONTINUATION = new Set(
+  (
+    "continue continua continuar sigue seguir sigamos again proceed next siguiente rest resto finish termina " +
+    "terminalo acaba acabalo keep going same mismo misma igual retry reintenta otra otro asi eso ahead adelante go " +
+    "vamo ya listo perfect perfecto gracias thank thanks ok vale dale fix run try apply implement arregla arreglalo " +
+    "aplica aplicalo implementa implementalo intenta correlo hazlo do done sure great good bueno claro"
+  ).split(" "),
+);
+
+/** Whether a request only carries on the one before it, so memory should be found for that one (doc 18 R2). */
+export function isFollowUp(text: string): boolean {
+  const words = foldText(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  if (words.length === 0 || words.length > 10) return false;
+  return searchTerms(text).every((term) => CONTINUATION.has(term));
+}
+
+const CONTINUES = /^(?:si|yes|yep|ok|okay|dale|vale|again|y|and|also|tambien|then|entonces|ahora|now|same|hazlo)\b/u;
+const REFERS_BACK = /\b(?:it|this|that|them|those|eso|esto|esa|ese|lo|hazlo|arreglalo)\b/u;
+
+/**
+ * How much of the previous request a request carries: all of it for a bare follow-up, part of it for one that goes
+ * on from it with a qualifier ("ok, now in prod", "rebuild it from scratch"), none for a new request ("fix the login
+ * bug"), whose own words decide.
+ */
+export function previousRequestWeight(text: string): number {
+  if (isFollowUp(text)) return 0.8;
+  const folded = foldText(text).trim();
+  const words = folded.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (words.length > 12) return 0;
+  return CONTINUES.test(folded) || REFERS_BACK.test(folded) ? 0.4 : 0;
 }
 
 /**

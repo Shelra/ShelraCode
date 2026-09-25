@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { looksInjectionShaped } from "./gate";
-import { memoryDir, recordMemoryPromotion } from "./store";
+import { ensureMemoryDir, memoryDir, recordMemoryPromotion } from "./store";
 import type { MemoryRecord, MemoryScope } from "./types";
 
 /**
@@ -125,6 +125,7 @@ export function proposeProceduresAsSkills(
         result.skipped.push({ slug: record.slug, reason: "already waiting for approval" });
         continue;
       }
+      ensureMemoryDir(scope);
       mkdirSync(proposalsDir(scope), { recursive: true });
       writeFileSync(proposal, rendered, "utf8");
       result.proposed.push(record.slug);

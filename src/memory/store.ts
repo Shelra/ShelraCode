@@ -69,6 +69,24 @@ export function memoryDir(scope: MemoryScope): string {
   return join(scope.workspace, ".shelra", "memory");
 }
 
+/**
+ * Creates a scope's folder, with a `.gitignore` that keeps it out of version control: memory is local (doc 18 §8),
+ * and a model asked to "stage the relevant files" must not commit a project's episodes. Returns the folder.
+ */
+export function ensureMemoryDir(scope: MemoryScope): string {
+  const dir = memoryDir(scope);
+  mkdirSync(dir, { recursive: true });
+  const ignore = join(dir, ".gitignore");
+  if (scope.kind === "project" && !existsSync(ignore)) {
+    try {
+      writeFileSync(ignore, "# Shelra's memory of this project stays on this machine.\n*\n", "utf8");
+    } catch (error) {
+      recordSwallowedError("memory.gitignore", error);
+    }
+  }
+  return dir;
+}
+
 /** Exposed for callers/tests that need to locate memory files without duplicating scope logic. */
 export function memoryIndexPath(scope: MemoryScope): string {
   return join(memoryDir(scope), INDEX_FILE);
@@ -271,7 +289,7 @@ function parseIndex(raw: string): MemoryIndexEntry[] {
 function appendHistory(scope: MemoryScope, event: MemoryHistoryEvent): void {
   try {
     const path = memoryHistoryPath(scope);
-    mkdirSync(memoryDir(scope), { recursive: true });
+    ensureMemoryDir(scope);
     if (existsSync(path) && statSync(path).size > MEMORY_HISTORY_MAX_BYTES) {
       const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
       writeFileAtomic(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);
@@ -379,7 +397,7 @@ export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): M
     };
   }
 
-  mkdirSync(dir, { recursive: true });
+  ensureMemoryDir(scope);
   const previous = readMemoryEntry(scope, input.slug).entry;
   const now = new Date().toISOString();
   // A rewrite keeps what the entry said before, readable as its history (doc 18 §4.4).
@@ -692,7 +710,7 @@ export interface ReflectionAuditRecord {
 export function appendReflectionAudit(scope: MemoryScope, record: ReflectionAuditRecord): void {
   try {
     const path = join(memoryDir(scope), REFLECTIONS_FILE);
-    mkdirSync(memoryDir(scope), { recursive: true });
+    ensureMemoryDir(scope);
     if (existsSync(path) && statSync(path).size > MEMORY_HISTORY_MAX_BYTES) {
       const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
       writeFileAtomic(path, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);

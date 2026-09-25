@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
-import { pendingReflectionCount, readEpisodes } from "../memory/episodes";
+import { pendingReflectionCount, queuePendingReflection, readEpisodes } from "../memory/episodes";
 import {
   listMemoryRecords,
   projectMemoryScope,
@@ -421,6 +421,84 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     expect(system).toContain('"Set up the project and build the level loader"');
     expect(system).toContain("worked: `bun install`");
     expect(agent.getLastMemoryContext()?.episodes).toHaveLength(1);
+  });
+
+  it("keeps a chain of follow-ups on the request they carry on (review round 2)", async () => {
+    const workspace = scratch("shelra-memory-chain-");
+    writeMemoryEntry(projectMemoryScope(workspace), {
+      slug: "login-flaky-test",
+      title: "The login test is flaky",
+      hook: "tests/login.spec.ts fails one run in five on a race with the session cookie",
+      type: "known-problems",
+      description: "Why the login test fails at random",
+      body: "Await `page.waitForResponse('/api/session')` before asserting; the cookie arrives after the redirect.",
+      source: "observed",
+      confidence: 0.9,
+    });
+    const agent = agentIn(workspace, new ScriptedProvider([{ events: [], text: "On it." }]));
+    const recalled: string[][] = [];
+    for (const message of ["fix the flaky login test", "sí, hazlo", "dale, sigue"]) {
+      for await (const _chunk of agent.processMessage(message, {
+        onMemoryRecall: (info) =>
+          recalled.push(info.entries.filter((entry) => entry.tier === "knowledge").map((entry) => entry.slug)),
+      })) {
+        // drain
+      }
+    }
+    expect(recalled).toEqual([["login-flaky-test"], ["login-flaky-test"], ["login-flaky-test"]]);
+  });
+
+  it("records a turn that ended in an error as one, and defers its reflection (review round 2)", async () => {
+    const workspace = scratch("shelra-memory-error-");
+    const rejected = new APICallError({
+      message: "Invalid API Key",
+      url: "https://example.test/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 401,
+      responseBody: '{"error":{"message":"Invalid API Key"}}',
+    });
+    const provider = new ScriptedProvider([
+      { events: [...bashStep("bun test", false, "1 fail"), ...bashStep("bun test", true, "4 pass")], fail: rejected },
+    ]);
+    await turn(agentIn(workspace, provider), "Make the loader tests pass");
+
+    const scope = projectMemoryScope(workspace);
+    expect(readEpisodes(scope)[0]?.outcome).toBe("error");
+    expect(pendingReflectionCount(scope)).toBe(1);
+  });
+
+  it("never holds a turn that reflected nothing for an old reflection, and drops one that keeps failing", async () => {
+    const workspace = scratch("shelra-memory-drain-bounds-");
+    const scope = projectMemoryScope(workspace);
+    const old = {
+      userMessage: "Build the level loader",
+      assistantText: "Wrote it.",
+      changedFiles: ["src/loader.ts"],
+      commands: [
+        { command: "npm test", success: false, output: "missing script" },
+        { command: "bun test", success: true, output: "4 pass" },
+      ],
+      verified: true,
+      toolCalls: 9,
+    };
+    queuePendingReflection(scope, old, "limited", 2);
+    const provider = new ScriptedProvider(
+      [
+        { events: [{ type: "text-delta", text: "Hello." }], text: "Hello." },
+        { events: [...bashStep("bun test", false, "1 fail"), ...bashStep("bun test", true, "4 pass")], text: "Fixed." },
+      ],
+      ['{"memories":[]}', new Error("429 Too Many Requests")],
+    );
+    const agent = agentIn(workspace, provider);
+
+    await turn(agent, "Hi there");
+    expect(provider.reflections).toHaveLength(0);
+    expect(pendingReflectionCount(scope)).toBe(1);
+
+    await turn(agent, "Make the loader tests pass");
+    expect(provider.reflections).toHaveLength(2);
+    expect(pendingReflectionCount(scope)).toBe(0);
+    expect(readReflectionAudit(scope).at(-1)?.reason).toContain("dropped after 3 failed attempts");
   });
 
   it("records nothing for a turn that only answered", async () => {

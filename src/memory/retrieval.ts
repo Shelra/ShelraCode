@@ -1,6 +1,6 @@
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { foldText, searchTerms } from "./terms";
+import { foldText, previousRequestWeight, searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord } from "./types";
 
 /**
@@ -94,8 +94,6 @@ const DEFAULT_RELATIVE_CUTOFF = 0.6;
 /** A body longer than what is left of the budget is shown clipped when at least this much room is left (R6). */
 const MIN_CLIPPED_BODY = 400;
 /** A request with fewer terms than this is read together with the one before it. */
-const FOLLOW_UP_TERMS = 4;
-const PREVIOUS_WEIGHT = 0.8;
 const BODY_WEIGHT = 0.4;
 const BODY_TERMS = 60;
 /** A single matched term is enough to expand an entry when it is at least this rare, relative to an unseen term. */
@@ -188,14 +186,18 @@ function documentFrequency(records: readonly MemoryRecord[]): Map<string, number
   return frequency;
 }
 
-/** The request's weighted terms: its own, plus the previous request's when it is a short follow-up. */
+/**
+ * The request's weighted terms: its own, plus the previous request's when it only carries that one on ("sí, hazlo",
+ * "go ahead and fix it"). A short new request ("fix the login bug") is not a follow-up: its own words decide.
+ */
 function queryTerms(query: RetrievalQuery): Map<string, number> {
   const weights = new Map<string, number>();
   const own = searchTerms(query.text);
   for (const term of own) weights.set(term, 1);
-  if (query.previous && own.length < FOLLOW_UP_TERMS) {
+  const carried = query.previous ? previousRequestWeight(query.text) : 0;
+  if (query.previous && carried > 0) {
     for (const term of searchTerms(query.previous)) {
-      if (!weights.has(term)) weights.set(term, PREVIOUS_WEIGHT);
+      if (!weights.has(term)) weights.set(term, carried);
     }
   }
   return weights;

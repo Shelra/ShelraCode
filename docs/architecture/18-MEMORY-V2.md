@@ -196,6 +196,30 @@ The owner's 18 acceptance criteria map onto three layers of evidence:
 | M6 (done 2026-09-25) | Procedural: validated procedures proposed as skills, promoted on the user's yes | `src/memory/skills.ts`: a procedure credited in two passing turns is proposed under `.shelra/memory/skill-proposals/`; `shelra memory skills / promote / decline`; a declined revision is not proposed again; an update to an approved skill is proposed too. Tests in `reflection.test.ts`, `cli.test.ts`. The terminal UI does not show proposals yet (the UI is another session's area) |
 | M7 | Real-model evaluation on free models | bench/history entries |
 
+## 7a. Adversarial review of M1 and M2 (round 2, 2026-09-25)
+
+Two reviewers read the committed range 276abaa..817d357 (correctness; safety, privacy and resilience), and a separate
+skeptic tried to refute each finding with the code and, where it could, a probe. All 13 findings held; all are fixed,
+each with a test that pins it:
+
+| Finding | Fix |
+|---|---|
+| Episodes and pending digests kept keys, passwords, private keys and home paths that the gate would reject (high) | one redactor (`redactSecrets` + the trace's `redact`, home folder → `~`) on every stored field; `.shelra/memory/.gitignore` keeps the folder out of version control |
+| A line of an @-attached file became the user's standing rule, even user-wide (high) | directives come from the typed text only (`typedText` drops `<attached_files>`) |
+| Task remarks ("no, the bug is in …", "note that the output above …") became permanent human facts (high) | a task-local filter; "note that" and "ten en cuenta que" are no longer facts; corrections must state a convention |
+| Two rules sharing their first 48 characters overwrote each other | a statement of the user's with a colliding generated name gets its own |
+| A restated rule became a second rule, and "Node 18" then "Node 20" stood together | statements compared on their words alone: a rewording updates, a new value supersedes, a different rule stands |
+| A short new request took the previous request's words, which outranked its own | the previous request is read in full only for a bare follow-up, at 0.4 for a qualified one ("ok, now in prod"), not at all for a new request |
+| A second follow-up in a row lost the request it carried on | a follow-up keeps the request before it as the one memory is found for |
+| A turn that ended in an error was recorded as verified or answered | the error exit leaves an `[Error — …]` note; its reflection is deferred |
+| The deferred reflection held every turn up to 45 s, even a chat turn, and retried forever | it runs only after this turn's own reflection called the model and got an answer, 30 s at most; an item is dropped after three failed attempts, with an audit record |
+| A deferred reflection of a turn cut Limited skipped the unverified confidence cap | any change nothing checked is capped at 0.4 |
+| "Make the API respond in English" went to the user-wide store | only a preference addressed to Shelra ("answer me in Spanish") is user-wide |
+| Ambiguous Spanish words (seguro, tema, programación, registro, ingreso, cifra) and "rerun" became coding terms; singular and plural did not meet | removed from the lexicon; plurals fold before -ing/-ed, and a doubled consonant with them |
+
+The memory benchmark after the fixes: recall 91%, precision 70%, MRR 0.83, superseded shown 0, rules 100%, 35 ms p50 at
+5,000 entries per project (`bench/memory/results/after-review2.json`).
+
 ## 8. Decisions taken for the owner, and assumptions
 
 - **No embeddings in v2.** The prior decision holds; the multilingual tokenizer and bilingual keywords address the
