@@ -128,7 +128,8 @@ batch endpoint. Local runtimes use the normal streaming path.
 **Continue a saved session:**
 
 ```bash
-shelra --session latest
+shelra sessions          # this folder's conversations, newest first (--all: every folder)
+shelra --session latest  # the latest one in this folder
 shelra -s <session-id>
 ```
 
@@ -355,7 +356,7 @@ capability-gated, while the built-in web research tools are provider-neutral.
 | **OpenTUI React terminal UI** | Fast, keyboard-driven terminal rendering. |
 | **Skills** | Agent Skills under `.agents/skills/<name>/SKILL.md` (project) or `~/.agents/skills/` (user). Use `/skills` in the TUI to list what's installed. |
 | **MCPs** | Extend with Model Context Protocol servers — configure via `/mcps` in the TUI or `.shelra/settings.json` (`mcpServers`). |
-| **Sessions** | Conversations persist; `--session latest` picks up where you left off. |
+| **Sessions** | Conversations persist; `shelra sessions` lists them and `--session latest` picks up where you left off. |
 | **Headless** | `--prompt` / `-p` for non-interactive runs — pipe it, script it, bench it. |
 | **Hackable** | TypeScript, a clear agent loop, and typed tools — fork it. |
 

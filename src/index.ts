@@ -2172,6 +2172,39 @@ program
   );
 
 program
+  .command("sessions")
+  .description("List saved conversations in this folder, newest first; continue one with `shelra -s <id>`")
+  .option("--all", "list the conversations of every folder")
+  .option("-n, --limit <n>", "how many to list", "20")
+  .action(async (options: { all?: boolean; limit?: string }) => {
+    const { SessionStore } = await import("./storage/index");
+    const store = new SessionStore(process.cwd());
+    const limit = Math.max(1, Number.parseInt(options.limit ?? "20", 10) || 20);
+    const sessions = store.listSessions({ all: options.all === true, limit });
+    if (sessions.length === 0) {
+      console.log(
+        options.all
+          ? "No saved conversations yet."
+          : "No saved conversations in this folder yet (`--all` lists every folder).",
+      );
+      return;
+    }
+    const stamp = (date: Date) => {
+      const pad = (value: number) => String(value).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
+    console.log(
+      `${options.all ? "Saved conversations" : `Saved conversations in ${store.getWorkspace().canonicalPath}`}, newest first. Continue one with: ${CLI_NAME} -s <id>   (the latest here: ${CLI_NAME} -s latest)\n`,
+    );
+    for (const session of sessions) {
+      const label = session.title ?? session.firstRequest ?? "(no message yet)";
+      const line = `  ${session.id}  ${stamp(session.updatedAt)}  ${String(session.messages).padStart(4)} msgs  ${label}`;
+      console.log(line.length > 150 ? `${line.slice(0, 149)}…` : line);
+      if (options.all) console.log(`                ${session.workspace}`);
+    }
+  });
+
+program
   .command("trace [session]")
   .description(
     "Show what a session did, turn by turn, from its local trace (~/.shelra/logs/sessions): the latest session by default",

@@ -88,6 +88,44 @@ export class SessionStore {
     return row ? toSessionInfo(row) : null;
   }
 
+  /**
+   * The saved conversations that hold a message, newest first: this folder's by default, every folder's with `all`. Each comes with how
+   * many messages it holds and the first thing the user asked, for a conversation that has no title yet.
+   */
+  listSessions(options: { all?: boolean; limit?: number } = {}): SessionListing[] {
+    const rows = getDatabase()
+      .prepare(`
+      SELECT s.id, s.title, s.model, s.mode, s.cwd_last, s.updated_at, w.canonical_path AS workspace_path,
+        (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count,
+        (SELECT m.message_json FROM messages m WHERE m.session_id = s.id AND m.role = 'user' ORDER BY m.seq LIMIT 1) AS first_user
+      FROM sessions s JOIN workspaces w ON w.id = s.workspace_id
+      WHERE EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)${options.all ? "" : " AND s.workspace_id = @workspace_id"}
+      ORDER BY s.updated_at DESC
+      LIMIT @limit
+    `)
+      .all({ workspace_id: this.workspace.id, limit: options.limit ?? 20 }) as Array<{
+      id: string;
+      title: string | null;
+      model: string;
+      mode: AgentMode;
+      cwd_last: string;
+      updated_at: string;
+      workspace_path: string;
+      message_count: number;
+      first_user: string | null;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      firstRequest: firstRequestText(row.first_user),
+      messages: row.message_count,
+      model: row.model,
+      mode: row.mode,
+      workspace: row.workspace_path,
+      updatedAt: new Date(row.updated_at),
+    }));
+  }
+
   getSessionById(id: string): SessionInfo | null {
     const row = getDatabase()
       .prepare(`
@@ -160,6 +198,41 @@ export class SessionStore {
       WHERE id = ?
     `)
       .run(cwd, new Date().toISOString(), id);
+  }
+}
+
+export interface SessionListing {
+  id: string;
+  title: string | null;
+  /** The first thing the user asked, on one line; null when the conversation has no user message. */
+  firstRequest: string | null;
+  messages: number;
+  model: string;
+  mode: AgentMode;
+  workspace: string;
+  updatedAt: Date;
+}
+
+/** The text of a stored user message, on one line, whatever shape the message was saved in. */
+function firstRequestText(messageJson: string | null): string | null {
+  if (!messageJson) return null;
+  try {
+    const message = JSON.parse(messageJson) as { content?: unknown };
+    const content = message.content;
+    const text =
+      typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .map((part) =>
+                part && typeof part === "object" && "text" in part ? String((part as { text: unknown }).text) : "",
+              )
+              .join(" ")
+          : "";
+    const flat = text.replace(/\s+/gu, " ").trim();
+    return flat || null;
+  } catch {
+    return null;
   }
 }
 
