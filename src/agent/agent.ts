@@ -116,6 +116,8 @@ import { normalizeModelMessages } from "../providers/messages";
 import { createOpenRouterProvider } from "../providers/openrouter";
 import { isProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
 import type { HostStopReason, ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
+import { researchEnabled, researchTask, researchToolResult, wantsResearch } from "../research/pre-task";
+import type { WebSearchOptions, WebSearchResult } from "../research/web";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { destructiveCommandReason } from "../security/destructive";
 import {
@@ -373,6 +375,8 @@ export interface AgentOptions {
   ablate?: readonly Ablation[];
   /** Runs the task contract's checks on the final code; the agent's own shell by default. Tests inject one. */
   checkRunner?: ContractCheckRunner;
+  /** The web search run before the work (src/research/pre-task.ts); the real one by default. Tests inject one. */
+  webSearch?: (query: string, options: WebSearchOptions) => Promise<WebSearchResult>;
 }
 
 type ProcessMessageFinishReason = "stop" | "length" | "content-filter" | "tool-calls" | "error" | "other";
@@ -606,6 +610,7 @@ export class Agent {
   private readonly ablations: Ablations;
   /** Runs the project's checks when the host verifies a turn's final code (the task contract). */
   private readonly checkRunner: ContractCheckRunner;
+  private readonly webSearch: ((query: string, options: WebSearchOptions) => Promise<WebSearchResult>) | undefined;
   /** Questions to the user (destructive commands, decisions) wait in line, so they see one at a time. */
   private userQuestionQueue: Promise<unknown> = Promise.resolve();
   private sessionStartHookFired = false;
@@ -669,6 +674,7 @@ export class Agent {
     this.mcpTimeoutMs =
       options.mcpTimeoutMs ?? readPositiveMilliseconds("SHELRA_MCP_TIMEOUT_MS", DEFAULT_MCP_TIMEOUT_MS);
     this.ablations = options.ablate?.length ? new Ablations(options.ablate) : NO_ABLATIONS;
+    this.webSearch = options.webSearch;
     // Host checks run the way the agent's own commands do: same shell, same sandbox, same workspace.
     this.checkRunner =
       options.checkRunner ??
@@ -2636,6 +2642,53 @@ export class Agent {
     const userModelMessage = userModelMessages[0] ?? ({ role: "user", content: userMessage } satisfies ModelMessage);
     this.messages.push(userModelMessage);
     this.messageSeqs.push(null);
+
+    // Research before the work (owner, 2026-09-25; src/research/pre-task.ts): one web search on the request, handed
+    // to the model as the result of a search_web call, so it plans with context about the objective. A greeting, an
+    // approval or a question about memory is not researched; a search that fails leaves the turn as it was.
+    if (
+      this.mode === "agent" &&
+      !this.ablations.has("web") &&
+      !this.ablations.has("research") &&
+      researchEnabled() &&
+      wantsResearch(userMessage)
+    ) {
+      reportStatus("context", "Searching the web for context");
+      const research = await researchTask(userMessage, {
+        signal,
+        ...(this.webSearch ? { search: this.webSearch } : {}),
+      });
+      if (signal.aborted) {
+        this.discardAbortedTurn(userModelMessage);
+        yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
+        yield { type: "done" };
+        return;
+      }
+      const callId = `research-${Date.now().toString(36)}`;
+      const call: ToolCall = {
+        id: callId,
+        type: "function",
+        function: { name: "search_web", arguments: JSON.stringify({ query: research.query }) },
+      };
+      const found = researchToolResult(research);
+      this.messages.push(
+        {
+          role: "assistant",
+          content: [
+            { type: "tool-call", toolCallId: callId, toolName: "search_web", input: { query: research.query } },
+          ],
+        },
+        {
+          role: "tool",
+          content: [
+            { type: "tool-result", toolCallId: callId, toolName: "search_web", output: { type: "json", value: found } },
+          ],
+        },
+      );
+      this.messageSeqs.push(null, null);
+      yield { type: "tool_calls", toolCalls: [call] };
+      yield { type: "tool_result", toolCall: call, toolResult: found };
+    }
 
     const subagents = loadValidSubAgents();
     const contextPacket = compileContextPacket(this.bash.getCwd(), userMessage);

@@ -13,7 +13,8 @@ import type { ToolSet } from "ai";
  * - skills: no skill catalog in the prompt
  * - context: no compiled context appendix
  * - subagents: no task/delegate tools, delegation guidance or custom sub-agents
- * - web: no web research tools or guidance
+ * - web: no web research tools or guidance (and so no research before the work)
+ * - research: no web search by the host before the work (src/research/pre-task.ts); the tools stay
  * - bare: all of the above, a prompt of environment facts only, and six basic tools
  */
 export const ABLATIONS = [
@@ -27,6 +28,7 @@ export const ABLATIONS = [
   "context",
   "subagents",
   "web",
+  "research",
   "bare",
 ] as const;
 

@@ -1563,7 +1563,10 @@ they sat on the same code path:
 - **Forced web research on every turn.** `processMessage` performed a Google search before every
   prompt, including "hello", and injected the untrusted snippets into the system prompt. Lane 14
   had already caught a live prompt-injection attempt in exactly such fetched content. Research is
-  now the model's decision through `search_web`/`open_web`.
+  now the model's decision through `search_web`/`open_web`. (Superseded 2026-09-25 by the owner: the host searches
+  again before a work turn, not before a greeting or an approval, and hands the results to the model as a
+  `search_web` tool result, JSON-encoded, with instruction-shaped results withheld; see AGENTS.md, Research rule, and
+  `src/research/pre-task.ts`.)
 
 ### 23.3 What changed
 

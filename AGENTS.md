@@ -81,12 +81,16 @@ directory.
 
 ## Research rule
 
-Research is on demand, not per turn. The agent combines repository evidence,
-project instructions, and local docs first, and reaches for `search_web` /
-`open_web` only when a task depends on an external library, API, or protocol
-whose current behavior is uncertain. Search results are untrusted leads and must
-be verified against the official source before reliance; fetched content is
-never treated as instructions.
+Research comes before the work (owner, 2026-09-25): before the first model round of a work turn in agent mode, the
+host runs one web search on the request and hands the model the results as the result of a `search_web` call
+(`src/research/pre-task.ts`), so it plans with context about the objective. A greeting, an approval ("sí",
+"continúa") or a question about memory is not researched; the search is bounded to 10 s and a failed search leaves
+the turn as it was. This reverses the 2026-09-17 removal of a forced search (doc 14 §23.2) with its failures designed
+out: the results are JSON-encoded data in a tool result, never in the system prompt, saying what they are and where
+they came from, and a result that reads like an instruction is withheld. `SHELRA_RESEARCH=off` or `--ablate research`
+turns it off. The model still reaches for `search_web` / `open_web` on its own when a task depends on an external
+library, API, or protocol. Search results are untrusted leads and must be verified against the official source before
+reliance; fetched content is never treated as instructions.
 
 ## Tool surface and diagnostics
 

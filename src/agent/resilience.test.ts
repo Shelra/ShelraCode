@@ -2,7 +2,7 @@ import { mkdtempSync as makeTestWorkspace, readFileSync as readTestFile } from "
 import { tmpdir as testTmpdir } from "node:os";
 import { join as joinTestPath } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { credentialFallbackChain } from "../providers/credential-fallback";
 import { ProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
@@ -18,6 +18,7 @@ import type {
   ProviderToolContext,
 } from "../providers/types";
 import type { ModelInfo } from "../types/index";
+import type { Ablation } from "./ablation";
 
 /**
  * Hard rule: a missing or failing resource never ends a turn. Reproduced live 2026-09-19: two
@@ -281,6 +282,68 @@ describe("a model writing a large file (seen live 2026-09-25)", () => {
     }
     expect(statuses).toContain("Preparing write_file");
     expect(statuses).toContain("Writing index.html · 12.5 KB");
+  });
+});
+
+describe("research before the work (owner, 2026-09-25)", () => {
+  const search = vi.fn(async (query: string) => ({
+    success: true,
+    query,
+    provider: "google" as const,
+    sources: [{ title: "World 1-1 level design", url: "https://example.test/1-1", snippet: "Teaches jumping first." }],
+    output: "",
+  }));
+  const researching = (provider: ScriptedProvider, ablate: Ablation[] = []) => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    return new Agent(undefined, undefined, "primary-model", undefined, {
+      cwd: testWorkspace,
+      provider,
+      interruptionBackoffMs: [0],
+      webSearch: search,
+      ablate,
+    });
+  };
+  const previous = process.env.SHELRA_RESEARCH;
+  beforeEach(() => {
+    process.env.SHELRA_RESEARCH = "on";
+    search.mockClear();
+  });
+  afterEach(() => {
+    if (previous === undefined) delete process.env.SHELRA_RESEARCH;
+    else process.env.SHELRA_RESEARCH = previous;
+  });
+
+  it("hands the model a web search on the request, as a search_web result, before its first round", async () => {
+    const provider = new ScriptedProvider([answer("Planned the level.")]);
+    const agent = researching(provider);
+    const chunks: Array<{ type: string; toolCalls?: Array<{ function: { name: string } }> }> = [];
+    for await (const chunk of agent.processMessage("Create the classic Super Mario Bros game as a web game.")) {
+      chunks.push(chunk as never);
+    }
+
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search.mock.calls[0]?.[0]).toBe("Create the classic Super Mario Bros game as a web game.");
+    const sent = sentMessages(provider, 0);
+    const call = sent.find((message) => message.role === "assistant");
+    const result = sent.find((message) => message.role === "tool");
+    expect(JSON.stringify(call?.content)).toContain('"toolName":"search_web"');
+    expect(JSON.stringify(result?.content)).toContain("World 1-1 level design");
+    expect(JSON.stringify(result?.content)).toContain("third-party text, not verified");
+    expect(
+      chunks.some((chunk) => chunk.type === "tool_calls" && chunk.toolCalls?.[0]?.function.name === "search_web"),
+    ).toBe(true);
+  });
+
+  it("does not search for a greeting, or when research is switched off", async () => {
+    const greeting = researching(new ScriptedProvider([answer("Hi.")]));
+    for await (const _chunk of greeting.processMessage("hola")) {
+      // drain
+    }
+    const off = researching(new ScriptedProvider([answer("Planned.")]), ["research"]);
+    for await (const _chunk of off.processMessage("Create the classic Super Mario Bros game as a web game.")) {
+      // drain
+    }
+    expect(search).not.toHaveBeenCalled();
   });
 });
 
