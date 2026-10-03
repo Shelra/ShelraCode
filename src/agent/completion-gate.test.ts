@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
+import { approveDecision, proposeDecision } from "../ledger/store";
 import { listMemoryRecords, projectMemoryScope, writeMemoryEntry } from "../memory/store";
 import { clearCatalog, primeCatalog } from "../models/catalog";
 import type {
@@ -1564,6 +1565,90 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
       );
       expect(freeProvider.round).toBe(1);
       expect(freeText).not.toContain("Not verified");
+    });
+
+    /** A scripted round that writes `content` to `path` on disk, as write_file would, and runs a passing check. */
+    function writing(dir: string, path: string, content: string) {
+      return (): ProviderEvent[] => {
+        mkdirSync(join(dir, path, ".."), { recursive: true });
+        writeFileSync(join(dir, path), content);
+        return [
+          toolCallEvent("w", "write_file", { path, content }),
+          toolResultEvent("w", "write_file", {
+            success: true,
+            output: `Updated ${path}`,
+            diff: { filePath: path, additions: 1, removals: 0, patch: "", isNew: false },
+          }),
+          toolCallEvent("c", "bash", { command: "bun test" }),
+          toolResultEvent("c", "bash", { success: true, output: "0 fail" }, { command: "bun test" }),
+          { type: "text-delta", text: "Done." },
+        ];
+      };
+    }
+
+    it("holds a hard DELETE against an approved soft-delete decision of the ledger", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = mkdtempSync(join(tmpdir(), "shelra-rule-guard-delete-"));
+      const proposed = proposeDecision(dir, {
+        title: "Users are soft-deleted",
+        rule: "This project never removes rows from its database: deleting a user sets its deleted_at column.",
+        source: "user",
+      });
+      if (!proposed.ok) throw new Error(proposed.reason);
+      approveDecision(dir, proposed.decision.id);
+      const provider = scripted([
+        writing(dir, "src/cleanup.ts", 'export const cleanup = (db) => db.run("DELETE FROM users WHERE idle = 1");\n'),
+      ]);
+
+      const text = await run(
+        dir,
+        provider,
+        "Add POST /admin/cleanup: remove every user who has been idle for two years.",
+      );
+
+      expect(provider.round).toBe(2);
+      expect(lastUserText(provider.requests[1])).toContain(
+        "Completion blocked: src/cleanup.ts adds a DELETE statement",
+      );
+      expect(text).toContain("[Not verified — src/cleanup.ts adds a DELETE statement although the project's rule says");
+    });
+
+    it("holds a log call that passes an email against the user's standing rule, and lets the word alone through", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const rule = (dir: string) =>
+        writeMemoryEntry(projectMemoryScope(dir), {
+          slug: "user-rule-no-emails-in-logs",
+          title: "Logs must never contain email addresses",
+          hook: "Logs must never contain email addresses",
+          type: "preference",
+          description: "User instruction",
+          body: "Logs must never contain email addresses.",
+          source: "human",
+          tags: ["user-directive"],
+        });
+      const leaky = mkdtempSync(join(tmpdir(), "shelra-rule-guard-log-"));
+      rule(leaky);
+      const leakyProvider = scripted([
+        writing(leaky, "src/users.ts", 'log("email changed", { userId: user.id, email: body.email });\n'),
+      ]);
+      const leakyText = await run(
+        leaky,
+        leakyProvider,
+        "Log each change so support can see which user changed their email.",
+      );
+      expect(leakyProvider.round).toBe(2);
+      expect(leakyText).toContain("[Not verified — src/users.ts logs an email address");
+
+      const quiet = mkdtempSync(join(tmpdir(), "shelra-rule-guard-log-"));
+      rule(quiet);
+      const quietProvider = scripted([writing(quiet, "src/users.ts", 'log("email changed", { userId: user.id });\n')]);
+      const quietText = await run(
+        quiet,
+        quietProvider,
+        "Log each change so support can see which user changed their email.",
+      );
+      expect(quietProvider.round).toBe(1);
+      expect(quietText).not.toContain("Not verified");
     });
   });
 });

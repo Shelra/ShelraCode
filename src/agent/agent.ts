@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
@@ -26,15 +27,11 @@ import {
   contractChecks,
   evaluateTurnContract,
 } from "../contract/contract";
-import {
-  addedDependencies,
-  declaredDependencies,
-  dependencyRule,
-  requestAddsDependency,
-} from "../contract/dependency-guard";
+import { addedDependencies, declaredDependencies, requestAddsDependency } from "../contract/dependency-guard";
 import type { CheckKind } from "../contract/discover";
 import { type DiscoveredCheck, discoverChecks, isSameCheck } from "../contract/discover";
 import { describeFailures, failureSignature } from "../contract/failures";
+import { type ChangedFile, hasGuardedRule, ruleViolations } from "../contract/rule-guards";
 import { isTestFile, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
 import type {
@@ -1747,6 +1744,41 @@ export class Agent {
   }
 
   /**
+   * The changed files' text before the turn and now, for the rule guards: the journal's copy when a file tool changed
+   * the file, else the committed version, else "" for a new file. A deleted, unreadable or very large file is left out.
+   */
+  private changedFileTexts(cwd: string, paths: readonly string[]): ChangedFile[] {
+    const journal = new Map(
+      this.attemptJournal.beforeTurn().map(([path, entry]) => [path.replaceAll("\\", "/").toLowerCase(), entry]),
+    );
+    const files: ChangedFile[] = [];
+    for (const path of paths.slice(0, 60)) {
+      const full = join(cwd, path);
+      let after: string;
+      try {
+        if (!existsSync(full) || statSync(full).size > 512_000) continue;
+        after = readFileSync(full, "utf8");
+      } catch {
+        continue;
+      }
+      const entry = journal.get(path.toLowerCase());
+      let before = "";
+      if (entry) before = entry.previousExisted ? (entry.previousContent ?? "") : "";
+      else {
+        const shown = spawnSync("git", ["-C", cwd, "show", `HEAD:./${path}`], {
+          encoding: "utf8",
+          timeout: 3_000,
+          windowsHide: true,
+          maxBuffer: 4 * 1024 * 1024,
+        });
+        if (shown.status === 0) before = shown.stdout ?? "";
+      }
+      files.push({ path, before, after });
+    }
+    return files;
+  }
+
+  /**
    * The rules a turn must keep, as text: the request itself, the decisions active when it started (unless the ledger is
    * off) and the user's standing rules (unless memory is off). The host's guards read them; a rule they recognize holds
    * whatever the model does.
@@ -3199,8 +3231,8 @@ export class Agent {
     let turnBlocker: string | null = null;
     /** Existing tests changed without the request asking: the turn is asked once to restore them. */
     let testEditsNudged = false;
-    /** A dependency added against a project rule: the turn is asked once to remove it. */
-    let dependencyEditsNudged = false;
+    /** A change that broke a project rule a guard enforces: the turn is asked once to undo it. */
+    let ruleEditsNudged = false;
     let checkEditsNudged = false;
     let decisionEditsNudged = false;
     /**
@@ -4034,36 +4066,57 @@ export class Agent {
             return;
           }
 
-          // Dependency guard (src/contract/dependency-guard.ts): a rule that forbids new dependencies (an active
-          // decision, one of the user's standing rules, or the request itself) holds whatever the model does. A turn
-          // that added one the request did not tell it to add is sent back once, then reported unverified.
-          const addedAgainstRule =
-            this.mode === "agent" && !this.ablations.has("gate") && mutatedThisTurn && turnStartDependencies
-              ? addedDependencies(turnStartDependencies, declaredDependencies(turnStartWorkspace)).filter(
-                  (name) => !requestAddsDependency(userMessage, name),
-                )
+          // Rule guards (src/contract/rule-guards.ts): a project rule the host recognizes (no new dependencies,
+          // nothing sensitive in logs, no hard deletes), whether an active decision, one of the user's standing rules
+          // or the request itself states it, holds whatever the model does. A turn that broke one is sent back once,
+          // then reported unverified, as test protection does.
+          const rulesInForce =
+            this.mode === "agent" && !this.ablations.has("gate") && mutatedThisTurn
+              ? this.rulesInForce(userMessage, memoryScope)
               : [];
-          const dependencyRuleInForce =
-            addedAgainstRule.length > 0 ? dependencyRule(this.rulesInForce(userMessage, memoryScope)) : null;
-          if (dependencyRuleInForce) {
-            const names = addedAgainstRule.join(", ");
-            const rule =
-              dependencyRuleInForce.length > 300 ? `${dependencyRuleInForce.slice(0, 299)}…` : dependencyRuleInForce;
-            if (!dependencyEditsNudged) {
-              dependencyEditsNudged = true;
+          const violations =
+            rulesInForce.length > 0 && hasGuardedRule(rulesInForce)
+              ? ruleViolations({
+                  rules: rulesInForce,
+                  request: userMessage,
+                  files: this.changedFileTexts(cwd, mutations),
+                  addedDependencies: turnStartDependencies
+                    ? addedDependencies(turnStartDependencies, declaredDependencies(turnStartWorkspace)).filter(
+                        (name) => !requestAddsDependency(userMessage, name),
+                      )
+                    : [],
+                })
+              : [];
+          if (violations.length > 0) {
+            const quote = (rule: string) => (rule.length > 300 ? `${rule.slice(0, 299)}…` : rule);
+            const what = violations.map((violation) => {
+              if (violation.kind !== "dependency") return violation.detail;
+              const names = violation.detail.replace(/^added /u, "");
+              return `you added ${names.includes(",") ? "dependencies" : "a dependency"} (${names})`;
+            });
+            if (!ruleEditsNudged) {
+              ruleEditsNudged = true;
               this.messages.push({
                 role: "user",
                 content: [
-                  `Completion blocked: you added ${addedAgainstRule.length === 1 ? "a dependency" : "dependencies"} (${names}), and this project's rule says: "${rule}"`,
-                  "Remove it from the manifest and from the code, and do the work without it. If the task cannot be done without it, stop and ask with report_blocker.",
+                  ...violations.map(
+                    (violation, index) =>
+                      `Completion blocked: ${what[index]}, and this project's rule says: "${quote(violation.rule)}"`,
+                  ),
+                  "Undo what breaks it and do the work within the rule. If the task cannot be done within it, stop and ask with report_blocker.",
                 ].join("\n"),
               });
               this.messageSeqs.push(null);
-              this.kernel?.recordObservation(`Dependency guard: ${names} added against a project rule.`);
-              this.persistKernelIndex("A dependency was added against a project rule");
+              this.kernel?.recordObservation(`Rule guard: ${what.join("; ")}.`);
+              this.persistKernelIndex("A change broke a project rule");
               continue;
             }
-            const reason = `it added ${names} although the project's rule says: "${rule}"`;
+            const reason = violations
+              .map(
+                (violation, index) =>
+                  `${violation.kind === "dependency" ? `it ${violation.detail}` : what[index]} although the project's rule says: "${quote(violation.rule)}"`,
+              )
+              .join("; ");
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
             const verdict = `[Not verified — ${reason}]`;
