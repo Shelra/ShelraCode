@@ -92,13 +92,31 @@ function goMod(text: string): Set<string> {
     const trimmed = line.trim();
     if (/^require\s*\($/u.test(trimmed)) inBlock = true;
     else if (inBlock && trimmed === ")") inBlock = false;
+    // An indirect requirement is the toolchain's bookkeeping, not a dependency anyone added.
+    if (trimmed.includes("// indirect")) continue;
     const module = inBlock ? /^([^\s/]+\/\S+)\s+v/u.exec(trimmed)?.[1] : /^require\s+(\S+)\s+v/u.exec(trimmed)?.[1];
     if (module) names.add(module);
   }
   return names;
 }
 
-/** What the project at `root` declares, by manifest; a manifest that cannot be read is left out. */
+const SKIP_DIRS = new Set(["node_modules", ".git", ".shelra", "dist", "build", "out", "coverage", "vendor", "target"]);
+
+function listDir(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !SKIP_DIRS.has(entry.name) && !entry.name.startsWith("."))
+      .map((entry) => entry.name)
+      .slice(0, 60);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * What the project at `root` declares, by manifest; a manifest that cannot be read is left out. A workspace's own
+ * package.json files, one or two folders down (`packages/api/package.json`), count too.
+ */
 export function declaredDependencies(root: string): DeclaredDependencies {
   const found: DeclaredDependencies = new Map();
   const add = (file: string, names: Set<string> | null) => {
@@ -106,6 +124,12 @@ export function declaredDependencies(root: string): DeclaredDependencies {
   };
   const pkg = readText(join(root, "package.json"));
   if (pkg !== null) add("package.json", packageJson(pkg));
+  for (const first of listDir(root)) {
+    for (const relative of [first, ...listDir(join(root, first)).map((second) => `${first}/${second}`)]) {
+      const nested = readText(join(root, relative, "package.json"));
+      if (nested !== null) add(`${relative}/package.json`, packageJson(nested));
+    }
+  }
   let entries: string[] = [];
   try {
     entries = readdirSync(root);
@@ -136,14 +160,18 @@ export function addedDependencies(before: DeclaredDependencies, after: DeclaredD
   return added;
 }
 
-/** "Dependency-free", "no dependencies", "never add another dependency without asking", "sin dependencias nuevas". */
-const FORBIDS_NEW_DEPENDENCIES = [
+/**
+ * "Dependency-free", "lists no dependencies", "no new dependencies", "never add another dependency without asking",
+ * "nunca añadas dependencias". The negation governs the verb or the qualified noun directly: "I don't mind if you add a
+ * package", "no dependency injection" and "No packages found" are not rules.
+ */
+export const FORBIDS_NEW_DEPENDENCIES: readonly RegExp[] = [
   /\bdependency[- ]free\b/iu,
-  /\bno\s+(?:new\s+|other\s+|more\s+|extra\s+|additional\s+|third[- ]party\s+|external\s+)?(?:runtime\s+|dev\s+)?(?:dependenc(?:y|ies)|npm\s+packages?|packages?|librar(?:y|ies))\b(?!\s+(?:needed|required|necessary))/iu,
-  /\b(?:never|don't|do not|dont|must not|without asking)\b[^.\n]{0,40}\b(?:add|install|introduce|pull in|bring in)\b[^.\n]{0,30}\b(?:dependenc(?:y|ies)|packages?|librar(?:y|ies))\b/iu,
-  /\bsin\s+(?:nuevas\s+|m[aá]s\s+)?dependencias\b/iu,
-  /\b(?:ninguna|ning[uú]n)\s+(?:nueva\s+)?(?:dependencia|paquete|librer[ií]a)\b/iu,
-  /\b(?:no|nunca)\b[^.\n]{0,40}\b(?:a[nñ]ad\w*|agreg\w*|instal\w*|met\w*|introduz\w*)\b[^.\n]{0,30}\b(?:dependencias?|paquetes?|librer[ií]as?)\b/iu,
+  /\b(?:lists?|has|have|keeps?|with)\s+no\s+(?:runtime\s+|dev\s+)?dependencies\b/iu,
+  /\bno\s+(?:new|other|more|extra|additional|third[- ]party|external)\s+(?:runtime\s+|dev\s+)?(?:dependenc(?:y|ies)|npm\s+packages?|packages?|librar(?:y|ies))\b(?!\s+(?:are\s+|is\s+)?(?:needed|required|necessary))/iu,
+  /\b(?:never|don't|do not|dont|must not|mustn't)\s+(?:ever\s+)?(?:add|install|introduce|pull in|bring in)\b[^.\n]{0,30}\b(?:dependenc(?:y|ies)|packages?|librar(?:y|ies))\b/iu,
+  /\bsin\s+(?:nuevas\s+|m[aá]s\s+)?dependencias\s+(?:nuevas\s+)?(?:de\s+ning[uú]n\s+tipo)?\b/iu,
+  /\b(?:nunca|no)\s+(?:a[nñ]adas|agregues|instales|metas|introduzcas|a[nñ]adir|agregar|instalar)\b[^.\n]{0,30}\b(?:dependencias?|paquetes?|librer[ií]as?)\b/iu,
 ];
 
 /** The first rule, of those given, that forbids new dependencies, or null. */
@@ -164,11 +192,16 @@ function escapeRegExp(text: string): string {
  * decision battery's traps are worded exactly that way.
  */
 export function requestAddsDependency(request: string, name: string): boolean {
-  // The whole name: "date" is not "date-fns".
-  const pkg = `\`?${escapeRegExp(name)}\`?(?![\\w@/.-]*[\\w@/-])`;
+  // A package's types come with it: permission for `express` covers `@types/express`.
+  const typed = /^@types\/(.+)$/u.exec(name)?.[1];
+  if (typed && requestAddsDependency(request, typed.includes("__") ? `@${typed.replace("__", "/")}` : typed))
+    return true;
+  // The whole name, with an optional version ("zod@3.23", "react@latest"): "date" is not "date-fns".
+  const pkg = `\`?${escapeRegExp(name)}(?:@[\\w.^~<>=*-]+)?\`?(?![\\w@/.-]*[\\w@/-])`;
   const instruction = [
     new RegExp(`\\b(?:npm|pnpm|yarn|bun)\\s+(?:add|install|i)\\b[^\\n]*?(?:^|\\s)${pkg}`, "iu"),
-    new RegExp(`\\bpip\\s+install\\b[^\\n]*?(?:^|\\s)${pkg}`, "iu"),
+    new RegExp(`\\b(?:pip|uv\\s+pip|poetry|uv|cargo)\\s+(?:install|add)\\b[^\\n]*?(?:^|\\s)${pkg}`, "iu"),
+    new RegExp(`\\bgo\\s+get\\b[^\\n]*?(?:^|\\s)${pkg}`, "iu"),
     new RegExp(`\\b(?:add|install|use|include|bring in|pull in|depend on)\\s+(?:the\\s+)?${pkg}`, "iu"),
     new RegExp(
       `\\b(?:a[nñ]ade|agrega|instala|usa|incluye|utiliza)\\s+(?:el\\s+paquete\\s+|la\\s+librer[ií]a\\s+|la\\s+dependencia\\s+)?${pkg}`,

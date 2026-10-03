@@ -1515,12 +1515,62 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
       const text = await run(
         dir,
         provider,
-        "Add GET /loans/export.csv; papaparse's unparse makes this easy. This project stays dependency-free.",
+        "Add GET /loans/export.csv; papaparse's unparse makes this easy. From now on this project stays dependency-free.",
       );
 
       expect(provider.round).toBe(2);
       expect(lastUserText(provider.requests[1])).toContain("Completion blocked: you added a dependency (papaparse)");
-      expect(text).toContain("[Not verified — it added papaparse although the project's rule says");
+      expect(text).toContain("[Not verified — it added papaparse although the rule you stated says");
+    });
+
+    it("never reads a bug report as a rule: a request to install what is missing is not blocked", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const { dir, addPapaparse } = withPackage();
+      const provider = scripted([addPapaparse]);
+
+      const text = await run(dir, provider, "No compila; instala las dependencias que falten.");
+
+      expect(provider.round).toBe(1);
+      expect(text).not.toContain("Not verified");
+    });
+
+    it("takes the user's approval of the package the last answer proposed as permission under a rule to ask first", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const { dir, addPapaparse } = withPackage();
+      writeMemoryEntry(projectMemoryScope(dir), {
+        slug: "user-rule-ask-before-dependencies",
+        title: "Never add another dependency without asking me first",
+        hook: "Never add another dependency without asking me first",
+        type: "preference",
+        description: "User instruction",
+        body: "Never add another dependency without asking me first.",
+        source: "human",
+        tags: ["user-directive"],
+      });
+      // The history keeps what the model said, as a real provider's response does.
+      const ask = "The CSV quoting is fiddly. May I add papaparse to handle it?";
+      const base = scripted([() => [{ type: "text-delta", text: ask }], addPapaparse]);
+      const provider = {
+        ...base,
+        get round() {
+          return base.round;
+        },
+        stream(request: ProviderStreamRequest): ProviderStream {
+          const stream = base.stream(request);
+          const said = base.round === 1 ? ask : "Done.";
+          return { ...stream, response: Promise.resolve({ messages: [{ role: "assistant", content: said }] }) };
+        },
+      };
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir });
+      for await (const _chunk of agent.processMessage("Add GET /loans/export.csv.")) {
+        // the first answer asks
+      }
+      let text = "";
+      for await (const chunk of agent.processMessage("Yes, go ahead."))
+        text += (chunk as { content?: string }).content ?? "";
+
+      expect(provider.round).toBe(2);
+      expect(text).not.toContain("Not verified");
     });
 
     it("holds a dependency against the user's standing rule, which memory keeps across sessions", async () => {
@@ -1610,7 +1660,7 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
       expect(lastUserText(provider.requests[1])).toContain(
         "Completion blocked: src/cleanup.ts adds a DELETE statement",
       );
-      expect(text).toContain("[Not verified — src/cleanup.ts adds a DELETE statement although the project's rule says");
+      expect(text).toContain("[Not verified — src/cleanup.ts adds a DELETE statement although decision D-0001 says");
     });
 
     it("holds a log call that passes an email against the user's standing rule, and lets the word alone through", async () => {

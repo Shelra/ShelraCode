@@ -31,7 +31,14 @@ import { addedDependencies, declaredDependencies, requestAddsDependency } from "
 import type { CheckKind } from "../contract/discover";
 import { type DiscoveredCheck, discoverChecks, isSameCheck } from "../contract/discover";
 import { describeFailures, failureSignature } from "../contract/failures";
-import { type ChangedFile, hasGuardedRule, ruleViolations } from "../contract/rule-guards";
+import {
+  type ChangedFile,
+  describeRule,
+  guardedKinds,
+  isGuardedSource,
+  type RuleInForce,
+  ruleViolations,
+} from "../contract/rule-guards";
 import { isTestFile, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
 import type {
@@ -1744,15 +1751,15 @@ export class Agent {
   }
 
   /**
-   * The changed files' text before the turn and now, for the rule guards: the journal's copy when a file tool changed
-   * the file, else the committed version, else "" for a new file. A deleted, unreadable or very large file is left out.
+   * The changed source files' text before the turn and now, for the rule guards. Before is the journal's copy when a
+   * file tool changed the file, else the committed version of a file that had no uncommitted change when the turn
+   * started, else "" for a file that did not exist then. A file whose state before the turn is unknown (uncommitted
+   * edits, no git) is left out rather than blamed on the turn, and so is a deleted, unreadable or very large one.
    */
-  private changedFileTexts(cwd: string, paths: readonly string[]): ChangedFile[] {
-    const journal = new Map(
-      this.attemptJournal.beforeTurn().map(([path, entry]) => [path.replaceAll("\\", "/").toLowerCase(), entry]),
-    );
+  private changedFileTexts(cwd: string, paths: readonly string[], start: WorkspaceState | null): ChangedFile[] {
+    const journal = this.attemptJournal.beforeTurn();
     const files: ChangedFile[] = [];
-    for (const path of paths.slice(0, 60)) {
+    for (const path of paths.filter(isGuardedSource).slice(0, 60)) {
       const full = join(cwd, path);
       let after: string;
       try {
@@ -1761,10 +1768,15 @@ export class Agent {
       } catch {
         continue;
       }
-      const entry = journal.get(path.toLowerCase());
-      let before = "";
+      const folded = foldPath(path);
+      const entry = journal.find(([journaled]) => {
+        const key = foldPath(journaled);
+        return key === folded || key.endsWith(`/${folded}`) || folded.endsWith(`/${key}`);
+      })?.[1];
+      let before: string | null = null;
       if (entry) before = entry.previousExisted ? (entry.previousContent ?? "") : "";
-      else {
+      else if (start && !existedAt(start, cwd, path)) before = "";
+      else if (start?.kind === "git" && !start.files.has(path)) {
         const shown = spawnSync("git", ["-C", cwd, "show", `HEAD:./${path}`], {
           encoding: "utf8",
           timeout: 3_000,
@@ -1773,24 +1785,51 @@ export class Agent {
         });
         if (shown.status === 0) before = shown.stdout ?? "";
       }
-      files.push({ path, before, after });
+      if (before !== null) files.push({ path, before, after });
     }
     return files;
   }
 
-  /**
-   * The rules a turn must keep, as text: the request itself, the decisions active when it started (unless the ledger is
-   * off) and the user's standing rules (unless memory is off). The host's guards read them; a rule they recognize holds
-   * whatever the model does.
-   */
-  private rulesInForce(request: string, scope: ReturnType<typeof projectMemoryScope>): string[] {
-    const rules = [typedText(request)];
-    if (!this.ablations.has("ledger")) {
-      for (const decision of this.turnDecisions) rules.push(`${decision.title}. ${decision.rule}`);
+  /** The text of the last assistant message with words in it: at a turn's start, the previous turn's answer. */
+  private lastAssistantTextBeforeTurn(): string {
+    for (let index = this.messages.length - 1; index >= 0; index -= 1) {
+      const message = this.messages[index];
+      if (message?.role !== "assistant") continue;
+      const text =
+        typeof message.content === "string"
+          ? message.content
+          : message.content
+              .map((part) => (part.type === "text" ? part.text : ""))
+              .join("")
+              .trim();
+      if (text) return text.slice(-4_000);
     }
+    return "";
+  }
+
+  /**
+   * The rules a turn must keep, with where each comes from: the decisions active when it started (unless the ledger is
+   * off), the standing rules the request itself states, and the user's standing rules (unless memory is off). The raw
+   * request is not one: a bug report would block the fix it asks for. The host's guards read them.
+   */
+  private rulesInForce(request: string, scope: ReturnType<typeof projectMemoryScope>): RuleInForce[] {
+    const rules: RuleInForce[] = [];
+    if (!this.ablations.has("ledger")) {
+      for (const decision of this.turnDecisions) {
+        rules.push({
+          text: `${decision.title}. ${decision.rule}`,
+          origin: "decision",
+          id: decision.id,
+          scope: decision.scope,
+        });
+      }
+    }
+    for (const directive of extractUserDirectives(request)) rules.push({ text: directive.hook, origin: "request" });
     if (!this.ablations.has("memory")) {
       try {
-        for (const record of listMemoryRecords(scope)) if (isStandingRule(record)) rules.push(record.index.hook);
+        for (const record of listMemoryRecords(scope)) {
+          if (isStandingRule(record)) rules.push({ text: record.index.hook, origin: "standing-rule" });
+        }
       } catch (error) {
         recordSwallowedError("memory.rules", error);
       }
@@ -3188,6 +3227,11 @@ export class Agent {
     const turnStartState = this.mode === "agent" ? captureWorkspaceState(turnStartWorkspace) : null;
     // What the project declared when the turn started, for the dependency guard.
     const turnStartDependencies = this.mode === "agent" ? declaredDependencies(turnStartWorkspace) : null;
+    // What counts as the user's permission to add a package: the request, and, when it is a short approval ("yes, go
+    // ahead"), what the last answer before this turn proposed. The model's own words in this turn never do.
+    const dependencyPermission = isShortFollowUp(userMessage)
+      ? `${userMessage}\n${this.lastAssistantTextBeforeTurn()}`
+      : userMessage;
     // The checks that decide "done", as they stood when the turn started (audit doc 17, S10): a turn is judged by
     // them, not by a check script or command table it rewrote.
     // The kinds of check the request asks to change; a short follow-up carries the request it answers.
@@ -4067,28 +4111,32 @@ export class Agent {
           }
 
           // Rule guards (src/contract/rule-guards.ts): a project rule the host recognizes (no new dependencies,
-          // nothing sensitive in logs, no hard deletes), whether an active decision, one of the user's standing rules
-          // or the request itself states it, holds whatever the model does. A turn that broke one is sent back once,
-          // then reported unverified, as test protection does.
+          // nothing sensitive in logs, no hard deletes), stated by an active decision, one of the user's standing
+          // rules or a standing rule in the request, holds whatever the model does. A turn that broke one is sent
+          // back once, then reported unverified, as test protection does.
           const rulesInForce =
             this.mode === "agent" && !this.ablations.has("gate") && mutatedThisTurn
               ? this.rulesInForce(userMessage, memoryScope)
               : [];
+          const guarded = guardedKinds(rulesInForce);
           const violations =
-            rulesInForce.length > 0 && hasGuardedRule(rulesInForce)
+            guarded.size > 0
               ? ruleViolations({
                   rules: rulesInForce,
                   request: userMessage,
-                  files: this.changedFileTexts(cwd, mutations),
-                  addedDependencies: turnStartDependencies
-                    ? addedDependencies(turnStartDependencies, declaredDependencies(turnStartWorkspace)).filter(
-                        (name) => !requestAddsDependency(userMessage, name),
-                      )
-                    : [],
+                  files:
+                    guarded.has("sensitive-log") || guarded.has("hard-delete")
+                      ? this.changedFileTexts(cwd, mutations, turnStartState)
+                      : [],
+                  addedDependencies:
+                    guarded.has("dependency") && turnStartDependencies
+                      ? addedDependencies(turnStartDependencies, declaredDependencies(turnStartWorkspace)).filter(
+                          (name) => !requestAddsDependency(dependencyPermission, name),
+                        )
+                      : [],
                 })
               : [];
           if (violations.length > 0) {
-            const quote = (rule: string) => (rule.length > 300 ? `${rule.slice(0, 299)}…` : rule);
             const what = violations.map((violation) => {
               if (violation.kind !== "dependency") return violation.detail;
               const names = violation.detail.replace(/^added /u, "");
@@ -4100,8 +4148,7 @@ export class Agent {
                 role: "user",
                 content: [
                   ...violations.map(
-                    (violation, index) =>
-                      `Completion blocked: ${what[index]}, and this project's rule says: "${quote(violation.rule)}"`,
+                    (violation, index) => `Completion blocked: ${what[index]}, and ${describeRule(violation.rule)}`,
                   ),
                   "Undo what breaks it and do the work within the rule. If the task cannot be done within it, stop and ask with report_blocker.",
                 ].join("\n"),
@@ -4114,7 +4161,7 @@ export class Agent {
             const reason = violations
               .map(
                 (violation, index) =>
-                  `${violation.kind === "dependency" ? `it ${violation.detail}` : what[index]} although the project's rule says: "${quote(violation.rule)}"`,
+                  `${violation.kind === "dependency" ? `it ${violation.detail}` : what[index]} although ${describeRule(violation.rule)}`,
               )
               .join("; ");
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });

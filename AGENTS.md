@@ -123,6 +123,17 @@ provider as `hostStops`). Once per turn the model is told why, naming the file a
 error, and may take another way or report; a second stop goes on to the completion gate. The step in which the model
 calls `report_blocker` ends the generation too, and the turn ends `[Stopped — reason]` (seen 2026-10-03: a model
 reported that a request broke the user's offline rule, then installed a dependency in the same generation).
+Three kinds of project rule hold whatever the model does, when an active decision (within its scope), one of the
+user's standing rules or a standing rule the request states ("from now on…", "that is a rule for the whole project")
+says so in words the host recognizes (English or Spanish; `src/contract/rule-guards.ts`): no new dependencies (a name
+the manifests, root and workspace packages, did not declare when the turn started; `src/contract/dependency-guard.ts`),
+nothing sensitive in logs (a log call newly passing a value named for an email, password, token, secret or phone,
+outside string literals and masking calls) and no hard deletes (a new `DELETE FROM` outside comments). The raw request
+is never a rule: a bug report would block the fix it asks for. A turn that broke one is sent back once, then reported
+`[Not verified — …]` naming the rule and where it comes from, as test protection does. The request wins only when it
+asks in so many words ("install date-fns", "log the new email", "permanently delete"), or approves what the previous
+answer proposed; naming a package as a suggestion is not permission. A file whose state before the turn is unknown
+(uncommitted edits, no git) is not judged.
 A turn that changed a web app's files (html, css, js/ts, vue, svelte, package.json) has the app opened by the host
 before it may end (`src/agent/runtime-smoke.ts`): through the server the session runs, else by serving the folder a
 static-server script names or a plain site's index.html in-process, else by starting Vite on a free port with no

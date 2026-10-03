@@ -230,6 +230,26 @@ function sentencesOf(message: string): string[] {
 
 type DirectiveKind = "rule" | "fact" | "correction";
 
+/**
+ * "Logs must never contain email addresses; that is a rule for the whole project from now on", or a sentence that says
+ * so of the one before it ("This project never removes rows … That is a rule for the whole project"): the user calls it
+ * a standing rule in so many words (the decision chain's steps 2 and 9 state their rules this way).
+ */
+const PROJECT_RULE_MARKER =
+  /\b(?:(?:that|this|it)(?:'s|\s+is)\s+)?(?:a|the)\s+rule\s+for\s+the\s+(?:whole|entire)\s+project\b|\bes\s+una\s+regla\s+(?:de|para)\s+todo\s+el\s+proyecto\b/iu;
+
+/** The rule a sentence marks as project-wide, from the sentence itself or the one before it; null otherwise. */
+function projectRuleOf(sentence: string, previous: string | undefined): string | null {
+  const marker = PROJECT_RULE_MARKER.exec(sentence);
+  if (!marker) return null;
+  const before = sentence
+    .slice(0, marker.index)
+    .replace(/[\s;:,—-]+$/u, "")
+    .trim();
+  if (before.length >= 8 && !/^(?:that|this|it|esa|esta|eso)$/iu.test(before)) return before;
+  return previous && previous.length >= 8 && previous.length <= 300 && !/[?]$/u.test(previous) ? previous : null;
+}
+
 /** What a sentence states as lasting, and the statement itself; null when it states nothing lasting. */
 function directiveOf(sentence: string, document: boolean): { kind: DirectiveKind; statement: string } | null {
   if (/^(never mind|always wondered|never thought)/iu.test(sentence)) return null;
@@ -267,7 +287,8 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
   const userMessage = privateText(typedText(message));
   const document = /^#{1,6}\s/mu.test(userMessage);
   const today = new Date().toISOString().slice(0, 10);
-  for (const sentence of sentencesOf(userMessage)) {
+  const sentences = sentencesOf(userMessage);
+  for (const [index, sentence] of sentences.entries()) {
     // A lead-in to a list ("… so that it tests your ability to reason about:") is not a complete statement.
     // Nor is a question ("should we always use X?").
     if (/[:?]$/u.test(sentence) || sentence.length < 8 || sentence.length > 300) continue;
@@ -277,7 +298,10 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
       seen.add(reminder.slug);
       continue;
     }
-    const directive = directiveOf(sentence, document);
+    const marked = document ? null : projectRuleOf(sentence, sentences[index - 1]);
+    const directive: { kind: DirectiveKind; statement: string } | null = marked
+      ? { kind: "rule", statement: marked }
+      : directiveOf(sentence, document);
     if (!directive || directive.statement.length < 8) continue;
     const statement = directive.statement.charAt(0).toUpperCase() + directive.statement.slice(1);
     const prefix = directive.kind === "rule" ? "user-rule-" : directive.kind === "fact" ? "user-fact-" : "user-fix-";

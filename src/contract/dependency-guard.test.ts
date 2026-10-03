@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -55,9 +55,27 @@ describe("the dependency guard", () => {
       "Always store money as integer cents",
       "No dependencies needed for this script, it is plain TypeScript",
       "Update the dependency list in the README",
+      // Requests and bug reports that share words with a rule (the review of 2026-10-03).
+      "No compila; instala las dependencias que falten",
+      "El build no funciona, agrega la librería que falta",
+      "I don't mind if you add a package for this",
+      "Use no dependency injection container",
+      "Fix the 'No packages found' error",
+      "No new dependencies are needed for this change",
     ]) {
       expect(dependencyRule([other]), other).toBeNull();
     }
+  });
+
+  it("reads a workspace's nested package.json and leaves Go's indirect requirements out", () => {
+    const root = project({
+      "go.mod": "module x\n\nrequire (\n\tgithub.com/a/b v1.0.0\n\tgithub.com/c/d v1.0.0 // indirect\n)\n",
+    });
+    mkdirSync(join(root, "packages", "api"), { recursive: true });
+    writeFileSync(join(root, "packages", "api", "package.json"), JSON.stringify({ dependencies: { hono: "4" } }));
+    const declared = declaredDependencies(root);
+    expect([...(declared.get("go.mod") ?? [])]).toEqual(["github.com/a/b"]);
+    expect([...(declared.get("packages/api/package.json") ?? [])]).toEqual(["hono"]);
   });
 
   it("takes only an instruction to add a package as permission, never a suggestion that names it", () => {
@@ -70,5 +88,11 @@ describe("the dependency guard", () => {
     );
     expect(requestAddsDependency("date-fns has a formatDistance that does this well.", "date-fns")).toBe(false);
     expect(requestAddsDependency("Install date-fns.", "date")).toBe(false);
+    // Versions, Go modules and a permitted package's types.
+    expect(requestAddsDependency("Run bun add zod@3.23 for the schema.", "zod")).toBe(true);
+    expect(requestAddsDependency("npm i react@latest", "react")).toBe(true);
+    expect(requestAddsDependency("go get github.com/gin-gonic/gin", "github.com/gin-gonic/gin")).toBe(true);
+    expect(requestAddsDependency("Add express for the server.", "@types/express")).toBe(true);
+    expect(requestAddsDependency("Add express for the server.", "@types/lodash")).toBe(false);
   });
 });

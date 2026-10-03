@@ -80,6 +80,28 @@ describe("automatic memory capture", () => {
     );
   });
 
+  it("captures what the user calls a rule for the whole project, in the sentence or the one before it", () => {
+    const hooks = (text: string) => extractUserDirectives(text).map((candidate) => candidate.hook);
+    expect(
+      hooks(
+        "Log every loan with log(). Logs must never contain email addresses; that is a rule for the whole project from now on.",
+      ),
+    ).toEqual(["Logs must never contain email addresses"]);
+    expect(
+      hooks(
+        "Add DELETE /users/:id. This project never removes rows from its database: deleting a user sets its deleted_at column. That is a rule for the whole project from now on, not only for this endpoint.",
+      ),
+    ).toEqual(["This project never removes rows from its database: deleting a user sets its deleted_at column"]);
+    // A bug report or a request is not a rule, whatever words it shares with one.
+    for (const request of [
+      "No compila; instala las dependencias que falten",
+      "The error log does not include the user's email; add it",
+      "there is no delete button; add one",
+    ]) {
+      expect(hooks(request), request).toEqual([]);
+    }
+  });
+
   it("takes neither a list's lead-in nor a spec's own preferences as standing rules", () => {
     // Seen live 2026-09-24 with a game spec.
     const spec = [
