@@ -2205,6 +2205,97 @@ program
   });
 
 program
+  .command("import [id]")
+  .description(
+    "Bring the chats Claude Code and Codex saved into Shelra, to continue them with /resume or `shelra -s <id>`: this folder's by default, or one chat by its id (from any folder)",
+  )
+  .option("--all", "the chats of every folder")
+  .option("--list", "list the chats without importing them")
+  .option("--from <agent>", "only one agent's chats: claude-code or codex")
+  .action(async (id: string | undefined, options: { all?: boolean; list?: boolean; from?: string }) => {
+    const { importForeignChat, listForeignChats, SOURCE_NAMES } = await import("./import/index");
+    const from = options.from?.trim().toLowerCase();
+    if (from && from !== "claude-code" && from !== "codex") {
+      console.error(`--from takes claude-code or codex, not "${options.from}".`);
+      process.exitCode = 1;
+      return;
+    }
+    const cwd = process.cwd();
+    const sources = from ? [from as "claude-code" | "codex"] : undefined;
+    const wanted = id?.trim().toLowerCase();
+    // An id names a chat in any folder; without one, this folder's (or every folder's) are the ones meant.
+    const listed = listForeignChats({
+      cwd,
+      all: options.all === true || Boolean(wanted),
+      sources,
+      includeImported: true,
+      limit: wanted ? 100_000 : 500,
+    });
+    const chats = wanted ? listed.filter((chat) => chat.sourceId.toLowerCase().startsWith(wanted)) : listed;
+    const stamp = (date: Date) => date.toISOString().slice(0, 10);
+    const label = (chat: (typeof chats)[number]) => {
+      const line = `${chat.title ?? chat.firstRequest ?? "(untitled)"}`;
+      return line.length > 70 ? `${line.slice(0, 69)}…` : line;
+    };
+    if (chats.length === 0) {
+      console.log(
+        wanted
+          ? `No Claude Code or Codex chat has an id starting with "${id}".`
+          : options.all
+            ? "No Claude Code or Codex chats were found on this machine."
+            : "No Claude Code or Codex chats were found for this folder (`--all` looks in every folder).",
+      );
+      return;
+    }
+    if (wanted && chats.length > 1) {
+      console.log(`"${id}" starts ${chats.length} chats' ids; give more of it:`);
+      for (const chat of chats.slice(0, 20))
+        console.log(`  ${chat.sourceId}  ${SOURCE_NAMES[chat.source]}  ${label(chat)}`);
+      process.exitCode = 1;
+      return;
+    }
+    if (options.list) {
+      console.log(`Chats from Claude Code and Codex${options.all ? "" : ` in ${cwd}`}, newest first:\n`);
+      for (const chat of chats) {
+        const state = chat.importedAs ? `imported as ${chat.importedAs}` : "not imported";
+        console.log(
+          `  ${chat.sourceId}  ${stamp(chat.updatedAt)}  ${SOURCE_NAMES[chat.source].padEnd(11)}  ${label(chat)}`,
+        );
+        console.log(`      ${state}${options.all && chat.cwd ? ` · ${chat.cwd}` : ""}`);
+      }
+      console.log(
+        `\nImport one: ${CLI_NAME} import <id>   all of these: ${CLI_NAME} import${options.all ? " --all" : ""}`,
+      );
+      return;
+    }
+    let imported = 0;
+    let lastId: string | null = null;
+    for (const chat of chats) {
+      try {
+        const result = await importForeignChat(chat, { fallbackCwd: cwd });
+        lastId = result.sessionId;
+        if (!result.created) {
+          console.log(`  already imported  ${result.sessionId}  ${SOURCE_NAMES[chat.source]}  ${label(chat)}`);
+          continue;
+        }
+        imported += 1;
+        const kept =
+          result.summarized > 0 ? ` (the model reads the latest ${result.messages - result.summarized} in full)` : "";
+        console.log(
+          `  imported  ${result.sessionId}  ${SOURCE_NAMES[chat.source]}  ${result.messages} msgs${kept}  ${label(chat)}`,
+        );
+        if (result.folder !== chat.cwd)
+          console.log(`      its folder ${chat.cwd ?? "(unknown)"} is gone; it belongs to ${result.folder}`);
+      } catch (error) {
+        console.log(`  not imported  ${chat.sourceId}  ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    console.log(
+      `\n${imported} chat${imported === 1 ? "" : "s"} imported. Continue one with /resume, or ${CLI_NAME} -s ${lastId ?? "<id>"} in its folder.`,
+    );
+  });
+
+program
   .command("trace [session]")
   .description(
     "Show what a session did, turn by turn, from its local trace (~/.shelra/logs/sessions): the latest session by default",

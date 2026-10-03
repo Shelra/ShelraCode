@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Agent, type ProcessMessageObserver } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
 import { type HookIssue, setHookIssueListener } from "../hooks/index";
+import { importForeignChat, listForeignChats, SOURCE_NAMES } from "../import/index";
 import type { Decision } from "../ledger/types";
 import { POPULAR_MCP_CATALOG } from "../mcp/catalog";
 import { parseEnvLines, parseHeaderLines } from "../mcp/parse-headers";
@@ -26,7 +27,6 @@ import {
   normalizeModelId,
 } from "../models/catalog";
 import { SessionStore } from "../storage/index";
-import type { SessionListing } from "../storage/sessions";
 import { createTelegramBridge, type TelegramBridgeHandle } from "../telegram/bridge";
 import { approvePairingCode } from "../telegram/pairing";
 import { createTurnCoordinator } from "../telegram/turn-coordinator";
@@ -131,7 +131,7 @@ import {
   type PlanQuestionsState,
   PlanView,
 } from "./plan";
-import { parseResumeCommand } from "./resume";
+import { foreignResumeChat, mergeResumeChats, parseResumeCommand, type ResumeChat } from "./resume";
 import { ResumePickerModal } from "./resume-picker";
 import { THOUGHT_DWELL_MS, useDwell, usePacedText } from "./reveal";
 import { buildScheduleBrowseRows, ScheduleBrowserModal } from "./schedule-modal";
@@ -675,7 +675,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [showRecapPicker, setShowRecapPicker] = useState(false);
   /** /resume: the saved chats listed, the cursor, whether they span every folder, and why one would not open. */
   const [resumePicker, setResumePicker] = useState<{
-    chats: SessionListing[];
+    chats: ResumeChat[];
     index: number;
     all: boolean;
     error: string | null;
@@ -2638,31 +2638,58 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
   const resetToNewSession = useCallback(() => showSession(agent.startNewSession()), [agent, showSession]);
 
-  /** /resume: the chats saved in this folder, or every folder, newest first; the one open now is left out. */
+  /**
+   * /resume: the chats saved in this folder, or every folder, newest first; the one open now is left out. Claude
+   * Code's and Codex's chats there are listed with them (the owner, 2026-10-03: "chats I want to recover").
+   */
   const openResumePicker = useCallback(
     (all: boolean) => {
-      let chats: SessionListing[] = [];
+      let saved: ResumeChat[] = [];
+      let foreign: ResumeChat[] = [];
       let error: string | null = null;
       try {
         const current = agent.getSessionId();
-        chats = new SessionStore(agent.getCwd()).listSessions({ all, limit: 50 }).filter((chat) => chat.id !== current);
+        saved = new SessionStore(agent.getCwd()).listSessions({ all, limit: 50 }).filter((chat) => chat.id !== current);
       } catch (cause) {
         error = cause instanceof Error ? cause.message : "The saved chats could not be read.";
       }
-      setResumePicker({ chats, index: 0, all, error });
+      try {
+        foreign = listForeignChats({ cwd: agent.getCwd(), all, limit: 50 }).map(foreignResumeChat);
+      } catch {
+        // Another agent's chats that cannot be read leave Shelra's own list as it is.
+      }
+      setResumePicker({ chats: mergeResumeChats(saved, foreign), index: 0, all, error });
     },
     [agent],
   );
 
-  /** Continues the chosen chat in place; the picker stays open with the reason when it cannot. */
+  /** A Claude Code or Codex chat being imported from /resume, so a second Enter does not import it twice. */
+  const importingChatRef = useRef(false);
+
+  /**
+   * Continues the chosen chat in place, importing another agent's chat as a Shelra chat first; the picker stays open
+   * with the reason when it cannot.
+   */
   const continueSavedChat = useCallback(
-    (chat: SessionListing) => {
+    async (chat: ResumeChat) => {
       if (isProcessingRef.current) {
         setResumePicker((picker) => picker && { ...picker, error: "Continue it after this turn (esc stops it)." });
         return;
       }
+      if (importingChatRef.current) return;
       try {
-        const snapshot = agent.openSavedSession(chat.id);
+        let id = chat.id;
+        if (chat.foreign) {
+          importingChatRef.current = true;
+          showNotice(`Importing the ${SOURCE_NAMES[chat.foreign.source]} chat`, 60_000);
+          try {
+            id = (await importForeignChat(chat.foreign, { fallbackCwd: agent.getCwd() })).sessionId;
+          } finally {
+            importingChatRef.current = false;
+            setNotice(null);
+          }
+        }
+        const snapshot = agent.openSavedSession(id);
         if (!snapshot) {
           setResumePicker(
             (picker) => picker && { ...picker, error: "This session does not save chats, so it cannot continue one." },
@@ -2672,7 +2699,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         showSession(snapshot);
         setResumePicker(null);
         // The header already names the chat; the notice only confirms the switch, short enough for 80 columns.
-        showNotice("Chat continued", 3200);
+        showNotice(chat.foreign ? `${SOURCE_NAMES[chat.foreign.source]} chat continued` : "Chat continued", 3200);
         setTimeout(scrollToBottom, 50);
       } catch (cause) {
         const error = cause instanceof Error ? cause.message : "The chat could not be opened.";
@@ -3978,7 +4005,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         }
         if (key.name === "return") {
           const chat = resumePicker.chats[resumePicker.index];
-          if (chat) continueSavedChat(chat);
+          if (chat) void continueSavedChat(chat);
           return;
         }
         return;

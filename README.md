@@ -141,7 +141,22 @@ shelra --session latest  # the latest one in this folder
 shelra -s <session-id>
 ```
 
-Works in interactive mode too—same flag.
+Works in interactive mode too—same flag. In the terminal UI, `/resume` lists them.
+
+**Continue a Claude Code or Codex chat:** `/resume` also lists the chats Claude Code
+(`~/.claude/projects`) and Codex (`~/.codex/sessions`) saved for this folder; Enter
+imports the chosen one as a Shelra chat and continues it. From the command line:
+
+```bash
+shelra import --list     # this folder's Claude Code and Codex chats (--all: every folder)
+shelra import            # import them all; each becomes a Shelra session
+shelra import <id>       # import one, from any folder, by its id (or the id's start)
+```
+
+An imported chat keeps its requests and replies as text, with each reply's tool calls
+named in a note (the files it changed, the commands it ran); their output is not kept.
+A long chat keeps its latest turns in full and lists its earlier requests and changed
+files in a summary, so a small model's context holds it. Each chat is imported once.
 
 **Structured headless output:**
 

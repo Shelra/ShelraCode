@@ -200,6 +200,22 @@ function createAutonomyLedgerSchema(db: SQLiteDatabase): void {
 function ensureLatestSchema(db: SQLiteDatabase): void {
   createSessionRecapSchema(db);
   createBenchmarkSchema(db);
+  createSessionImportSchema(db);
+}
+
+/** Which session a chat imported from another agent (Claude Code, Codex) became, so it is imported once. */
+function createSessionImportSchema(db: SQLiteDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_imports (
+      source TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      source_path TEXT NOT NULL,
+      source_updated_at TEXT NOT NULL,
+      imported_at TEXT NOT NULL,
+      PRIMARY KEY (source, source_id)
+    ) STRICT;
+  `);
 }
 
 /**

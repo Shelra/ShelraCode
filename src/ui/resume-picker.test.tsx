@@ -3,6 +3,7 @@ import { testRender } from "@opentui/react/test-utils";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import type { SessionListing } from "../storage/sessions";
+import { foreignResumeChat } from "./resume";
 import { ResumePickerModal } from "./resume-picker";
 import { dark } from "./theme";
 
@@ -55,6 +56,36 @@ describe("ResumePickerModal", () => {
     expect(frame).toContain("Fix the failing token refresh tests");
     expect(frame).toContain("yesterday");
     expect(frame).toContain("enter continue  tab every folder  esc close");
+  });
+
+  it("shows a Claude Code chat with the agent in place of its size", async () => {
+    const claude = foreignResumeChat({
+      source: "claude-code",
+      sourceId: "4f200c79-cb1a-4879-a1f6-c51eea1d6473",
+      path: "/home/dev/.claude/projects/-work-demo/4f200c79.jsonl",
+      title: "Chat import from other agents",
+      firstRequest: "Import my old chats",
+      cwd: "D:/PROYECTS/demo",
+      model: "claude-sonnet-5",
+      createdAt: new Date(now.getTime() - 9 * 3_600_000),
+      updatedAt: new Date(now.getTime() - 5 * 3_600_000),
+      bytes: 4096,
+    });
+    const { frame } = await frameOf(
+      <ResumePickerModal
+        t={dark}
+        chats={[...CHATS, claude]}
+        selectedIndex={2}
+        all={false}
+        width={90}
+        height={30}
+        error={null}
+        now={now}
+      />,
+    );
+    expect(frame).toContain("3 chats · this folder");
+    expect(frame).toContain("Chat import from other agents");
+    expect(frame).toContain("Claude Code chat · 5h ago · claude-sonnet-5");
   });
 
   it("marks the chosen chat with the cursor row", async () => {

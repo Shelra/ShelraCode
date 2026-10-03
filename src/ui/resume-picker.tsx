@@ -1,14 +1,13 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useEffect, useRef } from "react";
-import type { SessionListing } from "../storage/sessions";
 import { truncateText } from "./activity";
 import { SectionBadge } from "./components/badge";
-import { chatFolder, chatLabel, chatMeta, wrapWords } from "./resume";
+import { chatFolder, chatLabel, chatMeta, type ResumeChat, wrapWords } from "./resume";
 import { scrollbarStyle, type Theme } from "./theme";
 
 export interface ResumePickerProps {
   t: Theme;
-  chats: readonly SessionListing[];
+  chats: readonly ResumeChat[];
   selectedIndex: number;
   /** The list spans every folder, not only this one. */
   all: boolean;
@@ -21,7 +20,8 @@ export interface ResumePickerProps {
 
 /**
  * /resume: the chats saved in this folder (or every folder), newest first, each with what it was about,
- * its size, when it was last used and the model. Enter continues the chosen chat in place.
+ * its size, when it was last used and the model; Claude Code's and Codex's chats among them, named by the agent.
+ * Enter continues the chosen chat in place, importing another agent's first.
  */
 export function ResumePickerModal({ t, chats, selectedIndex, all, width, height, error, now }: ResumePickerProps) {
   const listRef = useRef<ScrollBoxRenderable>(null);

@@ -236,7 +236,7 @@ function firstRequestText(messageJson: string | null): string | null {
   }
 }
 
-function createSessionId(): string {
+export function createSessionId(): string {
   return randomUUID().replace(/-/g, "").slice(0, 12);
 }
 

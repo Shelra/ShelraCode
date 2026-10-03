@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { chatFolder, chatLabel, chatMeta, parseResumeCommand, relativeTime, wrapWords } from "./resume";
+import {
+  chatFolder,
+  chatLabel,
+  chatMeta,
+  foreignResumeChat,
+  mergeResumeChats,
+  parseResumeCommand,
+  relativeTime,
+  wrapWords,
+} from "./resume";
 
 const now = new Date(2026, 8, 25, 12, 0, 0);
 const ago = (minutes: number) => new Date(now.getTime() - minutes * 60_000);
@@ -45,6 +54,41 @@ describe("the /resume list", () => {
     expect(lines.at(-1)).toContain("ab12");
     expect(wrapWords("short one", 24)).toEqual(["short one"]);
     expect(wrapWords("x".repeat(50), 20)).toEqual(["x".repeat(20), "x".repeat(20), "x".repeat(10)]);
+  });
+
+  it("lists Claude Code's and Codex's chats among Shelra's by date, named by the agent", () => {
+    const codex = foreignResumeChat({
+      source: "codex",
+      sourceId: "01a0a31b-4ad3-7431-a80d-7c381b80405f",
+      path: "/home/dev/.codex/sessions/rollout.jsonl",
+      title: "Login endpoint",
+      firstRequest: "Fix the login endpoint",
+      cwd: "/work/api",
+      model: "gpt-5.6-luna",
+      createdAt: ago(300),
+      updatedAt: ago(120),
+      bytes: 2048,
+    });
+    const saved = {
+      id: "a1",
+      title: "Kart",
+      firstRequest: null,
+      messages: 3,
+      model: "openrouter/qwen/qwen3-coder",
+      mode: "agent" as const,
+      workspace: "/work/kart",
+      updatedAt: ago(60),
+    };
+
+    expect(codex).toMatchObject({
+      id: "codex:01a0a31b-4ad3-7431-a80d-7c381b80405f",
+      title: "Login endpoint",
+      workspace: "/work/api",
+    });
+    expect(chatMeta(codex, now)).toBe("Codex chat · 2h ago · gpt-5.6-luna");
+    expect(chatMeta({ ...codex, model: "" }, now)).toBe("Codex chat · 2h ago");
+    expect(mergeResumeChats([saved], [codex]).map((chat) => chat.id)).toEqual(["a1", codex.id]);
+    expect(mergeResumeChats([{ ...saved, updatedAt: ago(500) }], [codex])[0]?.id).toBe(codex.id);
   });
 
   it("reads /resume and /sessions, with or without every folder", () => {

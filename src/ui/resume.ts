@@ -1,4 +1,33 @@
+import { type ForeignChatListing, SOURCE_NAMES } from "../import/foreign-chats";
 import type { SessionListing } from "../storage/sessions";
+
+/**
+ * A row of the /resume list: a chat Shelra saved, or one Claude Code or Codex saved (`foreign`), which Enter imports
+ * as a Shelra chat before continuing it.
+ */
+export interface ResumeChat extends SessionListing {
+  foreign?: ForeignChatListing;
+}
+
+/** Another agent's chat as a /resume row: its size is not known until it is read, so it shows no message count. */
+export function foreignResumeChat(chat: ForeignChatListing): ResumeChat {
+  return {
+    id: `${chat.source}:${chat.sourceId}`,
+    title: chat.title,
+    firstRequest: chat.firstRequest,
+    messages: 0,
+    model: chat.model ?? "",
+    mode: "agent",
+    workspace: chat.cwd ?? "",
+    updatedAt: chat.updatedAt,
+    foreign: chat,
+  };
+}
+
+/** Shelra's chats and other agents' in one list, newest first. */
+export function mergeResumeChats(saved: readonly ResumeChat[], foreign: readonly ResumeChat[]): ResumeChat[] {
+  return [...saved, ...foreign].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
 
 /** What a saved chat is called in the /resume list: its title, else what the user first asked. */
 export function chatLabel(chat: Pick<SessionListing, "title" | "firstRequest">): string {
@@ -25,13 +54,20 @@ function shortModel(model: string): string {
   return model.split("/").pop() || model;
 }
 
-/** The second line of a chat in the list: its size, when it was last used and the model. */
-export function chatMeta(chat: Pick<SessionListing, "messages" | "updatedAt" | "model">, now: Date): string {
+/**
+ * The second line of a chat in the list: its size, when it was last used and the model; for another agent's chat,
+ * that agent in place of the size.
+ */
+export function chatMeta(chat: Pick<ResumeChat, "messages" | "updatedAt" | "model" | "foreign">, now: Date): string {
   return [
-    `${chat.messages} message${chat.messages === 1 ? "" : "s"}`,
+    chat.foreign
+      ? `${SOURCE_NAMES[chat.foreign.source]} chat`
+      : `${chat.messages} message${chat.messages === 1 ? "" : "s"}`,
     relativeTime(chat.updatedAt, now),
-    shortModel(chat.model),
-  ].join(" · ");
+    chat.model ? shortModel(chat.model) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /**
