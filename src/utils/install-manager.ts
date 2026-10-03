@@ -223,9 +223,31 @@ export function parseChecksumsFile(contents: string): Map<string, string> {
   return result;
 }
 
+/**
+ * A copy a package manager owns (npm, bun, pnpm and yarn put the binary under `node_modules`): the command that
+ * updates it. Replacing that binary in place would leave the package manager's record behind.
+ */
+export function packageManagerUpdateCommand(execPath = process.execPath): string | null {
+  const normalized = execPath.replaceAll("\\", "/").toLowerCase();
+  if (!normalized.includes("/node_modules/")) return null;
+  if (normalized.includes("/.bun/")) return "bun add -g shelra@latest";
+  if (normalized.includes("/pnpm/") || normalized.includes("/.pnpm/")) return "pnpm add -g shelra@latest";
+  if (normalized.includes("/yarn/")) return "yarn global add shelra@latest";
+  return "npm install -g shelra@latest";
+}
+
 export async function runScriptManagedUpdate(currentVersion: string): Promise<ScriptUpdateRunResult> {
+  const managed = packageManagerUpdateCommand();
+  if (managed) {
+    return {
+      success: false,
+      output: `This ShelraCode was installed with a package manager. Update it with: ${managed}`,
+    };
+  }
   const context = getScriptInstallContext();
   if (!context) return notScriptManaged("update");
+  // What an earlier update moved aside goes now, even when there is nothing new to install.
+  clearReplacedBinaries(context.binaryPath);
 
   const normalizedCurrent = semverValid(currentVersion);
   if (!normalizedCurrent) {
@@ -461,6 +483,26 @@ function applyWindowsUpdate(
   return { success: true, output: `Updated ShelraCode to ${release.version}. Restart the CLI to use the new version.` };
 }
 
+/** Removes the binaries earlier updates moved aside (`<target>.old-<time>`); one still running stays for a later update. */
+export function clearReplacedBinaries(target: string): void {
+  const dir = path.dirname(target);
+  const base = path.basename(target);
+  let names: string[] = [];
+  try {
+    names = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.startsWith(`${base}.old-`)) continue;
+    try {
+      fs.rmSync(path.join(dir, name), { force: true });
+    } catch {
+      // Still running in another open CLI: it goes at a later update.
+    }
+  }
+}
+
 /**
  * Puts `downloadedPath` where `target` is, while `target` may be running. Windows refuses to delete or overwrite a
  * running executable but lets it be renamed, so the old one is moved aside (`<target>.old-<time>`, removed by the next
@@ -470,16 +512,7 @@ function applyWindowsUpdate(
  * failure puts the old binary back and says why. Never throws.
  */
 export function replaceBinaryInPlace(downloadedPath: string, target: string): ScriptUpdateRunResult {
-  const dir = path.dirname(target);
-  const base = path.basename(target);
-  for (const name of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
-    if (!name.startsWith(`${base}.old-`)) continue;
-    try {
-      fs.rmSync(path.join(dir, name), { force: true });
-    } catch {
-      // Still running in another open CLI: it goes at a later update.
-    }
-  }
+  clearReplacedBinaries(target);
   const aside = `${target}.old-${Date.now()}`;
   let movedAside = false;
   try {

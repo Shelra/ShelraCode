@@ -134,3 +134,6 @@ __pycache__/
 # The account service (Bun API + Supabase) lives only in the owner's checkout, not in this public repository
 # (owner, 2026-09-25).
 backend/
+
+# npm tarballs built by scripts/npm-publish.ts
+npm-dist/

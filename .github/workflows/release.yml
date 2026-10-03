@@ -132,3 +132,61 @@ jobs:
             release-assets/**/shelra-darwin-arm64
             release-assets/**/shelra-windows-x64.exe
             release-assets/checksums.txt
+
+  # npm, bun, pnpm and yarn all install from the npm registry: the release's own binaries, checked against its
+  # checksums.txt, go there as `shelra` and one package per platform (scripts/npm-publish.ts). Without an NPM_TOKEN
+  # secret the release stays on GitHub alone. A pre-release goes to the `next` tag, never `latest`.
+  npm:
+    needs: publish
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      INPUT_VERSION: ${{ github.event.inputs.version }}
+      REF_NAME: ${{ github.ref_name }}
+
+    steps:
+      - name: Check for an npm token
+        id: token
+        shell: bash
+        run: |
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No NPM_TOKEN secret: this release is not published to npm."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+
+      - name: Setup Bun
+        if: steps.token.outputs.present == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.1
+
+      - name: Setup Node for npm
+        if: steps.token.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        if: steps.token.outputs.present == 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Publish to npm
+        if: steps.token.outputs.present == 'true'
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then tag="$INPUT_VERSION"; else tag="$REF_NAME"; fi
+          case "$tag" in
+            *-rc*|*-alpha*|*-beta*|*-pre*) dist_tag="--tag next" ;;
+            *) dist_tag="" ;;
+          esac
+          bun run scripts/npm-publish.ts --version "$tag" --publish $dist_tag
