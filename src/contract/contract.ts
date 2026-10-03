@@ -26,6 +26,8 @@ export interface ObservedCheckRun {
   beforeFirstChange: boolean;
   /** For the host's own run of a decision check that reached no verdict: why (see `ContractCheckResult`). */
   unrunnable?: string;
+  /** The run reached an end of its own, not a time limit (known for a passing run and for the host's runs). */
+  finished?: boolean;
 }
 
 /**
@@ -56,6 +58,8 @@ export interface ContractCheckResult {
    * or running it would do damage): why. Such a check vouches for nothing, and says nothing against the change either.
    */
   unrunnable?: string;
+  /** What the host's own run printed, a pass included (Go's `[no test files]` exits 0). */
+  output?: string;
 }
 
 /** Runs one check command in the agent's workspace, the way the agent's own shell would. */
@@ -145,8 +149,10 @@ function unrunnableCheck(
 ): string | undefined {
   const reason = checkCouldNotRun(end, check.command);
   if (!reason || check.kind === "decision") return reason ?? undefined;
-  if (end.state === "timed_out") return finishedBefore ? undefined : reason;
   if (end.state === "refused" || end.state === "killed") return reason;
+  // It ran here before the change: what stops it now (a timeout, a program gone missing) the change did.
+  if (finishedBefore) return undefined;
+  if (end.state === "timed_out") return reason;
   if (parseFailures(end.output).length > 0 || RAN_TESTS.test(end.output)) return undefined;
   const missing = missingCommands(end.output);
   if (missing.length === 0) return reason;
@@ -176,11 +182,16 @@ export async function evaluateTurnContract(input: {
     const earlier = input.runs.filter((run) => isSameCheck(run.command, check) && run.beforeFirstChange);
     return { failedBefore: earlier.some((run) => !run.passed), passedBefore: earlier.some((run) => run.passed) };
   };
-  // A run before the change that reached an end: then a timeout now is something the change did.
+  // A run before the change that reached an end of its own: then a timeout now, or a program gone missing, is
+  // something the change did. Only a run known to have finished counts: a suite the diagnosis budget cut off left
+  // partial output that reads like an end (review 2026-10-03).
   const finishedBefore = (check: ContractCheck) =>
     input.runs.some(
       (run) =>
-        isSameCheck(run.command, check) && run.beforeFirstChange && !run.unrunnable && !/timed out/iu.test(run.detail),
+        isSameCheck(run.command, check) &&
+        run.beforeFirstChange &&
+        (run.passed || run.finished === true) &&
+        !run.unrunnable,
     );
   for (const check of input.checks) {
     const latest = input.runs.filter((run) => isSameCheck(run.command, check)).at(-1);
@@ -277,6 +288,7 @@ export async function evaluateTurnContract(input: {
           : run?.output || result?.detail || `\`${check.command}\` did not run`,
         ...before(check),
         ...(unrunnable ? { unrunnable } : {}),
+        ...(run ? { output: run.output } : {}),
       });
     });
   }

@@ -116,5 +116,7 @@ describe("failuresWithin", () => {
     // A list cut at the parser's limit may hide a new failure past it.
     const many = Array.from({ length: 13 }, (_, index) => `(fail) case ${index} [1.00ms]`).join("\n");
     expect(failuresWithin(`${many}\n(fail) a new one [1.00ms]\n`, many)).toBe(false);
+    // A summary that counts more than before has something the parser did not read (a pytest collection error).
+    expect(failuresWithin(before.replace(" 2 fail", " 2 fail\n 1 error"), before)).toBe(false);
   });
 });

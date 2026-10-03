@@ -171,6 +171,14 @@ export function failuresWithin(after: string, before: string): boolean {
   const now = parseFailures(after);
   const then = parseFailures(before);
   if (now.length === 0 || then.length === 0 || now.length >= MAX_FAILURES || then.length >= MAX_FAILURES) return false;
+  // A summary that counts more failures or errors than before has something new the parser did not read (a pytest
+  // collection ERROR beside the old FAILED lines).
+  const stated = (output: string) =>
+    [...output.replace(ANSI_RE, "").matchAll(/\b(\d+)\s+(?:failed|fail|failing|failures?|errors?)\b/giu)].reduce(
+      (sum, match) => sum + Number(match[1]),
+      0,
+    );
+  if (stated(after) > stated(before)) return false;
   const key = (failure: CheckFailure) =>
     [
       failure.name?.trim() ?? "",

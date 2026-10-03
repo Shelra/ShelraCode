@@ -57,28 +57,58 @@ function bodyOf(text: string, keepIndent: boolean): string[] {
     .filter((line) => line.trim() !== "");
 }
 
-/** The lines of `long` left over once `short` is matched in order, or null when `short` is not in it in order. */
-function addedLines(short: readonly string[], long: readonly string[]): string[] | null {
-  const added: string[] = [];
+/**
+ * `long` line by line, each marked kept (matched, in order, against `short`) or added; null when `short` is not in it
+ * in order.
+ */
+function alignLines(short: readonly string[], long: readonly string[]): Array<{ line: string; kept: boolean }> | null {
+  const aligned: Array<{ line: string; kept: boolean }> = [];
   let index = 0;
   for (const line of long) {
-    if (index < short.length && line === short[index]) index += 1;
-    else added.push(line);
+    const kept = index < short.length && line === short[index];
+    if (kept) index += 1;
+    aligned.push({ line, kept });
   }
-  return index === short.length ? added : null;
+  return index === short.length ? aligned : null;
 }
 
+/** `.only` silences every other test, the kept ones included, wherever it is added. */
+const ONLY_RE = /\.only\s*\(|\bfdescribe\s*\(|\bfit\s*\(/u;
+/** A marker that skips the test or block right after it: harmful when that block is one the test already had. */
+const SKIP_MARKER_RE =
+  /\.(?:skip|todo)\s*\(|\b(?:xit|xdescribe|xtest|xcontext)\s*\(|@pytest\.mark\.(?:skip|skipif|xfail)\b|@unittest\.(?:skip|expectedFailure)\b/u;
+/** A line that stops what follows it from running or asserting: an early return, a comment or string opened, a dead branch, a skip call. */
+const CUTS_FLOW_RE =
+  /^(?:return\b|\/\*|"""|'''|if\s*\(?\s*(?:false|False|0|None)\s*\)?\s*[:{]?\s*$)|\bpytest\.skip\(|\bt\.Skip(?:Now|f)?\(|\bself\.skipTest\(|\bthis\.skip\(/u;
+/** The start of a declaration, test or block of its own: code after a cut-off helper that the cut does not reach. */
+const OPENS_BLOCK_RE =
+  /^(?:(?:export\s+)?(?:async\s+)?(?:function|class|def|func)\b|(?:export\s+)?(?:const|let|var)\s+\w+\s*=|@|(?:test|it|describe|suite|context|beforeEach|afterEach|beforeAll|afterAll)(?:\.\w+)?\s*\(|[})\]]+[;,)]*$)/u;
+
 /**
- * An added line that can stop a kept test from asserting anything: an early return, a comment opened around code, a
- * dead branch, a skip, an `.only` that silences the rest.
+ * The first added line that can stop a test the file already had from asserting anything (review 2026-10-03): an
+ * `.only` anywhere; a skip marker right before a kept line; a cut (an early return, an opened comment or string, a dead
+ * branch, a skip call) whose next kept line is a statement it would stop, not the start of a block of its own. A new
+ * helper's `return` or a new test's own skip is left alone.
  */
-const DISABLES_RE =
-  /^(?:return\b|\/\*|if\s*\(?\s*(?:false|False|0|None)\s*\)?\s*[:{]?\s*$)|\.(?:skip|only|todo)\s*\(|\b(?:xit|xdescribe|xtest|xcontext)\s*\(|@pytest\.mark\.(?:skip|xfail)|@unittest\.(?:skip|expectedFailure)|\bpytest\.skip\(|\bt\.Skip(?:Now|f)?\(|\bself\.skipTest\(|\bthis\.skip\(/u;
+function disablingLine(aligned: ReadonlyArray<{ line: string; kept: boolean }>): string | null {
+  for (const [index, { line, kept }] of aligned.entries()) {
+    if (kept) continue;
+    const text = line.trim();
+    if (ONLY_RE.test(text)) return text;
+    if (SKIP_MARKER_RE.test(text) && aligned[index + 1]?.kept) return text;
+    if (CUTS_FLOW_RE.test(text)) {
+      const next = aligned.slice(index + 1).find((entry) => entry.kept);
+      if (next && !OPENS_BLOCK_RE.test(next.line.trim())) return text;
+    }
+  }
+  return null;
+}
 
 /** An import line with its module left out, so a moved module's new import pairs with its old one. */
 function bindingOf(line: string): string {
   return line
     .trim()
+    .replace(/;$/u, "")
     .replace(/(['"])[^'"]+\1/u, "<>")
     .replace(/^from\s+[\w.]+\s+import\b/u, "from <> import")
     .replace(/^import\s+[\w.]+(\s+as\s+\w+)?;?$/u, "import <>$1");
@@ -139,10 +169,10 @@ export function originalTestToRun(
   existedBefore: (relativePath: string) => boolean,
 ): { original: string; movedImports: string[] } | { refused: string } {
   const python = testPath.endsWith(".py");
-  const added = addedLines(bodyOf(before, python), bodyOf(after, python));
-  if (added === null) return { refused: "it removed or rewrote a line of the test" };
-  const disabling = added.find((line) => DISABLES_RE.test(line.trim()));
-  if (disabling) return { refused: `it added a line that can skip or cut short a test (\`${disabling.trim()}\`)` };
+  const aligned = alignLines(bodyOf(before, python), bodyOf(after, python));
+  if (aligned === null) return { refused: "it removed or rewrote a line of the test" };
+  const disabling = disablingLine(aligned);
+  if (disabling) return { refused: `it added a line that can skip or cut short a test (\`${disabling}\`)` };
   const beforeImports = new Set(
     lines(before)
       .filter(isImportLine)

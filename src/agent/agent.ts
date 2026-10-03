@@ -392,9 +392,12 @@ function verifyFiles(workspace: string): Map<string, string> {
     for (const entry of entries) {
       if (files.size >= 20) return;
       const path = `${relative}/${entry.name}`;
-      if (entry.isDirectory()) walk(path, depth + 1);
-      else if (entry.isFile() && statSync(join(workspace, path)).size <= 200_000) {
-        files.set(path, readFileSync(join(workspace, path), "utf8"));
+      if (entry.isDirectory()) {
+        if (entry.name !== "__pycache__" && entry.name !== "node_modules") walk(path, depth + 1);
+      } else if (entry.isFile() && statSync(join(workspace, path)).size <= 200_000) {
+        const bytes = readFileSync(join(workspace, path));
+        // Only text: a compiled cache file read as UTF-8 would come back corrupted.
+        if (!bytes.includes(0)) files.set(path, bytes.toString("utf8"));
       }
     }
   };
@@ -2578,8 +2581,10 @@ export class Agent {
   }): Promise<{ check: IndependentCheck; run: ContractRun } | { unavailable: string; touched?: string[] }> {
     const runner = testRunnerHint(input.workspace, input.changedFiles);
     if (!runner) return { unavailable: "no test runner can run a test kept outside the project's packages" };
-    // Whatever happens, nothing the checker wrote is left where the project's own runner would find it.
+    // Whatever happens, nothing the checker wrote is left where the project's own runner would find it, and nothing
+    // the turn put in its folder (a conftest) becomes part of its check.
     try {
+      clearVerifyDir(input.workspace);
       const before = captureWorkspaceState(input.workspace);
       const result = await this.runTask(
         {
@@ -2719,9 +2724,10 @@ export class Agent {
           }
         }
         if (run.passed) continue;
-        // Failures the run before the work already had are not the edit's doing.
+        // Failures the run before the work already had are not the edit's doing; a scoped run's are a part of the
+        // whole suite's.
         const before = input.beforeRuns.filter((earlier) => isSameCheck(earlier.command, check)).at(-1);
-        if (command === check.command && before && failuresWithin(run.output, before.detail)) continue;
+        if (before && failuresWithin(run.output, before.detail)) continue;
         const couldNotRun = checkCouldNotRun(
           { state: run.state ?? "completed", exitCode: run.exitCode ?? null, output: run.output },
           command,
@@ -3158,7 +3164,7 @@ export class Agent {
     // The project's state before the work (src/agent/pre-work.ts): asked to check, fix, continue or test a project
     // that states its checks, the host runs them on the code as the turn found it and hands the model the results as
     // its own run would read, before it changes anything. A check that would do damage is not run.
-    const preWorkRuns: Array<{ command: string; passed: boolean; output: string }> = [];
+    const preWorkRuns: Array<{ command: string; passed: boolean; output: string; finished: boolean }> = [];
     if (
       this.mode === "agent" &&
       !this.ablations.has("gate") &&
@@ -3177,7 +3183,13 @@ export class Agent {
           cwd: workspace,
         }).catch((error: unknown) => ({ passed: false, output: String(error), durationMs: 0 }));
         if (signal.aborted) break;
-        preWorkRuns.push({ command: check.command, passed: run.passed, output: run.output });
+        // Whether it reached an end of its own: a suite cut off by the diagnosis budget did not (review 2026-10-03).
+        preWorkRuns.push({
+          command: check.command,
+          passed: run.passed,
+          output: run.output,
+          finished: run.passed || ("state" in run && run.state === "completed"),
+        });
         const callId = `diagnosis-${preWorkRuns.length}-${Date.now().toString(36)}`;
         const input = { command: check.command };
         const call: ToolCall = {
@@ -3648,6 +3660,8 @@ export class Agent {
       cwd: string;
       /** A host run of a decision check that reached no verdict keeps that judgment when it is reused. */
       unrunnable?: string;
+      /** The run reached an end of its own, not a time limit: known for a passing run and for the host's runs. */
+      finished?: boolean;
     }> = [];
     // The checks the host ran before the work are runs on the code as the turn found it: a failure among them
     // predates the turn, and a pass that fails later is a regression the turn caused.
@@ -3659,6 +3673,7 @@ export class Agent {
         mutationEvents: 0,
         state: turnStartState,
         cwd: turnStartWorkspace,
+        finished: run.finished,
       });
     }
 
@@ -4017,6 +4032,7 @@ export class Agent {
                       mutationEvents: turnMutationEvents,
                       state: captureWorkspaceState(turnStartWorkspace),
                       cwd: this.bash.getCwd(),
+                      finished: tr.success && hostSawFailure === null,
                     });
                   }
                 }
@@ -4810,6 +4826,7 @@ export class Agent {
                     turnStartState !== null &&
                     changedPaths(turnStartState, run.state)?.length === 0,
                   ...(run.unrunnable ? { unrunnable: run.unrunnable } : {}),
+                  ...(run.finished ? { finished: true } : {}),
                 })),
                 workspace: turnStartWorkspace,
                 runCheck: (command, options) => {
@@ -4846,12 +4863,18 @@ export class Agent {
                 return index >= 0 ? (again[index] ?? result) : result;
               });
             }
-            // A scoped run that found no test for the changed files ran nothing: nothing to fix, and no pass.
-            results = results.map((result) =>
-              !result.passed && result.check.source.endsWith(SCOPED) && !result.unrunnable && ranNoTest(result.detail)
-                ? { ...result, unrunnable: "no test covers the files this turn changed" }
-                : result,
-            );
+            // A scoped run that found no test for the changed files ran nothing: nothing to fix, and no pass (Go's
+            // `[no test files]` exits 0).
+            results = results.map((result) => {
+              if (!result.check.source.endsWith(SCOPED) || result.unrunnable) return result;
+              const output = result.output ?? result.detail;
+              const ranNothing = result.passed
+                ? /\[no test files\]/u.test(output) && !/^ok\s/mu.test(output)
+                : ranNoTest(output);
+              return ranNothing
+                ? { ...result, passed: false, unrunnable: "no test covers the files this turn changed" }
+                : result;
+            });
             results = [
               ...results,
               ...tooSlow.map((check): (typeof results)[number] => ({

@@ -93,6 +93,43 @@ describe("the original of a test a turn changed, when the change only added to i
     expect(originalTestToRun(py, hidden, "tests/test_slug.py", nothingExists, () => true)).toEqual({
       refused: "it removed or rewrote a line of the test",
     });
+    // A skip put on a test the file already had, a docstring opened over its asserts, an `.only` anywhere.
+    const pyTwo = `${py}\ndef test_lower():\n    assert slugify('AB') == 'ab'\n`;
+    expect(
+      originalTestToRun(
+        pyTwo,
+        pyTwo.replace("def test_lower", "@pytest.mark.skip\ndef test_lower"),
+        "t/test_s.py",
+        nothingExists,
+        () => true,
+      ),
+    ).toEqual({ refused: "it added a line that can skip or cut short a test (`@pytest.mark.skip`)" });
+    expect(
+      originalTestToRun(py, py.replace("    assert", '    """\n    assert'), "t/test_s.py", nothingExists, () => true),
+    ).toEqual({ refused: 'it added a line that can skip or cut short a test (`"""`)' });
+    expect(
+      originalTestToRun(BEFORE, `${BEFORE}test.only('new', () => {});\n`, "src/slug.test.ts", nothingExists, slugWas),
+    ).toEqual({ refused: "it added a line that can skip or cut short a test (`test.only('new', () => {});`)" });
+  });
+
+  it("leaves alone what a new test or helper adds: its returns, docs and its own skip (review 2026-10-03)", () => {
+    const helper = `${BEFORE}/** The cases the request lists. */\nfunction cases() {\n  return [['A b', 'a-b']];\n}\ntest.skip('later', () => {\n  return;\n});\ntest('lists', () => {\n  for (const [input, out] of cases()) expect(slugify(input)).toBe(out);\n});\n`;
+    expect(originalTestToRun(BEFORE, helper, "src/slug.test.ts", nothingExists, slugWas)).toEqual({
+      original: BEFORE,
+      movedImports: [],
+    });
+    // A pytest fixture between two kept tests.
+    const py = "def test_a():\n    assert 1\n\ndef test_b():\n    assert 2\n";
+    const fixture = py.replace("def test_b", "@pytest.fixture\ndef pair():\n    return (2, 3)\n\ndef test_b");
+    expect(originalTestToRun(py, fixture, "tests/test_x.py", nothingExists, () => true)).toEqual({
+      original: py,
+      movedImports: [],
+    });
+    // An import re-pointed at a moved module that only drops its semicolon.
+    const moved = BEFORE.replace("import { slugify } from './slug';", 'import { slugify } from "./text/slug"');
+    expect(
+      originalTestToRun(BEFORE, moved, "src/slug.test.ts", (path) => path === "src/text/slug.ts", slugWas),
+    ).toMatchObject({ movedImports: ["import { slugify } from './slug';"] });
   });
 
   it("follows a module that moved, with the original's assertions and the new import", () => {

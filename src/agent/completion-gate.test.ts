@@ -1392,6 +1392,38 @@ describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's t
     expect(checkRunner.mock.calls.map(([command]) => command)).toContain("go test ./lib/auth");
   });
 
+  it("still narrows a slow suite when the run before the work was cut off with partial output (second review)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-cut-prework-"));
+    writeFileSync(join(dir, "go.mod"), "module example.com/app\n");
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Done." }], ["lib/auth/token.go"]);
+    const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+      command === "go test ./..."
+        ? // Cut off by the time limit, after printing what it had: partial output with no "timed out" in it.
+          {
+            passed: false,
+            output: "ok  \texample.com/app/lib/a\t1.2s\n",
+            durationMs: 1_000,
+            state: "timed_out",
+            exitCode: null,
+          }
+        : { passed: true, output: "ok", durationMs: 5 },
+    );
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner,
+      checkTimeoutMs: 240_000,
+    });
+
+    // "Fix" makes the host run the checks before the work.
+    const text = await run(agent, "Fix the token expiry in lib/auth/token.go");
+
+    expect(checkRunner.mock.calls.map(([command]) => command)).toContain("go test ./lib/auth");
+    expect(text).toContain("`go test ./lib/auth` passed");
+    expect(text).not.toContain("Not verified");
+  });
+
   it("counts a scoped run that found no test for the change as no run, not a pass (review 2026-10-03)", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const dir = mkdtempSync(join(tmpdir(), "shelra-scoped-none-"));
