@@ -1,6 +1,7 @@
 import { formatDecisionsForPrompt } from "../ledger/prompt";
 import { listDecisions } from "../ledger/store";
 import { isLspToolEnabled } from "../lsp/runtime";
+import { documentLines, refreshDocIndex, replacementsFrom } from "../memory/docs-index";
 import {
   describeEpisode,
   describeOpenPlans,
@@ -17,8 +18,15 @@ import {
   type MemoryContext,
   noteWhenNothingMatches,
 } from "../memory/retrieval";
-import { listArchivedEntries, listMemoryRecords, listUserMemoryRecords, projectMemoryScope } from "../memory/store";
+import {
+  listArchivedEntries,
+  listMemoryRecords,
+  listUserMemoryRecords,
+  projectMemoryScope,
+  readMemoryEntry,
+} from "../memory/store";
 import { isContinuationRequest } from "../memory/terms";
+import type { MemoryRecord, MemoryScope } from "../memory/types";
 import { getModelInfo } from "../models/catalog";
 import { isShuruSupported } from "../tools/bash";
 import type { AgentMode, TaskRequest } from "../types/index";
@@ -243,8 +251,9 @@ export function memoryContextFor(
 ): MemoryContext {
   try {
     const scope = projectMemoryScope(cwd);
+    const projectRecords = listMemoryRecords(scope);
     const context = buildMemoryContext(
-      [...listMemoryRecords(scope), ...listUserMemoryRecords()],
+      [...projectRecords, ...listUserMemoryRecords()],
       { text: query, paths, ...(previous ? { previous } : {}) },
       cwd,
       { archived: listArchivedEntries(scope) },
@@ -264,7 +273,10 @@ export function memoryContextFor(
             describeOpenPlans(open),
           )
         : withLessons;
-    if (!isContinuationRequest(query)) return open.length > 0 ? withPlans : noteWhenNothingMatches(withPlans);
+    const documents = documentsFor(scope, cwd, query, projectRecords);
+    if (!isContinuationRequest(query)) {
+      return withDocuments(open.length > 0 ? withPlans : noteWhenNothingMatches(withPlans), documents);
+    }
     // A request to carry on is about the latest work, whatever its words: it gets the newest turns, and never the
     // note that the project is new to memory (doc 20, TEST E9; doc 21 §5.7).
     const shown = new Set(withPlans.episodes ?? []);
@@ -272,15 +284,44 @@ export function memoryContextFor(
       .reverse()
       .filter((episode) => !shown.has(episode.at))
       .slice(0, 3);
-    return appendRecentWork(
-      withPlans,
-      recent.map((episode) => describeEpisode(episode)),
-      recent.map((episode) => episode.at),
+    return withDocuments(
+      appendRecentWork(
+        withPlans,
+        recent.map((episode) => describeEpisode(episode)),
+        recent.map((episode) => episode.at),
+      ),
+      documents,
     );
   } catch (error) {
     recordSwallowedError("memory.retrieve", error);
     return { text: "", expanded: [], listed: [] };
   }
+}
+
+/**
+ * The project's documents as pointers (doc 21, Phase C): what the README says the project is, the documents the
+ * request is about, each flagged when it still states a term the project replaced, and an instruction file written for
+ * another agent. Memory never copies them; nothing when the project has none.
+ */
+function documentsFor(scope: MemoryScope, root: string, request: string, records: readonly MemoryRecord[]): string[] {
+  try {
+    const index = refreshDocIndex(scope, root);
+    if (index.entries.length === 0) return [];
+    const replacements = replacementsFrom(records, listDecisions(root), (slug) => readMemoryEntry(scope, slug).entry);
+    return documentLines(index, request, root, replacements);
+  } catch (error) {
+    recordSwallowedError("memory.docs", error);
+    return [];
+  }
+}
+
+function withDocuments(context: MemoryContext, lines: readonly string[]): MemoryContext {
+  if (lines.length === 0) return context;
+  const block = [
+    "PROJECT DOCUMENTS (pointers: read a file when the task needs it; the file is the authority, not this line):",
+    ...lines,
+  ].join("\n");
+  return { ...context, text: context.text ? `${context.text}\n\n${block}` : block };
 }
 
 export function buildConversationSystemPrompt(cwd: string): string {

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -181,6 +181,32 @@ describe("automatic project memory consultation", () => {
     }
 
     expect(provider.lastRequest?.system).not.toContain("PROJECT MEMORY:");
+  });
+
+  it("points the turn to the project's documents: the README's description and the document the request is about (doc 21, Phase C)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-memory-context-docs-"));
+    tempDirs.push(cwd);
+    await mkdir(path.join(cwd, "docs"), { recursive: true });
+    await writeFile(path.join(cwd, "README.md"), "# apiclient\n\nA small HTTP client for the billing API.\n");
+    await writeFile(
+      path.join(cwd, "docs", "SECURITY.md"),
+      "# Security rules\n\nAPI tokens must never be written to logs.\n",
+    );
+    await writeFile(path.join(cwd, "docs", "RELEASING.md"), "# Releasing\n\nTag the commit and publish.\n");
+
+    process.chdir(cwd);
+    const provider = new CapturingProvider();
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    for await (const _chunk of agent.processMessage("Add request logging to the HTTP client")) {
+      // drain
+    }
+
+    const system = provider.lastRequest?.system ?? "";
+    const block = system.slice(system.indexOf("PROJECT DOCUMENTS (pointers")).split("\n\n")[0] ?? "";
+    expect(block).toContain("- README.md: apiclient — A small HTTP client for the billing API.");
+    expect(block).toContain("- docs/SECURITY.md: Security rules — API tokens must never be written to logs.");
+    expect(block).not.toContain("RELEASING.md");
   });
 
   it("gives a request to continue the latest work, never the note that the project is new (doc 20, TEST E9)", async () => {
