@@ -41,7 +41,7 @@ import {
   ruleViolations,
 } from "../contract/rule-guards";
 import { SCOPED, scopedCheck } from "../contract/scope";
-import { isTestFile, originalTestToRun, requestAllowsTestEdits } from "../contract/test-protection";
+import { deletedWithItsCode, isTestFile, originalTestToRun, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
 import type {
   NotificationHookInput,
@@ -330,7 +330,10 @@ const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
 /** Marks, in a contract check's source, a check the turn itself defined in a project that stated none. */
 const DEFINED_THIS_TURN = "defined this turn";
 /** Whether the existing tests a turn changed still hold as they were (Agent.originalTestsHold). */
-type OriginalTestsOutcome = { passed: true; moved: string[] } | { passed: false; detail: string } | { refused: string };
+type OriginalTestsOutcome =
+  | { passed: true; moved: string[]; removed: string[] }
+  | { passed: false; detail: string }
+  | { refused: string };
 
 /** A file's size and modification time: when it changes, an earlier run of its tests no longer speaks for it. */
 function fileStamp(path: string): string {
@@ -1807,7 +1810,6 @@ export class Agent {
     start: WorkspaceState | null,
     include: (path: string) => boolean = isGuardedSource,
   ): ChangedFile[] {
-    const journal = this.attemptJournal.beforeTurn();
     const files: ChangedFile[] = [];
     for (const path of paths.filter(include).slice(0, 60)) {
       const full = join(cwd, path);
@@ -1818,26 +1820,33 @@ export class Agent {
       } catch {
         continue;
       }
-      const folded = foldPath(path);
-      const entry = journal.find(([journaled]) => {
-        const key = foldPath(journaled);
-        return key === folded || key.endsWith(`/${folded}`) || folded.endsWith(`/${key}`);
-      })?.[1];
-      let before: string | null = null;
-      if (entry) before = entry.previousExisted ? (entry.previousContent ?? "") : "";
-      else if (start && !existedAt(start, cwd, path)) before = "";
-      else if (start?.kind === "git" && !start.files.has(path)) {
-        const shown = spawnSync("git", ["-C", cwd, "show", `HEAD:./${path}`], {
-          encoding: "utf8",
-          timeout: 3_000,
-          windowsHide: true,
-          maxBuffer: 4 * 1024 * 1024,
-        });
-        if (shown.status === 0) before = shown.stdout ?? "";
-      }
+      const before = this.textBeforeTurn(cwd, path, start);
       if (before !== null) files.push({ path, before, after });
     }
     return files;
+  }
+
+  /**
+   * A file's text when the turn started: the journal's copy when a file tool changed it, "" when it did not exist, else
+   * the version committed at the turn's start (not HEAD, which a turn that committed has moved) when the file had no
+   * uncommitted change then. Null when it cannot be known.
+   */
+  private textBeforeTurn(cwd: string, path: string, start: WorkspaceState | null): string | null {
+    const folded = foldPath(path);
+    const entry = this.attemptJournal.beforeTurn().find(([journaled]) => {
+      const key = foldPath(journaled);
+      return key === folded || key.endsWith(`/${folded}`) || folded.endsWith(`/${key}`);
+    })?.[1];
+    if (entry) return entry.previousExisted ? (entry.previousContent ?? "") : "";
+    if (start && !existedAt(start, cwd, path)) return "";
+    if (start?.kind !== "git" || start.files.has(path)) return null;
+    const shown = spawnSync("git", ["-C", cwd, "show", `${start.head?.commit ?? "HEAD"}:./${path}`], {
+      encoding: "utf8",
+      timeout: 3_000,
+      windowsHide: true,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    return shown.status === 0 ? (shown.stdout ?? "") : null;
   }
 
   /** The text of the last assistant message with words in it: at a turn's start, the previous turn's answer. */
@@ -2591,17 +2600,29 @@ export class Agent {
     paths: readonly string[];
     start: WorkspaceState | null;
     checks: readonly ContractCheck[];
+    /** The request: a test deleted with the code it tested stands only when it asks to remove something. */
+    request: string;
     signal?: AbortSignal;
   }): Promise<OriginalTestsOutcome> {
+    const exists = (relative: string) => existsSync(join(input.cwd, relative));
+    const existedBefore = (relative: string) => input.start !== null && existedAt(input.start, input.cwd, relative);
+    const removed: string[] = [];
+    for (const path of input.paths.filter((path) => !exists(path))) {
+      const before = this.textBeforeTurn(input.cwd, path, input.start);
+      if (before === null || !deletedWithItsCode(input.request, before, path, exists, existedBefore)) {
+        return { refused: `${path} was deleted, and the request does not remove the code it tests` };
+      }
+      removed.push(path);
+    }
+    const kept = input.paths.filter(exists);
+    if (kept.length === 0) return { passed: true, moved: [], removed };
     if (input.checks.length === 0) return { refused: "the project states no test command to run them with" };
-    const texts = this.changedFileTexts(input.cwd, input.paths, input.start, () => true);
-    if (texts.length !== input.paths.length) return { refused: "a test was deleted, or its earlier text is unknown" };
+    const texts = this.changedFileTexts(input.cwd, kept, input.start, () => true);
+    if (texts.length !== kept.length) return { refused: "the earlier text of a test is unknown" };
     const originals: Array<{ path: string; original: string; after: string }> = [];
     const moved: string[] = [];
     for (const file of texts) {
-      const shape = originalTestToRun(file.before, file.after, file.path, (relative) =>
-        existsSync(join(input.cwd, relative)),
-      );
+      const shape = originalTestToRun(file.before, file.after, file.path, exists);
       if ("refused" in shape) return { refused: `${file.path}: ${shape.refused}` };
       originals.push({ path: file.path, original: shape.original, after: file.after });
       moved.push(...shape.movedImports);
@@ -2640,7 +2661,7 @@ export class Agent {
           return { refused: `\`${command}\` could not run them as they were (${errorLine(couldNotRun)})` };
         return { passed: false, detail: `\`${command}\`:\n${describeFailures(run.output)}` };
       }
-      return { passed: true, moved };
+      return { passed: true, moved, removed };
     } finally {
       originals.forEach(({ path, after }, index) => {
         const full = join(input.cwd, path);
@@ -4289,6 +4310,7 @@ export class Agent {
                 paths: changedTests,
                 start: turnStartState,
                 checks: turnStartChecks.filter((check) => check.kind === "test"),
+                request: userMessage,
                 signal,
               }).catch((error: unknown): OriginalTestsOutcome => {
                 recordSwallowedError("test-protection.originals", error);
@@ -4304,14 +4326,27 @@ export class Agent {
               this.kernel?.recordObservation(
                 `Test protection: ${changedTests.join(", ")} changed, and as they were they pass on the final code.`,
               );
-              yield {
-                type: "content",
-                content: `\n\n[${changedTests.join(", ")} existed before this request; the turn ${
-                  originals.moved.length > 0
-                    ? "re-pointed imports at moved modules and kept every case"
-                    : "only added to"
-                } ${changedTests.length === 1 ? "it" : "them"}, and Shelra ran ${changedTests.length === 1 ? "it" : "them"} as ${changedTests.length === 1 ? "it was" : "they were"}: ${changedTests.length === 1 ? "it passes" : "they pass"} on the final code.]\n\n`,
-              };
+              const removedTests = originals.removed;
+              const editedTests = changedTests.filter((path) => !removedTests.includes(path));
+              const one = (paths: readonly string[], singular: string, plural: string) =>
+                paths.length === 1 ? singular : plural;
+              const parts = [
+                ...(editedTests.length > 0
+                  ? [
+                      `${editedTests.join(", ")} existed before this request; the turn ${
+                        originals.moved.length > 0
+                          ? "re-pointed imports at moved modules and kept every case"
+                          : "only added to"
+                      } ${one(editedTests, "it", "them")}, and Shelra ran ${one(editedTests, "it", "them")} as ${one(editedTests, "it was", "they were")}: ${one(editedTests, "it passes", "they pass")} on the final code`,
+                    ]
+                  : []),
+                ...(removedTests.length > 0
+                  ? [
+                      `${removedTests.join(", ")} went with the code ${one(removedTests, "it", "they")} tested, which the request removes`,
+                    ]
+                  : []),
+              ];
+              yield { type: "content", content: `\n\n[${parts.join("; ")}.]\n\n` };
             }
           } else if (changedTests.length > 0) {
             if (!testEditsNudged) {

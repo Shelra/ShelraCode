@@ -133,3 +133,29 @@ export function originalTestToRun(
     movedImports: removed.map((line) => line.trim()),
   };
 }
+
+/** "Remove the monthly report", "we no longer want X", "drop", "elimina", "ya no queremos". */
+const REMOVES_CODE_RE =
+  /\b(?:remove|delete|drop|get rid of|rip out|no longer (?:want|need|support))\b|(?:^|[\s¿¡])(?:elimin\w*|quit[ae]\w*|borr[ae]\w*|suprim\w*|ya no (?:queremos|necesitamos|soportamos))/iu;
+
+/**
+ * Whether a test the turn deleted went with the code it tested: the request asks to remove something, and every module
+ * the test imported from the project is gone too (doc 21, the deterministic year: the monthly report the user dropped
+ * in May took its test with it, and the turn was held for deleting a test). A test whose code is still there, or one
+ * that imported nothing from the project, is not.
+ */
+export function deletedWithItsCode(
+  request: string,
+  before: string,
+  testPath: string,
+  exists: (relativePath: string) => boolean,
+  existedBefore: (relativePath: string) => boolean,
+): boolean {
+  if (!REMOVES_CODE_RE.test(request)) return false;
+  // Only imports of the project's own files count: `import os` names no file of the project, then or now.
+  const ownModules = lines(before)
+    .filter(isImportLine)
+    .map((line) => importCandidates(line, testPath))
+    .filter((candidates) => candidates.some(existedBefore));
+  return ownModules.length > 0 && ownModules.every((candidates) => !candidates.some(exists));
+}

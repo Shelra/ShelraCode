@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { importCandidates, isTestFile, originalTestToRun, requestAllowsTestEdits } from "./test-protection";
+import {
+  deletedWithItsCode,
+  importCandidates,
+  isTestFile,
+  originalTestToRun,
+  requestAllowsTestEdits,
+} from "./test-protection";
 
 describe("isTestFile", () => {
   it("knows the common runners' test files and nothing else", () => {
@@ -109,5 +115,43 @@ describe("the original of a test a turn changed, when the change only added to i
       "src/os/__init__.py",
     ]);
     expect(importCandidates("import { a } from '../../../outside'", "src/a.test.ts")).toEqual([]);
+  });
+});
+
+describe("a test deleted with the code it tested", () => {
+  const before = "import { expect, test } from 'bun:test';\nimport { monthly } from '../src/report-monthly';\n";
+  const was = (path: string) => path === "src/report-monthly.ts";
+
+  it("stands when the request removes something and the project module it imported is gone", () => {
+    expect(
+      deletedWithItsCode(
+        "We no longer want the monthly report.",
+        before,
+        "test/report-monthly.test.ts",
+        () => false,
+        was,
+      ),
+    ).toBe(true);
+    expect(
+      deletedWithItsCode("Elimina el informe mensual.", before, "test/report-monthly.test.ts", () => false, was),
+    ).toBe(true);
+  });
+
+  it("does not when the code is still there, the request removes nothing, or the test imported nothing of the project", () => {
+    expect(deletedWithItsCode("Remove the monthly report.", before, "test/report-monthly.test.ts", was, was)).toBe(
+      false,
+    );
+    expect(deletedWithItsCode("Speed up the report.", before, "test/report-monthly.test.ts", () => false, was)).toBe(
+      false,
+    );
+    expect(
+      deletedWithItsCode(
+        "Remove the old checks.",
+        "import { test } from 'bun:test';\n",
+        "test/a.test.ts",
+        () => false,
+        was,
+      ),
+    ).toBe(false);
   });
 });

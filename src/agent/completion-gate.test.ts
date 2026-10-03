@@ -1881,6 +1881,46 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
       expect(quietProvider.round).toBe(1);
       expect(quietText).not.toContain("Not verified");
     });
+
+    it("judges a file the turn committed against the version of the turn's start, not the moved HEAD", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = mkdtempSync(join(tmpdir(), "shelra-rule-guard-commit-"));
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(join(dir, "src", "users.ts"), 'log("email changed", { userId: user.id });\n');
+      const git = (...args: string[]) =>
+        spawnSync("git", ["-C", dir, ...args], { windowsHide: true, encoding: "utf8" });
+      git("init", "-q");
+      git("config", "user.email", "test@example.test");
+      git("config", "user.name", "test");
+      git("add", "-A");
+      git("commit", "-q", "-m", "start");
+      writeMemoryEntry(projectMemoryScope(dir), {
+        slug: "user-rule-no-emails-in-logs",
+        title: "Logs must never contain email addresses",
+        hook: "Logs must never contain email addresses",
+        type: "preference",
+        description: "User instruction",
+        body: "Logs must never contain email addresses.",
+        source: "human",
+        tags: ["user-directive"],
+      });
+      const leakAndCommit = (): ProviderEvent[] => {
+        const events = writing(
+          dir,
+          "src/users.ts",
+          'log("email changed", { userId: user.id, email: body.email });\n',
+        )();
+        git("add", "src/users.ts");
+        git("commit", "-q", "-m", "log the email");
+        return events;
+      };
+      const provider = scripted([leakAndCommit]);
+
+      const text = await run(dir, provider, "Log each change so support can see which user changed their email.");
+
+      expect(text).toContain("[Not verified — src/users.ts logs an email address");
+      // A repository and a dozen git processes: room under a full parallel test run.
+    }, 20_000);
   });
 });
 
@@ -2858,6 +2898,50 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(seen.at(-1)).toContain("TestExpiry");
       expect(text).toContain("only added to it, and Shelra ran it as it was: it passes on the final code.");
       expect(text).not.toContain("Not verified");
+    }, 60_000);
+
+    it("lets a test go with the code it tested when the request removes it, and holds one deleted alone", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "0 fail", durationMs: 5 }));
+      for (const [request, deleteCode, held] of [
+        ["We no longer need slugify; remove it.", true, false],
+        ["Implement slugify in src/slug.ts so it lowercases.", false, true],
+      ] as const) {
+        const dir = slugProject();
+        // A repository: what a file deleted by the shell held is the version committed when the turn began.
+        const git = (...args: string[]) =>
+          spawnSync("git", ["-C", dir, ...args], { windowsHide: true, encoding: "utf8" });
+        git("init", "-q");
+        git("config", "user.email", "test@example.test");
+        git("config", "user.name", "test");
+        git("add", "-A");
+        git("commit", "-q", "-m", "start");
+        const { provider, requests } = roundsModel([
+          () => {
+            rmSync(join(dir, "src", "slug.test.ts"));
+            if (deleteCode) rmSync(join(dir, "src", "slug.ts"));
+            return deleteCode ? [] : write("w1", "src/slug.ts", TRIM_AND_LOWER);
+          },
+          () => [{ type: "text-delta", text: "Done." } as ProviderEvent],
+        ]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, request);
+
+        if (held) {
+          expect(lastUserText(requests[1])).toContain(
+            "Not allowed: src/slug.test.ts was deleted, and the request does not remove the code it tests.",
+          );
+        } else {
+          expect(requests).toHaveLength(1);
+          expect(text).toContain("[src/slug.test.ts went with the code it tested, which the request removes.]");
+          expect(text).not.toContain("Not verified");
+        }
+      }
     }, 60_000);
 
     it("still holds a changed assertion, whatever was added around it", async () => {
