@@ -114,6 +114,27 @@ describe.skipIf(!hasGit)("workspace state in a git repository", () => {
     writeFileSync(join(folder, "index.html"), "<p>2</p>\n");
     expect(changedPaths(before, captureWorkspaceState(folder))).toEqual(["index.html"]);
   });
+
+  it("sees what the turn committed, which leaves git status clean (seen 2026-10-03, three runs of three)", async () => {
+    const root = repo();
+    const git = (...args: string[]) => spawnSync("git", ["-C", root, ...args], { windowsHide: true, encoding: "utf8" });
+    const start = captureWorkspaceState(root);
+    expect(start.head?.commit).toMatch(/^[0-9a-f]{40}$/u);
+
+    await later();
+    writeFileSync(join(root, "a.ts"), "export const a = 'weakened';\n");
+    writeFileSync(join(root, "made.test.ts"), "test('new', () => {});\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "change and hide it");
+
+    const end = captureWorkspaceState(root);
+    expect(end.files.size).toBe(0);
+    expect(changedPaths(start, end)).toEqual(["a.ts", "made.test.ts"]);
+    // What the turn created and committed did not exist before it; what it edited did.
+    expect(existedAt(start, root, "made.test.ts")).toBe(false);
+    expect(existedAt(start, root, "a.ts")).toBe(true);
+    // A dozen git processes: well under a second alone, more under a full parallel test run.
+  }, 20_000);
 });
 
 describe("mergeChangedFiles", () => {

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -1459,6 +1460,40 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
     const verdict = chunks.find((c) => c.content?.includes("Not verified"));
     expect(verdict?.content).toContain("src/slug.test.ts");
   });
+
+  it("holds a weakened test the turn then committed, which git status no longer shows (2026-10-03)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const { dir, weakenTest } = withExistingTest();
+    const git = (...args: string[]) => spawnSync("git", ["-C", dir, ...args], { windowsHide: true, encoding: "utf8" });
+    git("init", "-q");
+    git("config", "user.email", "test@example.test");
+    git("config", "user.name", "test");
+    git("add", "-A");
+    git("commit", "-q", "-m", "start");
+    // The model edits the test and commits, as a free model did in three runs of three.
+    const weakenAndCommit = (): ProviderEvent[] => {
+      const events = weakenTest();
+      git("add", "-A");
+      git("commit", "-q", "-m", "make the tests pass");
+      return [
+        ...events.slice(0, -1),
+        toolCallEvent("g", "bash", { command: "git add -A; git commit -m 'make the tests pass'" }),
+        toolResultEvent("g", "bash", { success: true, output: "1 file changed" }),
+        { type: "text-delta", text: "Tests pass." },
+      ];
+    };
+    const provider = scripted([weakenAndCommit, () => [{ type: "text-delta", text: "Done anyway." }]]);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir });
+
+    let text = "";
+    for await (const chunk of agent.processMessage("Implement slugify."))
+      text += (chunk as { content?: string }).content ?? "";
+
+    expect(provider.round).toBe(2);
+    expect(lastUserText(provider.requests[1])).toContain("you changed tests that existed before this request");
+    expect(text).toContain("[Not verified — it changed tests that existed before this request");
+    // A real repository and a dozen git processes: the room other process tests have under a full parallel run.
+  }, 20_000);
 
   it("lets a request that asks for test changes change them", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);

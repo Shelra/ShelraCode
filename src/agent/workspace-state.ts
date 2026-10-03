@@ -20,6 +20,12 @@ export interface WorkspaceState {
   kind: "git" | "walk" | "unknown";
   /** Path relative to the workspace → a signature that changes when the file changes. */
   files: Map<string, string>;
+  /**
+   * A git reading's commit and where it was read: a turn that commits its change leaves `git status` clean, and
+   * without the commit the gate saw nothing changed (seen 2026-10-03: a protected test edited, then `git add -A; git
+   * commit`, three runs of three).
+   */
+  head?: { commit: string; gitRoot: string; cwd: string };
 }
 
 /** Generated output, dependencies and Shelra's own state: never the user's change. */
@@ -88,7 +94,38 @@ function captureGit(cwd: string, gitRoot: string): WorkspaceState | null {
     if (ignored(relativePath)) continue;
     files.set(relativePath, signature(full));
   }
-  return { kind: "git", files };
+  const head = spawnSync("git", ["-C", gitRoot, "rev-parse", "--verify", "-q", "HEAD"], {
+    encoding: "utf8",
+    timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
+  });
+  const commit = !head.error && head.status === 0 ? head.stdout.trim() : "";
+  return { kind: "git", files, ...(commit ? { head: { commit, gitRoot, cwd } } : {}) };
+}
+
+/** Files under the workspace that commits between two readings changed (added, edited, deleted or renamed). */
+function committedBetween(before: WorkspaceState, after: WorkspaceState): string[] {
+  const from = before.head;
+  const to = after.head;
+  if (!from || !to || from.commit === to.commit || from.gitRoot !== to.gitRoot) return [];
+  const result = spawnSync(
+    "git",
+    ["-C", to.gitRoot, "diff", "--name-only", "-z", "--no-renames", from.commit, to.commit],
+    {
+      encoding: "utf8",
+      timeout: GIT_TIMEOUT_MS,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024,
+    },
+  );
+  if (result.error || result.status !== 0 || typeof result.stdout !== "string") return [];
+  const paths: string[] = [];
+  for (const path of result.stdout.split("\0").filter(Boolean)) {
+    const relativePath = relative(to.cwd, join(to.gitRoot, path)).replace(/\\/g, "/");
+    if (relativePath === ".." || relativePath.startsWith("../") || isAbsolute(relativePath)) continue;
+    if (!ignored(relativePath)) paths.push(relativePath);
+  }
+  return paths;
 }
 
 function captureWalk(cwd: string): WorkspaceState {
@@ -139,17 +176,28 @@ export function changedPaths(before: WorkspaceState, after: WorkspaceState): str
   const changed = new Set<string>();
   for (const [path, value] of after.files) if (before.files.get(path) !== value) changed.add(path);
   for (const path of before.files.keys()) if (!after.files.has(path)) changed.add(path);
+  // What the turn committed: clean in `git status`, changed all the same.
+  for (const path of committedBetween(before, after)) changed.add(path);
   return [...changed].sort();
 }
 
 /**
  * Whether `path` (relative to `cwd`) existed when `start` was read. A walk lists every file; git status lists
- * only what differed from the last commit, so an unlisted file existed if git tracks it.
+ * only what differed from the last commit, so an unlisted file existed if that commit has it (not the current
+ * index: a test the turn created and committed did not exist before it).
  */
 export function existedAt(start: WorkspaceState, cwd: string, path: string): boolean {
   const signatureAtStart = start.files.get(path);
   if (signatureAtStart !== undefined) return signatureAtStart !== "deleted";
   if (start.kind !== "git") return false;
+  if (start.head) {
+    const inRepo = relative(start.head.gitRoot, join(cwd, path)).replace(/\\/g, "/");
+    const found = spawnSync("git", ["-C", start.head.gitRoot, "cat-file", "-e", `${start.head.commit}:${inRepo}`], {
+      timeout: GIT_TIMEOUT_MS,
+      windowsHide: true,
+    });
+    return !found.error && found.status === 0;
+  }
   const result = spawnSync("git", ["-C", cwd, "ls-files", "--error-unmatch", "--", path], {
     encoding: "utf8",
     timeout: GIT_TIMEOUT_MS,
