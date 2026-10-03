@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "child_process";
-import { createReadStream, createWriteStream } from "fs";
+import { createReadStream, createWriteStream, mkdirSync, writeFileSync } from "fs";
 import { mkdtemp, rm, stat, unlink } from "fs/promises";
 import os from "os";
 import path from "path";
@@ -9,9 +9,11 @@ import { executeEventHooks } from "../hooks/index";
 import type { CwdChangedHookInput } from "../hooks/types";
 import type { ToolResult } from "../types/index";
 import type { SandboxMode, SandboxSettings } from "../utils/settings";
+import { normalizationNote, normalizeForPowerShell, type PowerShellNormalization } from "./powershell-normalize";
 
 const MAX_TAIL_BYTES = 8_192;
 const MAX_BACKGROUND_PROCESSES = 8;
+let nextScriptDir = 1;
 
 export interface BackgroundProcess {
   id: number;
@@ -34,6 +36,8 @@ interface BashToolOptions {
    * starting folder is inside it, so it can never widen where `cd` may go beyond the starting folder's workspace.
    */
   root?: string;
+  /** The platform commands are rewritten for (see `normalizeCommand`); the host's unless a test says otherwise. */
+  platform?: NodeJS.Platform;
 }
 
 /** What running a command came to, unformatted. */
@@ -55,6 +59,9 @@ export class BashTool {
   private tmpDir: string | null = null;
   private sandboxMode: SandboxMode;
   private sandboxSettings: SandboxSettings;
+  private readonly platform: NodeJS.Platform;
+  /** Where inline scripts a command was rewritten to read are written; removed by `cleanup`. */
+  private readonly scriptDir: string;
 
   constructor(initialCwd = process.cwd(), options: BashToolOptions = {}) {
     this.cwd = initialCwd;
@@ -64,6 +71,33 @@ export class BashTool {
     this.rootCwd = inside.startsWith("..") || path.isAbsolute(inside) ? start : root;
     this.sandboxMode = options.sandboxMode ?? "off";
     this.sandboxSettings = options.sandboxSettings ?? {};
+    this.platform = options.platform ?? process.platform;
+    this.scriptDir = path.join(os.tmpdir(), `shelra-scripts-${process.pid}-${nextScriptDir++}`);
+  }
+
+  /**
+   * The command as it runs on this host: on Windows, sh and cmd syntax rewritten for PowerShell
+   * (`powershell-normalize.ts`); elsewhere, and in the Shuru sandbox, the command itself. Pure, so the
+   * destructive-command guard can check the rewritten form as well as the written one.
+   */
+  normalizeCommand(command: string): PowerShellNormalization {
+    if (this.sandboxMode === "shuru") return { command, changes: [], files: [] };
+    return normalizeForPowerShell(command, { platform: this.platform, scriptDir: this.scriptDir });
+  }
+
+  /** The command to run and the note saying how it was rewritten; the command as written when its scripts cannot be saved. */
+  private commandToRun(command: string): { command: string; note: string | null } {
+    const normalized = this.normalizeCommand(command);
+    if (normalized.command === command) return { command, note: null };
+    try {
+      for (const file of normalized.files) {
+        mkdirSync(path.dirname(file.path), { recursive: true });
+        writeFileSync(file.path, file.content, "utf8");
+      }
+    } catch {
+      return { command, note: null };
+    }
+    return { command: normalized.command, note: normalizationNote(normalized) };
   }
 
   private async ensureTmpDir(): Promise<string> {
@@ -116,7 +150,10 @@ export class BashTool {
         return { success: false, error: "[Cancelled]" };
       }
 
-      const prepared = this.prepareCommand(command);
+      const runAs = this.commandToRun(command);
+      // The model learns the PowerShell form from what Shelra ran instead.
+      const told = (text: string) => (runAs.note ? `${text}\n\n[${runAs.note}]` : text);
+      const prepared = this.prepareCommand(runAs.command);
       if (!prepared.ok) {
         return { success: false, error: prepared.error };
       }
@@ -138,7 +175,7 @@ export class BashTool {
       }
 
       if (outcome.state === "timed_out") {
-        return { success: false, error: output || `Command timed out after ${timeout}ms` };
+        return { success: false, error: told(output || `Command timed out after ${timeout}ms`) };
       }
 
       if (outcome.state !== "completed" || outcome.exitCode !== 0) {
@@ -146,10 +183,10 @@ export class BashTool {
         if (sandboxError) return { success: false, error: sandboxError };
         const failure = output || `Command failed with exit code ${outcome.exitCode ?? "unknown"}`;
         const hint = powerShellParseHint(command, failure);
-        return { success: false, error: hint ? `${failure}\n\n[Shelra: ${hint}]` : failure };
+        return { success: false, error: told(hint ? `${failure}\n\n[Shelra: ${hint}]` : failure) };
       }
 
-      return { success: true, output: output || "Command executed successfully (no output)" };
+      return { success: true, output: told(output || "Command executed successfully (no output)") };
     } catch (err: unknown) {
       if (err && typeof err === "object" && "stdout" in err) {
         const execErr = err as { stdout?: string; stderr?: string; message: string };
@@ -215,7 +252,8 @@ export class BashTool {
     }
 
     try {
-      const prepared = this.prepareCommand(command);
+      const runAs = this.commandToRun(command);
+      const prepared = this.prepareCommand(runAs.command);
       if (!prepared.ok) {
         return { success: false, output: prepared.error };
       }
@@ -266,6 +304,7 @@ export class BashTool {
           `Background process started (id: ${id}, pid: ${entry.pid})`,
           `Command: ${truncCmd(command, 80)}`,
           `Use process_logs(${id}) to view output, process_stop(${id}) to terminate.`,
+          ...(runAs.note ? [`[${runAs.note}]`] : []),
         ].join("\n"),
         backgroundProcess: { id, pid: entry.pid, command },
       };
@@ -376,6 +415,11 @@ export class BashTool {
       } catch {
         /* */
       }
+    }
+    try {
+      await rm(this.scriptDir, { recursive: true, force: true });
+    } catch {
+      /* */
     }
   }
 

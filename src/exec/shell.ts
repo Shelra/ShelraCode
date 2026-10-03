@@ -138,7 +138,8 @@ function preferCurlExe(command: string): string {
   return result;
 }
 
-function translateChains(command: string): string {
+/** The `&&`/`||` part of `translateForWindowsPowerShell`; also used by the bash tool's normalizer, which says what changed. */
+export function translateChains(command: string): string {
   if (!command.includes("&&")) return translateOrChain(command);
   const segments: string[] = [];
   let current = "";

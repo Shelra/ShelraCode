@@ -25,6 +25,19 @@ function resolvePath(filePath: string, cwd: string): string {
   return resolveWorkspacePath(filePath, cwd).path;
 }
 
+const BOM = String.fromCharCode(0xfeff);
+
+/**
+ * The text to write: a PowerShell script, module or data file with non-ASCII text gets a UTF-8 byte-order mark.
+ * Windows PowerShell 5.1 reads a file without one as the ANSI code page, so `é` or `✓` in a model-written `.ps1`
+ * became mojibake or a parse error (five failed `bash` calls on one such script in the 2026-10-03 runs); with the
+ * mark both 5.1 and PowerShell 7 read it as UTF-8. Every other file is written as given.
+ */
+export function withPowerShellEncoding(filePath: string, content: string): string {
+  if (!/\.ps[dm]?1$/iu.test(filePath) || content.startsWith(BOM)) return content;
+  return /[\u0080-\u{10FFFF}]/u.test(content) ? `${BOM}${content}` : content;
+}
+
 function computeDiff(filePath: string, before: string, after: string): FileDiff {
   const patch = createTwoFilesPatch(filePath, filePath, before, after, "", "", {
     context: 3,
@@ -118,9 +131,12 @@ export async function writeFile(filePath: string, content: string, cwd: string):
     const before = existsSync(full) ? readFileSync(full, "utf-8") : "";
     const dir = dirname(full);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(full, content, "utf-8");
+    const written = withPowerShellEncoding(full, content);
+    writeFileSync(full, written, "utf-8");
 
-    const diff = computeDiff(filePath, before, content);
+    // The byte-order mark is not part of the change the model asked for.
+    const unmarked = written !== content && before.startsWith(BOM) ? before.slice(BOM.length) : before;
+    const diff = computeDiff(filePath, unmarked, content);
     const verb = before === "" ? "Created" : "Updated";
     const lspDiagnostics = await syncFileWithLsp(cwd, full, content, true, true).catch(() => [] as LspDiagnosticFile[]);
     const lspSummary = summarizeDiagnostics(lspDiagnostics);
@@ -282,7 +298,7 @@ export async function editFile(
             output: `No change to ${filePath}: new_string differs from the matched text only in whitespace, and the file keeps its own. If the code is wrong, change what it says, not its spacing: read the failure again.`,
           };
         }
-        writeFileSync(full, after, "utf-8");
+        writeFileSync(full, withPowerShellEncoding(full, after), "utf-8");
         const diff = computeDiff(filePath, before, after);
         const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(
           () => [] as LspDiagnosticFile[],
@@ -324,7 +340,7 @@ export async function editFile(
     if (after === before) {
       return { success: false, output: `No change to ${filePath}: new_string is the same as old_string.` };
     }
-    writeFileSync(full, after, "utf-8");
+    writeFileSync(full, withPowerShellEncoding(full, after), "utf-8");
 
     const diff = computeDiff(filePath, before, after);
     const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(() => [] as LspDiagnosticFile[]);

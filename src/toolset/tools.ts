@@ -150,8 +150,13 @@ async function refuseDestructiveCommand(
   options: CreateToolsOptions,
   abortSignal?: AbortSignal,
   ownPids: readonly number[] = [],
+  runAs = command,
 ): Promise<{ refused: "declined" | "blocked"; output: string } | null> {
-  const reason = destructiveCommandReason(command, cwd, { ownPids });
+  // On Windows the command may run rewritten for PowerShell (`rm -rf x` as `Remove-Item -Recurse -Force x`):
+  // the guard reads both the form the model wrote and the one that runs.
+  const reason =
+    destructiveCommandReason(command, cwd, { ownPids }) ??
+    (runAs !== command ? destructiveCommandReason(runAs, cwd, { ownPids }) : null);
   if (!reason) return null;
   const policy = options.destructiveCommandPolicy ?? loadDestructiveCommandPolicy();
   if (policy === "allow") return null;
@@ -242,6 +247,7 @@ export function createTools(
           options,
           abortSignal,
           bash.runningProcesses().map((entry) => entry.pid),
+          bash.normalizeCommand(command).command,
         );
         if (refusal) return { success: false, ...refusal };
         if (background) {

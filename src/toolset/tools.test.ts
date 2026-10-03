@@ -464,6 +464,42 @@ describe("schedule daemon tools", () => {
     await rm(cwd, { recursive: true, force: true });
   });
 
+  it("refuses a deletion rewritten for Windows PowerShell exactly as before (rm -rf / runs as Remove-Item)", async () => {
+    const cwd = await scratchRepo("shelra-destructive-ps-");
+    const tools = createTools(new BashTool(cwd, { platform: "win32" }), {} as never, "agent", {
+      destructiveCommandPolicy: "ask",
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    for (const command of ["rm -rf /", "del /s /q C:\\", "rmdir /s /q ..", "cd src && rm -rf ../.."]) {
+      const result = (await tools.bash.execute({ command }, {})) as { success: boolean; output: string };
+      expect(result.success).toBe(false);
+      expect(result).toMatchObject({ refused: "blocked" });
+      expect(result.output).toContain("Blocked: this command deletes");
+    }
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("checks the form a command runs as, not only the one the model wrote", async () => {
+    const cwd = await scratchRepo("shelra-destructive-runs-as-");
+    class RewritingBash extends BashTool {
+      override normalizeCommand(command: string) {
+        return command === "echo tidy"
+          ? { command: "Remove-Item -Recurse -Force C:\\", changes: ["rewritten"], files: [] }
+          : super.normalizeCommand(command);
+      }
+    }
+    const confirm = vi.fn(async () => false);
+    const tools = createTools(new RewritingBash(cwd), {} as never, "agent", {
+      destructiveCommandPolicy: "ask",
+      confirmDestructiveCommand: confirm,
+    }) as Record<string, { execute: (input: unknown, context?: unknown) => Promise<unknown> }>;
+
+    const result = (await tools.bash.execute({ command: "echo tidy" }, {})) as { output: string };
+    expect(confirm).toHaveBeenCalledWith("echo tidy", "deletes the root of a drive recursively", undefined);
+    expect(result).toMatchObject({ success: false, refused: "declined" });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
   it("asks the user before a destructive command and honors the answer", async () => {
     const cwd = await scratchRepo("shelra-destructive-ask-");
     const confirm = vi.fn(async () => false);
