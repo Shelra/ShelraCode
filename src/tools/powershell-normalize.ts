@@ -617,7 +617,17 @@ function rewriteWords(core: string, standalone: boolean): string | null {
     const short = flags.filter((flag) => !flag.startsWith("--")).join("");
     const recurse = /r/iu.test(short) || flags.includes("--recursive");
     const force = short.includes("f") || flags.includes("--force");
-    return `Remove-Item${recurse ? " -Recurse" : ""}${force ? " -Force" : ""} ${operands.join(", ")}${redirections}`;
+    // `rm -f` is silent about a path that is not there, so `rm -rf dist && build` goes on; Remove-Item fails, and
+    // even `-ErrorAction Ignore` leaves `$?` false. Each path is removed only when it exists.
+    if (force) {
+      return operands
+        .map(
+          (operand) =>
+            `if (Test-Path ${operand}) { Remove-Item${recurse ? " -Recurse" : ""} -Force ${operand}${redirections} }`,
+        )
+        .join("; ");
+    }
+    return `Remove-Item${recurse ? " -Recurse" : ""} ${operands.join(", ")}${redirections}`;
   }
 
   if (["del", "erase", "rd", "rmdir"].includes(name)) {

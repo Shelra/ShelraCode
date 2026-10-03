@@ -29,10 +29,17 @@ describe("normalizeForPowerShell rewrites what Windows PowerShell cannot run", (
     ["ls -l", "Get-ChildItem"],
     ["ls -la 2>/dev/null", "Get-ChildItem -Force 2>$null"],
     ["ls -la | Select-Object -First 3", "Get-ChildItem -Force | Select-Object -First 3"],
-    ["rm -rf dist", "Remove-Item -Recurse -Force dist"],
-    ["rm -rf dist coverage", "Remove-Item -Recurse -Force dist, coverage"],
-    ["rm -f out.log", "Remove-Item -Force out.log"],
-    ["rm -rf node_modules && bun install", "Remove-Item -Recurse -Force node_modules; if ($?) { bun install }"],
+    ["rm -rf dist", "if (Test-Path dist) { Remove-Item -Recurse -Force dist }"],
+    [
+      "rm -rf dist coverage",
+      "if (Test-Path dist) { Remove-Item -Recurse -Force dist }; if (Test-Path coverage) { Remove-Item -Recurse -Force coverage }",
+    ],
+    ["rm -f out.log", "if (Test-Path out.log) { Remove-Item -Force out.log }"],
+    ["rm -rR old", "Remove-Item -Recurse old"],
+    [
+      "rm -rf node_modules && bun install",
+      "if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }; if ($?) { bun install }",
+    ],
     ["del /s /q build", "Remove-Item -Recurse -Force build"],
     ["rmdir /s /q build\\cache", "Remove-Item -Recurse -Force build\\cache"],
     ["rd /S /Q dist", "Remove-Item -Recurse -Force dist"],
@@ -43,7 +50,7 @@ describe("normalizeForPowerShell rewrites what Windows PowerShell cannot run", (
     ["export NODE_ENV=test && bun test", '$env:NODE_ENV = "test"; if ($?) { bun test }'],
     ["NODE_ENV=production bun run build", '$env:NODE_ENV = "production"; bun run build'],
     ["CI=1 DEBUG=0 bun test && echo ok", '$env:CI = "1"; $env:DEBUG = "0"; bun test; if ($?) { echo ok }'],
-    ["FORCE=1 rm -rf dist", '$env:FORCE = "1"; Remove-Item -Recurse -Force dist'],
+    ["FORCE=1 rm -rf dist", '$env:FORCE = "1"; if (Test-Path dist) { Remove-Item -Recurse -Force dist }'],
   ])("%j", (input, expected) => {
     const result = onWindows(input);
     expect(result.command).toBe(expected);
@@ -53,7 +60,7 @@ describe("normalizeForPowerShell rewrites what Windows PowerShell cannot run", (
   it("says what changed, so the model sees the PowerShell form", () => {
     const result = onWindows("ls -la && rm -rf dist 2>/dev/null");
     expect(normalizationNote(result)).toBe(
-      "Shelra ran this as Windows PowerShell: `ls -la` became `Get-ChildItem -Force`; `2>/dev/null` became `2>$null`; `rm -rf dist 2>$null` became `Remove-Item -Recurse -Force dist 2>$null`; `&&` became `; if ($?) { … }`.",
+      "Shelra ran this as Windows PowerShell: `ls -la` became `Get-ChildItem -Force`; `2>/dev/null` became `2>$null`; `rm -rf dist 2>$null` became `if (Test-Path dist) { Remove-Item -Recurse -Force dist 2>$n…`; `&&` became `; if ($?) { … }`.",
     );
     expect(normalizationNote(onWindows("bun test"))).toBeNull();
   });
@@ -184,12 +191,12 @@ describe("the destructive-command guard still sees a rewritten deletion", () => 
   const cwd = path.join(os.tmpdir(), "shelra-guard-project");
 
   it.each([
-    ["rm -rf /", "Remove-Item -Recurse -Force /"],
-    ["rm -rf ~", "Remove-Item -Recurse -Force ~"],
+    ["rm -rf /", "if (Test-Path /) { Remove-Item -Recurse -Force / }"],
+    ["rm -rf ~", "if (Test-Path ~) { Remove-Item -Recurse -Force ~ }"],
     ["del /s /q C:\\", "Remove-Item -Recurse -Force C:\\"],
     ["rmdir /s /q ..", "Remove-Item -Recurse -Force .."],
-    ["cd src && rm -rf ../..", "cd src; if ($?) { Remove-Item -Recurse -Force ../.. }"],
-    ["HOME=x rm -rf .git", '$env:HOME = "x"; Remove-Item -Recurse -Force .git'],
+    ["cd src && rm -rf ../..", "cd src; if ($?) { if (Test-Path ../..) { Remove-Item -Recurse -Force ../.. } }"],
+    ["HOME=x rm -rf .git", '$env:HOME = "x"; if (Test-Path .git) { Remove-Item -Recurse -Force .git }'],
   ])("%j runs as %j, which is refused as before", (written, runs) => {
     expect(onWindows(written).command).toBe(runs);
     expect(destructiveCommandReason(written, cwd)).not.toBeNull();
@@ -260,6 +267,15 @@ describe.skipIf(process.platform !== "win32")("the bash tool on Windows", { time
     expect(result.success).toBe(true);
     expect(result.output).toContain("removed");
     expect(fs.existsSync(path.join(dir, "dist"))).toBe(false);
+    await bash.cleanup();
+  });
+
+  it("goes on after `rm -rf` of a folder that is not there, as `rm -f` does", async () => {
+    const dir = project();
+    const bash = new BashTool(dir);
+    const result = await bash.execute("rm -rf dist && echo built");
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("built");
     await bash.cleanup();
   });
 });
