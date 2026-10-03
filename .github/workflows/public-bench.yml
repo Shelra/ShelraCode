@@ -33,6 +33,11 @@ on:
         description: Number of subset entries to consider (0 = all)
         type: string
         default: "0"
+      shelra_build:
+        description: Which Shelra to measure (shelra arm only)
+        type: choice
+        options: [commit, release]
+        default: commit
       resume_run_id:
         description: Run id of an earlier dispatch of this same arm, to resume from its results (optional)
         type: string
@@ -52,8 +57,10 @@ env:
   SCALE_REPO: scaleapi/SWE-bench_Pro-os
   SCALE_COMMIT: 66f92766bba642462d4bbe5479e83f91f9211862
   HARBOR_VERSION: "0.23.0"
+  # The published release, measured only with shelra_build=release; by default the arm builds the dispatched commit.
   SHELRA_TAG: shelra@1.1.9
-  SHELRA_SHA256: d0ee05b73ebc2336576cd18a23408f24aa5b0cb8aaad0924517cfc4026b67b32
+  SHELRA_RELEASE_SHA256: d0ee05b73ebc2336576cd18a23408f24aa5b0cb8aaad0924517cfc4026b67b32
+  BUN_VERSION: "1.4.1"
   STEP_LIMIT: "50"
   TIME_LIMIT_SEC: "2910"
 
@@ -70,6 +77,7 @@ jobs:
       OFFSET: ${{ inputs.offset }}
       LIMIT: ${{ inputs.limit }}
       RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+      SHELRA_BUILD: ${{ inputs.shelra_build }}
     steps:
       - name: Check out ShelraCode
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,7 +94,12 @@ jobs:
           case "$MODEL" in openai/*|anthropic/*) echo "refused: no openai/* or anthropic/* models"; exit 1;; esac
           [[ "$MODEL" == *:free ]] || { echo "refused: free models only"; exit 1; }
           slug=$(printf '%s' "$MODEL" | sed -E 's/[^A-Za-z0-9._-]+/_/g')
-          echo "artifact=public-bench-${AGENT}-${slug}-${SUBSET}" >> "$GITHUB_OUTPUT"
+          # A Shelra arm is resumable only on the same build: results of two builds are never merged into one arm.
+          build=""
+          if [ "$AGENT" = "shelra" ]; then
+            if [ "$SHELRA_BUILD" = "release" ]; then build="-${SHELRA_TAG#shelra@}"; else build="-${GITHUB_SHA::7}"; fi
+          fi
+          echo "artifact=public-bench-${AGENT}-${slug}-${SUBSET}${build}" >> "$GITHUB_OUTPUT"
 
       - name: Free disk space and move Docker to the larger disk
         run: |
@@ -130,17 +143,41 @@ jobs:
           sparse-checkout: v2
           persist-credentials: false
 
+      # By default the arm measures the code it was dispatched on, built with the release's own recipe
+      # (scripts/build.ts, as in release.yml), so a change can be measured before it ships.
+      - name: Set up Bun
+        if: inputs.agent == 'shelra' && inputs.shelra_build == 'commit'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Build ShelraCode from this commit
+        if: inputs.agent == 'shelra' && inputs.shelra_build == 'commit'
+        env:
+          SHELRA_BUILD_SKIP_INSTALL: "1"
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run scripts/build.ts
+          cp dist/shelra shelra-linux-x64
+          chmod +x shelra-linux-x64
+          echo "SHELRA_SHA256=$(sha256sum shelra-linux-x64 | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          ./shelra-linux-x64 --version
+          echo "Shelra under test: commit ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Download the ShelraCode release binary
-        if: inputs.agent == 'shelra'
+        if: inputs.agent == 'shelra' && inputs.shelra_build == 'release'
         run: |
           set -euo pipefail
           base="https://github.com/Shelra/ShelraCode/releases/download/${SHELRA_TAG/@/%40}"
           curl -fsSL --retry 3 -o shelra-linux-x64 "$base/shelra-linux-x64"
           curl -fsSL --retry 3 -o checksums.txt "$base/checksums.txt"
           grep ' shelra-linux-x64$' checksums.txt | sha256sum -c -
-          echo "${SHELRA_SHA256}  shelra-linux-x64" | sha256sum -c -
+          echo "${SHELRA_RELEASE_SHA256}  shelra-linux-x64" | sha256sum -c -
           chmod +x shelra-linux-x64
+          echo "SHELRA_SHA256=${SHELRA_RELEASE_SHA256}" >> "$GITHUB_ENV"
           ./shelra-linux-x64 --version
+          echo "Shelra under test: release ${SHELRA_TAG}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download results of the run being resumed
         if: inputs.resume_run_id != ''

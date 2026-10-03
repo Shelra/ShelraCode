@@ -22,8 +22,10 @@ Nothing here has produced a result yet. The first run is the 20-task pilot.
   endpoint (`--allow-agent-host openrouter.ai`); setup and verification keep normal access. The agent's diff is saved
   as `model.patch`; the unchanged verifier then runs in the same container.
 - **Harnesses:**
-  - `shelra`: `harbor/shelra_agent.py`, an installed agent. It uploads the released binary `shelra-linux-x64`
-    (release `shelra@1.1.9`, SHA-256 checked) into the task container and runs
+  - `shelra`: `harbor/shelra_agent.py`, an installed agent. It uploads `shelra-linux-x64` (SHA-256 checked) into
+    the task container: by default the dispatched commit built with the release's recipe (`scripts/build.ts`), so
+    a change is measured before it ships; with `shelra_build=release`, the published `shelra@1.1.9`. The arm's
+    results artifact names the build, so two builds are never resumed into one arm. It runs
     `shelra -p <instruction> --format json --model <model> --model-policy free --max-cost 0 --max-tool-rounds 50
     --no-sandbox` in the repository through `harbor/shelra_runner.sh`, which enforces the limits.
   - `mini-swe-agent`: Scale's `v2/tooling/locked_mini_swe.py` (Harbor's built-in mini-swe-agent plus patch capture,
@@ -78,7 +80,9 @@ repository secret `OPENROUTER_API_KEY`. One dispatch runs one arm. For the pilot
 | next | same as the run it continues | | | | | id of that run |
 
 Or from the command line: `gh workflow run public-bench.yml -f agent=shelra -f
-model=nvidia/nemotron-3-ultra-550b-a55b:free -f subset=pilot20`.
+model=nvidia/nemotron-3-ultra-550b-a55b:free -f subset=pilot20`. GitHub offers a manual workflow only once it is on
+the default branch; `--ref <branch>` then runs it, and builds Shelra, from that branch. Resume a Shelra arm on the
+same commit it started on.
 
 A dispatch stops starting tasks when the daily free quota is nearly spent, when a task ran into the daily limit, or
 70 minutes before its 320-minute budget (GitHub ends a hosted job at 6 hours). Dispatch the same arm again with
