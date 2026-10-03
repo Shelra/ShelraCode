@@ -101,8 +101,9 @@ jobs:
           fi
           echo "artifact=public-bench-${AGENT}-${slug}-${SUBSET}${build}" >> "$GITHUB_OUTPUT"
 
-      # The secret must be a key made for this benchmark, with a small credit limit, never the owner's own key: a model
-      # can print its environment, and only a key that cannot spend is safe to hand a task container. Nothing is printed.
+      # The secret must be a key that cannot spend, never the owner's own key: a model can print its environment, and
+      # only such a key is safe to hand a task container. It cannot spend when its account never bought credits (the
+      # owner's benchmark account, 2026-10-03) or when the key itself has a small credit limit. Nothing is printed.
       - name: Refuse a key that can spend
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -114,10 +115,12 @@ jobs:
               sys.exit("refused: add a dedicated benchmark key as the repository secret OPENROUTER_API_KEY (bench/public/README.md)")
           request = urllib.request.Request("https://openrouter.ai/api/v1/key", headers={"Authorization": f"Bearer {key}"})
           data = json.load(urllib.request.urlopen(request, timeout=30)).get("data") or {}
-          limit, remaining = data.get("limit"), data.get("limit_remaining")
-          if limit is None or remaining is None or float(remaining) > 5:
-              sys.exit(f"refused: the key needs a credit limit with at most $5 left (limit={limit}, remaining={remaining}); create one for this benchmark")
-          print(f"benchmark key: credit limit {limit}, {remaining} left")
+          limit, remaining, never_bought = data.get("limit"), data.get("limit_remaining"), data.get("is_free_tier") is True
+          daily = data.get("free_model_daily_requests") or {}
+          capped = limit is not None and remaining is not None and float(remaining) <= 5
+          if not (never_bought or capped):
+              sys.exit(f"refused: the key can spend (limit={limit}, remaining={remaining}, account never bought credits: {never_bought}); use a key with a credit limit of at most $5, or one from an account that never bought credits")
+          print(f"benchmark key: account never bought credits: {never_bought}; credit limit {limit}, {remaining} left; free requests today: {daily.get('remaining')} of {daily.get('limit')}")
           PY
 
       - name: Free disk space and move Docker to the larger disk

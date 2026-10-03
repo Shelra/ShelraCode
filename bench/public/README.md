@@ -76,11 +76,12 @@ Ten repositories are represented (Python, Go, JavaScript, TypeScript); tutanota 
 ## Running it
 
 GitHub Actions, workflow **Public benchmark** (`.github/workflows/public-bench.yml`), manual dispatch only, with the
-repository secret `OPENROUTER_API_KEY`. That secret is a key made for this benchmark alone, never the owner's own:
-create it in OpenRouter's key settings with a credit limit of $1 (free models cost nothing, and a key at its limit is
-refused, so a leaked key can spend at most that), store it under Settings → Secrets and variables → Actions, and delete
-the key when the runs are over. The workflow refuses to run with a key that has no credit limit or more than $5 left.
-The free-model daily quota belongs to the account, so the benchmark's requests count against the owner's 1,000 a day.
+repository secret `OPENROUTER_API_KEY`. That secret is a key that cannot spend, never the owner's own, since a model
+can print its environment: either a key from an account that never bought credits (the owner's benchmark account), or
+a key with a credit limit of $1 (free models cost nothing, and a key at its limit is refused). Store it under Settings →
+Secrets and variables → Actions. The workflow refuses any other key, and prints the account's free requests for the
+day. The free-model daily quota belongs to the account: 1,000 a day once it has bought 10 credits, 50 a day if it never
+did, which is about one Shelra task a day.
 One dispatch runs one arm. For the pilot on the first model:
 
 | Run | agent | model | subset | offset | limit | resume_run_id |
