@@ -67,9 +67,25 @@ export function formatDecisionsForPrompt(decisions: readonly Decision[], options
     lines.push(`- … and ${active.length - listed.length} more in ${LEDGER_DIR}.`);
   }
   if (replaced.length > 0) {
+    // A replaced decision the request is about keeps its reasons: what was weighed and rejected then is still the
+    // project's history (doc 21 §9.3, K6: both arms missed why SQLite had been chosen over Postgres once DuckDB
+    // replaced it).
+    const replacedWhy = new Set(
+      replaced
+        .filter((decision) => decision.why && relevance(decision) > 0)
+        .slice(0, MAX_WITH_WHY)
+        .map((decision) => decision.id),
+    );
     lines.push(
       `No longer in force (replaced; do not follow them, their files in ${LEDGER_DIR} say why they changed): ${replaced
-        .map((decision) => `${decision.id} "${clip(decision.title, 80)}" → replaced by ${decision.supersededBy}`)
+        .map(
+          (decision) =>
+            `${decision.id} "${clip(decision.title, 80)}" → replaced by ${decision.supersededBy}${
+              replacedWhy.has(decision.id) && decision.why
+                ? ` (it had been taken because: ${clip(decision.why, MAX_WHY_CHARS)})`
+                : ""
+            }`,
+        )
         .join("; ")}.`,
     );
   }

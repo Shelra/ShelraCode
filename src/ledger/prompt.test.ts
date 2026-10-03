@@ -54,6 +54,25 @@ describe("the decisions section of the prompt", () => {
     expect(text).not.toMatch(/^- D-0001/mu);
   });
 
+  it("keeps why a replaced decision had been taken when the request is about it (doc 21 §9.3, K6)", () => {
+    const old = decision(1, {
+      title: "Storage uses SQLite",
+      rule: "Ledger data is stored in SQLite.",
+      status: "superseded",
+      supersededBy: "D-0002",
+      why: "JSON files had to be loaded whole. Rejected: Postgres (needs a server, breaks offline use).",
+    });
+    const current = decision(2, { title: "Storage uses DuckDB", supersedes: "D-0001" });
+    expect(
+      formatDecisionsForPrompt([old, current], {
+        request: "Which storage engine does it use now, why, and what did it use before?",
+      }),
+    ).toContain(
+      'D-0001 "Storage uses SQLite" → replaced by D-0002 (it had been taken because: JSON files had to be loaded whole. Rejected: Postgres (needs a server, breaks offline use).)',
+    );
+    expect(formatDecisionsForPrompt([old, current], { request: "Add a CSV export." })).not.toContain("Postgres");
+  });
+
   it("is empty for a project with no decisions", () => {
     expect(formatDecisionsForPrompt([])).toBe("");
   });
