@@ -17,7 +17,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join, normalize, relative } from "node:path";
 import { destructiveCommandReason } from "../security/destructive";
 import { namedCommands } from "./store";
-import { foldText } from "./terms";
+import { foldText, rawTerms } from "./terms";
 import type { MemorySource } from "./types";
 
 export type EvidenceKind = "quote" | "command" | "file" | "commit" | "none";
@@ -46,9 +46,13 @@ export interface EvidenceContext {
   workspace: string;
 }
 
-/** The fewest characters and words a quote needs to count as the user's statement. */
-const MIN_QUOTE_CHARS = 12;
-const MIN_QUOTE_WORDS = 3;
+/**
+ * A quote states something only with a few content words ("yes, do it" proves nothing), and a quote longer than a
+ * paragraph is a paste, not a statement.
+ */
+const MIN_QUOTE_CHARS = 20;
+const MAX_QUOTE_CHARS = 300;
+const MIN_QUOTE_TERMS = 3;
 
 /** Text folded for a word-for-word comparison: accents, case, curly quotes, spacing and edge punctuation. */
 export function normalizeQuote(text: string): string {
@@ -63,8 +67,18 @@ export function normalizeQuote(text: string): string {
 /** Whether a quote appears, word for word, in one of the user's texts, and is long enough to state something. */
 export function quoteFound(quote: string, userTexts: readonly string[]): boolean {
   const wanted = normalizeQuote(quote);
-  if (wanted.length < MIN_QUOTE_CHARS || wanted.split(" ").length < MIN_QUOTE_WORDS) return false;
-  return userTexts.some((text) => normalizeQuote(text).includes(wanted));
+  if (wanted.length < MIN_QUOTE_CHARS || wanted.length > MAX_QUOTE_CHARS) return false;
+  if (rawTerms(wanted).length < MIN_QUOTE_TERMS) return false;
+  return userTexts.some((text) => normalizeQuote(quotableText(text)).includes(wanted));
+}
+
+/** What the user wrote in their own words: code they pasted and lines they quoted from elsewhere are not statements. */
+export function quotableText(text: string): string {
+  return text
+    .replace(/```[\s\S]*?(?:```|$)/gu, " ")
+    .split(/\r?\n/u)
+    .filter((line) => !line.trimStart().startsWith(">"))
+    .join("\n");
 }
 
 function commandMatches(ran: string, ref: string): boolean {

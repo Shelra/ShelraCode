@@ -248,6 +248,7 @@ export function memoryContextFor(
   query: string,
   paths: readonly string[] = [],
   previous?: string,
+  options: { orientation?: boolean } = {},
 ): MemoryContext {
   try {
     const scope = projectMemoryScope(cwd);
@@ -274,28 +275,58 @@ export function memoryContextFor(
           )
         : withLessons;
     const documents = documentsFor(scope, cwd, query, projectRecords);
-    if (!isContinuationRequest(query)) {
+    const continuation = isContinuationRequest(query);
+    if (!continuation && !options.orientation) {
       return withDocuments(open.length > 0 ? withPlans : noteWhenNothingMatches(withPlans), documents);
     }
-    // A request to carry on is about the latest work, whatever its words: it gets the newest turns, and never the
-    // note that the project is new to memory (doc 20, TEST E9; doc 21 §5.7).
-    const shown = new Set(withPlans.episodes ?? []);
+    // A session's first request, or a request to carry on, gets what someone returning to the project needs first,
+    // whatever its words: the lessons the project paid for, and its newest turns (doc 20, TEST E9; doc 21, Phase D). A
+    // request to carry on never gets the note that the project is new to memory.
+    const shownSlugs = new Set([...withPlans.expanded, ...withPlans.listed, ...(withPlans.rules ?? [])]);
+    const withLearned = appendSection(
+      withPlans,
+      "Lessons this project learned the hard way (most important first; check they still apply):",
+      topLessons(projectRecords, shownSlugs).map(
+        (record) => `- ${clipLine(record.index.title, 100)}: ${clipLine(record.index.hook, 180)}`,
+      ),
+    );
+    const shown = new Set(withLearned.episodes ?? []);
     const recent = [...episodes]
       .reverse()
       .filter((episode) => !shown.has(episode.at))
       .slice(0, 3);
-    return withDocuments(
-      appendRecentWork(
-        withPlans,
-        recent.map((episode) => describeEpisode(episode)),
-        recent.map((episode) => episode.at),
-      ),
-      documents,
+    const oriented = appendRecentWork(
+      withLearned,
+      recent.map((episode) => describeEpisode(episode)),
+      recent.map((episode) => episode.at),
     );
+    return withDocuments(continuation || open.length > 0 ? oriented : noteWhenNothingMatches(oriented), documents);
   } catch (error) {
     recordSwallowedError("memory.retrieve", error);
     return { text: "", expanded: [], listed: [] };
   }
+}
+
+/** Entries about something the project went through: a failure, a trap, a debugging session. */
+const LESSON_TYPES = new Set(["failure", "debugging", "known-problems"]);
+
+/** The project's lessons a returning reader should hear first: the most important, then the best credited, then newest. */
+function topLessons(records: readonly MemoryRecord[], shown: ReadonlySet<string>, max = 3): MemoryRecord[] {
+  const meta = (record: MemoryRecord) => record.entry.frontmatter.metadata;
+  return records
+    .filter((record) => LESSON_TYPES.has(meta(record).type) && !shown.has(record.slug))
+    .sort(
+      (a, b) =>
+        (meta(b).importance ?? 0.5) - (meta(a).importance ?? 0.5) ||
+        (meta(b).credit ?? 0) - (meta(a).credit ?? 0) ||
+        meta(b).modified.localeCompare(meta(a).modified),
+    )
+    .slice(0, max);
+}
+
+function clipLine(text: string, max: number): string {
+  const flat = text.replace(/\s+/gu, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 /**

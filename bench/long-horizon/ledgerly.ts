@@ -26,8 +26,6 @@ export interface Epoch {
   answer: string;
   /** What the reflection call returns: the durable facts an ideal model proposes. */
   reflection: Array<Record<string, unknown>>;
-  /** What an ideal model returns to the memory-commit prompt, once Shelra asks one (Project Memory V2). */
-  commitItems?: Array<Record<string, unknown>>;
   /** The simulated user approves every decision proposed in this epoch. */
   approveDecisions?: boolean;
   /** The process is killed after this many tool results (a crash mid-turn). */
@@ -321,6 +319,17 @@ export const EPOCHS: Epoch[] = [
     reflection: [
       {
         type: "architecture",
+        slug: "product-purpose",
+        title: "Ledgerly: an offline expense tracker for freelancers",
+        hook: "An offline expense tracker for freelancers who invoice in several currencies",
+        description: "What the product is for, as the user stated it",
+        body: "Ledgerly tracks a freelancer's expenses in several currencies, offline.",
+        confidence: 0.9,
+        tags: ["purpose"],
+        quote: "an offline expense tracker for freelancers who invoice in several currencies",
+      },
+      {
+        type: "architecture",
         slug: "storage-json-files",
         title: "Storage is one JSON file per month under data/",
         hook: "src/store.ts saves data/YYYY-MM.json; no database yet",
@@ -339,6 +348,8 @@ export const EPOCHS: Epoch[] = [
         body: "Ledgerly must work fully offline. Never add sync, telemetry or any network call.",
         confidence: 0.9,
         tags: ["privacy", "offline", "network"],
+        // The user's own words, which the host finds in the request (doc 21, Phase D).
+        quote: "Nothing may leave the user's machine: no cloud sync and no telemetry.",
       },
     ],
     commit: "Set up Ledgerly with cents and monthly JSON storage",

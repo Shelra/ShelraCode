@@ -337,7 +337,6 @@ async function orchestrate(args: Args): Promise<void> {
       rounds: epoch.rounds,
       answer: epoch.answer,
       reflection: epoch.reflection,
-      ...(epoch.commitItems ? { commit: epoch.commitItems } : {}),
       ...(epoch.approveDecisions ? { approveDecisions: true } : {}),
       ...(epoch.crashAfterTools !== undefined ? { crashAfterTools: epoch.crashAfterTools } : {}),
       ...(args.ablate.length > 0 ? { ablate: args.ablate } : {}),

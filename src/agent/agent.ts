@@ -574,6 +574,11 @@ export class Agent {
    * or carried on from an earlier session (doc 21, Phase B). Its snapshot goes with the turn's episode and live record.
    */
   private sessionPlan: Plan | null = null;
+  /**
+   * What the user typed in this session, newest last: the only text a quote attributed to the user may come from. The
+   * host's own nudges are user-role messages too, so the transcript cannot tell them apart (doc 21, Phase D).
+   */
+  private sessionUserTexts: string[] = [];
   private turnVerificationEvidence: string[] = [];
   /**
    * Criterion ids explicitly linked to a completed step THIS turn, via `update_plan_step(status:
@@ -1365,6 +1370,7 @@ export class Agent {
     this.activeAcceptanceCriteria = null;
     this.activePlanSteps = null;
     this.sessionPlan = null;
+    this.sessionUserTexts = [];
     this.turnVerificationEvidence = [];
     this.turnLinkedCriteriaIds = new Set();
     this.planState = { published: true, structured: false };
@@ -1425,6 +1431,7 @@ export class Agent {
     this.activeAcceptanceCriteria = null;
     this.activePlanSteps = null;
     this.sessionPlan = null;
+    this.sessionUserTexts = [];
     this.turnVerificationEvidence = [];
     this.turnLinkedCriteriaIds = new Set();
     this.sessionStore = store;
@@ -2896,7 +2903,10 @@ export class Agent {
     if (!memoryOff) consolidateMemory(memoryScope);
     const memoryContext: MemoryContext = memoryOff
       ? { text: "", expanded: [], listed: [] }
-      : memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest);
+      : // The session's first request is oriented: lessons and the latest turns, whatever its words (doc 21, Phase D).
+        memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest, {
+          orientation: this.sessionUserTexts.length === 0,
+        });
     // A reminder due now is crossed off when the turn closes, and only if a model answered it (deliverDueReminders): a
     // turn cut Limited never showed it to anyone.
     this.turnDueReminders = { scope: memoryScope, slugs: memoryContext.reminders ?? [] };
@@ -2934,6 +2944,7 @@ export class Agent {
       this.previousRequest = typedText(userMessage);
     }
     this.lastMemoryContext = memoryContext;
+    this.sessionUserTexts = [...this.sessionUserTexts, typedText(userMessage).slice(0, 4_000)].slice(-20);
     // "Continue" in a new session, after a crash or another day: the latest open plan of the project becomes this
     // session's plan, its steps with the status they had, so update_plan_step goes on from there (doc 21, Phase B).
     // Only a request to continue adopts one; any other request starts clean (cross-turn-criteria.test.ts).
@@ -3025,6 +3036,7 @@ export class Agent {
       verified: this.turnVerificationEvidence.length > 0,
       toolCalls: turnToolCalls,
       ...planSnapshotOf(this.sessionPlan),
+      userTexts: [...this.sessionUserTexts],
     });
     const pendingCommands = new Map<string, string>();
     /** Checks this turn ran whose exit status a later command replaced; the gate names them. */
@@ -3960,6 +3972,28 @@ export class Agent {
             const verdict = `[Not verified — ${reason}]`;
             this.recordVerdict(verdict);
             yield { type: "content", content: `\n\n${verdict}` };
+            // A held turn whose checks passed still learned about the project (the input it was asked to handle, a
+            // trap it met): it reflects, labelled `held`, and never as proof the change was right (doc 21, Phase D). In
+            // the Year in a Box six of ten working months were held and taught nothing else.
+            if (this.turnVerificationEvidence.length > 0) {
+              reportStatus("recap", "Updating project memory");
+              await this.learnFromTurn(
+                {
+                  userMessage,
+                  assistantText: `${turnText.slice(-12_000)}\n\n${verdict}`,
+                  changedFiles: [...mutations],
+                  commands: turnCommands,
+                  verified: true,
+                  held: reason,
+                  toolCalls: turnToolCalls,
+                  ...planSnapshotOf(this.sessionPlan),
+                },
+                runtime.modelId,
+                signal,
+                observer,
+                "unverified",
+              );
+            }
             yield { type: "done" };
             return;
           }
@@ -4909,9 +4943,15 @@ ${verdict}`,
   ): Promise<void> {
     this.turnLearned = true;
     if (!this.provider || this.mode !== "agent" || this.ablations.has("memory")) return;
+    if (!digest.userTexts) digest = { ...digest, userTexts: [...this.sessionUserTexts] };
     const scope = projectMemoryScope(this.bash.getRootCwd());
     if (didWork(digest)) {
-      appendEpisode(scope, episodeFrom(digest, outcome, { session: this.session?.id, model: modelId }));
+      // The closing note says why a turn that reflects ended unverified (failing checks, or held by test protection).
+      const note = outcome === "unverified" ? this.turnEndNotes.at(-1) : undefined;
+      appendEpisode(
+        scope,
+        episodeFrom(digest, outcome, { session: this.session?.id, model: modelId, ...(note ? { note } : {}) }),
+      );
     }
     try {
       const report = await reflectOnTurn({

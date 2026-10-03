@@ -209,6 +209,62 @@ describe("automatic project memory consultation", () => {
     expect(block).not.toContain("RELEASING.md");
   });
 
+  it("orients a session's first request with the project's lessons and latest turns, whatever its words (doc 21, Phase D)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-memory-context-orient-"));
+    tempDirs.push(cwd);
+    const scope = projectMemoryScope(cwd);
+    // A store past the listing limit: an entry the request shares no word with is counted, not listed.
+    for (let index = 0; index < 14; index++) {
+      writeMemoryEntry(scope, {
+        slug: `widget-note-${index}`,
+        title: `Widget note ${index}`,
+        hook: `Widget ${index} renders inside panel ${index}`,
+        type: "important-codepaths",
+        description: "Codepath",
+        body: `Widget ${index}.`,
+      });
+    }
+    writeMemoryEntry(scope, {
+      slug: "decimal-comma-amounts",
+      title: "Bank CSVs may write amounts as 1.234,56",
+      hook: "toCents must read the European decimal comma",
+      type: "known-problems",
+      description: "A trap in bank exports",
+      body: "Spanish banks export 1.234,56.",
+    });
+    appendEpisode(
+      scope,
+      episodeFrom(
+        {
+          userMessage: "Accept semicolon-separated CSV files.",
+          assistantText: "The importer detects the separator.",
+          changedFiles: ["src/importers/csv.ts"],
+          commands: [],
+          verified: true,
+          toolCalls: 5,
+        },
+        "verified",
+      ),
+    );
+
+    process.chdir(cwd);
+    const provider = new CapturingProvider();
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    for await (const _chunk of agent.processMessage("Which stack does this project use?")) {
+      // drain
+    }
+    const first = provider.lastRequest?.system ?? "";
+    expect(first).toContain("Lessons this project learned the hard way");
+    expect(first).toContain("- Bank CSVs may write amounts as 1.234,56: toCents must read the European decimal comma");
+    expect(first).toContain('"Accept semicolon-separated CSV files."');
+
+    for await (const _chunk of agent.processMessage("Which stack does this project use?")) {
+      // drain
+    }
+    expect(provider.lastRequest?.system ?? "").not.toContain("Lessons this project learned the hard way");
+  });
+
   it("gives a request to continue the latest work, never the note that the project is new (doc 20, TEST E9)", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-memory-context-continue-"));

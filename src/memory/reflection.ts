@@ -1,5 +1,6 @@
 import type { ProviderAdapter, ProviderUsage } from "../providers/types";
 import type { PlanAcceptanceCriterion, PlanStepStatus } from "../types/index";
+import { quoteFound } from "./evidence";
 import { decideMemoryWrite, type GateDecision, privateText } from "./gate";
 import { errorLine, recoveryOf } from "./recovery";
 import {
@@ -53,12 +54,37 @@ export interface TurnDigest {
   toolCalls: number;
   /** The plan the turn worked under, if any. */
   plan?: PlanSnapshot;
+  /**
+   * Why the host held the turn although its checks passed (test protection): it may teach what the commands showed
+   * about the project, labelled `held`, never that what it changed was right (doc 21, Phase D).
+   */
+  held?: string;
+  /** What the user typed in this session, oldest first: where a quote attributed to the user must be found. */
+  userTexts?: string[];
 }
 
 /** What a turn that ended unverified may teach is kept, but it never outranks a confirmed fact. */
 const UNVERIFIED_CONFIDENCE_CAP = 0.4;
+/** A held turn's checks passed, on what it changed: a little more than unverified, less than confirmed. */
+const HELD_CONFIDENCE_CAP = 0.55;
+/** At or above dynamics.ts's IMPORTANT: a lesson that cost a failing check to learn is kept. */
+const HARD_WON_IMPORTANCE = 0.75;
 
-export interface ReflectionCandidate extends MemoryWriteInput {}
+/** Whether the turn paid for what it learned: a command failed and the same command passed later in the turn. */
+export function learnedTheHardWay(digest: TurnDigest): boolean {
+  return digest.commands.some(
+    (command, index) =>
+      !command.success &&
+      digest.commands
+        .slice(index + 1)
+        .some((later) => later.success && later.command.trim() === command.command.trim()),
+  );
+}
+
+export interface ReflectionCandidate extends MemoryWriteInput {
+  /** The user's own words this states, when it is the project's purpose, a constraint or a non-goal. */
+  quote?: string;
+}
 
 export interface ReflectionReport {
   qualified: boolean;
@@ -369,17 +395,27 @@ export function buildReflectionPrompt(
       REFLECTION_TYPES.join("|") +
       '>,"slug":<kebab-case>,"title":<short>,"hook":<one line>,"description":<one line>,"body":<markdown, 1-8 lines, exact commands/paths/flags>,"confidence":<0..1>,"relatedFiles":[<workspace-relative paths this depends on>],"tags":[<keywords>],"supersedes":<optional: the slug of an EXISTING entry this turn proved is no longer true>}.',
     "Keep only what is non-obvious, project-specific, and reusable: a command that must be run in a particular way, a trap and its fix, a convention the code enforces, a decision and the alternative rejected, a procedure that took several steps to discover.",
+    'When the user stated what the project is for, a constraint it must keep, or something it must not do, keep that too, with "quote": the user\'s exact words from the REQUEST or USER SAID, copied verbatim. A quote Shelra cannot find there is dropped.',
     "Do not store what a fresh reader gets by opening a file (file listings, function signatures), the task itself, credentials, or anything the user only asked once.",
     'If the turn taught nothing durable, return {"memories":[]}.',
   ].join("\n");
+  const earlier = (digest.userTexts ?? []).filter((text) => text.trim() !== digest.userMessage.trim()).slice(-4);
   const sections: string[] = [
     `REQUEST:\n${clip(digest.userMessage, 1_200)}`,
+    ...(earlier.length > 0
+      ? [`USER SAID EARLIER IN THIS SESSION:\n${earlier.map((text) => `- ${clip(text, 400)}`).join("\n")}`]
+      : []),
     `FILES CHANGED: ${digest.changedFiles.length > 0 ? digest.changedFiles.join(", ") : "(none)"}`,
     `VERIFIED: ${digest.verified ? "yes" : "no"}`,
   ];
   if (digest.endedUnverified) {
     sections.push(
       "OUTCOME: the turn ended unverified: the project's checks still failed on its code. Keep what the commands showed (what fails, how, and what did not work), never a fix that was not confirmed.",
+    );
+  }
+  if (digest.held) {
+    sections.push(
+      `OUTCOME: Shelra held this turn (${clip(digest.held, 300)}). Its checks passed, but on what it changed. Keep what the commands and the request showed about the project (inputs, formats, traps), never that the changed tests or the change itself are right.`,
     );
   }
   if (digest.commands.length > 0) {
@@ -425,6 +461,7 @@ export const REFLECTION_SCHEMA: Record<string, unknown> = {
           relatedFiles: { type: "array", items: { type: "string" } },
           tags: { type: "array", items: { type: "string" } },
           supersedes: { type: "string" },
+          quote: { type: "string" },
         },
         required: ["type", "slug", "title", "hook", "description", "body", "confidence"],
         additionalProperties: false,
@@ -487,13 +524,33 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
       relatedFiles: asStringArray(record.relatedFiles),
       tags: asStringArray(record.tags),
       ...(asString(record.supersedes) ? { supersedes: slugify(asString(record.supersedes)) } : {}),
+      ...(asString(record.quote) ? { quote: asString(record.quote).slice(0, 600) } : {}),
     });
     if (candidates.length >= MAX_CANDIDATES) break;
   }
   return candidates;
 }
 
-/** Applies the gate to each candidate and writes the admitted ones. Pure store I/O; no model. */
+/**
+ * A statement attributed to the user is theirs only when Shelra finds the quote, word for word, in what they typed this
+ * session (doc 21, Phase D; the owner's decision of 2026-10-03). Then the quote is the record: its hook, the top of its
+ * body, source `human`, tagged `intent` so it reaches every request. A quote that is not there is dropped, and the item
+ * stays an inference like any paraphrase.
+ */
+export function withQuoteChecked(candidate: ReflectionCandidate, userTexts: readonly string[]): ReflectionCandidate {
+  const { quote, ...rest } = candidate;
+  if (!quote || !quoteFound(quote, userTexts)) return rest;
+  const words = quote.replace(/\s+/gu, " ").trim();
+  return {
+    ...rest,
+    hook: words.length <= 160 ? words : `${words.slice(0, 159)}…`,
+    body: `> ${words}\n\n${rest.body}`,
+    source: "human",
+    confidence: Math.max(rest.confidence ?? 0, 0.9),
+    tags: [...new Set([...(rest.tags ?? []), "intent", "evidence:quote"])],
+  };
+}
+
 /** What a correction says is no longer used: "we don't use X anymore", "use Y instead of X", "ya no usamos X". */
 const CORRECTED_SUBJECT: RegExp[] = [
   /\b(?:instead of|rather than|en vez de|en lugar de)\s+(.+)$/iu,
@@ -784,15 +841,33 @@ export async function reflectOnTurn(options: ReflectOptions): Promise<Reflection
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   }
+  // The user's own words are theirs whatever the turn's outcome; everything else follows it.
+  const userTexts = (options.digest.userTexts ?? [options.digest.userMessage]).map(typedText);
+  report.candidates = report.candidates.map((candidate) => withQuoteChecked(candidate, userTexts));
+  // A lesson the turn paid for (a check that failed, then passed) is important: it does not fade by disuse
+  // (dynamics.ts). In the Year in a Box the June decimal-comma trap faded by October, one turn a month (doc 21, Phase D).
+  if (learnedTheHardWay(options.digest)) {
+    report.candidates = report.candidates.map((candidate) =>
+      HISTORICAL_TYPES.has(candidate.type) && candidate.importance === undefined
+        ? { ...candidate, importance: HARD_WON_IMPORTANCE }
+        : candidate,
+    );
+  }
   // A change nothing checked teaches at most a hypothesis, whichever way the turn ended (a deferred reflection of a
   // turn cut Limited has no verdict of its own; doc 18 review, round 2).
   const unchecked = options.digest.changedFiles.length > 0 && !options.digest.verified;
-  if (options.digest.endedUnverified || unchecked) {
-    report.candidates = report.candidates.map((candidate) => ({
-      ...candidate,
-      confidence: Math.min(candidate.confidence ?? UNVERIFIED_CONFIDENCE_CAP, UNVERIFIED_CONFIDENCE_CAP),
-      tags: [...new Set([...(candidate.tags ?? []), "unverified"])],
-    }));
+  const label = options.digest.endedUnverified || unchecked ? "unverified" : options.digest.held ? "held" : null;
+  if (label) {
+    const cap = label === "held" ? HELD_CONFIDENCE_CAP : UNVERIFIED_CONFIDENCE_CAP;
+    report.candidates = report.candidates.map((candidate) =>
+      candidate.source === "human"
+        ? candidate
+        : {
+            ...candidate,
+            confidence: Math.min(candidate.confidence ?? cap, cap),
+            tags: [...new Set([...(candidate.tags ?? []), label])],
+          },
+    );
   }
   // The mechanically observed trap (a command that failed until something else was done) is
   // recorded unless the model's own candidates already mention the recovering command; twice in

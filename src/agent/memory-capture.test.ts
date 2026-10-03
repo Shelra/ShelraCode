@@ -351,6 +351,63 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     }
   });
 
+  it("lets a turn held by test protection, whose checks passed, reflect, labelled held (doc 21, Phase D)", async () => {
+    const workspace = scratch("shelra-memory-held-");
+    mkdirSync(join(workspace, "test"), { recursive: true });
+    writeFileSync(join(workspace, "test", "money.test.ts"), "expect(toCents('1.234,56')).toBe(1234);\n");
+    callCounter += 1;
+    const write = {
+      id: `call-${callCounter}`,
+      type: "function" as const,
+      function: { name: "write_file", arguments: JSON.stringify({ path: "test/money.test.ts", content: "x" }) },
+    };
+    const round: Round = {
+      events: [
+        { type: "tool-call", toolCall: write },
+        {
+          type: "tool-result",
+          toolCall: write,
+          output: {
+            success: true,
+            output: "Updated test/money.test.ts",
+            diff: { filePath: "test/money.test.ts", additions: 1, removals: 1, patch: "", isNew: false },
+          },
+        },
+        ...bashStep("bun test", true, "6 pass"),
+      ],
+      text: "toCents reads 1.234,56 now.",
+      during: () =>
+        writeFileSync(join(workspace, "test", "money.test.ts"), "expect(toCents('1.234,56')).toBe(123456);\n"),
+    };
+    const lesson = JSON.stringify({
+      memories: [
+        {
+          type: "known-problems",
+          slug: "decimal-comma-amounts",
+          title: "Bank CSVs may write amounts as 1.234,56",
+          hook: "Spanish bank exports write 1.234,56; toCents must read the decimal comma",
+          description: "A trap in bank exports",
+          body: "Spanish banks export 1.234,56; src/money.ts normalizes before splitting.",
+          confidence: 0.9,
+        },
+      ],
+    });
+    const provider = new ScriptedProvider([round], [lesson]);
+    const text = await turn(
+      agentIn(workspace, provider),
+      "Imports from my Spanish bank are wrong: amounts like 1.234,56 come out as 1.234.",
+    );
+
+    expect(text).toContain("[Not verified — it changed tests that existed before this request");
+    expect(provider.reflections).toHaveLength(1);
+    expect(provider.reflections[0]?.prompt).toContain("OUTCOME: Shelra held this turn");
+    const scope = projectMemoryScope(workspace);
+    const kept = listMemoryRecords(scope).find((record) => record.slug === "decimal-comma-amounts");
+    expect(kept?.entry.frontmatter.metadata.tags).toContain("held");
+    expect(readEpisodes(scope).at(-1)).toMatchObject({ outcome: "unverified" });
+    expect(readEpisodes(scope).at(-1)?.note).toContain("changed tests that existed before this request");
+  });
+
   it("keeps memory in the session's root folder after the shell moved into a subfolder", async () => {
     const workspace = scratch("shelra-memory-root-");
     mkdirSync(join(workspace, "packages", "web"), { recursive: true });

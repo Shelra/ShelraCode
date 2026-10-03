@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeProvider } from "../providers/fake";
 import type { ProviderTextRequest, ProviderTextResult } from "../providers/types";
+import { hasFaded } from "./dynamics";
 import { failuresOf } from "./episodes";
 import {
   admitCandidates,
@@ -627,6 +628,101 @@ describe("automatic memory capture", () => {
       confidence: 0.4,
       tags: ["parser", "unverified"],
     });
+  });
+
+  it("learns from a turn held by test protection whose checks passed, labelled held (doc 21, Phase D)", async () => {
+    const held: TurnDigest = {
+      userMessage: "Imports from my Spanish bank are wrong: amounts like 1.234,56 come out as 1.234.",
+      assistantText: "toCents reads 1.234,56 now. [Not verified — it changed tests that existed before this request]",
+      changedFiles: ["src/money.ts", "test/money.test.ts"],
+      commands: [
+        { command: "bun test", success: false, output: "expected 123456, got 1234" },
+        { command: "bun test", success: true, output: "6 pass" },
+      ],
+      verified: true,
+      held: "it changed tests that existed before this request: test/money.test.ts.",
+      toolCalls: 4,
+    };
+    const provider = new JsonProvider(
+      JSON.stringify({
+        memories: [
+          {
+            type: "known-problems",
+            slug: "decimal-comma-amounts",
+            title: "Bank CSVs may write amounts as 1.234,56",
+            hook: "Spanish bank exports write 1.234,56; toCents must read the decimal comma",
+            description: "A trap in bank exports",
+            body: "Spanish banks export 1.234,56. src/money.ts normalizes before splitting.",
+            confidence: 0.9,
+            tags: ["csv"],
+          },
+        ],
+      }),
+    );
+    const scope = projectMemoryScope(workspace);
+    const report = await reflectOnTurn({ scope, provider, modelId: "m", digest: held });
+
+    expect(provider.requests[0]?.prompt).toContain("OUTCOME: Shelra held this turn");
+    expect(report.written).toEqual(["decimal-comma-amounts"]);
+    const meta = readMemoryEntry(scope, "decimal-comma-amounts").entry?.frontmatter.metadata;
+    expect(meta).toMatchObject({ confidence: 0.55, tags: ["csv", "held"] });
+    // `bun test` failed, then passed: a lesson the turn paid for does not fade by disuse.
+    expect(meta?.importance).toBe(0.75);
+    if (!meta) throw new Error("no entry");
+    expect(hasFaded(meta, Date.parse(meta.modified) + 300 * 24 * 60 * 60 * 1000)).toBe(false);
+    expect(hasFaded({ ...meta, importance: undefined }, Date.parse(meta.modified) + 300 * 24 * 60 * 60 * 1000)).toBe(
+      true,
+    );
+  });
+
+  it("keeps the user's purpose or constraint only with a quote found in what they typed, and the quote is the record", async () => {
+    const said = [
+      "We're starting Ledgerly: an offline expense tracker for freelancers. Nothing may leave the user's machine: no cloud sync and no telemetry.",
+      "Add CSV import.",
+    ];
+    const item = (slug: string, quote: string) => ({
+      type: "conventions",
+      slug,
+      title: "Nothing leaves the user's machine",
+      hook: "No sync, no telemetry, no network calls",
+      description: "Product constraint",
+      body: "Never add sync, telemetry or a network call.",
+      confidence: 0.8,
+      tags: ["privacy"],
+      quote,
+    });
+    const provider = new JsonProvider(
+      JSON.stringify({
+        memories: [
+          item("offline-only", "Nothing may leave the user's machine: no cloud sync and no telemetry."),
+          item("offline-paraphrase", "Nothing is ever sent anywhere, by design of the product"),
+        ],
+      }),
+    );
+    const scope = projectMemoryScope(workspace);
+    await reflectOnTurn({
+      scope,
+      provider,
+      modelId: "m",
+      digest: { ...digest, userMessage: "Add CSV import.", userTexts: said },
+    });
+
+    expect(provider.requests[0]?.prompt).toContain("USER SAID EARLIER IN THIS SESSION:\n- We're starting Ledgerly");
+    const quoted = readMemoryEntry(scope, "offline-only").entry;
+    expect(quoted?.frontmatter.metadata).toMatchObject({
+      source: "human",
+      tags: ["privacy", "intent", "evidence:quote"],
+    });
+    expect(quoted?.body).toContain("> Nothing may leave the user's machine: no cloud sync and no telemetry.");
+    expect(listMemoryRecords(scope).find((record) => record.slug === "offline-only")?.index.hook).toBe(
+      "Nothing may leave the user's machine: no cloud sync and no telemetry.",
+    );
+    // A quote that is not in what the user typed is dropped; the item stays an inference.
+    const paraphrase = readMemoryEntry(scope, "offline-paraphrase").entry;
+    if (paraphrase) {
+      expect(paraphrase.frontmatter.metadata.source).toBe("inference");
+      expect(paraphrase.frontmatter.metadata.tags ?? []).not.toContain("intent");
+    }
   });
 
   it("parses tolerant JSON and drops malformed items", () => {

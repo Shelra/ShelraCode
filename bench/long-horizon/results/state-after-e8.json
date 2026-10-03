@@ -9,8 +9,9 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
         "- [Storage is one JSON file per month under data/](storage-json-files.md) — src/store.ts saves data/YYYY-MM.json; no database yet",
-        "- [Nothing leaves the user's machine](offline-only.md) — No cloud sync, no telemetry, no network calls: a privacy requirement of the product"
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry."
       ],
       "decisions": [],
       "episodes": 1,
@@ -23,8 +24,9 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
         "- [Storage is one JSON file per month under data/](storage-json-files.md) — src/store.ts saves data/YYYY-MM.json; no database yet",
-        "- [Nothing leaves the user's machine](offline-only.md) — No cloud sync, no telemetry, no network calls: a privacy requirement of the product",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [Bank CSV import is parseCsv in src/import.ts](csv-import.md) — Expects comma-separated date,description,amount,currency with a header row"
       ],
       "decisions": [],
@@ -38,7 +40,8 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
-        "- [Nothing leaves the user's machine](offline-only.md) — No cloud sync, no telemetry, no network calls: a privacy requirement of the product",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [Bank CSV import is parseCsv in src/import.ts](csv-import.md) — Expects comma-separated date,description,amount,currency with a header row",
         "- [Use SQLite instead of JSON files for storage, with bun:sq...](user-fix-use-sqlite-instead-of-json-files-for-storage-wit.md) — Use SQLite instead of JSON files for storage, with bun:sqlite",
         "- [Storage is SQLite through bun:sqlite](storage-sqlite.md) — src/store.ts opens data/ledger.db with table expenses"
@@ -59,10 +62,13 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [Bank CSV import is parseCsv in src/import.ts](csv-import.md) — Expects comma-separated date,description,amount,currency with a header row",
         "- [Use SQLite instead of JSON files for storage, with bun:sq...](user-fix-use-sqlite-instead-of-json-files-for-storage-wit.md) — Use SQLite instead of JSON files for storage, with bun:sqlite",
         "- [Storage is SQLite through bun:sqlite](storage-sqlite.md) — src/store.ts opens data/ledger.db with table expenses",
-        "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report"
+        "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
+        "- [Yearly tax summary per currency in src/tax-summary.ts](tax-summary.md) — Replaced the monthly report, removed in May at the user's request; the CSV import stays unchanged"
       ],
       "decisions": [
         {
@@ -72,7 +78,7 @@
       ],
       "episodes": 4,
       "live": 0,
-      "archived": 1,
+      "archived": 0,
       "verdict": "[Not verified — it changed tests that existed before this request and the request did not ask to change: test/report-monthly.test.ts.]"
     },
     {
@@ -80,10 +86,14 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [Bank CSV import is parseCsv in src/import.ts](csv-import.md) — Expects comma-separated date,description,amount,currency with a header row",
         "- [Use SQLite instead of JSON files for storage, with bun:sq...](user-fix-use-sqlite-instead-of-json-files-for-storage-wit.md) — Use SQLite instead of JSON files for storage, with bun:sqlite",
         "- [Storage is SQLite through bun:sqlite](storage-sqlite.md) — src/store.ts opens data/ledger.db with table expenses",
-        "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report"
+        "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
+        "- [Yearly tax summary per currency in src/tax-summary.ts](tax-summary.md) — Replaced the monthly report, removed in May at the user's request; the CSV import stays unchanged",
+        "- [Bank CSVs may write amounts as 1.234,56](decimal-comma-amounts.md) — toCents accepts both 1,234.56 and the European 1.234,56; test/money.test.ts covers the Spanish bank format"
       ],
       "decisions": [
         {
@@ -93,7 +103,7 @@
       ],
       "episodes": 5,
       "live": 0,
-      "archived": 1,
+      "archived": 0,
       "verdict": "[Not verified — it changed tests that existed before this request and the request did not ask to change: test/money.test.ts.]"
     },
     {
@@ -101,10 +111,15 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
+        "- [Yearly tax summary per currency in src/tax-summary.ts](tax-summary.md) — Replaced the monthly report, removed in May at the user's request; the CSV import stays unchanged",
+        "- [Bank CSVs may write amounts as 1.234,56](decimal-comma-amounts.md) — toCents accepts both 1,234.56 and the European 1.234,56; test/money.test.ts covers the Spanish bank format",
         "- [We're dropping SQLite: the tax summary over ten years of ...](user-fix-we-re-dropping-sqlite-the-tax-summary-over-ten-y.md) — We're dropping SQLite: the tax summary over ten years of data needs columnar queries",
         "- [Use DuckDB instead of SQLite](user-fix-use-duckdb-instead-of-sqlite.md) — Use DuckDB instead of SQLite",
-        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first"
+        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first",
+        "- [Storage is DuckDB (data/ledger.duckdb)](storage-duckdb.md) — src/store.ts; the engine is injected, tests use memoryLedger()"
       ],
       "decisions": [
         {
@@ -118,7 +133,7 @@
       ],
       "episodes": 6,
       "live": 0,
-      "archived": 2,
+      "archived": 1,
       "verdict": "[Not verified — it changed tests that existed before this request and the request did not ask to change: test/store.test.ts.]"
     },
     {
@@ -126,10 +141,16 @@
       "exit": "ok",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
+        "- [Yearly tax summary per currency in src/tax-summary.ts](tax-summary.md) — Replaced the monthly report, removed in May at the user's request; the CSV import stays unchanged",
+        "- [Bank CSVs may write amounts as 1.234,56](decimal-comma-amounts.md) — toCents accepts both 1,234.56 and the European 1.234,56; test/money.test.ts covers the Spanish bank format",
         "- [We're dropping SQLite: the tax summary over ten years of ...](user-fix-we-re-dropping-sqlite-the-tax-summary-over-ten-y.md) — We're dropping SQLite: the tax summary over ten years of data needs columnar queries",
         "- [Use DuckDB instead of SQLite](user-fix-use-duckdb-instead-of-sqlite.md) — Use DuckDB instead of SQLite",
-        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first"
+        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first",
+        "- [Storage is DuckDB (data/ledger.duckdb)](storage-duckdb.md) — src/store.ts; the engine is injected, tests use memoryLedger()",
+        "- [Code is organized in src/domain, src/storage, src/importers and src/reports](module-layout.md) — Domain types, storage, importers and reports each live in their own folder under src/"
       ],
       "decisions": [
         {
@@ -143,7 +164,7 @@
       ],
       "episodes": 7,
       "live": 0,
-      "archived": 2,
+      "archived": 1,
       "verdict": "[Not verified — it changed tests that existed before this request and the request did not ask to change: test/money.test.ts, test/store.test.ts.]"
     },
     {
@@ -151,10 +172,15 @@
       "exit": "killed mid-turn after its first tool result",
       "memoryIndex": [
         "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
+        "- [Ledgerly: an offline expense tracker for freelancers](product-purpose.md) — an offline expense tracker for freelancers who invoice in several currencies",
+        "- [Nothing leaves the user's machine](offline-only.md) — Nothing may leave the user's machine: no cloud sync and no telemetry.",
         "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
+        "- [Bank CSVs may write amounts as 1.234,56](decimal-comma-amounts.md) — toCents accepts both 1,234.56 and the European 1.234,56; test/money.test.ts covers the Spanish bank format",
         "- [We're dropping SQLite: the tax summary over ten years of ...](user-fix-we-re-dropping-sqlite-the-tax-summary-over-ten-y.md) — We're dropping SQLite: the tax summary over ten years of data needs columnar queries",
         "- [Use DuckDB instead of SQLite](user-fix-use-duckdb-instead-of-sqlite.md) — Use DuckDB instead of SQLite",
-        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first"
+        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first",
+        "- [Storage is DuckDB (data/ledger.duckdb)](storage-duckdb.md) — src/store.ts; the engine is injected, tests use memoryLedger()",
+        "- [Code is organized in src/domain, src/storage, src/importers and src/reports](module-layout.md) — Domain types, storage, importers and reports each live in their own folder under src/"
       ],
       "decisions": [
         {
@@ -174,49 +200,49 @@
   ],
   "sessions": [
     {
-      "created": "2026-01-05T12:00:00.188Z",
+      "created": "2026-01-05T12:00:00.206Z",
       "model": "yib-model-a",
       "messages": 16,
       "toolCalls": 7
     },
     {
-      "created": "2026-02-03T12:00:00.188Z",
+      "created": "2026-02-03T12:00:00.199Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 5
     },
     {
-      "created": "2026-03-02T12:00:00.191Z",
+      "created": "2026-03-02T12:00:00.202Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-05-04T12:00:00.184Z",
+      "created": "2026-05-04T12:00:00.207Z",
       "model": "yib-model-a",
       "messages": 16,
       "toolCalls": 6
     },
     {
-      "created": "2026-06-01T12:00:00.189Z",
+      "created": "2026-06-01T12:00:00.199Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-07-06T12:00:00.189Z",
+      "created": "2026-07-06T12:00:00.204Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-08-03T12:00:00.185Z",
+      "created": "2026-08-03T12:00:00.205Z",
       "model": "yib-model-a",
       "messages": 36,
       "toolCalls": 16
     },
     {
-      "created": "2026-09-07T12:00:00.183Z",
+      "created": "2026-09-07T12:00:00.203Z",
       "model": "yib-model-a",
       "messages": 0,
       "toolCalls": 0
@@ -226,7 +252,7 @@
   "digestCounterfactual": [
     {
       "routineEpisodesAdded": 0,
-      "chars": 2080,
+      "chars": 2505,
       "reached": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F14"],
       "of": 14
     },

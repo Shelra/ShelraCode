@@ -34,8 +34,6 @@ export interface SessionSpec {
   answer: string;
   /** What an ideal model returns to the reflection prompt (the memories array). */
   reflection: Array<Record<string, unknown>>;
-  /** What an ideal model returns to the memory-commit prompt (the items array); used once that prompt exists. */
-  commit?: Array<Record<string, unknown>>;
   approveDecisions?: boolean;
   /** The process hangs (to be killed) after this many tool results. */
   crashAfterTools?: number;
@@ -95,7 +93,6 @@ function toolEvent(id: string, step: ScriptStep) {
 
 /** Which scripted answer a text call gets, by the prompt that asked. */
 function scriptedText(system: string, spec: SessionSpec): { kind: string; text: string } {
-  if (system.includes("MEMORY COMMIT")) return { kind: "commit", text: JSON.stringify({ items: spec.commit ?? [] }) };
   if (system.includes("extract durable project knowledge")) {
     return { kind: "reflection", text: JSON.stringify({ memories: spec.reflection }) };
   }

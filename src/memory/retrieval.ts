@@ -151,7 +151,9 @@ export function detectStaleness(
 export function isStandingRule(record: MemoryRecord): boolean {
   const meta = record.entry.frontmatter.metadata;
   if (meta.source !== "human") return false;
-  return meta.type === "preference" || (meta.tags ?? []).includes("user-directive");
+  // `intent`: what the project is for, a constraint or a non-goal, quoted from the user and found in what they typed.
+  const tags = meta.tags ?? [];
+  return meta.type === "preference" || tags.includes("user-directive") || tags.includes("intent");
 }
 
 interface RecordTerms {

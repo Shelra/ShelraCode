@@ -50,7 +50,9 @@ if (!apiKey) {
 }
 const realHome = homedir();
 
-const root = mkdtempSync(join(tmpdir(), `shelra-lh-real-${label}-`));
+/** `--root <dir>`: where the copy of the state goes, so a caller can grade the workspace the turn left. */
+const root = flag("--root") ?? mkdtempSync(join(tmpdir(), `shelra-lh-real-${label.replaceAll("/", "-")}-`));
+mkdirSync(root, { recursive: true });
 const home = join(root, "home");
 const workspace = join(root, workspaceName);
 cpSync(join(state, "home"), home, { recursive: true });

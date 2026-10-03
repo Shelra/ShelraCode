@@ -35,6 +35,18 @@ describe("quotes of the user", () => {
     expect(quoteFound("Fix it", USER)).toBe(false);
     expect(quoteFound("by client", USER)).toBe(false);
   });
+
+  it("need three content words and at most 300 characters, and never come from pasted code or quoted lines", () => {
+    const said = [
+      "yes, do it for me now please",
+      "Use this:\n```ts\nconst storage = 'never send data to the cloud';\n```\n> nothing may leave the machine, says the old doc\nOk.",
+      `${"a long pasted paragraph about the importer ".repeat(10)}`,
+    ];
+    expect(quoteFound("yes, do it for me now please", said)).toBe(false);
+    expect(quoteFound("never send data to the cloud", said)).toBe(false);
+    expect(quoteFound("nothing may leave the machine", said)).toBe(false);
+    expect(quoteFound(said[2] ?? "", said)).toBe(false);
+  });
 });
 
 describe("evidence a record points to", () => {

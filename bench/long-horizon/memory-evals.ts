@@ -271,15 +271,7 @@ const evals: Record<string, () => Promise<EvalResult>> = {
           confidence: 0.9,
           relatedFiles: ["src/report.ts"],
           tags: ["report", "client", "correction"],
-        },
-      ],
-      commit: [
-        {
-          kind: "correction",
-          subject: "report grouping",
-          statement: "The report groups totals by client, never by month.",
-          misunderstanding: "The report was written to total per month.",
-          evidence: { type: "quote", ref: "the report must group the totals by client, never by month" },
+          quote: "the report must group the totals by client, never by month",
         },
       ],
     });
@@ -449,15 +441,6 @@ const evals: Record<string, () => Promise<EvalResult>> = {
           tags: ["schema", "codegen"],
         },
       ],
-      commit: [
-        {
-          kind: "procedure",
-          subject: "changing the user schema",
-          statement:
-            "After editing schema/user.json, run `bun run gen` to regenerate src/generated.ts, then `bun test`.",
-          evidence: { type: "command", ref: "bun run gen" },
-        },
-      ],
     });
     commitAll(root, workspace, "Add phone");
     const text = await session(root, workspace, {
@@ -501,17 +484,6 @@ const evals: Record<string, () => Promise<EvalResult>> = {
           confidence: 0.85,
           relatedFiles: ["src/due.ts"],
           tags: ["clock", "time", "tests"],
-        },
-      ],
-      commit: [
-        {
-          kind: "failure",
-          subject: "testing code that reads the clock",
-          statement:
-            "Overriding Date.now in tests leaked into other tests; inject a clock function (now: () => number) instead.",
-          tried: "Overriding Date.now globally in the test",
-          resolution: "dueDate(days, now = Date.now)",
-          evidence: { type: "file", ref: "src/due.ts" },
         },
       ],
     });
@@ -564,14 +536,6 @@ const evals: Record<string, () => Promise<EvalResult>> = {
             confidence: 0.8,
             relatedFiles: ["src/routes/health.ts"],
             tags: ["routes", "api"],
-          },
-        ],
-        commit: [
-          {
-            kind: "fact",
-            subject: "API route convention",
-            statement: `${statement}.`,
-            evidence: { type: "file", ref: "src/routes/health.ts" },
           },
         ],
       });
