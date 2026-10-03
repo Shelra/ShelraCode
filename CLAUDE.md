@@ -37,7 +37,9 @@ criteria and working rules (free models only), is `docs/EXECUTION-PLAN.md`: work
   reusing a run the agent made after its last change, and sends failures back parsed, for a bounded repair; a plan
   criterion whose command did not pass before the change (it failed, or was not run) joins them. Without stated
   checks, a real check program must have run after the last change, shell writes included. Tests that existed
-  before the request are protected unless it asks to change them, and so are the checks themselves: the host runs
+  before the request are protected unless it asks to change them (a test the turn only added cases to, or whose
+  imports followed a moved module, stands when the host runs it as it was and it passes on the final code;
+  `src/contract/test-protection.ts`), and so are the checks themselves: the host runs
   them as the turn found them, in the session's workspace, and a turn whose edits change what one runs (a check
   script, a recipe, the runner's config, the tooling it executes) is sent back once, then reported unverified,
   unless the request asks for the change (`src/contract/check-definitions.ts`). Audit and roadmap:

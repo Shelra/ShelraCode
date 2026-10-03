@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
@@ -40,7 +40,7 @@ import {
   type RuleInForce,
   ruleViolations,
 } from "../contract/rule-guards";
-import { isTestFile, requestAllowsTestEdits } from "../contract/test-protection";
+import { isTestFile, originalTestToRun, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
 import type {
   NotificationHookInput,
@@ -326,6 +326,19 @@ const SMOKE_REPAIRS = 2;
 const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
 /** Marks, in a contract check's source, a check the turn itself defined in a project that stated none. */
 const DEFINED_THIS_TURN = "defined this turn";
+/** Whether the existing tests a turn changed still hold as they were (Agent.originalTestsHold). */
+type OriginalTestsOutcome = { passed: true; moved: string[] } | { passed: false; detail: string } | { refused: string };
+
+/** A file's size and modification time: when it changes, an earlier run of its tests no longer speaks for it. */
+function fileStamp(path: string): string {
+  try {
+    const stat = statSync(path);
+    return `${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    return "missing";
+  }
+}
+
 /** How long the independent check's one test file may run; one that runs longer says nothing either way. */
 const INDEPENDENT_CHECK_TIMEOUT_MS = 3 * 60_000;
 /** The independent check of the request: what its author reported, and its test as the author left it. */
@@ -1775,10 +1788,15 @@ export class Agent {
    * started, else "" for a file that did not exist then. A file whose state before the turn is unknown (uncommitted
    * edits, no git) is left out rather than blamed on the turn, and so is a deleted, unreadable or very large one.
    */
-  private changedFileTexts(cwd: string, paths: readonly string[], start: WorkspaceState | null): ChangedFile[] {
+  private changedFileTexts(
+    cwd: string,
+    paths: readonly string[],
+    start: WorkspaceState | null,
+    include: (path: string) => boolean = isGuardedSource,
+  ): ChangedFile[] {
     const journal = this.attemptJournal.beforeTurn();
     const files: ChangedFile[] = [];
-    for (const path of paths.filter(isGuardedSource).slice(0, 60)) {
+    for (const path of paths.filter(include).slice(0, 60)) {
       const full = join(cwd, path);
       let after: string;
       try {
@@ -2545,6 +2563,55 @@ export class Agent {
       });
     } finally {
       rmSync(join(workspace, VERIFY_DIR), { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Whether the existing tests a turn changed still hold as they were (src/contract/test-protection.ts): each change
+   * only added cases, or re-pointed an import at a module that moved, and the project's tests pass on the final code
+   * with the originals put back for the run. The turn's versions, and their timestamps, are restored afterwards, so
+   * nothing reads as changed. `refused` says why the originals could not be tried; then only the request can allow
+   * the change.
+   */
+  private async originalTestsHold(input: {
+    cwd: string;
+    paths: readonly string[];
+    start: WorkspaceState | null;
+    checks: readonly ContractCheck[];
+    signal?: AbortSignal;
+  }): Promise<OriginalTestsOutcome> {
+    if (input.checks.length === 0) return { refused: "the project states no test command to run them with" };
+    const texts = this.changedFileTexts(input.cwd, input.paths, input.start, () => true);
+    if (texts.length !== input.paths.length) return { refused: "a test was deleted, or its earlier text is unknown" };
+    const originals: Array<{ path: string; original: string; after: string }> = [];
+    const moved: string[] = [];
+    for (const file of texts) {
+      const shape = originalTestToRun(file.before, file.after, file.path, (relative) =>
+        existsSync(join(input.cwd, relative)),
+      );
+      if ("refused" in shape) return { refused: `${file.path}: ${shape.refused}` };
+      originals.push({ path: file.path, original: shape.original, after: file.after });
+      moved.push(...shape.movedImports);
+    }
+    const stamps = originals.map(({ path }) => statSync(join(input.cwd, path)));
+    try {
+      for (const { path, original } of originals) writeFileSync(join(input.cwd, path), original);
+      for (const check of input.checks) {
+        const run = await this.checkRunner(check.command, {
+          timeoutMs: CONTRACT_CHECK_TIMEOUT_MS,
+          signal: input.signal,
+          cwd: input.cwd,
+        });
+        if (!run.passed) return { passed: false, detail: `\`${check.command}\`:\n${describeFailures(run.output)}` };
+      }
+      return { passed: true, moved };
+    } finally {
+      originals.forEach(({ path, after }, index) => {
+        const full = join(input.cwd, path);
+        writeFileSync(full, after);
+        const stamp = stamps[index];
+        if (stamp) utimesSync(full, stamp.atime, stamp.mtime);
+      });
     }
   }
 
@@ -3382,6 +3449,9 @@ export class Agent {
     let ruleEditsNudged = false;
     let checkEditsNudged = false;
     let decisionEditsNudged = false;
+    /** The host's run of the changed tests as they were, for the files as they stood then (see originalTestsHold). */
+    let originalTestsCache = null as { key: string; outcome: OriginalTestsOutcome } | null;
+    let originalTestsNoted = false;
     /**
      * The repair ledger (audit doc 15, Phase 2.2): the last failing contract evaluation, to tell a repeat
      * of the same failures after more changes from progress.
@@ -4166,14 +4236,60 @@ export class Agent {
                   (path) => isTestFile(path) && existedAt(turnStartState, cwd, path),
                 )
               : [];
-          if (changedTests.length > 0) {
+          // A test the turn only added cases to, or whose imports followed a module that moved, stands when the host
+          // runs it as it was on the final code and it passes (src/contract/test-protection.ts): nothing it asserted was
+          // given up. Anything else still needs the request's word.
+          let originals: OriginalTestsOutcome | null = null;
+          if (changedTests.length > 0 && !this.ablations.has("contract")) {
+            const key = changedTests.map((path) => `${path}:${fileStamp(join(cwd, path))}`).join("|");
+            if (originalTestsCache?.key !== key) {
+              reportStatus("checks", "Running the tests as they were before this request");
+              const outcome = await this.originalTestsHold({
+                cwd,
+                paths: changedTests,
+                start: turnStartState,
+                checks: turnStartChecks.filter((check) => check.kind === "test"),
+                signal,
+              }).catch((error: unknown): OriginalTestsOutcome => {
+                recordSwallowedError("test-protection.originals", error);
+                return { refused: "the original tests could not be run" };
+              });
+              originalTestsCache = { key, outcome };
+            }
+            originals = originalTestsCache.outcome;
+          }
+          if (changedTests.length > 0 && originals !== null && "passed" in originals && originals.passed) {
+            if (!originalTestsNoted) {
+              originalTestsNoted = true;
+              this.kernel?.recordObservation(
+                `Test protection: ${changedTests.join(", ")} changed, and as they were they pass on the final code.`,
+              );
+              yield {
+                type: "content",
+                content: `\n\n[${changedTests.join(", ")} existed before this request; the turn ${
+                  originals.moved.length > 0
+                    ? "re-pointed imports at moved modules and kept every case"
+                    : "only added to"
+                } ${changedTests.length === 1 ? "it" : "them"}, and Shelra ran ${changedTests.length === 1 ? "it" : "them"} as ${changedTests.length === 1 ? "it was" : "they were"}: ${changedTests.length === 1 ? "it passes" : "they pass"} on the final code.]\n\n`,
+              };
+            }
+          } else if (changedTests.length > 0) {
             if (!testEditsNudged) {
               testEditsNudged = true;
               this.messages.push({
                 role: "user",
                 content: [
                   `Completion blocked: you changed tests that existed before this request: ${changedTests.join(", ")}.`,
-                  "The request does not ask for test changes. Restore them and make the code pass the original tests. If a test itself is wrong, stop and say so with report_blocker instead of changing it.",
+                  ...(originals !== null && "passed" in originals && !originals.passed
+                    ? [
+                        "Shelra ran them as they were before this request, on your code, and they fail:",
+                        originals.detail,
+                        "The request does not ask for test changes. Make the code pass the original tests; cases you added may stay. If a test itself is wrong, stop and say so with report_blocker instead of changing it.",
+                      ]
+                    : [
+                        ...(originals !== null && "refused" in originals ? [`Not allowed: ${originals.refused}.`] : []),
+                        "The request does not ask for test changes. Restore them and make the code pass the original tests. If a test itself is wrong, stop and say so with report_blocker instead of changing it.",
+                      ]),
                 ].join("\n"),
               });
               this.messageSeqs.push(null);
@@ -4181,7 +4297,11 @@ export class Agent {
               this.persistKernelIndex("Existing tests were changed");
               continue;
             }
-            const reason = `it changed tests that existed before this request and the request did not ask to change: ${changedTests.join(", ")}.`;
+            const reason = `it changed tests that existed before this request and the request did not ask to change: ${changedTests.join(", ")}${
+              originals !== null && "passed" in originals && !originals.passed
+                ? ", and as they were they fail on the final code"
+                : ""
+            }.`;
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
             const verdict = `[Not verified — ${reason}]`;

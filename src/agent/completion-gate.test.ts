@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -2603,6 +2603,105 @@ describe("the checks that decide done are the ones the turn started with (audit 
     expect(requests).toHaveLength(1);
     expect(text).toContain("changed during this turn outside its own file edits");
   }, 60_000);
+
+  describe("an existing test the turn only added to (2026-10-03: added cases and moved imports were held)", () => {
+    const ORIGINAL_TEST =
+      "import { expect, test } from 'bun:test';\nimport { slugify } from './slug';\ntest('trims', () => { expect(slugify(' A ')).toBe('a'); });\n";
+    const ADDED_CASE = "test('lowercases', () => { expect(slugify('AB')).toBe('ab'); });\n";
+    const TRIM_AND_LOWER = "export const slugify = (s: string) => s.trim().toLowerCase();\n";
+
+    it("keeps cases added to an existing test once the test as it was passes on the final code", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { provider, requests } = roundsModel([
+        () => [
+          ...write("w1", "src/slug.ts", TRIM_AND_LOWER),
+          ...write("w2", "src/slug.test.ts", `${ORIGINAL_TEST}${ADDED_CASE}`),
+        ],
+      ]);
+      // The real runner: the host runs `bun run test` with the original test put back, then the contract runs it.
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+      const text = await run(agent, "Implement slugify in src/slug.ts so it lowercases.");
+
+      expect(requests).toHaveLength(1);
+      expect(text).toContain(
+        "[src/slug.test.ts existed before this request; the turn only added to it, and Shelra ran it as it was: it passes on the final code.]",
+      );
+      expect(text).toContain("[Checked by Shelra on the final code: `bun run test` passed]");
+      expect(text).not.toContain("Not verified");
+      // The turn's version is back on disk after the run of the original.
+      expect(readFileSync(join(dir, "src", "slug.test.ts"), "utf8")).toBe(`${ORIGINAL_TEST}${ADDED_CASE}`);
+    }, 120_000);
+
+    it("follows a module the turn moved, with the original's cases and the new import", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { provider, requests } = roundsModel([
+        () => {
+          rmSync(join(dir, "src", "slug.ts"));
+          return [
+            ...write("w1", "src/text/slug.ts", TRIM_AND_LOWER),
+            ...write("w2", "src/slug.test.ts", ORIGINAL_TEST.replace("from './slug'", "from './text/slug'")),
+          ];
+        },
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+      const text = await run(agent, "Move slugify to src/text/slug.ts and make it trim and lowercase.");
+
+      expect(requests).toHaveLength(1);
+      expect(text).toContain("re-pointed imports at moved modules and kept every case");
+      expect(text).not.toContain("Not verified");
+    }, 120_000);
+
+    it("sends back what the test as it was reports when the turn's code breaks it", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { provider, requests } = roundsModel([
+        () => [
+          // Lowercases but no longer trims: the original 'trims' case fails, the added one passes.
+          ...write("w1", "src/slug.ts", "export const slugify = (s: string) => s.toLowerCase();\n"),
+          ...write("w2", "src/slug.test.ts", `${ORIGINAL_TEST}${ADDED_CASE}`),
+        ],
+        () => [{ type: "text-delta", text: "It works." } as ProviderEvent],
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+      const text = await run(agent, "Implement slugify in src/slug.ts so it lowercases.");
+
+      const nudge = lastUserText(requests[1]);
+      expect(nudge).toContain("Shelra ran them as they were before this request, on your code, and they fail:");
+      expect(nudge).toContain("trims");
+      expect(text).toContain("and as they were they fail on the final code");
+      expect(readFileSync(join(dir, "src", "slug.test.ts"), "utf8")).toBe(`${ORIGINAL_TEST}${ADDED_CASE}`);
+    }, 120_000);
+
+    it("still holds a changed assertion, whatever was added around it", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+      const { provider, requests } = roundsModel([
+        () => [
+          ...write("w1", "src/slug.ts", TRIM_AND_LOWER),
+          ...write("w2", "src/slug.test.ts", `${ORIGINAL_TEST.replace("toBe('a')", "toBe(' a ')")}${ADDED_CASE}`),
+        ],
+        () => [{ type: "text-delta", text: "Done." } as ProviderEvent],
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, "Implement slugify in src/slug.ts so it lowercases.");
+
+      expect(lastUserText(requests[1])).toContain(
+        "Not allowed: src/slug.test.ts: it removed or rewrote a line of the test.",
+      );
+      expect(text).toContain("[Not verified — it changed tests that existed before this request");
+    }, 60_000);
+  });
 
   describe("an independent check of the request (2026-10-03: seven of eight losses were false completions)", () => {
     const CHECKER_BRIEF = "You are an independent checker";
