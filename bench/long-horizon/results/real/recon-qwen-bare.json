@@ -1,0 +1,195 @@
+{
+  "label": "recon-qwen-bare",
+  "date": "2026-12-15T12:00:00Z",
+  "model": "openrouter/qwen/qwen3.8-27b:free",
+  "ablate": ["bare"],
+  "prompt": "Before you change anything, I need a status report on this project from what you can find. 1) What is the project for, and who is it for? 2) Which storage engine does it use now, why, and what did it use before? 3) Which requirements changed during the year? 4) What is finished, what is half done, and what went wrong along the way? 5) Which rules I set still hold? 6) What is the next correct step? Say where each answer comes from, and write unknown where you cannot find evidence.",
+  "seconds": 59,
+  "requests": 1,
+  "toolCalls": 30,
+  "verdict": null,
+  "firstSystem": "You are a coding agent working in the user's repository through tools. Complete the user's task. When you are done, reply with a short summary.\n\nENVIRONMENT:\n- Host shell: Windows PowerShell 5.1. Use PowerShell syntax (`Get-ChildItem -Force`, `Get-Content`, `Set-Location`, `New-Item`). Do not use POSIX `/d/...` paths, `ls -la`, `find`, or `&&`. Never create or change files through the shell (`>`, `echo`, `Set-Content`, `Out-File`): this shell writes UTF-16/BOM that corrupts JSON and source files — use write_file and edit_file, passing file text as a string. Commands already run in PowerShell: never wrap one in `powershell -Command \"...\"`, because the outer shell expands `$_` and other variables inside the double quotes. Run independent checks in one command, a label before each: `'--- services'; Get-Service | Where-Object Status -eq Running; '--- ports'; Get-NetTCPConnection -State Listen`.\n\nCurrent working directory: <root>\\ledgerly\nToday's date: 2026-12-15 (Tuesday, local time).",
+  "tools": [
+    {
+      "name": "bash",
+      "args": "{\"command\":\"Get-ChildItem -Force -Recurse -Depth 2 | Select-Object FullName, Length | Format-Table -AutoSize\"}",
+      "ok": true,
+      "output": "FullName                                                                                                               \r\n--------                                                                                                               \r\n<root>\\ledgerly\\.git                                  \r\n<root>"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"README.md\"}",
+      "ok": true,
+      "output": "[README.md: lines 1-8 of 8]\n1 | # Ledgerly\n2 | \n3 | An offline expense tracker for freelancers who invoice in several currencies. Nothing leaves your machine.\n4 | \n5 | ## Storage\n6 | \n7 | One JSON file per month under `data/`.\n8 | "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"package.json\"}",
+      "ok": true,
+      "output": "[package.json: lines 1-9 of 9]\n1 | {\n2 |   \"name\": \"ledgerly\",\n3 |   \"private\": true,\n4 |   \"type\": \"module\",\n5 |   \"scripts\": {\n6 |     \"test\": \"bun test\"\n7 |   }\n8 | }\n9 | "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"docs\\\\ARCHITECTURE.md\"}",
+      "ok": true,
+      "output": "[docs\\ARCHITECTURE.md: lines 1-5 of 5]\n1 | # Architecture\n2 | \n3 | - Money is stored as integer cents (`src/money.ts`).\n4 | - Storage: one JSON file per month under `data/` (`src/store.ts`). No database.\n5 | "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"docs\\\\decisions\\\\0001-storage-uses-sq...\"}",
+      "ok": false,
+      "output": "File not found: docs\\decisions\\0001-storage-uses-sq..."
+    },
+    {
+      "name": "bash",
+      "args": "{\"command\":\"Get-ChildItem docs\\\\decisions, .shelra\\\\memory, .shelra\\\\memory\\\\live -File | Select-Object FullName\"}",
+      "ok": true,
+      "output": "FullName                                                                                                               \r\n--------                                                                                                               \r\n<root>\\ledgerly\\docs\\decisions\\0001-storage-uses-sq...\r\n<root>"
+    },
+    {
+      "name": "bash",
+      "args": "{\"command\":\"Get-ChildItem docs\\\\decisions -File | ForEach-Object { $_.Name }; Get-ChildItem .shelra\\\\memory -File | ForEach-Object { $_.Name }\"}",
+      "ok": true,
+      "output": "0001-storage-uses-sqlite-through-bun-sqlite.md\r\n0002-storage-uses-duckdb.md\r\n.gitignore\r\narchive.jsonl\r\nconsolidation.json\r\ncsv-import.md\r\nepisodes.jsonl\r\nhistory.jsonl\r\nMEMORY.md\r\noffline-only.md\r\nreflections.jsonl\r\nstorage-json-files.md\r\nstorage-sqlite.md\r\nuser-fix-use-duckdb-instead-of-sqlite.md\r\nuser-fix-use-sqlite-instead-of-json-files-for-storage-wit.md\r\nuser-rule-always-store-money-as-integ"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"docs\\\\decisions\\\\0001-storage-uses-sqlite-through-bun-sqlite.md\"}",
+      "ok": true,
+      "output": "[docs\\decisions\\0001-storage-uses-sqlite-through-bun-sqlite.md: lines 1-21 of 21]\n1 | ---\n2 | id: D-0001\n3 | title: \"Storage uses SQLite through bun:sqlite\"\n4 | status: superseded\n5 | source: agent\n6 | scope: [\"src/store.ts\"]\n7 | proposed: 2026-03-02\n8 | approved: 2026-03-02\n9 | superseded_by: D-0002\n10 | ---\n11 | \n12 | All ledger data is stored in a SQLite database (data/ledger.db) through bun:sq"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"docs\\\\decisions\\\\0002-storage-uses-duckdb.md\"}",
+      "ok": true,
+      "output": "[docs\\decisions\\0002-storage-uses-duckdb.md: lines 1-21 of 21]\n1 | ---\n2 | id: D-0002\n3 | title: \"Storage uses DuckDB\"\n4 | status: active\n5 | source: agent\n6 | scope: [\"src/store.ts\"]\n7 | proposed: 2026-07-06\n8 | supersedes: D-0001\n9 | approved: 2026-07-06\n10 | ---\n11 | \n12 | All ledger data is stored in DuckDB (data/ledger.duckdb); the engine is injected so tests run without it.\n13 | \n14 | ## Why"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\MEMORY.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\MEMORY.md: lines 1-5 of 5]\n1 | - [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents\n2 | - [Use SQLite instead of JSON files for storage, with bun:sq...](user-fix-use-sqlite-instead-of-json-files-for-storage-wit.md) — Use SQLite instead of JSON files for storage, with bun:sqlite\n3 | - [Use DuckDB instead of S"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"src\\\\storage\\\\store.ts\"}",
+      "ok": true,
+      "output": "[src\\storage\\store.ts: lines 1-21 of 21]\n1 | export interface Expense {\n2 |   date: string;\n3 |   description: string;\n4 |   cents: number;\n5 |   currency: string;\n6 |   category?: string;\n7 | }\n8 | \n9 | /** Ledger storage on DuckDB (data/ledger.duckdb). The engine is injected, so tests run without the native module. */\n10 | export const LEDGER_FILE = \"data/ledger.duckdb\";\n11 | \n12 | export interf"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"src\\\\tax-summary.ts\"}",
+      "ok": true,
+      "output": "[src\\tax-summary.ts: lines 1-12 of 12]\n1 | import type { Expense } from \"./storage/store\";\n2 | \n3 | /** Yearly totals per currency, for the tax return. */\n4 | export function taxSummary(expenses: Expense[], year: string): Record<string, number> {\n5 |   const totals: Record<string, number> = {};\n6 |   for (const expense of expenses) {\n7 |     if (!expense.date.startsWith(year)) continue;\n8 |     to"
+    },
+    {
+      "name": "bash",
+      "args": "{\"command\":\"git log --oneline --date=short --pretty=format:'%h %ad %s' | Select-Object -First 100\"}",
+      "ok": true,
+      "output": "bbd13f4 2026-11-03 Detect the CSV separator\r\n05f2863 2026-10-20 Move the CSV importer into src/importers\r\nba9c9d5 2026-08-03 Move money and storage into modules\r\n83f0495 2026-07-06 Move storage to DuckDB\r\n8d8b852 2026-06-01 Read amounts written with a decimal comma\r\nb73d61c 2026-05-04 Replace the monthly report with a yearly tax summary\r\n269e0e3 2026-03-02 Store the ledger in SQLite\r\n237e575 2026-"
+    },
+    {
+      "name": "bash",
+      "args": "{\"command\":\"git status --short; git diff --stat; git log -1 --format='%H %ad %s'\"}",
+      "ok": true,
+      "output": "bbd13f48dca32d4043f597de736c042ae772bb92 Tue Nov 3 12:00:00 2026 +0000 Detect the CSV separator"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\user-rule-always-store-money-as-integer-cents.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\user-rule-always-store-money-as-integer-cents.md: lines 1-19 of 19]\n1 | ---\n2 | name: user-rule-always-store-money-as-integer-cents\n3 | description: \"User instruction on 2026-01-05: Always store money as integer cents\"\n4 | metadata:\n5 |   type: preference\n6 |   modified: 2026-01-05T12:00:00.390Z\n7 |   created: 2026-01-05T12:00:00.390Z\n8 |   source: human\n9 |   confidence: 1\n10 |   "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\user-rule-never-add-another-dependency-without-asking-me-f.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\user-rule-never-add-another-dependency-without-asking-me-f.md: lines 1-19 of 19]\n1 | ---\n2 | name: user-rule-never-add-another-dependency-without-asking-me-f\n3 | description: \"User instruction on 2026-07-06: Never add another dependency without asking me first\"\n4 | metadata:\n5 |   type: preference\n6 |   modified: 2026-07-06T12:00:00.388Z\n7 |   created: 2026-07-06T12:00:00.388Z\n8 | "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\user-fix-use-sqlite-instead-of-json-files-for-storage-wit.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\user-fix-use-sqlite-instead-of-json-files-for-storage-wit.md: lines 1-22 of 22]\n1 | ---\n2 | name: user-fix-use-sqlite-instead-of-json-files-for-storage-wit\n3 | description: \"User correction on 2026-03-02: Use SQLite instead of JSON files for storage, with bun:sqlite\"\n4 | metadata:\n5 |   type: conventions\n6 |   modified: 2026-03-02T12:00:00.381Z\n7 |   created: 2026-03-02T12:00:00.38"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\user-fix-use-duckdb-instead-of-sqlite.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\user-fix-use-duckdb-instead-of-sqlite.md: lines 1-22 of 22]\n1 | ---\n2 | name: user-fix-use-duckdb-instead-of-sqlite\n3 | description: \"User correction on 2026-07-06: Use DuckDB instead of SQLite\"\n4 | metadata:\n5 |   type: conventions\n6 |   modified: 2026-07-06T12:00:00.376Z\n7 |   created: 2026-07-06T12:00:00.376Z\n8 |   source: human\n9 |   confidence: 1\n10 |   lastConfirmed: 2026-07-"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\offline-only.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\offline-only.md: lines 1-19 of 19]\n1 | ---\n2 | name: offline-only\n3 | description: \"Product constraint stated by the user\"\n4 | metadata:\n5 |   type: conventions\n6 |   modified: 2026-01-05T12:00:01.186Z\n7 |   created: 2026-01-05T12:00:01.186Z\n8 |   source: inference\n9 |   confidence: 0.9\n10 |   lastConfirmed: 2026-01-05T12:00:01.186Z\n11 |   tags: [\"privacy\", \"offline\", \"network\"]\n12"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\csv-import.md\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\csv-import.md: lines 1-21 of 21]\n1 | ---\n2 | name: csv-import\n3 | description: \"Where bank statements are parsed\"\n4 | metadata:\n5 |   type: important-codepaths\n6 |   modified: 2026-02-03T12:00:01.163Z\n7 |   created: 2026-02-03T12:00:01.163Z\n8 |   source: inference\n9 |   confidence: 0.85\n10 |   lastConfirmed: 2026-02-03T12:00:01.163Z\n11 |   relatedFiles: [\"src/import.ts\", \"test/impo"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"src\\\\domain\\\\money.ts\"}",
+      "ok": true,
+      "output": "[src\\domain\\money.ts: lines 1-9 of 9]\n1 | /** Parses an amount into integer cents: \"12.34\", \"1,234.56\" or the European \"1.234,56\". */\n2 | export function toCents(amount: string): number {\n3 |   const text = amount.trim();\n4 |   const european = /,\\d{1,2}$/.test(text);\n5 |   const normalized = european ? text.replaceAll(\".\", \"\").replace(\",\", \".\") : text.replaceAll(\",\", \"\");\n6 |   const [whole, frac"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"src\\\\importers\\\\csv.ts\"}",
+      "ok": true,
+      "output": "[src\\importers\\csv.ts: lines 1-16 of 16]\n1 | import { toCents } from \"../domain/money\";\n2 | import type { Expense } from \"../storage/store\";\n3 | \n4 | /** Parses a bank statement exported as comma-separated date,description,amount,currency with a header row. */\n5 | export function parseCsv(text: string): Expense[] {\n6 |   return text\n7 |     .trim()\n8 |     .split(/\\r?\\n/)\n9 |     .slice(1)\n10 |   "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\episodes.jsonl\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\episodes.jsonl: lines 1-11 of 11]\n1 | {\"at\":\"2026-01-05T12:00:01.168Z\",\"session\":\"988772aec233\",\"outcome\":\"verified\",\"request\":\"We're starting Ledgerly: an offline expense tracker for freelancers who invoice in several currencies. Nothing may leave the user's machine: no cloud sync and no telemetry. Set up the project with Bun and TypeScript, store expenses in monthly JSON files to"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\history.jsonl\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\history.jsonl: lines 1-13 of 13]\n1 | {\"at\":\"2026-01-05T12:00:00.390Z\",\"event\":\"created\",\"slug\":\"user-rule-always-store-money-as-integer-cents\",\"source\":\"human\",\"type\":\"preference\",\"revision\":1,\"detail\":\"Always store money as integer cents\"}\n2 | {\"at\":\"2026-01-05T12:00:01.172Z\",\"event\":\"created\",\"slug\":\"storage-json-files\",\"source\":\"inference\",\"type\":\"architecture\",\"revision\":1,\"det"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\reflections.jsonl\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\reflections.jsonl: lines 1-25 of 25]\n1 | {\"kind\":\"directive\",\"at\":\"2026-01-05T12:00:00.402Z\",\"qualified\":true,\"reason\":\"the user's own words\",\"candidates\":1,\"decisions\":[{\"slug\":\"user-rule-always-store-money-as-integer-cents\",\"action\":\"create\",\"reason\":\"novel\"}],\"written\":[\"user-rule-always-store-money-as-integer-cents\"]}\n2 | {\"kind\":\"consolidation\",\"at\":\"2026-01-05T12:00:00.404Z\","
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\consolidation.json\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\consolidation.json: lines 1-2 of 2]\n1 | {\"lastRun\":\"2026-11-24T12:00:00.232Z\"}\n2 | "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\".shelra\\\\memory\\\\archive.jsonl\"}",
+      "ok": true,
+      "output": "[.shelra\\memory\\archive.jsonl: lines 1-3 of 3]\n1 | {\"slug\":\"offline-only\",\"title\":\"Nothing leaves the user's machine\",\"hook\":\"No cloud sync, no telemetry, no network calls: a privacy requirement of the product\",\"at\":\"2026-05-04T12:00:00.390Z\",\"reason\":\"faded from disuse (strength 0.20, last used 2026-01-05)\"}\n2 | {\"slug\":\"csv-import\",\"title\":\"Bank CSV import is parseCsv in src/import.ts\",\"hook\":\"E"
+    },
+    {
+      "name": "bash",
+      "args": "{\"command\":\"Get-ChildItem .shelra\\\\memory\\\\live -Force; Get-Content .shelra\\\\memory\\\\.gitignore; bun test 2>&1 | Select-Object -Last 30\",\"timeout\":120000}",
+      "ok": true,
+      "output": "# Shelra's memory of this project stays on this machine.\r\n*\r\nbun test v1.4.1 (4661e494f)\r\n\nSTDERR: bun : \r\nAt line:3 char:82\r\n+ ...  -Force; Get-Content .shelra\\memory\\.gitignore; bun test 2>&1 | Selec ...\r\n+                                                     ~~~~~~~~~~~~~\r\n    + CategoryInfo          : NotSpecified: (:String) [], RemoteException\r\n    + FullyQualifiedErrorId : NativeCommandError\r"
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"test\\\\store.test.ts\"}",
+      "ok": true,
+      "output": "[test\\store.test.ts: lines 1-9 of 9]\n1 | import { expect, test } from \"bun:test\";\n2 | import { memoryLedger } from \"../src/storage/store\";\n3 | \n4 | test(\"keeps expenses in the ledger\", () => {\n5 |   const db = memoryLedger();\n6 |   db.insert({ date: \"2026-07-01\", description: \"Laptop\", cents: 99900, currency: \"EUR\" });\n7 |   expect(db.all()).toHaveLength(1);\n8 | });\n9 | "
+    },
+    {
+      "name": "read_file",
+      "args": "{\"path\":\"test\\\\import.test.ts\"}",
+      "ok": true,
+      "output": "[test\\import.test.ts: lines 1-13 of 13]\n1 | import { expect, test } from \"bun:test\";\n2 | import { parseCsv } from \"../src/importers/csv\";\n3 | \n4 | test(\"imports a comma-separated bank statement\", () => {\n5 |   const rows = parseCsv(\"date,description,amount,currency\\n2026-02-01,Coffee,3.50,EUR\");\n6 |   expect(rows).toEqual([{ date: \"2026-02-01\", description: \"Coffee\", cents: 350, currency: \"EUR\" }]"
+    }
+  ],
+  "text": "# Ledgerly — Status Report\n\n## 1) What is the project, and who is it for?\n\n**An offline expense tracker for freelancers who invoice in several currencies; \"nothing leaves your machine.\"**\nSource: `README.md` (line 3), and the original request recorded in `.shelra/memory/episodes.jsonl` (episode of 2026-01-05: \"an offline expense tracker for freelancers who invoice in several currencies. Nothing may leave the user's machine: no cloud sync and no telemetry\").\n\n## 2) Storage engine: now, why, and before\n\n- **Now (by decision): DuckDB** — `data/ledger.duckdb`, decision D-0002 (status: active, approved 2026-07-06). Reason: \"the tax summary over ten years of data needs columnar queries; SQLite was too slow for them\" (`docs/decisions/0002-storage-uses-duckdb.md`; same in `episodes.jsonl` 2026-07-06). `src/storage/store.ts` also names `data/ledger.duckdb` and defines a `LedgerDb` interface with an injected engine.\n- **Before that: SQLite via `bun:sqlite`** (2026-03-02 → 2026-07-06), decision D-0001, now marked *superseded*. Reason then: \"reports need filtering and grouping; JSON files had to be loaded whole. Rejected: … Postgres (needs a server, breaks offline use).\"\n- **Before that: one JSON file per month** under `data/` (setup 2026-01-05; `episodes.jsonl` episode 1).\n\n**Important caveat:** although D-0002 is the active decision, **no actual DuckDB engine exists in the code**. `src/storage/store.ts` contains only the `LedgerDb` interface and an in-memory `memoryLedger()` fake; `package.json` has **zero dependencies** (no duckdb package), and `test/store.test.ts` tests only the in-memory fake. There is also no `data/` directory in the repo. So the engine that actually works today is \"none — in memory only.\" Unknown whether a real DuckDB implementation ever existed in the working tree; git history only shows the commit titles (\"Move storage to DuckDB\", 2026-07-06), and the current tree has no engine code.\n\n## 3) Requirements that changed during the year\n\nAll from `git log` + `episodes.jsonl` (user requests), cross-checked:\n\n| Date | Change |\n|---|---|\n| 2026-02-03 | Added CSV import of bank statements + monthly report per category |\n| 2026-03-02 | Storage: JSON files → SQLite (`bun:sqlite`) |\n| 2026-05-04 | Monthly report **dropped**, replaced by a yearly tax summary per currency; CSV import kept \"exactly as it is\" |\n| 2026-06-01 | Amounts must parse the European format `1.234,56` (Spanish bank imports were wrong) |\n| 2026-07-06 | Storage: SQLite → DuckDB |\n| 2026-08-03 | Refactor into modules: `src/domain`, `src/storage`, `src/importers`, `src/reports` |\n| 2026-11-03 | CSV import must handle semicolon separators (new bank) |\n\n## 4) Finished / half done / what went wrong\n\n**Finished (verified — I ran `bun test`: 6 pass, 0 fail):**\n- Money as integer cents, incl. European decimal-comma parsing (`src/domain/money.ts`, `test/money.test.ts`)\n- CSV import with header row, comma **and** semicolon separators (`src/importers/csv.ts`, `test/import.test.ts`)\n- Yearly tax summary per currency (`src/tax-summary.ts`, `test/tax-summary.test.ts`)\n- Decision records D-0001/D-0002 with proper supersession chain\n\n**Half done:**\n- **DuckDB storage** — active decision, but only an interface + in-memory fake exist; no engine, no dependency, no persistent data (see §2).\n- **Module refactor** — `src/domain` and `src/storage` done (2026-08-03), `src/importers` done (2026-10-20), but **`src/reports` was never created**: `tax-summary.ts` still sits at `src/` root. Evidence: episode 7 (\"Steps 3 and 4 remain\"), file tree, git log.\n- **Documentation is stale** — `README.md` and `docs/ARCHITECTURE.md` still say \"one JSON file per month under data/ … No database,\" contradicting active decision D-0002.\n\n**What went wrong along the way** (from `episodes.jsonl` notes/failures):\n- 2026-05-04: session ended *unverified* — it changed a pre-existing test (`test/report-monthly.test.ts`) the request didn't ask to change.\n- 2026-06-01: a `bun test` failure (`expect(received).toBe(expected)`) occurred mid-session and was fixed; also modified pre-existing tests unasked.\n- 2026-07-06, 08-03, 10-20, 11-03: all ended *unverified* for the same reason — pre-existing tests were changed without the request asking for it.\n- 2026-09-07: a \"continue the refactor\" session was **interrupted** mid-turn (episode 8).\n- Memory-system failure: the product constraint `offline-only` was **archived on 2026-05-04 as \"faded from disuse\"** (`archive.jsonl`, `history.jsonl`) even though it's a permanent user requirement still stated in the README.\n\n## 5) Which of your rules still hold?\n\n| Rule | Stated | Status |\n|---|---|---|\n| Always store money as integer cents | 2026-01-05 | **Holds** — code uses `cents` everywhere; memory record active |\n| Never add another dependency without asking first | 2026-07-06 | **Holds** — `package.json` has zero dependencies; memory record active |\n| Use DuckDB instead of SQLite | 2026-07-06 | **Holds as the active decision** (D-0002), but is **not actually implemented** in code |\n| Nothing leaves the machine (offline, no sync/telemetry) | 2026-01-05 | **Holds as a requirement** (still in README; no code violates it), but the agent's memory record of it was archived on 2026-05-04 — worth restoring |\n| Use SQLite instead of JSON | 2026-03-02 | **No longer holds** — explicitly superseded by the 2026-07-06 DuckDB correction |\n\nSources: `.shelra/memory/user-rule-*.md`, `user-fix-*.md`, `docs/decisions/*`, `README.md`, `package.json`.\n\n## 6) Next correct step\n\nThe biggest gap is that **no persistent storage exists at all**: the active decision says DuckDB, but the code only has an in-memory fake and zero dependencies. The next correct step is:\n\n1. **Ask you for permission to add a DuckDB dependency** (your 2026-07-06 rule forbids adding one without asking), then implement the real DuckDB engine behind the existing `LedgerDb` interface (`data/ledger.duckdb`) with a test that exercises it.\n2. In parallel / right after, **fix the stale docs** — `README.md` and `docs/ARCHITECTURE.md` still describe monthly JSON files.\n3. Finish the interrupted refactor: move `tax-summary.ts` into `src/reports/` (step 4 of 2026-08-03, never done).\n\nUnknowns: I found no evidence of who besides you uses or funds the project, no `data/` files (no evidence of real ledger data ever being stored), and no evidence what the 2026-07-06 DuckDB commit contained beyond its title — the engine code is simply not in the tree today."
+}
