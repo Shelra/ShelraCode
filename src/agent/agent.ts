@@ -2987,6 +2987,7 @@ export class Agent {
           this.bash.getSandboxSettings(),
           memoryContext,
           this.ablations,
+          { root: this.bash.getRootCwd(), request: userMessage },
         ),
         this.ablations.has("context") ? "" : contextPacket.promptAppendix,
         runningProcessesNote(this.bash.runningProcesses()),

@@ -300,6 +300,47 @@ describe("automatic memory capture", () => {
     for (const retired of ["eslint-config", "sqlite-file", "install-npm"]) expect(current).not.toContain(retired);
   });
 
+  it("retires the user's earlier correction when a later one drops what it adopted (doc 21 §5.6, TEST P5)", () => {
+    const scope = projectMemoryScope(workspace);
+    // Seen in the Year-in-a-Box: both stayed standing rules from July to December.
+    admitCandidates(scope, extractUserDirectives("Use SQLite instead of JSON files for storage, with bun:sqlite."));
+    admitCandidates(scope, extractUserDirectives("Use DuckDB instead of SQLite."));
+
+    const current = listMemoryRecords(scope).map((record) => record.index.hook);
+    expect(current).toEqual(["Use DuckDB instead of SQLite"]);
+    const old = readMemoryEntry(scope, "user-fix-use-sqlite-instead-of-json-files-for-storage-wit").entry;
+    expect(old?.frontmatter.metadata).toMatchObject({
+      status: "superseded",
+      supersededBy: "user-fix-use-duckdb-instead-of-sqlite",
+    });
+  });
+
+  it("keeps a statement that adopts something else, and a correction of an unrelated subject", () => {
+    const scope = projectMemoryScope(workspace);
+    admitCandidates(scope, extractUserDirectives("We use Postgres for storage."));
+    admitCandidates(scope, extractUserDirectives("Use Vitest instead of Jest."));
+    admitCandidates(scope, extractUserDirectives("Use DuckDB instead of SQLite."));
+    expect(listMemoryRecords(scope).map((record) => record.index.hook)).toEqual([
+      "We use Postgres for storage",
+      "Use Vitest instead of Jest",
+      "Use DuckDB instead of SQLite",
+    ]);
+  });
+
+  it("captures a dropped requirement as a correction (doc 20 §4: 'we no longer want X' left no trace)", () => {
+    const [dropped] = extractUserDirectives(
+      "We no longer want the monthly report. Replace it with a yearly tax summary per currency.",
+    );
+    expect(dropped).toMatchObject({
+      hook: "We no longer want the monthly report",
+      source: "human",
+      tags: expect.arrayContaining(["correction"]),
+    });
+    expect(extractUserDirectives("We're dropping SQLite: the tax summary needs columnar queries.")[0]?.hook).toBe(
+      "We're dropping SQLite: the tax summary needs columnar queries",
+    );
+  });
+
   it("lets a turned-around rule replace the old one, and keeps two different rules (review round 3)", () => {
     const scope = projectMemoryScope(workspace);
     for (const pair of [

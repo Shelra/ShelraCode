@@ -178,14 +178,18 @@ function supersededMentions(text: string): string[] {
     .map((line) => line.trim().slice(0, 240));
 }
 
-/** Standing-rule lines that name an engine the year replaced without naming the current one. */
+/** A line that adopts an engine the year replaced ("Use SQLite instead of JSON files"), not one that drops it. */
+const ADOPTS_REPLACED =
+  /\buse\s+(?:sqlite|json\s+files?)\b|\b(?:stored?|storage)\s+(?:is|in|uses?)\s+(?:sqlite|json)\b/iu;
+
+/** Standing-rule lines that state an engine the year replaced as the one in use. */
 function supersededRulesShown(text: string): string[] {
   const start = text.indexOf("Standing rules");
   if (start < 0) return [];
   const block = text.slice(start).split("\n\n")[0] ?? "";
   return block
     .split("\n")
-    .filter((line) => line.startsWith("- ") && /sqlite|json files?/iu.test(line) && !/duckdb/iu.test(line))
+    .filter((line) => line.startsWith("- ") && ADOPTS_REPLACED.test(line))
     .map((line) => line.trim());
 }
 

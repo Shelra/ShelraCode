@@ -1,0 +1,253 @@
+{
+  "label": "phase-a",
+  "passed": 8,
+  "total": 11,
+  "results": [
+    {
+      "id": "cold-start-project-recall",
+      "question": "What is this project, what is its objective, which stack and architecture does it use, what did we complete recently, what are we building now, which decisions should I know, what should I not do, and what is the next unfinished objective?",
+      "checks": [
+        {
+          "id": "purpose",
+          "label": "offline expense tracker for freelancers",
+          "passed": true
+        },
+        {
+          "id": "privacy",
+          "label": "nothing leaves the machine",
+          "passed": false
+        },
+        {
+          "id": "cents",
+          "label": "rule: integer cents",
+          "passed": true
+        },
+        {
+          "id": "deps",
+          "label": "rule: no dependency without asking",
+          "passed": true
+        },
+        {
+          "id": "architecture",
+          "label": "active storage DuckDB",
+          "passed": true
+        },
+        {
+          "id": "rationale",
+          "label": "why DuckDB",
+          "passed": true
+        },
+        {
+          "id": "scope",
+          "label": "tax summary replaced the monthly report",
+          "passed": true
+        },
+        {
+          "id": "recent",
+          "label": "recent work: CSV separator",
+          "passed": true
+        },
+        {
+          "id": "unfinished",
+          "label": "unfinished: the reports module",
+          "passed": false
+        },
+        {
+          "id": "failure",
+          "label": "known failure: decimal-comma amounts",
+          "passed": false
+        },
+        {
+          "id": "obsolete",
+          "label": "SQLite named as obsolete",
+          "passed": true
+        },
+        {
+          "id": "no-superseded-rule",
+          "label": "no superseded rule shown as current",
+          "passed": true
+        }
+      ],
+      "passed": false,
+      "score": "9/12",
+      "firstRequestChars": 7949
+    },
+    {
+      "id": "cross-session-continuation",
+      "question": "Continue. (after the September crash)",
+      "checks": [
+        {
+          "id": "modules",
+          "label": "the refactor's target modules",
+          "passed": true
+        },
+        {
+          "id": "progress",
+          "label": "what is done and what remains",
+          "passed": true
+        },
+        {
+          "id": "interrupted",
+          "label": "the interrupted turn",
+          "passed": true
+        },
+        {
+          "id": "half-done",
+          "label": "the half-moved importer",
+          "passed": true
+        },
+        {
+          "id": "no-new-here",
+          "label": "no 'treat it as new' note",
+          "passed": true
+        },
+        {
+          "id": "repo-context",
+          "label": "repository context present",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "6/6",
+      "firstRequestChars": 8705
+    },
+    {
+      "id": "superseded-decision",
+      "question": "Add a function that saves an expense to the ledger storage.",
+      "checks": [
+        {
+          "id": "active",
+          "label": "DuckDB is the storage",
+          "passed": true
+        },
+        {
+          "id": "not-current",
+          "label": "SQLite never shown as a current rule",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "2/2",
+      "firstRequestChars": 7706
+    },
+    {
+      "id": "user-correction-retention",
+      "question": "Add a grand total line to the report. (a month after the correction)",
+      "checks": [
+        {
+          "id": "correction",
+          "label": "the correction: group by client",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "1/1",
+      "firstRequestChars": 6606
+    },
+    {
+      "id": "project-isolation",
+      "question": "Project B asks where data is stored, after project A recorded DuckDB",
+      "checks": [
+        {
+          "id": "no-leak",
+          "label": "no fact of project A in project B",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "1/1",
+      "firstRequestChars": 5621
+    },
+    {
+      "id": "documentation-retrieval",
+      "question": "Add request logging to the HTTP client. (the rule lives only in docs/SECURITY.md)",
+      "checks": [
+        {
+          "id": "points-to-doc",
+          "label": "points to docs/SECURITY.md and what it is about",
+          "passed": false
+        }
+      ],
+      "passed": false,
+      "score": "0/1",
+      "firstRequestChars": 5943
+    },
+    {
+      "id": "stale-document-detection",
+      "question": "Explain the storage layer and update the README (the README still says JSON)",
+      "checks": [
+        {
+          "id": "flags-readme",
+          "label": "README flagged as possibly stale or contradicting the active decision",
+          "passed": false
+        }
+      ],
+      "passed": false,
+      "score": "0/1",
+      "firstRequestChars": 6940
+    },
+    {
+      "id": "successful-procedure-learning",
+      "question": "Add an address field to the user schema. (after a session that found the codegen step)",
+      "checks": [
+        {
+          "id": "procedure",
+          "label": "the codegen step is recalled",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "1/1",
+      "firstRequestChars": 6736
+    },
+    {
+      "id": "failed-approach-retention",
+      "question": "A related clock-dependent task, after a session where overriding Date.now failed",
+      "checks": [
+        {
+          "id": "lesson",
+          "label": "the failed approach and its fix are recalled",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "1/1",
+      "firstRequestChars": 6578
+    },
+    {
+      "id": "memory-consolidation",
+      "question": "Five sessions each learn the same route convention in other words; how many copies reach the sixth?",
+      "checks": [
+        {
+          "id": "known",
+          "label": "the convention is known",
+          "passed": true
+        },
+        {
+          "id": "one-copy",
+          "label": "at most two statements of it reach the request",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "2/2",
+      "firstRequestChars": 6315,
+      "notes": "src/routes mentions: 13"
+    },
+    {
+      "id": "memory-noise-resistance",
+      "question": "An unrelated request: how much project knowledge is expanded?",
+      "checks": [
+        {
+          "id": "few-expanded",
+          "label": "no more than one knowledge entry expanded",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "score": "1/1",
+      "firstRequestChars": 7417,
+      "notes": "expanded entries: 0"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
+import { appendEpisode, episodeFrom } from "../memory/episodes";
 import { projectMemoryScope, writeMemoryEntry } from "../memory/store";
 import type {
   ProviderAdapter,
@@ -178,5 +179,53 @@ describe("automatic project memory consultation", () => {
     }
 
     expect(provider.lastRequest?.system).not.toContain("PROJECT MEMORY:");
+  });
+
+  it("gives a request to continue the latest work, never the note that the project is new (doc 20, TEST E9)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-memory-context-continue-"));
+    tempDirs.push(cwd);
+    const scope = projectMemoryScope(cwd);
+    writeMemoryEntry(scope, {
+      slug: "user-rule-cents",
+      title: "Always store money as integer cents",
+      hook: "Always store money as integer cents",
+      type: "preference",
+      description: "User instruction",
+      body: "Always store money as integer cents.",
+      source: "human",
+      tags: ["user-directive"],
+    });
+    const digest = (userMessage: string, files: string[]) => ({
+      userMessage,
+      assistantText: "Steps 1 and 2 are done; importers and reports remain.",
+      changedFiles: files,
+      commands: [],
+      verified: true,
+      toolCalls: 9,
+    });
+    appendEpisode(
+      scope,
+      episodeFrom(
+        digest("Refactor the code into modules: src/domain, src/storage, src/importers and src/reports.", [
+          "src/domain/money.ts",
+        ]),
+        "verified",
+      ),
+    );
+    appendEpisode(scope, episodeFrom(digest("Continue the refactor.", ["src/importers/csv.ts"]), "interrupted"));
+
+    process.chdir(cwd);
+    const provider = new CapturingProvider();
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    for await (const _chunk of agent.processMessage("Continue where we left off.")) {
+      // drain
+    }
+
+    const system = provider.lastRequest?.system ?? "";
+    expect(system).toContain("Recent work in this project, newest first");
+    expect(system).toContain('interrupted · "Continue the refactor."');
+    expect(system).toContain("src/importers/csv.ts");
+    expect(system).not.toContain("treat it as new here");
   });
 });

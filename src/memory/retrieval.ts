@@ -556,6 +556,23 @@ export function appendEpisodeLessons(
   };
 }
 
+/** Adds the project's latest turns, for a request that carries the work on rather than naming it. */
+export function appendRecentWork(
+  context: MemoryContext,
+  lines: readonly string[],
+  at: readonly string[],
+): MemoryContext {
+  if (lines.length === 0) return context;
+  const section = ["Recent work in this project, newest first (what a request to continue is about):", ...lines].join(
+    "\n",
+  );
+  return {
+    ...context,
+    text: context.text ? `${context.text}\n\n${section}` : `PROJECT MEMORY:\n${section}`,
+    episodes: [...(context.episodes ?? []), ...at],
+  };
+}
+
 /**
  * Metamemory: when memory holds nothing about a request, the model is told so, as a person knows they have not met
  * something before. Without it a model given a list of unrelated entries tends to assume earlier work that never

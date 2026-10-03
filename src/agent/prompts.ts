@@ -1,14 +1,16 @@
 import { formatDecisionsForPrompt } from "../ledger/prompt";
-import { activeDecisions } from "../ledger/store";
+import { listDecisions } from "../ledger/store";
 import { isLspToolEnabled } from "../lsp/runtime";
-import { episodeLessons, readEpisodes } from "../memory/episodes";
+import { describeEpisode, episodeLessons, readEpisodes } from "../memory/episodes";
 import {
   appendEpisodeLessons,
+  appendRecentWork,
   buildMemoryContext,
   type MemoryContext,
   noteWhenNothingMatches,
 } from "../memory/retrieval";
 import { listArchivedEntries, listMemoryRecords, listUserMemoryRecords, projectMemoryScope } from "../memory/store";
+import { isContinuationRequest } from "../memory/terms";
 import { getModelInfo } from "../models/catalog";
 import { isShuruSupported } from "../tools/bash";
 import type { AgentMode, TaskRequest } from "../types/index";
@@ -164,6 +166,7 @@ export function buildSystemPrompt(
   sandboxSettings?: SandboxSettings,
   memoryContext?: MemoryContext,
   ablations: Ablations = NO_ABLATIONS,
+  turn: { root?: string; request?: string } = {},
 ): string {
   const custom = loadCustomInstructions(cwd);
   const customSection = custom
@@ -187,7 +190,11 @@ ${workspaceLines}`;
 
   const memoryText = ablations.has("memory") ? "" : (memoryContext ?? memoryContextFor(cwd, "")).text;
   const memorySection = memoryText ? `\n\n${memoryText}\n` : "";
-  const decisionsText = ablations.has("ledger") ? "" : formatDecisionsForPrompt(activeDecisions(cwd));
+  // The project's decisions live at the session's root, where the gate enforces them: after a `cd` into a subfolder
+  // they used to leave the prompt while still being enforced (doc 20, TEST P8).
+  const decisionsText = ablations.has("ledger")
+    ? ""
+    : formatDecisionsForPrompt(listDecisions(turn.root ?? cwd), { ...(turn.request ? { request: turn.request } : {}) });
   const decisionsSection = decisionsText ? `\n\n${decisionsText}\n` : "";
   const skillsText = ablations.has("skills") ? null : formatSkillsForPrompt(discoverSkills(cwd));
   const skillsSection = skillsText ? `\n\n${skillsText}\n` : "";
@@ -239,7 +246,20 @@ export function memoryContextFor(
       text: query,
       ...(previous ? { previous } : {}),
     });
-    return noteWhenNothingMatches(appendEpisodeLessons(context, lessons));
+    const withLessons = appendEpisodeLessons(context, lessons);
+    if (!isContinuationRequest(query)) return noteWhenNothingMatches(withLessons);
+    // A request to carry on is about the latest work, whatever its words: it gets the newest turns, and never the
+    // note that the project is new to memory (doc 20, TEST E9; doc 21 §5.7).
+    const shown = new Set(withLessons.episodes ?? []);
+    const recent = readEpisodes(scope, 4)
+      .reverse()
+      .filter((episode) => !shown.has(episode.at))
+      .slice(0, 3);
+    return appendRecentWork(
+      withLessons,
+      recent.map((episode) => describeEpisode(episode)),
+      recent.map((episode) => episode.at),
+    );
   } catch (error) {
     recordSwallowedError("memory.retrieve", error);
     return { text: "", expanded: [], listed: [] };

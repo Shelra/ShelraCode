@@ -836,7 +836,11 @@ export function createTools(
       }),
       execute: async ({ slug, title, hook, type, description, body, related_files, confidence, scope: scopeName }) => {
         try {
-          const scope = scopeName === "user" ? userMemoryScope() : projectMemoryScope(memoryRoot());
+          // The user-wide store reaches every project: only a preference about working with this user belongs there.
+          // A fact the model saved with scope "user" used to appear in every other repository (doc 20, TEST P7).
+          const userWide = scopeName === "user" && type === "preference";
+          const scope = userWide ? userMemoryScope() : projectMemoryScope(memoryRoot());
+          const kept = scopeName === "user" && !userWide ? " in this project (only preferences go user-wide)" : "";
           const candidate = {
             slug,
             title,
@@ -852,7 +856,7 @@ export function createTools(
           };
           // Model-initiated writes pass the same gate as automatic ones: no secrets, no
           // instruction-shaped text, no duplicate of an existing entry, no overwrite of a human statement.
-          const decision = decideMemoryWrite(candidate, listMemoryRecords(scope));
+          const decision = decideMemoryWrite(candidate, listMemoryRecords(scope), { workspace: memoryRoot() });
           if (decision.action === "reject") return { success: false, output: `Not saved: ${decision.reason}.` };
           if (decision.action === "skip") {
             return {
@@ -869,7 +873,7 @@ export function createTools(
           }
           return {
             success: true,
-            output: `${decision.action === "update" ? "Updated" : "Saved"} memory entry "${decision.slug}"${decision.slug === slug ? "" : ` (merged into the existing near-duplicate)`}.`,
+            output: `${decision.action === "update" ? "Updated" : "Saved"} memory entry "${decision.slug}"${decision.slug === slug ? "" : ` (merged into the existing near-duplicate)`}${kept}.`,
           };
         } catch (err: unknown) {
           return { success: false, output: err instanceof Error ? err.message : String(err) };
@@ -886,10 +890,17 @@ export function createTools(
       }),
       execute: async ({ slug, scope }) => {
         try {
-          const result = deleteMemoryEntry(
-            scope === "user" ? userMemoryScope() : projectMemoryScope(memoryRoot()),
-            slug,
-          );
+          const store = scope === "user" ? userMemoryScope() : projectMemoryScope(memoryRoot());
+          // What the user stated is theirs to withdraw: the gate already keeps a model from rewriting it, and a delete
+          // went around that (doc 20, TEST P6). A later statement of theirs supersedes it.
+          const existing = readMemoryEntry(store, slug).entry;
+          if (existing?.frontmatter.metadata.source === "human") {
+            return {
+              success: false,
+              output: `"${slug}" is something the user stated; only the user can withdraw it (a new statement of theirs replaces it). Tell the user if you think it no longer holds.`,
+            };
+          }
+          const result = deleteMemoryEntry(store, slug);
           if (!result.ok) {
             return {
               success: false,

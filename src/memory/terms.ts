@@ -437,6 +437,19 @@ export function isFollowUp(text: string): boolean {
   return searchTerms(text).every((term) => CONTINUATION.has(term));
 }
 
+/**
+ * A request to carry on the project's work rather than a new task: "continue", "where we left off", "sigue",
+ * "¿qué estábamos haciendo?". It needs the state of the work, not words to match (doc 20, TEST E9: "Continue where we
+ * left off." got no repository context and was told to treat the project as new).
+ */
+const CONTINUATION_REQUEST =
+  /\b(?:continue|continua|continuar|continuemos|sigue|seguimos|sigamos|resume|reanuda|reanudemos|keep going|carry on|pick up|where (?:we|you|i) left off|donde lo dejamos|donde nos quedamos|en lo que estabamos|what were we doing|que estabamos haciendo|next step|siguiente paso|what(?:'s| is) next)\b/u;
+
+export function isContinuationRequest(text: string): boolean {
+  const folded = foldText(text);
+  return folded.split(/\s+/u).filter(Boolean).length <= 25 && CONTINUATION_REQUEST.test(folded);
+}
+
 const CONTINUES = /^(?:si|yes|yep|ok|okay|dale|vale|again|y|and|also|tambien|then|entonces|ahora|now|same|hazlo)\b/u;
 const REFERS_BACK = /\b(?:it|this|that|them|those|eso|esto|esa|ese|lo|hazlo|arreglalo)\b/u;
 

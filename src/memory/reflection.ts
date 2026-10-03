@@ -84,8 +84,10 @@ const CORRECTION_START =
 /** What a correction must state: how this project does something, not where today's bug is. */
 const CORRECTION_STATEMENT =
   /\b(?:we (?:use|run|build|deploy|test|keep|store|call|write|name|format)|usamos|se usa|corremos|desplegamos|compilamos)\b/iu;
+// "We no longer want the monthly report", "we're dropping SQLite": a change of intent is a correction too (doc 20 §4,
+// TEST P5): the old wording matched only "no longer use", so a dropped requirement left no trace.
 const NO_LONGER =
-  /^(?:we (?:don't|do not|no longer) use|we stopped using|we (?:moved|migrated) (?:away )?from|ya no usamos|dejamos de usar|migramos de)\b/iu;
+  /^(?:we (?:don't|do not|no longer) (?:use|want|need)|we stopped using|we(?:'re| are) dropping|we (?:moved|migrated) (?:away )?from|ya no (?:usamos|queremos|necesitamos)|dejamos de usar|migramos de)\b/iu;
 const INSTEAD =
   /^(?:please |por favor )?(?:use|usa|utiliza|usamos)\b.{2,80}\b(?:instead of|rather than|en vez de|en lugar de)\b/iu;
 /** A sentence about the task at hand: what is broken here, what to do now, what was said above. */
@@ -481,7 +483,9 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
 /** What a correction says is no longer used: "we don't use X anymore", "use Y instead of X", "ya no usamos X". */
 const CORRECTED_SUBJECT: RegExp[] = [
   /\b(?:instead of|rather than|en vez de|en lugar de)\s+(.+)$/iu,
-  /\b(?:don't|do not|no longer|dont) use\s+(.+?)(?:\s+(?:anymore|any more))?$/iu,
+  /\b(?:don't|do not|no longer|dont) (?:use|want|need)\s+(.+?)(?:\s+(?:anymore|any more))?$/iu,
+  /\b(?:we're|we are) dropping\s+(.+)$/iu,
+  /\bya no (?:queremos|necesitamos)\s+(.+)$/iu,
   /\bstopped using\s+(.+)$/iu,
   /\b(?:moved|migrated|switched) (?:away )?from\s+(.+?)(?:\s+to\s+.+)?$/iu,
   /\bya no (?:usamos|se usa|utilizamos)\s+(.+)$/iu,
@@ -509,6 +513,29 @@ const CORRECTION_FILLER = new Set(
   ).split(" "),
 );
 
+/** What a statement of the user's says the project now uses: "use X instead of Y", "we use X", "moved from Y to X". */
+const ADOPTED: RegExp[] = [
+  /^(?:please |por favor )?(?:use|usa|utiliza|usamos)\s+(.+?)\s+(?:instead of|rather than|en vez de|en lugar de)\b/iu,
+  /\b(?:moved|migrated|switched) (?:away )?from\s+.+?\s+to\s+(.+)$/iu,
+  /\bmigramos de\s+.+?\s+a\s+(.+)$/iu,
+  /^(?:we use|this project uses|the project uses|usamos|el proyecto usa|en este proyecto usamos)\s+(.+)$/iu,
+  /[,;]\s*(?:we use|usamos)\s+(.+)$/iu,
+];
+/** Where the adopted name ends: what follows says what it is for ("SQLite for storage", "bun with workspaces"). */
+const ADOPTED_END = /\s*(?:[,;:.]|\s(?:and|y|but|pero|for|with|para|con|in|en|on|instead|rather)\s).*$/iu;
+
+/** The words of what a statement adopts (at most three), or none. */
+export function adoptedTerms(statement: string): string[] {
+  for (const pattern of ADOPTED) {
+    const match = pattern.exec(statement.trim());
+    if (match?.[1]) {
+      const terms = rawTerms(match[1].replace(ADOPTED_END, "")).filter((term) => !CORRECTION_FILLER.has(term));
+      return terms.length > 0 && terms.length <= 3 ? terms : [];
+    }
+  }
+  return [];
+}
+
 export function entriesContradictedBy(correction: MemoryWriteInput, records: readonly MemoryRecord[]): string[] {
   const statement = correction.hook;
   let subject = "";
@@ -525,10 +552,20 @@ export function entriesContradictedBy(correction: MemoryWriteInput, records: rea
   const subjectTerms = rawTerms(subject);
   if (subjectTerms.length === 0 || subjectTerms.length > 3) return [];
   const otherTerms = rawTerms(statement).filter((term) => !subjectTerms.includes(term) && !CORRECTION_FILLER.has(term));
+  const dropped = new Set(subjectTerms);
   return records
     .filter((record) => {
       if (record.slug === correction.slug || !isCurrentMemory(record)) return false;
       const meta = record.entry.frontmatter.metadata;
+      // A chain of the user's own statements (doc 21 §5.6, TEST P5): "Use DuckDB instead of SQLite" retires "Use SQLite
+      // instead of JSON files", the statement whose adopted value it drops, word for word. Without it both stayed
+      // standing rules for the rest of the year.
+      if (meta.source === "human") {
+        const adopted = adoptedTerms(record.index.hook);
+        if (adopted.length > 0 && adopted.length === dropped.size && adopted.every((term) => dropped.has(term))) {
+          return true;
+        }
+      }
       if (HISTORICAL_TYPES.has(meta.type) || (meta.tags ?? []).includes("correction")) return false;
       if (DESCRIBES_A_CHANGE.test(`${record.index.title} ${record.index.hook}`)) return false;
       const head = new Set(rawTerms(`${record.index.title} ${record.index.hook} ${(meta.tags ?? []).join(" ")}`));

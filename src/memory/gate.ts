@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { redact } from "../utils/session-trace";
+import { claimsLiveState, unsafeProcedure } from "./evidence";
 import { searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord, type MemorySource, type MemoryWriteInput } from "./types";
 
@@ -35,6 +36,8 @@ export interface GateOptions {
   perTypeCap?: number;
   /** Token-set similarity above which two entries are treated as the same fact. */
   duplicateThreshold?: number;
+  /** The project the entry is about, for judging the commands a procedure names; the process folder by default. */
+  workspace?: string;
 }
 
 const DEFAULT_PER_TYPE_CAP = 40;
@@ -332,6 +335,20 @@ export function decideMemoryWrite(
   }
 
   const candidateSource = candidate.source ?? "inference";
+  // What only a model or a tool proposed must not turn a moment into a fact or a dangerous act into a habit (doc 21
+  // §5.5; seen live 2026-09-25: "the development server is running" kept at confidence 0.9, and a procedure whose body
+  // was `Stop-Process -Id 7972 -Force`). The user's own words are theirs to keep.
+  if (candidateSource !== "human") {
+    if (claimsLiveState(`${candidate.title}\n${candidate.hook}\n${body}`)) {
+      return {
+        action: "reject",
+        slug: candidate.slug,
+        reason: "a claim about what is running right now is not a lasting fact",
+      };
+    }
+    const unsafe = unsafeProcedure(full, options.workspace ?? process.cwd());
+    if (unsafe) return { action: "reject", slug: candidate.slug, reason: `not kept as a procedure: ${unsafe}` };
+  }
   if (candidateSource === "human") {
     const relation = relationToUserStatements(candidate, records);
     if (relation) return relation;

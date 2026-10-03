@@ -168,3 +168,41 @@ describe("secrets memory never keeps (review round 3)", () => {
     expect(privateText("D:\\PROYECTS\\game\\index.html")).toBe("D:\\PROYECTS\\game\\index.html");
   });
 });
+
+describe("what a model or a tool proposes and memory never keeps (doc 21 §5.5)", () => {
+  it("refuses a claim about what is running right now, unless the user said it", () => {
+    const running = candidate({
+      slug: "project-setup",
+      title: "Initial project setup",
+      hook: "Three.js scene with a dev server",
+      type: "build",
+      body: "The development server is running and serving the game at http://localhost:8080.",
+    });
+    expect(decideMemoryWrite(running, [])).toMatchObject({
+      action: "reject",
+      reason: expect.stringContaining("running right now"),
+    });
+    expect(decideMemoryWrite({ ...running, source: "human" }, []).action).toBe("create");
+  });
+
+  it("refuses a procedure that kills a process by its number or runs a destructive command", () => {
+    const kill = candidate({
+      slug: "stop-conflicting-process-before-start",
+      title: "Stop the process on port 8080 before starting",
+      hook: "Port 8080 must be freed first",
+      type: "procedure",
+      body: "```powershell\nGet-NetTCPConnection -LocalPort 8080\nStop-Process -Id 7972 -Force\n```\nThen run `npm run start`.",
+    });
+    expect(decideMemoryWrite(kill, [])).toMatchObject({
+      action: "reject",
+      reason: "not kept as a procedure: it kills a process by its number",
+    });
+    const reset = candidate({
+      slug: "clean-tree",
+      type: "procedure",
+      body: "Clean the tree with `git reset --hard` before a release build.",
+    });
+    expect(decideMemoryWrite(reset, []).reason).toMatch(/destructive/u);
+    expect(decideMemoryWrite(candidate(), []).action).toBe("create");
+  });
+});

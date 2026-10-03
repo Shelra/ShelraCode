@@ -74,6 +74,18 @@ describe("host context compiler", () => {
     expect(classifyTurn(prompt)).toMatchObject({ kind: "repository" });
   });
 
+  it("reads a request to carry the work on as about the repository, not as chat (doc 21 §5.7)", () => {
+    for (const request of [
+      "Continue.",
+      "Continue where we left off.",
+      "sigue con lo que estabas haciendo",
+      "¿Qué estábamos haciendo?",
+    ]) {
+      expect(classifyTurn(request).kind, request).toBe("repository");
+    }
+    expect(classifyTurn("thanks, that is all").kind).toBe("conversation");
+  });
+
   it("attaches nothing to a conversation turn", () => {
     const root = scratch("shelra-context-chat-", { "package.json": '{"scripts":{"test":"bun test"}}' });
     expect(compileContextPacket(root, "What is a closure?")).toEqual({

@@ -4,7 +4,13 @@ import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { appendEpisode, episodeFrom, saveLiveEpisode } from "../memory/episodes";
-import { listMemoryRecords, projectMemoryScope } from "../memory/store";
+import {
+  listMemoryRecords,
+  listUserMemoryRecords,
+  projectMemoryScope,
+  readMemoryEntry,
+  writeMemoryEntry,
+} from "../memory/store";
 import { BashTool } from "../tools/bash";
 import { commandTimeoutMs, createTools, hardenToolSet } from "./tools";
 
@@ -815,6 +821,63 @@ describe("memory tools", () => {
       {},
     )) as { success: boolean };
     expect(result.success).toBe(true);
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("keeps a project fact the model marked user-wide in its project; only preferences go user-wide (doc 20, P7)", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-tools-memory-"));
+    const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+    >;
+    const before = listUserMemoryRecords().length;
+
+    const fact = (await tools.memory_write.execute(
+      {
+        slug: "storage-engine",
+        title: "Storage is DuckDB",
+        hook: "The ledger lives in data/ledger.duckdb",
+        type: "architecture",
+        description: "storage",
+        body: "DuckDB file data/ledger.duckdb holds the whole ledger.",
+        scope: "user",
+      },
+      {},
+    )) as { success: boolean; output: string };
+
+    expect(fact.success).toBe(true);
+    expect(fact.output).toContain("in this project (only preferences go user-wide)");
+    expect(listMemoryRecords(projectMemoryScope(cwd)).map((record) => record.slug)).toEqual(["storage-engine"]);
+    expect(listUserMemoryRecords()).toHaveLength(before);
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("refuses to delete what the user stated (doc 20, P6)", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-tools-memory-"));
+    const scope = projectMemoryScope(cwd);
+    writeMemoryEntry(scope, {
+      slug: "user-rule-never-commit-generated-files",
+      title: "Never commit generated files",
+      hook: "Never commit generated files",
+      type: "preference",
+      description: "User instruction",
+      body: "Never commit generated files.",
+      source: "human",
+      tags: ["user-directive"],
+    });
+    const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+      string,
+      { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+    >;
+
+    const result = (await tools.memory_delete.execute({ slug: "user-rule-never-commit-generated-files" }, {})) as {
+      success: boolean;
+      output: string;
+    };
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain("only the user can withdraw it");
+    expect(readMemoryEntry(scope, "user-rule-never-commit-generated-files").exists).toBe(true);
     await rm(cwd, { recursive: true, force: true });
   });
 

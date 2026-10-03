@@ -4,6 +4,7 @@ import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { contractChecks } from "../contract/contract";
 import { discoverChecks } from "../contract/discover";
 import { IGNORED_DIRS, listWorkspaceFiles } from "../contract/workspace-files";
+import { isContinuationRequest } from "../memory/terms";
 import type { ContextPacket, TurnClassification } from "./types";
 
 const MAX_CONTEXT_CHARS = 8_000;
@@ -46,6 +47,10 @@ export function classifyTurn(prompt: string): TurnClassification {
   }
   if (hasRepositorySignal) {
     return { kind: "repository", reason: "repository evidence requested" };
+  }
+  // "Continue", "where we left off": the work so far is the context such a request needs (doc 21 §5.7).
+  if (isContinuationRequest(prompt)) {
+    return { kind: "repository", reason: "continuation of the project's work" };
   }
   return { kind: "conversation", reason: "no repository or mutation signal" };
 }

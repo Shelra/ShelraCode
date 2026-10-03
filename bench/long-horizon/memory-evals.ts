@@ -134,14 +134,16 @@ function yearState(after: number): string {
 const write = (path: string, content: string): ScriptStep => ({ tool: "write_file", input: { path, content } });
 const bash = (command: string): ScriptStep => ({ tool: "bash", input: { command } });
 
+/** A line that adopts an engine the year replaced ("Use SQLite instead of JSON files"), not one that drops it. */
+const ADOPTS_REPLACED =
+  /\buse\s+(?:sqlite|json\s+files?)\b|\b(?:stored?|storage)\s+(?:is|in|uses?)\s+(?:sqlite|json)\b/iu;
+
 /** Standing-rule lines that state a superseded engine as current. */
 function supersededAsCurrent(text: string): boolean {
   const start = text.indexOf("Standing rules");
   if (start < 0) return false;
   const block = text.slice(start).split("\n\n")[0] ?? "";
-  return block
-    .split("\n")
-    .some((line) => line.startsWith("- ") && /sqlite|json files?/iu.test(line) && !/duckdb/iu.test(line));
+  return block.split("\n").some((line) => line.startsWith("- ") && ADOPTS_REPLACED.test(line));
 }
 
 const evals: Record<string, () => Promise<EvalResult>> = {
