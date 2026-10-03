@@ -4,11 +4,13 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildScriptUninstallPlan,
+  clearReplacedBinaries,
   getInstallMetadataPath,
   getReleaseTargetForPlatform,
   getScriptInstallContext,
   getScriptInstallDir,
   loadScriptInstallMetadata,
+  packageManagerUpdateCommand,
   parseChecksumsFile,
   replaceBinaryInPlace,
   saveScriptInstallMetadata,
@@ -213,6 +215,30 @@ describe("buildScriptUninstallPlan", () => {
   });
 });
 
+describe("installs a package manager owns", () => {
+  it("names the package manager's own update command, and none for the script install", () => {
+    expect(
+      packageManagerUpdateCommand(
+        "C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\shelra-windows-x64\\bin\\shelra.exe",
+      ),
+    ).toBe("npm install -g shelra@latest");
+    expect(packageManagerUpdateCommand("/home/a/.bun/install/global/node_modules/shelra-linux-x64/bin/shelra")).toBe(
+      "bun add -g shelra@latest",
+    );
+    expect(
+      packageManagerUpdateCommand(
+        "C:\\Users\\a\\AppData\\Local\\pnpm\\global\\5\\.pnpm\\shelra-windows-x64@1.1.9\\node_modules\\shelra-windows-x64\\bin\\shelra.exe",
+      ),
+    ).toBe("pnpm add -g shelra@latest");
+    expect(
+      packageManagerUpdateCommand(
+        "C:\\Users\\a\\AppData\\Local\\Yarn\\Data\\global\\node_modules\\shelra-windows-x64\\bin\\shelra.exe",
+      ),
+    ).toBe("yarn global add shelra@latest");
+    expect(packageManagerUpdateCommand("C:\\Users\\a\\.shelra\\bin\\shelra.exe")).toBeNull();
+  });
+});
+
 describe("replacing the installed binary (seen 2026-09-25: an update that said it updated and did not)", () => {
   const scratch = () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shelra-replace-"));
@@ -234,6 +260,19 @@ describe("replacing the installed binary (seen 2026-09-25: an update that said i
     const aside = fs.readdirSync(dir).filter((name) => name.startsWith("shelra.exe.old-"));
     expect(aside).toHaveLength(1);
     expect(aside[0]).not.toBe("shelra.exe.old-1");
+  });
+
+  it("clears what earlier updates moved aside, without touching the installed binary", () => {
+    const dir = scratch();
+    const target = path.join(dir, "shelra.exe");
+    fs.writeFileSync(target, "current");
+    fs.writeFileSync(`${target}.old-1`, "older");
+    fs.writeFileSync(`${target}.old-2`, "oldest");
+
+    clearReplacedBinaries(target);
+
+    expect(fs.readdirSync(dir)).toEqual(["shelra.exe"]);
+    clearReplacedBinaries(path.join(dir, "missing", "shelra.exe"));
   });
 
   it("keeps the installed binary and says so when the new one cannot be put in place", () => {

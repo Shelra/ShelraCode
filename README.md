@@ -38,11 +38,19 @@ script lives in `frontend/public/install.ps1`; the macOS and Linux equivalent is
 bun install
 ```
 
-**Alternative installs** (requires Bun on PATH):
+**With a package manager** (Windows x64, Linux x64, macOS on Apple Silicon):
 
 ```bash
+npm install -g shelra
 bun add -g shelra
+pnpm add -g shelra
+yarn global add shelra
 ```
+
+The `shelra` package is a small launcher; the binary is the release's own, in a package per platform that the
+package manager installs only where it runs (`shelra-windows-x64`, `shelra-linux-x64`, `shelra-darwin-arm64`). No
+install script runs and Bun is not needed. Update with the same package manager (`npm install -g shelra@latest`);
+`shelra update` says which command.
 
 **Self-management** (script-installed only):
 
@@ -690,13 +698,12 @@ which curl
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/Shelra/ShelraCode/main/install.sh)"
 ```
 
-**Bun not found**
+**No install script on this machine**
 
-The install script bundles Bun, but if you want to use your own:
+Any package manager installs the same release binary:
 
 ```bash
-curl -fsSL https://bun.sh/install | bash
-bun add -g shelra
+npm install -g shelra
 ```
 
 ### API key issues
