@@ -1473,6 +1473,99 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
     expect(provider.round).toBe(1);
     expect(chunks.some((c) => c.content?.includes("Not verified"))).toBe(false);
   });
+
+  describe("dependency guard (docs/EXECUTION-PLAN.md F6: a dependency-free decision broken at step 7)", () => {
+    /** A project with a package.json and no stated checks; each scripted round adds papaparse to it on disk. */
+    function withPackage() {
+      const dir = mkdtempSync(join(tmpdir(), "shelra-dependency-guard-"));
+      writeFileSync(join(dir, "package.json"), `${JSON.stringify({ name: "loans", type: "module" }, null, 2)}\n`);
+      const addPapaparse = (): ProviderEvent[] => {
+        const content = `${JSON.stringify({ name: "loans", type: "module", dependencies: { papaparse: "^5.4.1" } }, null, 2)}\n`;
+        writeFileSync(join(dir, "package.json"), content);
+        return [
+          toolCallEvent("p", "write_file", { path: "package.json", content }),
+          toolResultEvent("p", "write_file", {
+            success: true,
+            output: "Updated package.json",
+            diff: { filePath: "package.json", additions: 1, removals: 0, patch: "", isNew: false },
+          }),
+          toolCallEvent("c", "bash", { command: "bun test" }),
+          toolResultEvent("c", "bash", { success: true, output: "0 fail" }, { command: "bun test" }),
+          { type: "text-delta", text: "Export added." },
+        ];
+      };
+      return { dir, addPapaparse };
+    }
+
+    async function run(dir: string, provider: ProviderAdapter, request: string): Promise<string> {
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir });
+      let text = "";
+      for await (const chunk of agent.processMessage(request)) {
+        text += (chunk as { content?: string }).content ?? "";
+      }
+      return text;
+    }
+
+    it("asks once to remove a dependency the request's own rule forbids, then reports it", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const { dir, addPapaparse } = withPackage();
+      const provider = scripted([addPapaparse]);
+
+      const text = await run(
+        dir,
+        provider,
+        "Add GET /loans/export.csv; papaparse's unparse makes this easy. This project stays dependency-free.",
+      );
+
+      expect(provider.round).toBe(2);
+      expect(lastUserText(provider.requests[1])).toContain("Completion blocked: you added a dependency (papaparse)");
+      expect(text).toContain("[Not verified — it added papaparse although the project's rule says");
+    });
+
+    it("holds a dependency against the user's standing rule, which memory keeps across sessions", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const { dir, addPapaparse } = withPackage();
+      writeMemoryEntry(projectMemoryScope(dir), {
+        slug: "user-rule-no-dependencies",
+        title: "Never add another dependency without asking me first",
+        hook: "Never add another dependency without asking me first",
+        type: "preference",
+        description: "User instruction",
+        body: "Never add another dependency without asking me first.",
+        source: "human",
+        tags: ["user-directive"],
+      });
+      const provider = scripted([addPapaparse]);
+
+      const text = await run(dir, provider, "Add GET /loans/export.csv; papaparse's unparse makes this easy.");
+
+      expect(provider.round).toBe(2);
+      expect(text).toContain("[Not verified — it added papaparse");
+    });
+
+    it("lets the request add the dependency it tells Shelra to add, and leaves projects without such a rule alone", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const told = withPackage();
+      const toldProvider = scripted([told.addPapaparse]);
+      const toldText = await run(
+        told.dir,
+        toldProvider,
+        "Add papaparse as a dependency and export the loans as CSV. Otherwise this project stays dependency-free.",
+      );
+      expect(toldProvider.round).toBe(1);
+      expect(toldText).not.toContain("Not verified");
+
+      const free = withPackage();
+      const freeProvider = scripted([free.addPapaparse]);
+      const freeText = await run(
+        free.dir,
+        freeProvider,
+        "Add GET /loans/export.csv; papaparse's unparse makes this easy.",
+      );
+      expect(freeProvider.round).toBe(1);
+      expect(freeText).not.toContain("Not verified");
+    });
+  });
 });
 
 describe("evidence-driven repair (audit doc 15, Phase 2)", () => {

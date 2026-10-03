@@ -26,6 +26,12 @@ import {
   contractChecks,
   evaluateTurnContract,
 } from "../contract/contract";
+import {
+  addedDependencies,
+  declaredDependencies,
+  dependencyRule,
+  requestAddsDependency,
+} from "../contract/dependency-guard";
 import type { CheckKind } from "../contract/discover";
 import { type DiscoveredCheck, discoverChecks, isSameCheck } from "../contract/discover";
 import { describeFailures, failureSignature } from "../contract/failures";
@@ -91,7 +97,7 @@ import {
   turnQualifiesForReflection,
   typedText,
 } from "../memory/reflection";
-import type { MemoryContext, MemoryTier } from "../memory/retrieval";
+import { isStandingRule, type MemoryContext, type MemoryTier } from "../memory/retrieval";
 import { proposeProceduresAsSkills } from "../memory/skills";
 import {
   appendReflectionAudit,
@@ -1741,6 +1747,26 @@ export class Agent {
   }
 
   /**
+   * The rules a turn must keep, as text: the request itself, the decisions active when it started (unless the ledger is
+   * off) and the user's standing rules (unless memory is off). The host's guards read them; a rule they recognize holds
+   * whatever the model does.
+   */
+  private rulesInForce(request: string, scope: ReturnType<typeof projectMemoryScope>): string[] {
+    const rules = [typedText(request)];
+    if (!this.ablations.has("ledger")) {
+      for (const decision of this.turnDecisions) rules.push(`${decision.title}. ${decision.rule}`);
+    }
+    if (!this.ablations.has("memory")) {
+      try {
+        for (const record of listMemoryRecords(scope)) if (isStandingRule(record)) rules.push(record.index.hook);
+      } catch (error) {
+        recordSwallowedError("memory.rules", error);
+      }
+    }
+    return rules;
+  }
+
+  /**
    * The host's verdict on a turn ("[Not verified — …]") joins the turn's last reply, in memory and in
    * the stored transcript, so the next turn's model and a resumed session see that the work was not
    * verified. It used to be streamed only, and vanished. It is appended to the reply rather than sent
@@ -3128,6 +3154,8 @@ export class Agent {
     // The turn is judged in the session's workspace, not in whatever folder a `cd` left the shell in.
     const turnStartWorkspace = this.bash.getRootCwd();
     const turnStartState = this.mode === "agent" ? captureWorkspaceState(turnStartWorkspace) : null;
+    // What the project declared when the turn started, for the dependency guard.
+    const turnStartDependencies = this.mode === "agent" ? declaredDependencies(turnStartWorkspace) : null;
     // The checks that decide "done", as they stood when the turn started (audit doc 17, S10): a turn is judged by
     // them, not by a check script or command table it rewrote.
     // The kinds of check the request asks to change; a short follow-up carries the request it answers.
@@ -3171,6 +3199,8 @@ export class Agent {
     let turnBlocker: string | null = null;
     /** Existing tests changed without the request asking: the turn is asked once to restore them. */
     let testEditsNudged = false;
+    /** A dependency added against a project rule: the turn is asked once to remove it. */
+    let dependencyEditsNudged = false;
     let checkEditsNudged = false;
     let decisionEditsNudged = false;
     /**
@@ -4000,6 +4030,45 @@ export class Agent {
                 "unverified",
               );
             }
+            yield { type: "done" };
+            return;
+          }
+
+          // Dependency guard (src/contract/dependency-guard.ts): a rule that forbids new dependencies (an active
+          // decision, one of the user's standing rules, or the request itself) holds whatever the model does. A turn
+          // that added one the request did not tell it to add is sent back once, then reported unverified.
+          const addedAgainstRule =
+            this.mode === "agent" && !this.ablations.has("gate") && mutatedThisTurn && turnStartDependencies
+              ? addedDependencies(turnStartDependencies, declaredDependencies(turnStartWorkspace)).filter(
+                  (name) => !requestAddsDependency(userMessage, name),
+                )
+              : [];
+          const dependencyRuleInForce =
+            addedAgainstRule.length > 0 ? dependencyRule(this.rulesInForce(userMessage, memoryScope)) : null;
+          if (dependencyRuleInForce) {
+            const names = addedAgainstRule.join(", ");
+            const rule =
+              dependencyRuleInForce.length > 300 ? `${dependencyRuleInForce.slice(0, 299)}…` : dependencyRuleInForce;
+            if (!dependencyEditsNudged) {
+              dependencyEditsNudged = true;
+              this.messages.push({
+                role: "user",
+                content: [
+                  `Completion blocked: you added ${addedAgainstRule.length === 1 ? "a dependency" : "dependencies"} (${names}), and this project's rule says: "${rule}"`,
+                  "Remove it from the manifest and from the code, and do the work without it. If the task cannot be done without it, stop and ask with report_blocker.",
+                ].join("\n"),
+              });
+              this.messageSeqs.push(null);
+              this.kernel?.recordObservation(`Dependency guard: ${names} added against a project rule.`);
+              this.persistKernelIndex("A dependency was added against a project rule");
+              continue;
+            }
+            const reason = `it added ${names} although the project's rule says: "${rule}"`;
+            this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+            this.persistKernelIndex(reason);
+            const verdict = `[Not verified — ${reason}]`;
+            this.recordVerdict(verdict);
+            yield { type: "content", content: `\n\n${verdict}` };
             yield { type: "done" };
             return;
           }
