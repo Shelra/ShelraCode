@@ -191,7 +191,8 @@ describe("host context compiler", () => {
     });
     const truncated = compileContextPacket(deep, "revisa el proyecto");
     expect(truncated.promptAppendix).not.toContain("Files in this project");
-  });
+    // Three repositories and a walk: 2.5 s alone, past the default 5 s on a busy machine running the full suite.
+  }, 20_000);
 
   it("gives a larger project no file list, only the tests of the files the request names", () => {
     const filler = Object.fromEntries(

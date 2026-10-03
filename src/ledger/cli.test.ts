@@ -133,13 +133,15 @@ describe("shelra decisions check", () => {
     );
     writeFileSync(
       join(workspace, "scripts", "hangs.ts"),
-      'console.log("checking...");\nsetTimeout(() => {}, 3_000);\n',
+      'console.log("checking...");\nsetTimeout(() => {}, 60_000);\n',
     );
     decide("Exports keep their names", ["**"], "bun scripts/not-found.ts");
     decide("Tools exist", ["**"], "shelra-no-such-tool-xyz --version");
     decide("Checks end", ["**"], "bun scripts/hangs.ts");
 
-    const result = await checkDecisions(workspace, { timeoutMs: 1_500 });
+    // Room on both sides: a check that ends must not time out while the machine is busy (a full parallel test run
+    // starts Bun slowly), and the one that hangs must.
+    const result = await checkDecisions(workspace, { timeoutMs: 8_000 });
     expect(result).toMatchObject({ exitCode: 1, stream: "stderr" });
     expect(result.output).toContain("D-0001 Exports keep their names: BROKEN (`bun scripts/not-found.ts`)");
     expect(result.output).toContain("D-0002 Tools exist: COULD NOT RUN (`shelra-no-such-tool-xyz --version`)");
