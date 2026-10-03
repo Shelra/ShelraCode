@@ -26,6 +26,8 @@ export interface Epoch {
   answer: string;
   /** What the reflection call returns: the durable facts an ideal model proposes. */
   reflection: Array<Record<string, unknown>>;
+  /** What an ideal model returns to the memory-commit prompt, once Shelra asks one (Project Memory V2). */
+  commitItems?: Array<Record<string, unknown>>;
   /** The simulated user approves every decision proposed in this epoch. */
   approveDecisions?: boolean;
   /** The process is killed after this many tool results (a crash mid-turn). */

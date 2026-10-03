@@ -12,39 +12,27 @@
  * It scores what reached the model on the first request of epochs 9 to 12 against the facts the year established,
  * and writes `results/<label>.json`.
  */
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { EPOCHS, type Epoch, LEDGERLY_FIXTURE, type ScriptStep } from "./ledgerly";
+import { EPOCHS, type Epoch, LEDGERLY_FIXTURE } from "./ledgerly";
 import { redactPaths } from "./redact";
+import { type Capture, requestText, spawnSession } from "./session";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const RealDate = Date;
-const realNow = RealDate.now.bind(RealDate);
+const realNow = Date.now.bind(Date);
 
 interface Args {
-  child?: number;
-  root?: string;
   ablate: string[];
   label: string;
   keep: boolean;
   /** Stop after this epoch and keep the scratch folder: a project state for a real-model turn (`real-run.ts`). */
   stopAfter?: number;
   /**
-   * `tests-allowed`: the user adds "Update the tests as needed." to every work request (isolates test protection);
-   * `resume`: epoch 9 resumes the latest session (`shelra -s latest`) instead of starting a new one.
+   * `tests-allowed`: the user adds "Update the tests as needed." to the work requests that touch existing tests
+   * (isolates test protection); `resume`: epoch 9 resumes the latest session (`shelra -s latest`).
    */
   variant?: string;
 }
@@ -54,9 +42,7 @@ function parseArgs(argv: string[]): Args {
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index];
     const value = argv[index + 1];
-    if (flag === "--child" && value) args.child = Number(argv[++index]);
-    else if (flag === "--root" && value) args.root = argv[++index];
-    else if (flag === "--ablate" && value) args.ablate = (argv[++index] ?? "").split(",").filter(Boolean);
+    if (flag === "--ablate" && value) args.ablate = (argv[++index] ?? "").split(",").filter(Boolean);
     else if (flag === "--label" && value) args.label = argv[++index] ?? args.label;
     else if (flag === "--keep") args.keep = true;
     else if (flag === "--variant" && value) args.variant = argv[++index];
@@ -71,46 +57,6 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-/** Every `new Date()` and `Date.now()` in this process reads the epoch's date, moving forward in real time. */
-function installClock(target: number): void {
-  const offset = target - realNow();
-  class SimulatedDate extends RealDate {
-    constructor(...args: unknown[]) {
-      if (args.length === 0) super(realNow() + offset);
-      else super(...(args as [string]));
-    }
-    static now(): number {
-      return realNow() + offset;
-    }
-  }
-  globalThis.Date = SimulatedDate as unknown as DateConstructor;
-}
-
-/** Files the epoch wrote carry its date, as they would have; otherwise every memory entry would look stale. */
-function stampMtimes(dir: string, since: number, at: number): void {
-  for (const name of readdirSync(dir)) {
-    if (name === ".git" || name === ".shelra" || name === "node_modules") continue;
-    const full = join(dir, name);
-    const stat = statSync(full);
-    if (stat.isDirectory()) stampMtimes(full, since, at);
-    else if (stat.mtimeMs >= since - 1_000) utimesSync(full, at / 1000, at / 1000);
-  }
-}
-
-interface Capture {
-  round: number;
-  system: string;
-  messages: unknown[];
-  tools: string[];
-}
-
-function toolEvent(id: string, step: ScriptStep) {
-  return {
-    type: "tool-call" as const,
-    toolCall: { id, type: "function" as const, function: { name: step.tool, arguments: JSON.stringify(step.input) } },
-  };
-}
-
 /** The work epochs whose changes touch an existing test, apart from the continuation (epoch 9), whose wording must stay. */
 const TESTS_TOUCHED = [4, 5, 6, 7, 10];
 
@@ -122,137 +68,6 @@ function epochsFor(variant: string | undefined): Epoch[] {
   );
 }
 
-async function runChild(epochId: number, root: string, ablate: string[], variant?: string): Promise<void> {
-  const epoch = epochsFor(variant).find((candidate) => candidate.id === epochId) as Epoch;
-  const home = join(root, "home");
-  const workspace = join(root, "ledgerly");
-  process.env.HOME = home;
-  process.env.USERPROFILE = home;
-  process.env.SHELRA_USER_MEMORY_ROOT = home;
-  process.env.SHELRA_RESEARCH = "off";
-  process.env.SHELRA_TRACE_DIR = join(root, "traces");
-  process.env.SHELRA_DIAGNOSTICS_LOG = join(root, "swallowed-errors.jsonl");
-  const target = Date.parse(epoch.date);
-  installClock(target);
-  const realStart = realNow();
-  const { Agent } = await import("../../src/agent/agent");
-
-  const captures: Capture[] = [];
-  const toolOutputs: Array<{ tool: string; output: unknown }> = [];
-  const textCalls: Array<{ kind: string; chars: number }> = [];
-  let round = 0;
-  let toolResults = 0;
-  const provider = {
-    id: "year-in-a-box",
-    defaultModelId: epoch.model,
-    resolveModelRuntime: (modelId: string) => ({
-      modelId,
-      modelInfo: {
-        id: modelId,
-        name: "Scripted ideal model",
-        contextWindow: 200_000,
-        inputPrice: 0,
-        outputPrice: 0,
-        reasoning: false,
-        description: "Year-in-a-Box scripted model",
-        supportsClientTools: true,
-        supportsMaxOutputTokens: true,
-      },
-    }),
-    stream: (request: { system: string; messages: unknown[]; tools?: Record<string, unknown> }) => {
-      captures.push({
-        round: round + 1,
-        system: request.system,
-        // A copy: the agent keeps appending to the same array, and the capture is what this request carried.
-        messages: JSON.parse(JSON.stringify(request.messages)),
-        tools: Object.keys(request.tools ?? {}),
-      });
-      const steps = epoch.rounds[round] ?? [];
-      const answer = round === 0 ? epoch.answer : "Done.";
-      round += 1;
-      const tools = (request.tools ?? {}) as Record<
-        string,
-        { execute?: (input: unknown, options: unknown) => Promise<unknown> }
-      >;
-      const thisRound = round;
-      // The response carries the tool calls and results as the AI SDK's would, so the transcript holds them.
-      const messages: unknown[] = [];
-      let finish: (value: { messages: unknown[] }) => void = () => {};
-      const response = new Promise<{ messages: unknown[] }>((resolve) => {
-        finish = resolve;
-      });
-      return {
-        events: (async function* () {
-          for (const [index, step] of steps.entries()) {
-            if (epoch.crashAfterTools !== undefined && toolResults >= epoch.crashAfterTools) {
-              writeFileSync(join(root, `crash-ready-e${epoch.id}`), String(process.pid));
-              await new Promise(() => {});
-            }
-            const id = `e${epoch.id}-r${thisRound}-${index}`;
-            yield toolEvent(id, step);
-            const output = await tools[step.tool]?.execute?.(step.input, { toolCallId: id, messages: [] });
-            toolOutputs.push({ tool: step.tool, output });
-            toolResults += 1;
-            messages.push(
-              {
-                role: "assistant",
-                content: [{ type: "tool-call", toolCallId: id, toolName: step.tool, input: step.input }],
-              },
-              {
-                role: "tool",
-                content: [
-                  {
-                    type: "tool-result",
-                    toolCallId: id,
-                    toolName: step.tool,
-                    output: { type: "json", value: output ?? null },
-                  },
-                ],
-              },
-            );
-            yield { ...toolEvent(id, step), type: "tool-result" as const, output };
-          }
-          yield { type: "text-delta" as const, text: answer };
-          messages.push({ role: "assistant", content: answer });
-          finish({ messages });
-        })(),
-        response,
-      };
-    },
-    generateText: async (request: { system: string; prompt: string; modelId: string }) => {
-      const reflection = request.system.includes("extract durable project knowledge");
-      textCalls.push({ kind: reflection ? "reflection" : "other", chars: request.prompt.length });
-      return {
-        text: reflection ? JSON.stringify({ memories: epoch.reflection }) : "Summary.",
-        modelId: request.modelId,
-      };
-    },
-    getToolContext: () => ({}),
-  };
-
-  const agent = new Agent(undefined, undefined, epoch.model, undefined, {
-    // The scripted provider satisfies the adapter contract structurally.
-    provider: provider as never,
-    cwd: workspace,
-    persistSession: true,
-    // `resume`: after the crash the user picks the last session up with `shelra -s latest` instead of a new one.
-    ...(variant === "resume" && epoch.id === 9 ? { session: "latest" } : {}),
-    ablate: ablate as never,
-  });
-  if (epoch.approveDecisions) agent.setDecisionApproval(async () => "approve");
-  let text = "";
-  for await (const chunk of agent.processMessage(epoch.user)) {
-    const item = chunk as { type: string; content?: string };
-    if (item.type === "content" && item.content) text += item.content;
-  }
-  writeFileSync(
-    join(root, "captures", `e${epoch.id}.json`),
-    JSON.stringify({ epoch: epoch.id, captures, text, toolOutputs, textCalls }, null, 2),
-  );
-  stampMtimes(workspace, realStart, target);
-  process.exit(0);
-}
-
 function git(workspace: string, home: string, args: string[], date?: string): string {
   const env = {
     ...process.env,
@@ -262,14 +77,6 @@ function git(workspace: string, home: string, args: string[], date?: string): st
   };
   const result = spawnSync("git", args, { cwd: workspace, env, encoding: "utf8" });
   return `${result.stdout ?? ""}${result.stderr ?? ""}`;
-}
-
-function waitForExit(child: ChildProcess): Promise<number | null> {
-  return new Promise((resolve) => child.on("exit", (code) => resolve(code)));
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 interface Snapshot {
@@ -309,23 +116,6 @@ function snapshot(root: string, epoch: Epoch, exit: string): Snapshot {
     archived: read(join(memory, "archive.jsonl")).split("\n").filter(Boolean).length,
     verdict: verdict ? verdict[0].slice(0, 160) : "(no verdict line)",
   };
-}
-
-/** The text of a model request: system prompt, then every message's text, tool inputs and tool results. */
-function requestText(capture: Capture | undefined): string {
-  if (!capture) return "";
-  const parts: string[] = [capture.system];
-  for (const message of capture.messages as Array<{ role: string; content: unknown }>) {
-    if (typeof message.content === "string") {
-      parts.push(`[${message.role}] ${message.content}`);
-      continue;
-    }
-    for (const part of (message.content ?? []) as Array<Record<string, unknown>>) {
-      if (typeof part.text === "string") parts.push(`[${message.role}] ${part.text}`);
-      else parts.push(`[${message.role}:${String(part.type)}] ${JSON.stringify(part.input ?? part.output ?? "")}`);
-    }
-  }
-  return parts.join("\n");
 }
 
 interface Fact {
@@ -467,40 +257,23 @@ async function orchestrate(args: Args): Promise<void> {
   for (const epoch of epochsFor(args.variant)) {
     if (args.stopAfter !== undefined && epoch.id > args.stopAfter) break;
     const started = realNow();
-    const child = spawn(
-      process.execPath,
-      [
-        "run",
-        join(HERE, "year-in-a-box.ts"),
-        "--child",
-        String(epoch.id),
-        "--root",
-        root,
-        ...(args.ablate.length ? ["--ablate", args.ablate.join(",")] : []),
-        ...(args.variant ? ["--variant", args.variant] : []),
-      ],
-      { stdio: ["ignore", "pipe", "pipe"] },
-    );
-    let stderr = "";
-    child.stderr?.on("data", (data) => {
-      stderr += String(data);
+    const { exit } = await spawnSession({
+      root,
+      workspace: "ledgerly",
+      user: epoch.user,
+      model: epoch.model,
+      date: epoch.date,
+      rounds: epoch.rounds,
+      answer: epoch.answer,
+      reflection: epoch.reflection,
+      ...(epoch.commitItems ? { commit: epoch.commitItems } : {}),
+      ...(epoch.approveDecisions ? { approveDecisions: true } : {}),
+      ...(epoch.crashAfterTools !== undefined ? { crashAfterTools: epoch.crashAfterTools } : {}),
+      ...(args.ablate.length > 0 ? { ablate: args.ablate } : {}),
+      // `resume`: after the crash the user picks the last session up with `shelra -s latest` instead of a new one.
+      ...(args.variant === "resume" && epoch.id === 9 ? { session: "latest" } : {}),
+      captureFile: join(root, "captures", `e${epoch.id}.json`),
     });
-    let exit: string;
-    if (epoch.crashAfterTools !== undefined) {
-      const marker = join(root, `crash-ready-e${epoch.id}`);
-      const liveDir = join(workspace, ".shelra", "memory", "live");
-      const deadline = realNow() + 120_000;
-      while (realNow() < deadline && !(existsSync(marker) && existsSync(liveDir) && readdirSync(liveDir).length > 0)) {
-        await sleep(100);
-      }
-      await sleep(300);
-      child.kill("SIGKILL");
-      await waitForExit(child);
-      exit = existsSync(marker) ? "killed mid-turn after its first tool result" : "killed (marker missing)";
-    } else {
-      const code = await waitForExit(child);
-      exit = code === 0 ? "ok" : `exit ${code}: ${stderr.slice(-400)}`;
-    }
     if (epoch.commit) {
       git(workspace, home, ["add", "-A"]);
       git(workspace, home, ["commit", "-q", "-m", epoch.commit], epoch.date);
@@ -592,5 +365,4 @@ async function orchestrate(args: Args): Promise<void> {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (args.child !== undefined && args.root) await runChild(args.child, args.root, args.ablate, args.variant);
-else await orchestrate(args);
+await orchestrate(args);

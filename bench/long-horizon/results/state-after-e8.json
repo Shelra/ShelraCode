@@ -169,53 +169,73 @@
   ],
   "sessions": [
     {
-      "created": "2026-01-05T12:00:00.204Z",
+      "created": "2026-01-05T12:00:00.201Z",
       "model": "yib-model-a",
       "messages": 16,
       "toolCalls": 7
     },
     {
-      "created": "2026-02-03T12:00:00.241Z",
+      "created": "2026-02-03T12:00:00.189Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 5
     },
     {
-      "created": "2026-03-02T12:00:00.202Z",
+      "created": "2026-03-02T12:00:00.192Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-05-04T12:00:00.196Z",
+      "created": "2026-05-04T12:00:00.199Z",
       "model": "yib-model-a",
       "messages": 16,
       "toolCalls": 6
     },
     {
-      "created": "2026-06-01T12:00:00.220Z",
+      "created": "2026-06-01T12:00:00.197Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-07-06T12:00:00.195Z",
+      "created": "2026-07-06T12:00:00.211Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-08-03T12:00:00.202Z",
+      "created": "2026-08-03T12:00:00.200Z",
       "model": "yib-model-a",
       "messages": 36,
       "toolCalls": 16
     },
     {
-      "created": "2026-09-07T12:00:00.208Z",
+      "created": "2026-09-07T12:00:00.195Z",
       "model": "yib-model-a",
       "messages": 0,
       "toolCalls": 0
     }
   ],
-  "epochs": {}
+  "epochs": {},
+  "digestCounterfactual": [
+    {
+      "routineEpisodesAdded": 0,
+      "chars": 2080,
+      "reached": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F14"],
+      "of": 14
+    },
+    {
+      "routineEpisodesAdded": 30,
+      "chars": 2891,
+      "reached": [],
+      "of": 14
+    },
+    {
+      "routineEpisodesAdded": 300,
+      "chars": 2943,
+      "reached": [],
+      "of": 14
+    }
+  ]
 }
