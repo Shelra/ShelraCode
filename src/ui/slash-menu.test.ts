@@ -28,4 +28,12 @@ describe("filterSlashMenuItems", () => {
     expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "sessions")[0]?.id).toBe("resume");
     expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "history")[0]?.id).toBe("resume");
   });
+
+  it("lists /import, and finds it by the agents whose chats it brings (the owner, 2026-10-03)", () => {
+    expect(SLASH_MENU_ITEMS.map((item) => item.id)).toContain("import");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "/import")[0]?.id).toBe("import");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "claude")[0]?.id).toBe("import");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "codex")[0]?.id).toBe("import");
+    expect(filterSlashMenuItems(SLASH_MENU_ITEMS, "migrate")[0]?.id).toBe("import");
+  });
 });

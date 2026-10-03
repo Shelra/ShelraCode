@@ -678,6 +678,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     chats: ResumeChat[];
     index: number;
     all: boolean;
+    /** /import: only Claude Code's and Codex's chats. */
+    imports: boolean;
     error: string | null;
   } | null>(null);
   const [recapsEnabled, setRecapsEnabledState] = useState(() => agent.getRecapsEnabled());
@@ -2640,16 +2642,21 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
   /**
    * /resume: the chats saved in this folder, or every folder, newest first; the one open now is left out. Claude
-   * Code's and Codex's chats there are listed with them (the owner, 2026-10-03: "chats I want to recover").
+   * Code's and Codex's chats there are listed with them (the owner, 2026-10-03: "chats I want to recover"), and
+   * /import lists only theirs.
    */
   const openResumePicker = useCallback(
-    (all: boolean) => {
+    (all: boolean, imports = false) => {
       let saved: ResumeChat[] = [];
       let foreign: ResumeChat[] = [];
       let error: string | null = null;
       try {
         const current = agent.getSessionId();
-        saved = new SessionStore(agent.getCwd()).listSessions({ all, limit: 50 }).filter((chat) => chat.id !== current);
+        if (!imports) {
+          saved = new SessionStore(agent.getCwd())
+            .listSessions({ all, limit: 50 })
+            .filter((chat) => chat.id !== current);
+        }
       } catch (cause) {
         error = cause instanceof Error ? cause.message : "The saved chats could not be read.";
       }
@@ -2658,7 +2665,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       } catch {
         // Another agent's chats that cannot be read leave Shelra's own list as it is.
       }
-      setResumePicker({ chats: mergeResumeChats(saved, foreign), index: 0, all, error });
+      setResumePicker({ chats: mergeResumeChats(saved, foreign), index: 0, all, imports, error });
     },
     [agent],
   );
@@ -3033,7 +3040,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       }
       const resume = parseResumeCommand(c);
       if (resume) {
-        openResumePicker(resume.all);
+        openResumePicker(resume.all, resume.imports);
         return true;
       }
       if (c === "/status") {
@@ -3199,6 +3206,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           break;
         case "resume":
           openResumePicker(false);
+          break;
+        case "import":
+          openResumePicker(false, true);
           break;
         case "models":
           setShowModelPicker(true);
@@ -4000,7 +4010,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           return;
         }
         if (key.name === "tab") {
-          openResumePicker(!resumePicker.all);
+          openResumePicker(!resumePicker.all, resumePicker.imports);
           return;
         }
         if (key.name === "return") {
@@ -5186,6 +5196,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           chats={resumePicker.chats}
           selectedIndex={resumePicker.index}
           all={resumePicker.all}
+          imports={resumePicker.imports}
           width={width}
           height={height}
           error={resumePicker.error}

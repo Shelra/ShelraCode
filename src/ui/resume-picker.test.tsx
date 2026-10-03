@@ -106,6 +106,24 @@ describe("ResumePickerModal", () => {
     expect(span?.fg.equals(RGBA.fromHex(dark.brand))).toBe(true);
   });
 
+  it("titles /import's list and says so when no Claude Code or Codex chat is left to import", async () => {
+    const { frame } = await frameOf(
+      <ResumePickerModal
+        t={dark}
+        chats={[]}
+        selectedIndex={0}
+        all={false}
+        imports
+        width={90}
+        height={30}
+        error={null}
+        now={now}
+      />,
+    );
+    expect(frame).toContain("[ IMPORT ]  0 Claude Code and Codex chats · this folder");
+    expect(frame).toContain("No Claude Code or Codex chats to import in this folder.");
+  });
+
   it("shows each chat's folder across every folder, and says so when there is nothing to continue", async () => {
     const all = await frameOf(
       <ResumePickerModal t={dark} chats={CHATS} selectedIndex={0} all width={90} height={30} error={null} now={now} />,

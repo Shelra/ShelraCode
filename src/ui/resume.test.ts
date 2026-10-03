@@ -92,10 +92,17 @@ describe("the /resume list", () => {
   });
 
   it("reads /resume and /sessions, with or without every folder", () => {
-    expect(parseResumeCommand("/resume")).toEqual({ all: false });
-    expect(parseResumeCommand("/RESUME --all")).toEqual({ all: true });
-    expect(parseResumeCommand("/sessions all")).toEqual({ all: true });
+    expect(parseResumeCommand("/resume")).toEqual({ all: false, imports: false });
+    expect(parseResumeCommand("/RESUME --all")).toEqual({ all: true, imports: false });
+    expect(parseResumeCommand("/sessions all")).toEqual({ all: true, imports: false });
     expect(parseResumeCommand("/resume something")).toBeNull();
     expect(parseResumeCommand("/review")).toBeNull();
+  });
+
+  it("reads /import as the list of Claude Code's and Codex's chats only (the owner, 2026-10-03)", () => {
+    expect(parseResumeCommand("/import")).toEqual({ all: false, imports: true });
+    expect(parseResumeCommand("/import --all")).toEqual({ all: true, imports: true });
+    expect(parseResumeCommand("/migrate")).toEqual({ all: false, imports: true });
+    expect(parseResumeCommand("/import everything now")).toBeNull();
   });
 });

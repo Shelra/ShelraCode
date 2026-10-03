@@ -36,8 +36,14 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   {
     id: "resume",
     label: "resume",
-    description: "Continue an earlier chat (--all: every folder)",
+    description: "Continue an earlier chat, Claude Code's and Codex's too (--all: every folder)",
     aliases: ["sessions", "history", "chats"],
+  },
+  {
+    id: "import",
+    label: "import",
+    description: "Continue a Claude Code or Codex chat in Shelra",
+    aliases: ["migrate", "claude", "codex"],
   },
   { id: "commit-push", label: "commit & push", description: "Commit and push" },
   { id: "commit-pr", label: "commit & pr", description: "Commit and open a PR" },

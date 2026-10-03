@@ -144,8 +144,9 @@ shelra -s <session-id>
 Works in interactive mode too—same flag. In the terminal UI, `/resume` lists them.
 
 **Continue a Claude Code or Codex chat:** `/resume` also lists the chats Claude Code
-(`~/.claude/projects`) and Codex (`~/.codex/sessions`) saved for this folder; Enter
-imports the chosen one as a Shelra chat and continues it. From the command line:
+(`~/.claude/projects`) and Codex (`~/.codex/sessions`) saved for this folder, and
+`/import` lists only theirs; Enter imports the chosen one as a Shelra chat and
+continues it. From the command line:
 
 ```bash
 shelra import --list     # this folder's Claude Code and Codex chats (--all: every folder)

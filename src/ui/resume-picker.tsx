@@ -13,6 +13,8 @@ export interface ResumePickerProps {
   all: boolean;
   width: number;
   height: number;
+  /** /import: the list holds only Claude Code's and Codex's chats. */
+  imports?: boolean;
   /** Why the chosen chat could not be opened; the picker stays open to show it. */
   error: string | null;
   now: Date;
@@ -21,9 +23,19 @@ export interface ResumePickerProps {
 /**
  * /resume: the chats saved in this folder (or every folder), newest first, each with what it was about,
  * its size, when it was last used and the model; Claude Code's and Codex's chats among them, named by the agent.
- * Enter continues the chosen chat in place, importing another agent's first.
+ * /import lists only theirs. Enter continues the chosen chat in place, importing another agent's first.
  */
-export function ResumePickerModal({ t, chats, selectedIndex, all, width, height, error, now }: ResumePickerProps) {
+export function ResumePickerModal({
+  t,
+  chats,
+  selectedIndex,
+  all,
+  imports = false,
+  width,
+  height,
+  error,
+  now,
+}: ResumePickerProps) {
   const listRef = useRef<ScrollBoxRenderable>(null);
   useEffect(() => {
     const chat = chats[selectedIndex];
@@ -70,8 +82,8 @@ export function ResumePickerModal({ t, chats, selectedIndex, all, width, height,
         >
           <SectionBadge
             t={t}
-            label="Resume"
-            detail={`${chats.length} chat${chats.length === 1 ? "" : "s"} · ${scope}`}
+            label={imports ? "Import" : "Resume"}
+            detail={`${chats.length} ${imports ? "Claude Code and Codex " : ""}chat${chats.length === 1 ? "" : "s"} · ${scope}`}
           />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
@@ -109,7 +121,7 @@ export function ResumePickerModal({ t, chats, selectedIndex, all, width, height,
           })}
           {chats.length === 0 ? (
             <box paddingLeft={2} paddingRight={2}>
-              <text fg={t.textMuted}>{all ? "No earlier chats yet." : "No earlier chats in this folder."}</text>
+              <text fg={t.textMuted}>{emptyText(all, imports)}</text>
             </box>
           ) : null}
         </scrollbox>
@@ -127,4 +139,11 @@ export function ResumePickerModal({ t, chats, selectedIndex, all, width, height,
       </box>
     </box>
   );
+}
+
+function emptyText(all: boolean, imports: boolean): string {
+  if (imports) {
+    return all ? "No Claude Code or Codex chats to import." : "No Claude Code or Codex chats to import in this folder.";
+  }
+  return all ? "No earlier chats yet." : "No earlier chats in this folder.";
 }

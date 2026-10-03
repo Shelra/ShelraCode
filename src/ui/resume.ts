@@ -116,12 +116,17 @@ export function wrapWords(text: string, width: number): string[] {
   return lines;
 }
 
-/** Whether a typed command asks for /resume, and over every folder: `/resume`, `/resume --all`, `/sessions all`. */
-export function parseResumeCommand(command: string): { all: boolean } | null {
+/**
+ * Whether a typed command asks for /resume, and over every folder: `/resume`, `/resume --all`, `/sessions all`.
+ * `/import` asks for the same list with only Claude Code's and Codex's chats (`imports`).
+ */
+export function parseResumeCommand(command: string): { all: boolean; imports: boolean } | null {
   const words = command.trim().toLowerCase().split(/\s+/);
-  if (words[0] !== "/resume" && words[0] !== "/sessions") return null;
+  const imports = words[0] === "/import" || words[0] === "/migrate";
+  if (!imports && words[0] !== "/resume" && words[0] !== "/sessions") return null;
   const rest = words.slice(1);
-  if (rest.length === 0) return { all: false };
-  if (rest.length === 1 && (rest[0] === "--all" || rest[0] === "all" || rest[0] === "-a")) return { all: true };
+  if (rest.length === 0) return { all: false, imports };
+  if (rest.length === 1 && (rest[0] === "--all" || rest[0] === "all" || rest[0] === "-a"))
+    return { all: true, imports };
   return null;
 }
