@@ -120,7 +120,9 @@ seen (`createStallDetector`, `src/providers/stream.ts`). So is a turn going in c
 edits that flip a file between the same two versions twice (whitespace aside), or a check that fails the same way
 four runs in a row while files change between them (`createCircleDetector`, `src/agent/circles.ts`, passed to the
 provider as `hostStops`). Once per turn the model is told why, naming the file and versions or the check and its
-error, and may take another way or report; a second stop goes on to the completion gate.
+error, and may take another way or report; a second stop goes on to the completion gate. The step in which the model
+calls `report_blocker` ends the generation too, and the turn ends `[Stopped — reason]` (seen 2026-10-03: a model
+reported that a request broke the user's offline rule, then installed a dependency in the same generation).
 A turn that changed a web app's files (html, css, js/ts, vue, svelte, package.json) has the app opened by the host
 before it may end (`src/agent/runtime-smoke.ts`): through the server the session runs, else by serving the folder a
 static-server script names or a plain site's index.html in-process, else by starting Vite on a free port with no
@@ -233,9 +235,13 @@ progress in other sessions. After a turn that changed and verified files, worked
 failure, or investigated substantially, one bounded reflection call proposes durable facts and a
 deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text,
 no inference overwriting a human statement, no near-duplicates). A turn no model could finish (Limited, Paused)
-keeps its host-observed lessons at once and queues its reflection for the next turn a model answers; a turn stopped
-by test protection, a check or decision-record edit, missing evidence, a Stop hook or `report_blocker` keeps its
-episode and host-observed lessons, and no model reflects on it (`docs/architecture/18-MEMORY-V2.md`). Explicit
+keeps its host-observed lessons at once and queues its reflection for the next turn a model answers; a turn held by
+test protection whose checks passed reflects, and what it keeps is tagged `held`; a turn stopped by a check or
+decision-record edit, missing evidence, a Stop hook or `report_blocker` keeps its episode and host-observed lessons,
+and no model reflects on it (`docs/architecture/18-MEMORY-V2.md`, doc 21). A reflection item may quote the user: when
+the host finds the quote word for word in what the user typed this session, the quote becomes the record, human-sourced
+and tagged `intent`, and reaches every request with the standing rules; a lesson a turn paid for (a check that failed,
+then passed) does not fade. Explicit
 standing rules, facts and corrections from the user ("always …", "never …", "remember that …", "no, we use …") are
 captured without a model call; a preference about how Shelra talks to the person goes to the user-wide store. A project entry gains credit when the
 host runs the checks a project states and they pass with it in context, and loses it when they fail (a
@@ -248,6 +254,13 @@ Memory behaves like a person's (doc 18 §4.6, `src/memory/dynamics.ts`): an entr
 fades; once a day a consolidation pass turns a failure repeated across
 turns into one lesson and archives what faded (never the user's words, an important or a credited entry), and a
 request that matches an archived entry is offered it back; "recuérdame X cuando Y" keeps a reminder given once, on
-the request that names its cue. `shelra memory` lists, shows, explains (`why "<request>"`) and counts it. Design and evidence:
-`docs/architecture/18-MEMORY-V2.md` (current) and `docs/design/shelra-memory-engine.md`; proof suite:
-`bench/suites/shelra-memory-v0.1.json`; retrieval benchmark: `bench/memory/`.
+the request that names its cue. `shelra memory` lists, shows, explains (`why "<request>"`) and counts it.
+Where work stands and what the project documents say (doc 21): each episode keeps a snapshot of the session's plan,
+every request sees the project's open plans, and a request to continue in a new session adopts the newest one, so
+`update_plan_step` goes on from there; every request gets the README's description of the project, up to three
+documents it is about, each flagged when it still states what a superseded decision or entry replaced
+(`src/memory/docs-index.ts`), and a pointer to an instruction file written for another agent; a session's first
+request also gets the most important lessons and the latest turns. Design and evidence:
+`docs/architecture/18-MEMORY-V2.md`, `docs/architecture/21-PROJECT-MEMORY-V2.md` (current) and
+`docs/design/shelra-memory-engine.md`; proof suites: `bench/suites/shelra-memory-v0.1.json`,
+`bench/long-horizon/memory-evals.ts`, `bench/long-horizon/year-in-a-box.ts`; retrieval benchmark: `bench/memory/`.

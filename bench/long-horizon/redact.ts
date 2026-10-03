@@ -1,4 +1,4 @@
-import { homedir, tmpdir } from "node:os";
+import { homedir, tmpdir, userInfo } from "node:os";
 
 /**
  * Results are committed to a public repository, so no local path may appear in them. A path can show up written with
@@ -20,10 +20,24 @@ export function redactPaths(text: string, folders: Record<string, string> = {}):
   const entries = Object.entries(folders).sort(([, a], [, b]) => b.length - a.length);
   for (const [placeholder, folder] of entries) out = out.replace(pathPattern(folder), placeholder);
   out = out.replace(pathPattern(tmpdir(), "[\\\\/]+shelra-[A-Za-z0-9-]+"), "<root>");
-  return (
-    out
-      .replace(pathPattern(homedir()), "~")
-      // A table cut at its column width can leave a partial name ("…\Temp\she").
-      .replace(/~[\\/]+AppData[\\/]+Local[\\/]+Temp[\\/]+[A-Za-z0-9-]*/giu, "<root>")
-  );
+  out = out
+    .replace(pathPattern(homedir()), "~")
+    // A table cut at its column width can leave a partial name ("…\Temp\she").
+    .replace(/~[\\/]+AppData[\\/]+Local[\\/]+Temp[\\/]+[A-Za-z0-9-]*/giu, "<root>");
+  // A shell that clips a long path at its start ("... <user>\AppData\Local\Temp\x") leaves the tail of the home folder.
+  const user = safeUserName();
+  if (!user) return out;
+  const escaped = user.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return out
+    .replace(new RegExp(`${escaped}[\\\\/]+AppData[\\\\/]+Local[\\\\/]+Temp[\\\\/]+[A-Za-z0-9-]*`, "giu"), "<root>")
+    .replace(new RegExp(`(^|[\\\\/\\s"'])${escaped}(?=[\\\\/])`, "giu"), "$1<user>");
+}
+
+function safeUserName(): string {
+  try {
+    const name = userInfo().username;
+    return name.length >= 3 ? name : "";
+  } catch {
+    return "";
+  }
 }
