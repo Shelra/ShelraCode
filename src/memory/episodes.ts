@@ -9,10 +9,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { Plan } from "../types/index";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { privateText } from "./gate";
 import { errorLine, recoveryOf } from "./recovery";
-import { type TurnDigest, typedText } from "./reflection";
+import { type PlanSnapshot, type TurnDigest, typedText } from "./reflection";
 import { ensureMemoryDir, memoryDir } from "./store";
 import { previousRequestWeight, searchTerms } from "./terms";
 import type { MemoryScope } from "./types";
@@ -63,6 +64,8 @@ export interface Episode {
   /** The host's closing note ("[Limited — …]", "[Not verified — …]"), clipped. */
   note?: string;
   model?: string;
+  /** The plan the turn worked under, as it stood when the turn ended (or when the live record was last saved). */
+  plan?: PlanSnapshot;
 }
 
 export interface PendingReflection {
@@ -139,7 +142,95 @@ export function episodeFrom(
     toolCalls: digest.toolCalls,
     ...(extra.note ? { note: clip(extra.note, 300) } : {}),
     ...(extra.model ? { model: extra.model } : {}),
+    ...(digest.plan && digest.plan.steps.length > 0 ? { plan: snapshotOf(digest.plan) } : {}),
   };
+}
+
+/** A plan snapshot small enough to keep with every episode. */
+function snapshotOf(plan: PlanSnapshot): PlanSnapshot {
+  return {
+    title: clip(plan.title, 120),
+    ...(plan.goal ? { goal: clip(plan.goal, 300) } : {}),
+    steps: plan.steps.slice(0, 20).map((step) => ({ title: clip(step.title, 160), status: step.status })),
+    ...(plan.criteria && plan.criteria.length > 0
+      ? {
+          criteria: plan.criteria.slice(0, 12).map((criterion) => ({
+            id: criterion.id,
+            description: clip(criterion.description, 200),
+            verification: clip(criterion.verification, 200),
+            ...(criterion.command ? { command: clip(criterion.command, 200) } : {}),
+          })),
+        }
+      : {}),
+  };
+}
+
+/** A session's plan as the digest field: nothing when there is no plan or it has no steps. */
+export function planSnapshotOf(plan: Plan | null | undefined): { plan?: PlanSnapshot } {
+  if (!plan || plan.steps.length === 0) return {};
+  return {
+    plan: {
+      title: plan.title,
+      ...(plan.goal ? { goal: plan.goal } : {}),
+      steps: plan.steps.map((step) => ({ title: step.title, status: step.status ?? "pending" })),
+      ...(plan.acceptanceCriteria?.length ? { criteria: plan.acceptanceCriteria } : {}),
+    },
+  };
+}
+
+export interface OpenPlan {
+  /** When the plan was last seen, in an episode or a live record. */
+  at: string;
+  plan: PlanSnapshot;
+}
+
+const FINISHED_STEP = new Set(["complete", "claimed"]);
+/** Turns that ended on their own: a plan none of whose steps they moved says nothing about what is left. */
+const ENDED_NORMALLY = new Set<TurnOutcome>(["verified", "unverified", "answered"]);
+
+/**
+ * The plans still open in this project, newest first: for each plan (by title), the latest snapshot the episodes hold,
+ * kept when a step is not done yet. A routine turn's small plan does not hide August's half-finished refactor: each plan
+ * is its own entry (the review of doc 21, finding 4). A plan the turn never tracked (every step still pending when it
+ * ended on its own) is not open: the work may well be done, and "to do" would be a guess.
+ */
+export function openPlans(episodes: readonly Episode[], max = 3): OpenPlan[] {
+  const seen = new Set<string>();
+  const open: OpenPlan[] = [];
+  for (const episode of [...episodes].reverse()) {
+    const plan = episode.plan;
+    if (!plan || plan.steps.length === 0) continue;
+    const key = plan.title.toLowerCase().replace(/\s+/gu, " ").trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const untracked = plan.steps.every((step) => step.status === "pending") && ENDED_NORMALLY.has(episode.outcome);
+    if (!untracked && plan.steps.some((step) => !FINISHED_STEP.has(step.status))) open.push({ at: episode.at, plan });
+    if (open.length >= max) break;
+  }
+  return open;
+}
+
+const STEP_LABEL: Record<string, string> = {
+  complete: "done",
+  claimed: "claimed, not checked",
+  working: "in progress",
+  failed: "failed",
+  pending: "to do",
+};
+
+/** The open plans as prompt lines. */
+export function describeOpenPlans(open: readonly OpenPlan[]): string[] {
+  const lines: string[] = [];
+  for (const { at, plan } of open) {
+    const done = plan.steps.filter((step) => step.status === "complete").length;
+    lines.push(
+      `- "${plan.title}" (last worked on ${at.slice(0, 10)}; ${done}/${plan.steps.length} steps done)${plan.goal ? `: ${clip(plan.goal, 160)}` : ""}`,
+    );
+    plan.steps.forEach((step, index) => {
+      lines.push(`  ${index + 1}. ${clip(step.title, 110)} — ${STEP_LABEL[step.status] ?? step.status}`);
+    });
+  }
+  return lines;
 }
 
 function appendLine(path: string, line: string, maxBytes: number): void {
@@ -167,6 +258,30 @@ export function readEpisodes(scope: MemoryScope, limit = 500): Episode[] {
       .split("\n")
       .filter(Boolean)
       .slice(-limit)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as Episode];
+        } catch {
+          return [];
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The episodes that carry a plan, from the whole log: a busy project's routine turns must not push August's
+ * half-finished refactor out of the window the other readers take (doc 21, the volume variant). Only those lines are
+ * parsed.
+ */
+export function readPlanEpisodes(scope: MemoryScope): Episode[] {
+  try {
+    const path = join(memoryDir(scope), EPISODES_FILE);
+    if (!existsSync(path)) return [];
+    return readFileSync(path, "utf8")
+      .split("\n")
+      .filter((line) => line.includes('"plan":{'))
       .flatMap((line) => {
         try {
           return [JSON.parse(line) as Episode];

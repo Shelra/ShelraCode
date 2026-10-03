@@ -4,11 +4,13 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   appendEpisode,
+  describeOpenPlans,
   didWork,
   episodeFrom,
   episodeLessons,
   failuresOf,
   MAX_ATTEMPTS,
+  openPlans,
   pendingReflectionCount,
   queuePendingReflection,
   readEpisodes,
@@ -181,5 +183,63 @@ describe("what episodes keep (review round 2)", () => {
     expect(takePendingReflection(scope)?.attempts).toBe(2);
     expect(queuePendingReflection(scope, digest(), "limited", MAX_ATTEMPTS)).toBe(false);
     expect(pendingReflectionCount(scope)).toBe(0);
+  });
+});
+
+describe("open plans (doc 21, Phase B)", () => {
+  const refactor = (statuses: Array<"complete" | "claimed" | "working" | "pending" | "failed">) => ({
+    title: "Module layout refactor",
+    goal: "Code in src/domain, src/storage, src/importers and src/reports",
+    steps: ["Move money", "Move storage", "Move the importer", "Move reports"].map((title, index) => ({
+      title,
+      status: statuses[index] ?? "pending",
+    })),
+  });
+
+  it("keeps the plan a turn worked under with its episode, and the latest snapshot of each plan is the one that counts", () => {
+    const scope = projectMemoryScope(scratch("shelra-episodes-plans-"));
+    appendEpisode(scope, episodeFrom(digest({ plan: refactor(["complete", "working"]) }), "verified"));
+    appendEpisode(scope, episodeFrom(digest({ plan: refactor(["complete", "complete"]) }), "verified"));
+    appendEpisode(
+      scope,
+      episodeFrom(
+        digest({ plan: { title: "Fix a typo", steps: [{ title: "Fix it", status: "complete" }] } }),
+        "verified",
+      ),
+    );
+    const open = openPlans(readEpisodes(scope));
+    expect(open).toHaveLength(1);
+    expect(open[0]?.plan.steps.map((step) => step.status)).toEqual(["complete", "complete", "pending", "pending"]);
+    const lines = describeOpenPlans(open).join("\n");
+    expect(lines).toContain('"Module layout refactor"');
+    expect(lines).toContain("2/4 steps done");
+    expect(lines).toContain("3. Move the importer — to do");
+  });
+
+  it("drops a plan once every step is done, and lists at most three", () => {
+    const scope = projectMemoryScope(scratch("shelra-episodes-plans-"));
+    appendEpisode(scope, episodeFrom(digest({ plan: refactor(["complete"]) }), "verified"));
+    appendEpisode(
+      scope,
+      episodeFrom(digest({ plan: refactor(["complete", "complete", "complete", "claimed"]) }), "verified"),
+    );
+    expect(openPlans(readEpisodes(scope))).toEqual([]);
+    for (const title of ["A", "B", "C", "D"]) {
+      appendEpisode(
+        scope,
+        episodeFrom(digest({ plan: { title, steps: [{ title: "x", status: "working" }] } }), "verified"),
+      );
+    }
+    expect(openPlans(readEpisodes(scope)).map((item) => item.plan.title)).toEqual(["D", "C", "B"]);
+  });
+
+  it("does not call a plan open when its turn ended on its own without moving a step, unless the turn was cut", () => {
+    const scope = projectMemoryScope(scratch("shelra-episodes-plans-"));
+    const untracked = { title: "Yearly tax summary", steps: [{ title: "Write it", status: "pending" as const }] };
+    appendEpisode(scope, episodeFrom(digest({ plan: untracked }), "unverified"));
+    expect(openPlans(readEpisodes(scope))).toEqual([]);
+    const cut = { title: "Module layout refactor", steps: [{ title: "Move money", status: "pending" as const }] };
+    appendEpisode(scope, episodeFrom(digest({ plan: cut }), "interrupted"));
+    expect(openPlans(readEpisodes(scope)).map((item) => item.plan.title)).toEqual(["Module layout refactor"]);
   });
 });

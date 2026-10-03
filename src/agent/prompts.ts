@@ -1,10 +1,18 @@
 import { formatDecisionsForPrompt } from "../ledger/prompt";
 import { listDecisions } from "../ledger/store";
 import { isLspToolEnabled } from "../lsp/runtime";
-import { describeEpisode, episodeLessons, readEpisodes } from "../memory/episodes";
+import {
+  describeEpisode,
+  describeOpenPlans,
+  episodeLessons,
+  openPlans,
+  readEpisodes,
+  readPlanEpisodes,
+} from "../memory/episodes";
 import {
   appendEpisodeLessons,
   appendRecentWork,
+  appendSection,
   buildMemoryContext,
   type MemoryContext,
   noteWhenNothingMatches,
@@ -242,21 +250,30 @@ export function memoryContextFor(
       { archived: listArchivedEntries(scope) },
     );
     // What happened the last times a similar request came in: failures and what got past them (doc 18 §4.3).
-    const lessons = episodeLessons(readEpisodes(scope, 400), {
-      text: query,
-      ...(previous ? { previous } : {}),
-    });
+    const episodes = readEpisodes(scope, 400);
+    const lessons = episodeLessons(episodes, { text: query, ...(previous ? { previous } : {}) });
     const withLessons = appendEpisodeLessons(context, lessons);
-    if (!isContinuationRequest(query)) return noteWhenNothingMatches(withLessons);
+    // The plans the project left unfinished, each where it stands: what "the next unfinished objective" is, for any
+    // request (doc 21, Phase B). A project with open work is not new to memory.
+    const open = openPlans(readPlanEpisodes(scope));
+    const withPlans =
+      open.length > 0
+        ? appendSection(
+            withLessons,
+            "Open plans in this project (unfinished; carry one on only when the request is about it):",
+            describeOpenPlans(open),
+          )
+        : withLessons;
+    if (!isContinuationRequest(query)) return open.length > 0 ? withPlans : noteWhenNothingMatches(withPlans);
     // A request to carry on is about the latest work, whatever its words: it gets the newest turns, and never the
     // note that the project is new to memory (doc 20, TEST E9; doc 21 §5.7).
-    const shown = new Set(withLessons.episodes ?? []);
-    const recent = readEpisodes(scope, 4)
+    const shown = new Set(withPlans.episodes ?? []);
+    const recent = [...episodes]
       .reverse()
       .filter((episode) => !shown.has(episode.at))
       .slice(0, 3);
     return appendRecentWork(
-      withLessons,
+      withPlans,
       recent.map((episode) => describeEpisode(episode)),
       recent.map((episode) => episode.at),
     );

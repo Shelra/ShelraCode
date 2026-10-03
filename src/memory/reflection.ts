@@ -1,4 +1,5 @@
 import type { ProviderAdapter, ProviderUsage } from "../providers/types";
+import type { PlanAcceptanceCriterion, PlanStepStatus } from "../types/index";
 import { decideMemoryWrite, type GateDecision, privateText } from "./gate";
 import { errorLine, recoveryOf } from "./recovery";
 import {
@@ -29,6 +30,17 @@ export interface TurnCommand {
   output: string;
 }
 
+/**
+ * The plan a turn worked under, as the host last saw it: kept with the turn's episode so a later session, after a crash
+ * or on another day, knows which plans are still open and where each stands (doc 21 §5.3, the review's open plans).
+ */
+export interface PlanSnapshot {
+  title: string;
+  goal?: string;
+  steps: Array<{ title: string; status: PlanStepStatus }>;
+  criteria?: PlanAcceptanceCriterion[];
+}
+
 export interface TurnDigest {
   userMessage: string;
   assistantText: string;
@@ -39,6 +51,8 @@ export interface TurnDigest {
   /** The turn ended with the host's `[Not verified]` note: the project's checks still failed on its code. */
   endedUnverified?: boolean;
   toolCalls: number;
+  /** The plan the turn worked under, if any. */
+  plan?: PlanSnapshot;
 }
 
 /** What a turn that ended unverified may teach is kept, but it never outranks a confirmed fact. */

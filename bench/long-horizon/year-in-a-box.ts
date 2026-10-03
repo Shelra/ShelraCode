@@ -13,7 +13,16 @@
  * and writes `results/<label>.json`.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,7 +41,9 @@ interface Args {
   stopAfter?: number;
   /**
    * `tests-allowed`: the user adds "Update the tests as needed." to the work requests that touch existing tests
-   * (isolates test protection); `resume`: epoch 9 resumes the latest session (`shelra -s latest`).
+   * (isolates test protection); `resume`: epoch 9 resumes the latest session (`shelra -s latest`); `routine-plan`: a
+   * routine turn with a small finished plan of its own runs after the crash, before epoch 9; `volume`: 300 routine
+   * turns are recorded after the crash, before epoch 9 (doc 20 P0-1's volume exit).
    */
   variant?: string;
 }
@@ -62,6 +73,8 @@ const TESTS_TOUCHED = [4, 5, 6, 7, 10];
 
 /** The epochs as the variant words them. */
 function epochsFor(variant: string | undefined): Epoch[] {
+  if (variant === "routine-plan")
+    return EPOCHS.flatMap((epoch) => (epoch.id === 8 ? [epoch, ROUTINE_PLAN_EPOCH] : [epoch]));
   if (variant !== "tests-allowed") return EPOCHS;
   return EPOCHS.map((epoch) =>
     TESTS_TOUCHED.includes(epoch.id) ? { ...epoch, user: `${epoch.user} Update the tests as needed.` } : epoch,
@@ -165,7 +178,8 @@ const FACTS: Fact[] = [
   {
     id: "F14",
     label: "plan/progress of the refactor (steps done vs remaining)",
-    all: [/(importers and reports remain|reports remain|steps? 3\b)/iu],
+    // The answer's words, or the open plan's own count ("2/4 steps done").
+    all: [/(importers and reports remain|reports remain|steps? 3\b|\b2\/4 steps done\b)/iu],
     epochs: [9, 12],
   },
 ];
@@ -221,6 +235,59 @@ function routineEpisodes(count: number): EpisodeLine[] {
     request: `Rename the helper number ${index} in the importer and tidy its comments.`,
     summary: `Renamed helper ${index}; tests pass.`,
   }));
+}
+
+/** `routine-plan`: a small chore with its own plan, finished, between the crash and the continuation. */
+const ROUTINE_PLAN_EPOCH: Epoch = {
+  id: 8.5,
+  date: "2026-10-01T12:00:00Z",
+  model: "yib-model-a",
+  tests: "a routine turn's finished plan must not hide the half-done refactor",
+  user: "Tidy the comments in the storage module.",
+  rounds: [
+    [
+      {
+        tool: "generate_plan",
+        input: {
+          title: "Tidy storage comments",
+          goal: "Clearer comments in the storage module",
+          requirements: ["Comments say what the code does"],
+          acceptanceCriteria: [{ id: "AC1", description: "Tests still pass", verification: "bun test" }],
+          steps: ["Read the storage module", "Tidy its comments"],
+        },
+      },
+      { tool: "update_plan_step", input: { index: 1, status: "working" } },
+      { tool: "bash", input: { command: "bun test" } },
+      { tool: "update_plan_step", input: { index: 1, status: "complete", evidence: "bun test passes" } },
+      { tool: "update_plan_step", input: { index: 2, status: "working" } },
+      { tool: "bash", input: { command: "bun test" } },
+      { tool: "update_plan_step", input: { index: 2, status: "complete", evidence: "bun test passes" } },
+    ],
+  ],
+  answer: "The storage comments are tidy; bun test passes.",
+  reflection: [],
+  commit: "Tidy storage comments",
+};
+
+/** `volume`: 300 ordinary turns of a busy project, recorded as the agent records them, between the crash and epoch 9. */
+function recordRoutineTurns(workspace: string, count: number): void {
+  const file = join(workspace, ".shelra", "memory", "episodes.jsonl");
+  const start = Date.parse("2026-09-10T09:00:00Z");
+  const span = Date.parse("2026-10-19T18:00:00Z") - start;
+  const lines = Array.from({ length: count }, (_, index) =>
+    JSON.stringify({
+      at: new Date(start + Math.floor((span * index) / count)).toISOString(),
+      outcome: "verified",
+      request: `Rename the helper number ${index} in the importer and tidy its comments.`,
+      summary: `Renamed helper ${index}; bun test passes.`,
+      files: [`src/importers/helper-${index % 12}.ts`],
+      failures: [],
+      commands: ["bun test"],
+      verified: true,
+      toolCalls: 4,
+    }),
+  );
+  appendFileSync(file, `${lines.join("\n")}\n`, "utf8");
 }
 
 /** Every session the year created, with how many messages its transcript kept. */
@@ -282,6 +349,7 @@ async function orchestrate(args: Args): Promise<void> {
       git(workspace, home, ["add", "-A"]);
       git(workspace, home, ["commit", "-q", "-m", epoch.commit], epoch.date);
     }
+    if (args.variant === "volume" && epoch.id === 8) recordRoutineTurns(workspace, 300);
     const shot = snapshot(root, epoch, exit);
     snapshots.push(shot);
     console.log(

@@ -88,6 +88,8 @@ vi.mock("../storage/index", () => ({
 
 vi.mock("../hooks/index", () => ({
   executeEventHooks: executeEventHooksMock,
+  executePreToolHooks: vi.fn(async () => ({ blocked: false, blockingErrors: [], results: [] })),
+  executePostToolHooks: vi.fn(async () => ({})),
 }));
 
 import { Agent } from "./agent";
@@ -227,5 +229,86 @@ describe("automatic project memory consultation", () => {
     expect(system).toContain('interrupted · "Continue the refactor."');
     expect(system).toContain("src/importers/csv.ts");
     expect(system).not.toContain("treat it as new here");
+  });
+
+  it("carries the project's open plan into a new session that is asked to continue, where its steps can be updated (doc 21, Phase B)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-memory-context-plan-"));
+    tempDirs.push(cwd);
+    const scope = projectMemoryScope(cwd);
+    const plan = {
+      title: "Module layout refactor",
+      goal: "Code in src/domain, src/storage, src/importers and src/reports",
+      steps: [
+        { title: "Move money to src/domain", status: "complete" as const },
+        { title: "Move storage to src/storage", status: "complete" as const },
+        { title: "Move the importer to src/importers", status: "pending" as const },
+        { title: "Move reports to src/reports", status: "pending" as const },
+      ],
+    };
+    appendEpisode(
+      scope,
+      episodeFrom(
+        {
+          userMessage: "Refactor the code into modules.",
+          assistantText: "Steps 1 and 2 are done.",
+          changedFiles: ["src/domain/money.ts"],
+          commands: [],
+          verified: true,
+          toolCalls: 9,
+          plan,
+        },
+        "verified",
+      ),
+    );
+
+    // A model that updates step 3 of whatever plan the session has.
+    let updateOutput = "";
+    const requests: ProviderStreamRequest[] = [];
+    const provider: ProviderAdapter = {
+      id: "plan-continue",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: (request) => {
+        requests.push(request);
+        const tools = request.tools as Record<
+          string,
+          { execute?: (input: unknown, options: unknown) => Promise<unknown> }
+        >;
+        return {
+          events: (async function* () {
+            const output = (await tools.update_plan_step?.execute?.(
+              { index: 3, status: "working" },
+              { toolCallId: "u1", messages: [] },
+            )) as { output?: string } | undefined;
+            updateOutput = output?.output ?? "";
+            yield { type: "text-delta" as const, text: "Working on step 3." };
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Working on step 3." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+
+    process.chdir(cwd);
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider });
+    for await (const _chunk of agent.processMessage("Continue.")) {
+      // drain
+    }
+
+    const messages = JSON.stringify(requests[0]?.messages ?? []);
+    expect(messages).toContain("carried on the project's open plan");
+    expect(messages).toContain("2/4 steps done");
+    expect(updateOutput).toBe("Plan step 3 is working.");
+
+    // Any other request starts clean: the plan is offered in the brief, not adopted.
+    const other = new CapturingProvider();
+    const fresh = new Agent(undefined, undefined, "gate-test-model", undefined, { provider: other });
+    for await (const _chunk of fresh.processMessage("Add a CSV export button to the reports page")) {
+      // drain
+    }
+    expect(JSON.stringify(other.lastRequest?.messages ?? [])).not.toContain("carried on the project's open plan");
+    expect(other.lastRequest?.system ?? "").toContain("Module layout refactor");
   });
 });

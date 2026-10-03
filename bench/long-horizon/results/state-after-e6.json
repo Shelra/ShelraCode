@@ -1,5 +1,5 @@
 {
-  "label": "state-after-e8",
+  "label": "state-after-e6",
   "ablate": [],
   "variant": null,
   "root": "<root>",
@@ -120,114 +120,52 @@
       "live": 0,
       "archived": 2,
       "verdict": "[Not verified — it changed tests that existed before this request and the request did not ask to change: test/store.test.ts.]"
-    },
-    {
-      "epoch": 7,
-      "exit": "ok",
-      "memoryIndex": [
-        "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
-        "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
-        "- [We're dropping SQLite: the tax summary over ten years of ...](user-fix-we-re-dropping-sqlite-the-tax-summary-over-ten-y.md) — We're dropping SQLite: the tax summary over ten years of data needs columnar queries",
-        "- [Use DuckDB instead of SQLite](user-fix-use-duckdb-instead-of-sqlite.md) — Use DuckDB instead of SQLite",
-        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first"
-      ],
-      "decisions": [
-        {
-          "file": "0001-storage-uses-sqlite-through-bun-sqlite.md",
-          "status": "superseded"
-        },
-        {
-          "file": "0002-storage-uses-duckdb.md",
-          "status": "active"
-        }
-      ],
-      "episodes": 7,
-      "live": 0,
-      "archived": 2,
-      "verdict": "[Not verified — it changed tests that existed before this request and the request did not ask to change: test/money.test.ts, test/store.test.ts.]"
-    },
-    {
-      "epoch": 8,
-      "exit": "killed mid-turn after its first tool result",
-      "memoryIndex": [
-        "- [Always store money as integer cents](user-rule-always-store-money-as-integer-cents.md) — Always store money as integer cents",
-        "- [We no longer want the monthly report](user-fix-we-no-longer-want-the-monthly-report.md) — We no longer want the monthly report",
-        "- [We're dropping SQLite: the tax summary over ten years of ...](user-fix-we-re-dropping-sqlite-the-tax-summary-over-ten-y.md) — We're dropping SQLite: the tax summary over ten years of data needs columnar queries",
-        "- [Use DuckDB instead of SQLite](user-fix-use-duckdb-instead-of-sqlite.md) — Use DuckDB instead of SQLite",
-        "- [Never add another dependency without asking me first](user-rule-never-add-another-dependency-without-asking-me-f.md) — Never add another dependency without asking me first"
-      ],
-      "decisions": [
-        {
-          "file": "0001-storage-uses-sqlite-through-bun-sqlite.md",
-          "status": "superseded"
-        },
-        {
-          "file": "0002-storage-uses-duckdb.md",
-          "status": "active"
-        }
-      ],
-      "episodes": 7,
-      "live": 1,
-      "archived": 2,
-      "verdict": "(no verdict line)"
     }
   ],
   "sessions": [
     {
-      "created": "2026-01-05T12:00:00.222Z",
+      "created": "2026-01-05T12:00:00.470Z",
       "model": "yib-model-a",
       "messages": 16,
       "toolCalls": 7
     },
     {
-      "created": "2026-02-03T12:00:00.187Z",
+      "created": "2026-02-03T12:00:00.194Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 5
     },
     {
-      "created": "2026-03-02T12:00:00.184Z",
+      "created": "2026-03-02T12:00:00.201Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-05-04T12:00:00.184Z",
+      "created": "2026-05-04T12:00:00.195Z",
       "model": "yib-model-a",
       "messages": 16,
       "toolCalls": 6
     },
     {
-      "created": "2026-06-01T12:00:00.196Z",
+      "created": "2026-06-01T12:00:00.198Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
     },
     {
-      "created": "2026-07-06T12:00:00.185Z",
+      "created": "2026-07-06T12:00:00.219Z",
       "model": "yib-model-a",
       "messages": 12,
       "toolCalls": 4
-    },
-    {
-      "created": "2026-08-03T12:00:00.187Z",
-      "model": "yib-model-a",
-      "messages": 36,
-      "toolCalls": 16
-    },
-    {
-      "created": "2026-09-07T12:00:00.189Z",
-      "model": "yib-model-a",
-      "messages": 0,
-      "toolCalls": 0
     }
   ],
   "epochs": {},
   "digestCounterfactual": [
     {
       "routineEpisodesAdded": 0,
-      "chars": 2080,
-      "reached": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F14"],
+      "chars": 1780,
+      "reached": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11"],
       "of": 14
     },
     {

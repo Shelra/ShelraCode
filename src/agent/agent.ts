@@ -69,7 +69,10 @@ import {
   clearLiveEpisode,
   didWork,
   episodeFrom,
+  openPlans,
+  planSnapshotOf,
   queuePendingReflection,
+  readPlanEpisodes,
   recoverInterruptedTurns,
   saveLiveEpisode,
   type TurnOutcome,
@@ -100,7 +103,7 @@ import {
   recordMemoryUse,
   userMemoryScope,
 } from "../memory/store";
-import { previousRequestWeight } from "../memory/terms";
+import { isContinuationRequest, previousRequestWeight } from "../memory/terms";
 import {
   type BudgetLimits,
   type BudgetScope,
@@ -566,6 +569,11 @@ export class Agent {
    * Phase 3 item 1: per-criterion evidence, not aggregate).
    */
   private activePlanSteps: PlanStep[] | null = null;
+  /**
+   * The session's plan with every step's status, as the host last saw it: published, updated, restored with the session,
+   * or carried on from an earlier session (doc 21, Phase B). Its snapshot goes with the turn's episode and live record.
+   */
+  private sessionPlan: Plan | null = null;
   private turnVerificationEvidence: string[] = [];
   /**
    * Criterion ids explicitly linked to a completed step THIS turn, via `update_plan_step(status:
@@ -1065,6 +1073,7 @@ export class Agent {
     if (!this.session) return;
     try {
       const plan = loadPersistedPlanState(this.session.id);
+      this.sessionPlan = plan;
       this.activeAcceptanceCriteria = plan?.acceptanceCriteria?.map((criterion) => ({ ...criterion })) ?? null;
       this.activePlanSteps =
         plan?.steps.map((step) => ({
@@ -1355,6 +1364,7 @@ export class Agent {
     this.contextSummary = null;
     this.activeAcceptanceCriteria = null;
     this.activePlanSteps = null;
+    this.sessionPlan = null;
     this.turnVerificationEvidence = [];
     this.turnLinkedCriteriaIds = new Set();
     this.planState = { published: true, structured: false };
@@ -1414,6 +1424,7 @@ export class Agent {
     this.contextSummary = null;
     this.activeAcceptanceCriteria = null;
     this.activePlanSteps = null;
+    this.sessionPlan = null;
     this.turnVerificationEvidence = [];
     this.turnLinkedCriteriaIds = new Set();
     this.sessionStore = store;
@@ -2923,6 +2934,60 @@ export class Agent {
       this.previousRequest = typedText(userMessage);
     }
     this.lastMemoryContext = memoryContext;
+    // "Continue" in a new session, after a crash or another day: the latest open plan of the project becomes this
+    // session's plan, its steps with the status they had, so update_plan_step goes on from there (doc 21, Phase B).
+    // Only a request to continue adopts one; any other request starts clean (cross-turn-criteria.test.ts).
+    if (liveMemory && !this.ablations.has("plan") && !this.activePlanSteps && isContinuationRequest(userMessage)) {
+      const carried = openPlans(readPlanEpisodes(memoryScope))[0];
+      if (carried) {
+        const plan: Plan = {
+          title: carried.plan.title,
+          summary: `Carried on from ${carried.at.slice(0, 10)}`,
+          ...(carried.plan.goal ? { goal: carried.plan.goal } : {}),
+          ...(carried.plan.criteria?.length ? { acceptanceCriteria: carried.plan.criteria } : {}),
+          steps: carried.plan.steps.map((step) => ({ title: step.title, description: "", status: step.status })),
+        };
+        this.sessionPlan = plan;
+        this.activePlanSteps = plan.steps.map((step) => ({ ...step }));
+        this.activeAcceptanceCriteria = plan.acceptanceCriteria ?? null;
+        this.planState = { published: true, structured: true };
+        const callId = `memory-plan-${Date.now().toString(36)}`;
+        const call: ToolCall = {
+          id: callId,
+          type: "function",
+          function: { name: "generate_plan", arguments: JSON.stringify({ title: plan.title }) },
+        };
+        const done = plan.steps.filter((step) => step.status === "complete").length;
+        const carriedResult = {
+          success: true,
+          output: `[Shelra carried on the project's open plan "${plan.title}", last worked on ${carried.at.slice(0, 10)}: ${done}/${plan.steps.length} steps done. Check what the last turn left before redoing a step; update_plan_step works on it.]`,
+          plan,
+        };
+        this.messages.push(
+          {
+            role: "assistant",
+            content: [
+              { type: "tool-call", toolCallId: callId, toolName: "generate_plan", input: { title: plan.title } },
+            ],
+          },
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: callId,
+                toolName: "generate_plan",
+                // Plain JSON for the transcript, the shape a published plan's result has.
+                output: { type: "json", value: JSON.parse(JSON.stringify(carriedResult)) },
+              },
+            ],
+          },
+        );
+        this.messageSeqs.push(null, null);
+        yield { type: "tool_calls", toolCalls: [call] };
+        yield { type: "tool_result", toolCall: call, toolResult: carriedResult };
+      }
+    }
     notifyObserver(observer?.onMemoryRecall, {
       rules: memoryContext.rules ?? [],
       entries: (memoryContext.explain ?? []).filter((item) => item.tier !== "rule"),
@@ -2946,6 +3011,7 @@ export class Agent {
       commands: turnCommands,
       verified: this.turnVerificationEvidence.length > 0,
       toolCalls: turnToolCalls,
+      ...planSnapshotOf(this.sessionPlan),
     });
     this.turnMemoryDigest = () => ({
       userMessage,
@@ -2958,6 +3024,7 @@ export class Agent {
       commands: turnCommands,
       verified: this.turnVerificationEvidence.length > 0,
       toolCalls: turnToolCalls,
+      ...planSnapshotOf(this.sessionPlan),
     });
     const pendingCommands = new Map<string, string>();
     /** Checks this turn ran whose exit status a later command replaced; the gate names them. */
@@ -3425,6 +3492,15 @@ export class Agent {
                   planStartEvidence = this.turnVerificationEvidence.length;
                   stepStartEvidence.clear();
                 }
+                if (tr.success && tr.plan?.steps?.length) {
+                  this.sessionPlan = {
+                    ...tr.plan,
+                    steps: tr.plan.steps.map((step) => ({ ...step, status: step.status ?? "pending" })),
+                  };
+                }
+                const update = tr.success ? tr.planUpdate : undefined;
+                const updated = update ? this.sessionPlan?.steps[update.index] : undefined;
+                if (update && updated) updated.status = update.status;
                 if (tr.success && tr.blocker) turnBlocker = tr.blocker;
                 if (tr.success && tr.planUpdate?.status === "complete") {
                   for (const id of this.activePlanSteps?.[tr.planUpdate.index]?.satisfies ?? []) {

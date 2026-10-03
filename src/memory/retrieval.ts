@@ -556,6 +556,13 @@ export function appendEpisodeLessons(
   };
 }
 
+/** Adds a headed section to the memory context; nothing when it has no lines. */
+export function appendSection(context: MemoryContext, heading: string, lines: readonly string[]): MemoryContext {
+  if (lines.length === 0) return context;
+  const section = [heading, ...lines].join("\n");
+  return { ...context, text: context.text ? `${context.text}\n\n${section}` : `PROJECT MEMORY:\n${section}` };
+}
+
 /** Adds the project's latest turns, for a request that carries the work on rather than naming it. */
 export function appendRecentWork(
   context: MemoryContext,
@@ -563,12 +570,12 @@ export function appendRecentWork(
   at: readonly string[],
 ): MemoryContext {
   if (lines.length === 0) return context;
-  const section = ["Recent work in this project, newest first (what a request to continue is about):", ...lines].join(
-    "\n",
-  );
   return {
-    ...context,
-    text: context.text ? `${context.text}\n\n${section}` : `PROJECT MEMORY:\n${section}`,
+    ...appendSection(
+      context,
+      "Recent work in this project, newest first (what a request to continue is about):",
+      lines,
+    ),
     episodes: [...(context.episodes ?? []), ...at],
   };
 }
