@@ -408,6 +408,44 @@ describe("memory capture on every outcome (doc 18, M1)", () => {
     expect(readEpisodes(scope).at(-1)?.note).toContain("changed tests that existed before this request");
   });
 
+  it("leaves a key the request pastes in no memory file of the project (decision battery, 2026-10-03)", async () => {
+    const workspace = scratch("shelra-memory-secret-");
+    const key = "wk_live_7Hq2Lm9Pz4Rt8Vx1Bc6N";
+    const echo = JSON.stringify({
+      memories: [
+        {
+          type: "conventions",
+          slug: "weather-key",
+          title: "Weather API key",
+          hook: `The weather API takes ${key} as X-Api-Key`,
+          description: "d",
+          body: `Send ${key} in X-Api-Key.`,
+          confidence: 0.9,
+        },
+      ],
+    });
+    const provider = new ScriptedProvider(
+      [{ events: [...bashStep("bun test", false, "1 fail"), ...bashStep("bun test", true, "4 pass")], text: "Done." }],
+      [echo],
+    );
+    await turn(
+      agentIn(workspace, provider),
+      `Our weather API now needs a key on every request, sent as the X-Api-Key header. The key is ${key}. Add it to getForecast in src/weather.ts.`,
+    );
+
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else files.push(path);
+      }
+    };
+    walk(join(workspace, ".shelra"));
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.filter((path) => readFileSync(path, "utf8").includes(key))).toEqual([]);
+  });
+
   it("keeps memory in the session's root folder after the shell moved into a subfolder", async () => {
     const workspace = scratch("shelra-memory-root-");
     mkdirSync(join(workspace, "packages", "web"), { recursive: true });

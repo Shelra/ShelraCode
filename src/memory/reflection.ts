@@ -895,7 +895,8 @@ ${candidate.body}`
     at: new Date().toISOString(),
     qualified: report.qualified,
     reason: report.reason,
-    rawText: clip(rawText, 2_000),
+    // The model's reply can repeat what the turn saw, keys included; the audit file sits in the project.
+    rawText: clip(privateText(rawText), 2_000),
     candidates: report.candidates.length + fallback.length,
     decisions: report.decisions,
     written: report.written,

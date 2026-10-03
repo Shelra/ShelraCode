@@ -151,6 +151,9 @@ describe("secrets memory never keeps (review round 3)", () => {
       "https://x.blob.core.windows.net/c?sv=1&sig=abcDEF123",
       "-----BEGIN PGP PRIVATE KEY BLOCK-----\nabc\n-----END PGP PRIVATE KEY BLOCK-----",
       "STRIPE_WEBHOOK_SECRET=whsec_abcdef123456",
+      // A request that pastes a service key (the decision battery's weather-key task, 2026-10-03).
+      "The key is wk_live_7Hq2Lm9Pz4Rt8Vx1Bc6N. Add it to getForecast.",
+      "rzp_test_AbCdEf123456789",
     ];
     for (const leak of leaks) {
       expect(containsSecret(leak), leak).toBe(true);

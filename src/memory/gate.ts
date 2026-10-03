@@ -249,6 +249,9 @@ const REDACTIONS: Array<[RegExp, string]> = [
   ],
   [/(\b(?:mysql|mariadb|mysqldump)\b[^\n]*?\s-p)(?!\s)\S+/gu, "$1***"],
   [/\b(sk|rk|pk)[-_](live|test|or|ant|proj)[-_][A-Za-z0-9_-]{12,}/gu, "***"],
+  // Any service's live or test key in that shape (`wk_live_…`, `rzp_test_…`): a request that pastes one must not leave
+  // it in the project's memory files (seen in the decision battery's weather-key task, 2026-10-03).
+  [/\b[a-z]{2,8}_(?:live|test|prod)_[A-Za-z0-9]{8,}/gu, "***"],
   [/\bsk-[A-Za-z0-9_-]{16,}/gu, "***"],
   [/\bAKIA[0-9A-Z]{16}\b/gu, "***"],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/gu, "***"],
