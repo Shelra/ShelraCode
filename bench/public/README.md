@@ -76,7 +76,12 @@ Ten repositories are represented (Python, Go, JavaScript, TypeScript); tutanota 
 ## Running it
 
 GitHub Actions, workflow **Public benchmark** (`.github/workflows/public-bench.yml`), manual dispatch only, with the
-repository secret `OPENROUTER_API_KEY`. One dispatch runs one arm. For the pilot on the first model:
+repository secret `OPENROUTER_API_KEY`. That secret is a key made for this benchmark alone, never the owner's own:
+create it in OpenRouter's key settings with a credit limit of $1 (free models cost nothing, and a key at its limit is
+refused, so a leaked key can spend at most that), store it under Settings → Secrets and variables → Actions, and delete
+the key when the runs are over. The workflow refuses to run with a key that has no credit limit or more than $5 left.
+The free-model daily quota belongs to the account, so the benchmark's requests count against the owner's 1,000 a day.
+One dispatch runs one arm. For the pilot on the first model:
 
 | Run | agent | model | subset | offset | limit | resume_run_id |
 | --- | --- | --- | --- | --- | --- | --- |
