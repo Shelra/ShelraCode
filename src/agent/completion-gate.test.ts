@@ -9,6 +9,7 @@ import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { listMemoryRecords, projectMemoryScope, writeMemoryEntry } from "../memory/store";
 import { clearCatalog, primeCatalog } from "../models/catalog";
 import type {
+  HostStopStep,
   ProviderAdapter,
   ProviderEvent,
   ProviderModelRuntime,
@@ -1352,6 +1353,71 @@ describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
 
     expect(provider.round).toBe(1);
     expect(chunks.some((c) => c.content?.includes(`[Stopped — ${reason}]`))).toBe(true);
+  });
+
+  it("ends the generation at the step that reports a blocker: nothing the model calls after it runs", async () => {
+    // Seen with a free model (doc 21 §9, 2026-10-03): it reported that a Drive backup breaks the user's offline rule,
+    // then, in the same generation, installed googleapis and built the upload.
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const reason = "A Google Drive backup breaks the rule that nothing leaves the user's machine.";
+    const blocker = { success: true, output: "Blocker reported", blocker: reason };
+    const steps: Array<{ events: ProviderEvent[]; view: HostStopStep }> = [
+      {
+        events: [toolCallEvent("b", "report_blocker", { reason }), toolResultEvent("b", "report_blocker", blocker)],
+        view: {
+          toolCalls: [{ toolCallId: "b", toolName: "report_blocker", input: { reason } }],
+          toolResults: [{ toolCallId: "b", output: blocker }],
+        },
+      },
+      {
+        events: [
+          toolCallEvent("i", "bash", { command: "bun add googleapis" }),
+          toolResultEvent("i", "bash", { success: true, output: "installed googleapis" }),
+        ],
+        view: { toolCalls: [{ toolCallId: "i", toolName: "bash", input: { command: "bun add googleapis" } }] },
+      },
+    ];
+    const requests: ProviderStreamRequest[] = [];
+    const provider: ProviderAdapter = {
+      id: "stepwise",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      // Plays steps as the AI SDK's loop does: after each one, the caller's stop conditions decide whether it goes on.
+      stream: (request) => {
+        requests.push(request);
+        return {
+          events: (async function* () {
+            const seen: HostStopStep[] = [];
+            for (const step of steps) {
+              yield* step.events;
+              seen.push(step.view);
+              const stop = (request.hostStops ?? []).map((watch) => watch(seen)).find(Boolean);
+              if (stop) {
+                request.onHostStop?.(stop.reason, stop.detail);
+                return;
+              }
+            }
+          })(),
+          response: Promise.resolve({ messages: [{ role: "assistant", content: "Stopped." }] }),
+        };
+      },
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: testWorkspace });
+
+    const chunks: Array<{ type: string; content?: string; toolCalls?: Array<{ function: { name: string } }> }> = [];
+    for await (const chunk of agent.processMessage("Add an automatic nightly backup of the ledger to Google Drive.")) {
+      chunks.push(chunk as (typeof chunks)[number]);
+    }
+
+    const called = chunks.flatMap((chunk) => chunk.toolCalls?.map((call) => call.function.name) ?? []);
+    expect(called).toContain("report_blocker");
+    expect(called).not.toContain("bash");
+    expect(requests).toHaveLength(1);
+    const text = chunks.map((chunk) => chunk.content ?? "").join("");
+    expect(text).toContain(`[Stopped — ${reason}]`);
+    expect(text).not.toContain("Shelra stopped the round");
   });
 
   /** A workspace with a test that exists before the turn; each scripted round edits it on disk. */

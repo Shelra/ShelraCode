@@ -122,7 +122,13 @@ import { describeLimit, limitFromError } from "../providers/limits";
 import { normalizeModelMessages } from "../providers/messages";
 import { createOpenRouterProvider } from "../providers/openrouter";
 import { isProviderStreamIdleError, STALL_WINDOW } from "../providers/stream";
-import type { HostStopReason, ProviderAdapter, ProviderModelRuntime, ProviderTimeout } from "../providers/types";
+import type {
+  HostStopReason,
+  HostStopStep,
+  ProviderAdapter,
+  ProviderModelRuntime,
+  ProviderTimeout,
+} from "../providers/types";
 import { failureQuery, researchEnabled, researchTask, researchToolResult, wantsResearch } from "../research/pre-task";
 import type { WebSearchOptions, WebSearchResult } from "../research/web";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
@@ -3418,7 +3424,7 @@ export class Agent {
               roundHostStop = reason;
               roundHostStopDetail = detail ?? null;
             },
-            hostStops: [circles.round()],
+            hostStops: [circles.round(), blockerReported],
           });
           // An interrupted or cancelled round never awaits its response; its rejection must not
           // surface as an unhandled rejection. Awaiting it below still sees the rejection.
@@ -3823,7 +3829,7 @@ export class Agent {
 
           // A round the host stopped because the model made no progress ended on a tool call, with no answer. Once
           // per turn the model hears why and may take another way or report; a second stop goes on to the gate.
-          if (streamOk && roundHostStop && !hostStopNoted) {
+          if (streamOk && roundHostStop && roundHostStop !== "blocked" && !hostStopNoted) {
             hostStopNoted = true;
             const why =
               roundHostStopDetail ??
@@ -5522,6 +5528,20 @@ const STATUS_MESSAGES: Record<number, string> = {
  * Sent once per turn after the host stops a round that made no progress. Seen live 2026-09-25: the one note that
  * reached a model stuck for 170 steps (an interruption's) sent it straight back to work.
  */
+/**
+ * The step in which the model reported a blocker ends its generation: the tool says the turn ends with the reason, and
+ * a model that went on after it once installed a dependency the user's rule forbade (doc 21 §9, 2026-10-03).
+ */
+function blockerReported(steps: ReadonlyArray<HostStopStep>): { reason: HostStopReason; detail: string } | null {
+  for (const result of steps.at(-1)?.toolResults ?? []) {
+    const value = result.output ?? result.result;
+    if (value && typeof value === "object" && typeof (value as { blocker?: unknown }).blocker === "string") {
+      return { reason: "blocked", detail: (value as { blocker: string }).blocker };
+    }
+  }
+  return null;
+}
+
 function hostStopContinuation(why: string): string {
   return `Shelra stopped your last round because ${why}. Doing more of the same will not help. Say in one sentence what you are trying to establish, then get there another way: run the failing command and read its whole output, check what the code actually receives, or change the code and test the change. If you cannot make progress, say what you found and what is still open.`;
 }

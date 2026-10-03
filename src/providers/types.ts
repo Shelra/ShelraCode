@@ -70,7 +70,8 @@ export interface ProviderStreamRequest {
   hostStops?: ReadonlyArray<(steps: ReadonlyArray<HostStopStep>) => { reason: HostStopReason; detail: string } | null>;
 }
 
-export type HostStopReason = "repeating" | "stalled" | "oscillating" | "plateau";
+/** `blocked`: the model reported that the task cannot be done as asked (report_blocker); nothing after it runs. */
+export type HostStopReason = "repeating" | "stalled" | "oscillating" | "plateau" | "blocked";
 
 /** One model step as a stop condition sees it: the tools it called and what they returned. */
 export interface HostStopStep {
