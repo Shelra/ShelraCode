@@ -208,7 +208,8 @@ describe("memory store: index cap", () => {
     const afterOverflow = readMemoryIndex(scope);
     expect(afterOverflow.entries).toHaveLength(MEMORY_INDEX_MAX_LINES);
     expect(readMemoryEntry(scope, "one-too-many").exists).toBe(false);
-  });
+    // Two hundred writes, each rewriting the index: under 3 s alone, past the default 5 s in a full parallel run.
+  }, 20_000);
 });
 
 describe("memory store: agent scope isolation", () => {
