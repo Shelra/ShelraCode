@@ -223,6 +223,7 @@ import {
   verifierPrompt,
 } from "./behavior-verifier";
 import { createCircleDetector } from "./circles";
+import { describeUnbackedClaims, unbackedClaims } from "./claim-check";
 import {
   appendActiveCriteriaBlock,
   budgetedContextTokens,
@@ -5413,6 +5414,26 @@ ${verdict}`,
             yield { type: "content", content: `\n\n${verdict}` };
           }
           if (urlNote) yield { type: "content", content: `\n\n${urlNote}` };
+
+          // What the answer says the turn did, against what the host saw (src/agent/claim-check.ts): a command it says
+          // it ran that never ran, a file it says it wrote that is not there.
+          if (this.mode === "agent" && !this.ablations.has("gate")) {
+            const claimsNote = describeUnbackedClaims(
+              unbackedClaims({
+                answer: assistantText,
+                workspace: turnStartWorkspace,
+                changedFiles: mutations,
+                commandsRun: [
+                  ...turnCommands.map((command) => command.command),
+                  ...checkRuns.map((run) => run.command),
+                ],
+              }),
+            );
+            if (claimsNote) {
+              this.kernel?.recordObservation(claimsNote);
+              yield { type: "content", content: `\n\n${this.endNote(claimsNote)}` };
+            }
+          }
 
           const stopInput: StopHookInput = {
             hook_event_name: "Stop",

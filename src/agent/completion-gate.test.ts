@@ -1390,6 +1390,47 @@ describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's t
   });
 });
 
+describe("what the final answer claims (2026-10-03)", () => {
+  it("says when the answer claims a command the turn never ran or a file it never wrote", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-claims-gate-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+    const provider: ProviderAdapter = {
+      id: "claims",
+      defaultModelId: "gate-test-model",
+      resolveModelRuntime: (modelId) => ({ modelId }),
+      stream: () => ({
+        events: (async function* () {
+          yield toolCallEvent("w", "write_file", { path: "src/clock.ts", content: "x" });
+          yield toolResultEvent("w", "write_file", {
+            success: true,
+            output: "Created src/clock.ts",
+            diff: { filePath: "src/clock.ts", additions: 1, removals: 0, patch: "", isNew: true },
+          });
+          yield {
+            type: "text-delta",
+            text: "Created `src/clock.ts` and `src/clock.test.ts`. I ran `npm test` and all 8 tests pass.",
+          } as ProviderEvent;
+        })(),
+        response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+      }),
+      generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+      getToolContext: () => ({}),
+    };
+    const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "8 pass", durationMs: 5 }));
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir, checkRunner });
+
+    let text = "";
+    for await (const chunk of agent.processMessage("Create a digital clock"))
+      text += (chunk as { content?: string }).content ?? "";
+
+    expect(text).toContain(
+      "[Shelra checked the answer: it says it ran `npm test`, which this turn never ran; it names `src/clock.test.ts` as written, which does not exist.]",
+    );
+    expect(agent.getTurnEndNotes().some((note) => note.startsWith("[Shelra checked the answer"))).toBe(true);
+  });
+});
+
 describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
   /** A scripted model: each round's events, the last repeated for later rounds. */
   function scripted(
