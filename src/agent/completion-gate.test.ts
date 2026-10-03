@@ -1312,12 +1312,13 @@ describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's t
     expect(text).not.toContain("Not verified");
   });
 
-  it("does not send back a suite that fails only as it did before the change, and does send a new failure", async () => {
+  it("sends a suite that fails only as it did before back once, never as a pass, and a new failure every round", async () => {
+    // Review 2026-10-03: counted as a pass, the failure a "fix the failing test" request is about was never sent back.
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
     const before = "(fail) connects to the database [1.00ms]\n\n 4 pass\n 1 fail\n";
-    for (const [after, sentBack] of [
-      [before, false],
-      [`${before.replace(" 1 fail", "")}(fail) formats the clock [1.00ms]\n 3 pass\n 2 fail\n`, true],
+    for (const [after, onlyAsBefore] of [
+      [before, true],
+      [`${before.replace(" 1 fail", "")}(fail) formats the clock [1.00ms]\n 3 pass\n 2 fail\n`, false],
     ] as const) {
       const dir = mkdtempSync(join(tmpdir(), "shelra-failed-before-"));
       writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
@@ -1332,14 +1333,16 @@ describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's t
 
       const text = await run(agent, "Fix the clock formatting in src/clock.ts.");
 
-      if (sentBack) {
-        expect(lastUserText(provider.requests[1])).toContain("formats the clock");
-        expect(text).not.toContain("fails only as it did before this turn");
+      expect(lastUserText(provider.requests[1])).toContain(
+        onlyAsBefore ? "connects to the database" : "formats the clock",
+      );
+      expect(text).not.toContain("Checked by Shelra");
+      if (onlyAsBefore) {
+        // The initial round and one repair round, then the verdict.
+        expect(provider.round).toBe(2);
+        expect(text).toContain("[Not verified — `bun run test` fails on the final code, as before this turn");
       } else {
-        expect(provider.round).toBe(1);
-        expect(text).toContain(
-          "[Checked by Shelra on the final code: `bun run test` fails only as it did before this turn, with no new failure]",
-        );
+        expect(provider.round).toBe(4);
       }
     }
   });
@@ -3084,7 +3087,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
       expect(text).toContain("[An independent check of the request fails on this code (1 failing)");
       expect(text).toContain(
-        "[Checked by Shelra on the final code: `bun run test` passed, an independent check of 3 behaviors the request states passed after a repair]",
+        "[Checked by Shelra on the final code: `bun run test` passed, an independent check of the request passed after a repair]",
       );
       expect(text).not.toContain("Not verified");
     }, 60_000);
@@ -3103,7 +3106,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
 
       expect(lastUserText(main[1])).toContain("removes trailing hyphens");
       expect(lastUserText(main[1])).toContain('Expected: "a-b"');
-      expect(text).toContain("an independent check of 3 behaviors the request states passed after a repair");
+      expect(text).toContain("an independent check of the request passed after a repair");
       expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
     }, 120_000);
 
@@ -3135,9 +3138,44 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(checkFiles).toEqual([CHECK_TEST, CHECK_TEST]);
       expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
       expect(text).toContain(
-        '[Not verified — an independent check of 3 behaviors the request states still fails on the final code (failing: "removes trailing hyphens").',
+        '[Not verified — an independent check of the request still fails on the final code (failing: "removes trailing hyphens").',
       );
       expect(text).not.toContain("Checked by Shelra");
+    }, 60_000);
+
+    it("runs the checker's helper files with its test, and leaves none behind however the turn ends (review 2026-10-03)", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const helper = ".shelra/verify/cases.ts";
+      const helperSeen: boolean[] = [];
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command) => {
+        if (!command.includes(".shelra/verify/")) {
+          // The project's own checks never see a checker's file, a copy the model wrote there included.
+          expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
+          return { passed: true, output: "1 pass", durationMs: 5 };
+        }
+        helperSeen.push(existsSync(join(dir, helper)));
+        return { passed: false, output: "(fail) removes trailing hyphens [0.20ms]\n 2 pass\n 1 fail\n", durationMs: 5 };
+      });
+      const { provider } = checkedModel(
+        [
+          () => write("w1", "src/slug.ts", PARTIAL_SLUG),
+          // The repair round writes a copy of the check into the project's verify folder, as a model may.
+          () => [...write("w2", "src/slug.ts", `${PARTIAL_SLUG}// tried\n`), ...write("w3", CHECK_FILE, CHECK_TEST)],
+        ],
+        () => [...write("c0", helper, "export const cases = [];\n"), ...checkerWritesItsTest()],
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(helperSeen).toEqual([true, true]);
+      expect(text).toContain("[Not verified — an independent check of the request still fails on the final code");
+      expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
     }, 60_000);
 
     it("does not use a check whose author changed the project's code, and has the turn audit itself", async () => {

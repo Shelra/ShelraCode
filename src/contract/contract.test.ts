@@ -131,6 +131,35 @@ describe("evaluateTurnContract", () => {
     expect(reused[0]).toMatchObject({ by: "agent", unrunnable: "sh: 1: pyright: not found" });
   });
 
+  it("never lets a real failure hide behind 'could not run' (review 2026-10-03)", async () => {
+    const test = { kind: "test" as const, command: "bun run test", source: "package.json", runs: "bun test" };
+    const outputs: Record<string, { output: string; state: "completed" | "timed_out"; exitCode: number | null }> = {
+      // One test spawns a helper that is missing; another fails for real.
+      helper: {
+        output: "sh: 1: imagemagick: not found\n(fail) formats the clock [1.00ms]\n 3 pass\n 1 fail\n",
+        state: "completed",
+        exitCode: 1,
+      },
+      // A program the check does not start is missing, and nothing says a test ran.
+      other: { output: "bash: convert: command not found", state: "completed", exitCode: 127 },
+      // The suite hangs after the change, though it finished before it.
+      hang: { output: "", state: "timed_out", exitCode: null },
+    };
+    for (const [name, end] of Object.entries(outputs)) {
+      const results = await evaluateTurnContract({
+        checks: [test],
+        runs:
+          name === "hang"
+            ? [{ command: "bun run test", passed: true, detail: "4 pass", fresh: false, beforeFirstChange: true }]
+            : [],
+        workspace,
+        runCheck: async () => ({ passed: false, durationMs: 1, ...end }),
+        timeoutMs: 60_000,
+      });
+      expect(results[0]?.unrunnable, name).toBeUndefined();
+    }
+  });
+
   it("looks through the script a check runs before running it (audit gap #10)", async () => {
     writeFileSync(
       join(workspace, "package.json"),

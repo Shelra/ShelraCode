@@ -4,6 +4,8 @@ import { destructiveCommandReason } from "../security/destructive";
 import { definitionOf } from "./check-definitions";
 import { type CheckKind, type DiscoveredCheck, isSameCheck } from "./discover";
 import { evaluateAcceptance } from "./evaluate";
+
+import { parseFailures } from "./failures";
 import type { AcceptanceCriterion } from "./types";
 
 /**
@@ -88,13 +90,68 @@ export function checkDamageReason(command: string, workspace: string): string | 
   return null;
 }
 
+/** The commands a launch failure names as missing: "x: command not found", dash's "sh: 1: x: not found", cmd's and PowerShell's "'x' is not recognized". */
+function missingCommands(output: string): string[] {
+  const names = [
+    ...output.matchAll(/(?:^|[\s:])([\w./@+-]+): command not found/gmu),
+    ...output.matchAll(/^(?:\/bin\/)?(?:sh|dash): \d+: ([\w./@+-]+): not found$/gmu),
+    ...output.matchAll(/'([\w./@+-]+)' is not recognized as/gu),
+  ].map((match) => match[1] ?? "");
+  return names
+    .map(
+      (name) =>
+        name
+          .split(/[\\/]/u)
+          .at(-1)
+          ?.replace(/\.(?:exe|cmd|bat)$/iu, "") ?? "",
+    )
+    .filter(Boolean);
+}
+
+/** The programs a check starts: its command's, its package script's and its make or just recipe's first words. */
+function checkTools(check: ContractCheck, workspace: string): Set<string> {
+  const first = (line: string) =>
+    line
+      .trim()
+      .replace(/^(?:@|-|[A-Z_]+=\S+\s+)+/u, "")
+      .split(/\s+/u)[0] ?? "";
+  const lines = [check.command, check.runs ?? ""];
+  try {
+    for (const part of definitionOf(workspace, check.command).parts) {
+      if (!part.missing && /^(?:script|recipe):/u.test(part.key)) lines.push(...part.value.split(/\r?\n|&&|;/u));
+    }
+  } catch {
+    // The definition is only a hint here.
+  }
+  return new Set(lines.map(first).filter(Boolean));
+}
+
+/** A test runner's summary or a parsed failure: the check ran, whatever else its output says. */
+const RAN_TESTS = /\b\d+\s+(?:pass(?:ed|ing)?|fail(?:ed|ing|ures?)?|tests?|errors?)\b/iu;
+
 /**
  * Why a failed check reached no verdict, or undefined for a real failure. A project check that cannot run here (its
  * tool is not installed, it ran out of time) used to read as a failure the turn was sent back to fix, again and again
- * (2026-10-03: in SWE-bench Pro's task images `pyright`, `make lint` and whole-repository suites).
+ * (2026-10-03: in SWE-bench Pro's task images `pyright`, `make lint` and whole-repository suites). For a project check
+ * it is narrow, so no real failure hides behind it: a timeout counts only when the check never finished before the
+ * change (a hang the change caused is a failure), and a failed launch only when no test ran and the missing program is
+ * the check's own. A decision's check keeps the ledger's reading.
  */
-function unrunnableCheck(check: ContractCheck, end: CheckEnd): string | undefined {
-  return checkCouldNotRun(end, check.command) ?? undefined;
+function unrunnableCheck(
+  check: ContractCheck,
+  end: CheckEnd,
+  workspace: string,
+  finishedBefore: boolean,
+): string | undefined {
+  const reason = checkCouldNotRun(end, check.command);
+  if (!reason || check.kind === "decision") return reason ?? undefined;
+  if (end.state === "timed_out") return finishedBefore ? undefined : reason;
+  if (end.state === "refused" || end.state === "killed") return reason;
+  if (parseFailures(end.output).length > 0 || RAN_TESTS.test(end.output)) return undefined;
+  const missing = missingCommands(end.output);
+  if (missing.length === 0) return reason;
+  const tools = checkTools(check, workspace);
+  return missing.some((name) => tools.has(name)) ? reason : undefined;
 }
 
 /**
@@ -119,6 +176,12 @@ export async function evaluateTurnContract(input: {
     const earlier = input.runs.filter((run) => isSameCheck(run.command, check) && run.beforeFirstChange);
     return { failedBefore: earlier.some((run) => !run.passed), passedBefore: earlier.some((run) => run.passed) };
   };
+  // A run before the change that reached an end: then a timeout now is something the change did.
+  const finishedBefore = (check: ContractCheck) =>
+    input.runs.some(
+      (run) =>
+        isSameCheck(run.command, check) && run.beforeFirstChange && !run.unrunnable && !/timed out/iu.test(run.detail),
+    );
   for (const check of input.checks) {
     const latest = input.runs.filter((run) => isSameCheck(run.command, check)).at(-1);
     if (latest?.fresh) {
@@ -126,7 +189,13 @@ export async function evaluateTurnContract(input: {
       // is known.
       const unrunnable = latest.passed
         ? undefined
-        : (latest.unrunnable ?? unrunnableCheck(check, { state: "completed", exitCode: null, output: latest.detail }));
+        : (latest.unrunnable ??
+          unrunnableCheck(
+            check,
+            { state: "completed", exitCode: null, output: latest.detail },
+            input.workspace,
+            finishedBefore(check),
+          ));
       decided.set(check, {
         check,
         passed: latest.passed,
@@ -193,11 +262,12 @@ export async function evaluateTurnContract(input: {
       const unrunnable =
         passed || !run
           ? undefined
-          : unrunnableCheck(check, {
-              state: run.state ?? "completed",
-              exitCode: run.exitCode ?? null,
-              output: run.output,
-            });
+          : unrunnableCheck(
+              check,
+              { state: run.state ?? "completed", exitCode: run.exitCode ?? null, output: run.output },
+              input.workspace,
+              finishedBefore(check),
+            );
       decided.set(check, {
         check,
         passed,

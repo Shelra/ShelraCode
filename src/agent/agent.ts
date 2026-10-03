@@ -1,5 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  type Dirent,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
@@ -350,7 +360,43 @@ const INDEPENDENT_CHECK_TIMEOUT_MS = 3 * 60_000;
 /** The independent check of the request: what its author reported, and its test as the author left it. */
 interface IndependentCheck {
   report: VerifierReport;
+  /** The test file's text. */
   content: string;
+  /** Every file the checker left in VERIFY_DIR (its test and any helper), by workspace-relative path. */
+  files: ReadonlyMap<string, string>;
+}
+
+/** Removes the independent check's folder; a failure to do so is recorded, never thrown out of the turn. */
+function clearVerifyDir(workspace: string): void {
+  try {
+    rmSync(join(workspace, VERIFY_DIR), { recursive: true, force: true });
+  } catch (error) {
+    recordSwallowedError("independent-check.cleanup", error);
+  }
+}
+
+/** The files the checker left in VERIFY_DIR, by workspace-relative path with forward slashes: at most 20, each small. */
+function verifyFiles(workspace: string): Map<string, string> {
+  const files = new Map<string, string>();
+  const walk = (relative: string, depth: number) => {
+    if (depth > 3) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(join(workspace, relative), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (files.size >= 20) return;
+      const path = `${relative}/${entry.name}`;
+      if (entry.isDirectory()) walk(path, depth + 1);
+      else if (entry.isFile() && statSync(join(workspace, path)).size <= 200_000) {
+        files.set(path, readFileSync(join(workspace, path), "utf8"));
+      }
+    }
+  };
+  walk(VERIFY_DIR, 0);
+  return files;
 }
 /** How long a plan criterion's command may run when the host checks that it fails before the change. */
 const CRITERION_PROBE_TIMEOUT_MS = 2 * 60_000;
@@ -2529,62 +2575,74 @@ export class Agent {
   }): Promise<{ check: IndependentCheck; run: ContractRun } | { unavailable: string; touched?: string[] }> {
     const runner = testRunnerHint(input.workspace, input.changedFiles);
     if (!runner) return { unavailable: "no test runner can run a test kept outside the project's packages" };
-    const before = captureWorkspaceState(input.workspace);
-    const result = await this.runTask(
-      {
-        agent: "check",
-        description: "Independent check of the request",
-        prompt: verifierPrompt({ ...input, runner }),
-        maxSteps: VERIFIER_MAX_STEPS,
-      },
-      input.signal,
-    );
-    const touched = changedPaths(before, captureWorkspaceState(input.workspace)) ?? [];
-    if (touched.length > 0) {
-      rmSync(join(input.workspace, VERIFY_DIR), { recursive: true, force: true });
-      return { unavailable: "the checking sub-agent changed project files", touched };
+    // Whatever happens, nothing the checker wrote is left where the project's own runner would find it.
+    try {
+      const before = captureWorkspaceState(input.workspace);
+      const result = await this.runTask(
+        {
+          agent: "check",
+          description: "Independent check of the request",
+          prompt: verifierPrompt({ ...input, runner }),
+          maxSteps: VERIFIER_MAX_STEPS,
+        },
+        input.signal,
+      );
+      const touched = changedPaths(before, captureWorkspaceState(input.workspace)) ?? [];
+      if (touched.length > 0) return { unavailable: "the checking sub-agent changed project files", touched };
+      const report = result.success ? parseVerifierReport(result.output ?? "") : null;
+      const problem = !result.success
+        ? "the checking sub-agent did not finish"
+        : !report
+          ? "the checking sub-agent gave no report"
+          : report.result === "error"
+            ? "the checking sub-agent could not make its test run"
+            : verifierCommandProblem(report.command, report.testFile);
+      if (!report || problem) return { unavailable: problem ?? "the checking sub-agent gave no report" };
+      const files = verifyFiles(input.workspace);
+      const content = files.get(report.testFile);
+      if (content === undefined) return { unavailable: "the checking sub-agent wrote no test file" };
+      // A test that names none of the changed files tests something else (review 2026-10-03).
+      const names = input.changedFiles
+        .map((file) => basename(file).replace(/\.[^.]+$/u, ""))
+        .filter((name) => name.length > 2 && !/^(?:index|main|__init__|mod|lib)$/u.test(name));
+      if (names.length > 0 && !names.some((name) => content.includes(name))) {
+        return { unavailable: "the checker's test does not exercise the changed files" };
+      }
+      const check: IndependentCheck = {
+        report: { ...report, command: runnableVerifierCommand(report.command, report.testFile) },
+        content,
+        files,
+      };
+      const run = await this.runIndependentTest(check, input.workspace, input.signal);
+      // A run that ran no test says nothing either way, whatever its exit code.
+      if (ranNoTest(run.output) || run.state === "timed_out") {
+        return { unavailable: `\`${check.report.command}\` ran no test here` };
+      }
+      return { check, run };
+    } finally {
+      clearVerifyDir(input.workspace);
     }
-    const report = result.success ? parseVerifierReport(result.output ?? "") : null;
-    const problem = !result.success
-      ? "the checking sub-agent did not finish"
-      : !report
-        ? "the checking sub-agent gave no report"
-        : report.result === "error"
-          ? "the checking sub-agent could not make its test run"
-          : verifierCommandProblem(report.command, report.testFile);
-    const content = report && !problem ? readTextOrNull(join(input.workspace, report.testFile)) : null;
-    if (!report || problem || content === null) {
-      rmSync(join(input.workspace, VERIFY_DIR), { recursive: true, force: true });
-      return { unavailable: problem ?? "the checking sub-agent wrote no test file" };
-    }
-    const check: IndependentCheck = {
-      report: { ...report, command: runnableVerifierCommand(report.command, report.testFile) },
-      content,
-    };
-    const run = await this.runIndependentTest(check, input.workspace, input.signal);
-    // A run that ran no test says nothing either way, whatever its exit code.
-    if (ranNoTest(run.output) || run.state === "timed_out") {
-      return { unavailable: `\`${check.report.command}\` ran no test here` };
-    }
-    return { check, run };
   }
 
   /**
-   * Runs the independent check's test as its author left it, whatever the turn did to the file since. The file is on
-   * disk only for the run: a project runner such as Vitest also discovers tests under `.shelra/`.
+   * Runs the independent check's files as their author left them, whatever the turn did to them since, and nothing
+   * else (a conftest the turn put there is gone). They are on disk only for the run: a project runner such as Vitest
+   * also discovers tests under `.shelra/`.
    */
   private async runIndependentTest(check: IndependentCheck, workspace: string, signal?: AbortSignal) {
-    const path = join(workspace, check.report.testFile);
+    clearVerifyDir(workspace);
     try {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, check.content);
+      for (const [path, text] of check.files) {
+        mkdirSync(dirname(join(workspace, path)), { recursive: true });
+        writeFileSync(join(workspace, path), text);
+      }
       return await this.checkRunner(check.report.command, {
         timeoutMs: INDEPENDENT_CHECK_TIMEOUT_MS,
         signal,
         cwd: workspace,
       });
     } finally {
-      rmSync(join(workspace, VERIFY_DIR), { recursive: true, force: true });
+      clearVerifyDir(workspace);
     }
   }
 
@@ -3451,6 +3509,8 @@ export class Agent {
     // passed before later changes does not vouch for the final code.
     // The turn is judged in the session's workspace, not in whatever folder a `cd` left the shell in.
     const turnStartWorkspace = this.bash.getRootCwd();
+    // An independent check a process that died left behind is not the project's (src/agent/behavior-verifier.ts).
+    if (this.mode === "agent") clearVerifyDir(turnStartWorkspace);
     const turnStartState = this.mode === "agent" ? captureWorkspaceState(turnStartWorkspace) : null;
     // What the project declared when the turn started, for the dependency guard.
     const turnStartDependencies = this.mode === "agent" ? declaredDependencies(turnStartWorkspace) : null;
@@ -3557,6 +3617,8 @@ export class Agent {
     let contractCouldNotRun: string[] = [];
     /** Checks that could not run, already said once this turn. */
     const couldNotRunNoted = new Set<string>();
+    /** Failures that were all there before the turn's first change were sent back once; they are not sent again. */
+    let preExistingAsked = false;
     const checkRuns: Array<{
       command: string;
       passed: boolean;
@@ -4305,6 +4367,7 @@ export class Agent {
             const key = changedTests.map((path) => `${path}:${fileStamp(join(cwd, path))}`).join("|");
             if (originalTestsCache?.key !== key) {
               reportStatus("checks", "Running the tests as they were before this request");
+              clearVerifyDir(turnStartWorkspace);
               const outcome = await this.originalTestsHold({
                 cwd,
                 paths: changedTests,
@@ -4686,6 +4749,8 @@ export class Agent {
           );
           contractCouldNotRun = [];
           if (contract.length > 0) {
+            // The project's checks never pick up an independent check's files (a copy the model wrote there included).
+            clearVerifyDir(turnStartWorkspace);
             // A project check whose full run outlasts the budget is run again scoped to the files this turn changed
             // (src/contract/scope.ts), and the session remembers it: later passes go straight to the scoped run, or,
             // when none can be told, say once that it could not run instead of waiting for it again.
@@ -4797,9 +4862,11 @@ export class Agent {
                   )} here, so ${unsaid.length === 1 ? "it says" : "they say"} nothing about this change.]\n\n`,
               };
             }
-            // A check that fails only the way it failed before the turn's first change (the run before the work) broke
-            // nothing more: those failures are not the turn's to fix (a task image whose suite fails for want of a
-            // service). It is reported as such, and a new failure among them is sent back as before.
+            // A check that fails only the way it failed before the turn's first change (the run before the work) still
+            // fails: it is never a pass. It is sent back once, since the request may be about exactly those failures,
+            // then the turn ends unverified "as before this turn" instead of spending more rounds on failures that may
+            // have nothing to do with it (a task image whose suite fails for want of a service). A new failure among
+            // them is sent back as any other.
             const failedOnlyAsBefore = results.filter((result) => {
               if (result.passed || couldNotRun.includes(result) || !result.failedBefore) return false;
               const earlier = checkRuns
@@ -4815,9 +4882,8 @@ export class Agent {
                 .at(-1);
               return earlier !== undefined && failuresWithin(result.detail, earlier.detail);
             });
-            const failing = results.filter(
-              (result) => !result.passed && !couldNotRun.includes(result) && !failedOnlyAsBefore.includes(result),
-            );
+            const failing = results.filter((result) => !result.passed && !couldNotRun.includes(result));
+            const onlyAsBefore = failing.length > 0 && failing.every((result) => failedOnlyAsBefore.includes(result));
             // A check the turn itself defined can fail the turn; its pass is not evidence (see turnDefined above).
             const trusted = results.filter(
               (result) => !result.check.source.endsWith(DEFINED_THIS_TURN) && !couldNotRun.includes(result),
@@ -4825,18 +4891,14 @@ export class Agent {
             contractPassed = failing.length === 0 && trusted.length > 0;
             if (failing.length > 0) checkedNote = null;
             if (failing.length === 0) {
-              const outcomeOf = (result: (typeof results)[number]) =>
-                failedOnlyAsBefore.includes(result)
-                  ? "fails only as it did before this turn, with no new failure"
-                  : "passed";
               for (const result of trusted) {
                 this.turnVerificationEvidence.push(
-                  `${result.check.command} ${outcomeOf(result)} (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
+                  `${result.check.command} passed (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
                 );
               }
               // A pass that only reused runs keeps the note: nothing changed since the host's own run.
               if (trusted.some((result) => result.by === "host")) {
-                checkedPasses = trusted.map((result) => `\`${result.check.command}\` ${outcomeOf(result)}`).join(", ");
+                checkedPasses = trusted.map((result) => `\`${result.check.command}\` passed`).join(", ");
                 checkedNote = `[Checked by Shelra on the final code: ${checkedPasses}]`;
               }
               const ownPasses = results.filter((result) => result.check.source.endsWith(DEFINED_THIS_TURN));
@@ -4849,8 +4911,9 @@ export class Agent {
                     .join(", ")}; a check a turn writes itself does not verify its work.]`,
                 };
               }
-            } else if (verificationRetries < MAX_VERIFICATION_RETRIES) {
+            } else if (verificationRetries < MAX_VERIFICATION_RETRIES && !(onlyAsBefore && preExistingAsked)) {
               verificationRetries += 1;
+              if (onlyAsBefore) preExistingAsked = true;
               // Evidence-driven repair (audit doc 15, Phase 2.1-2.4): name what failed and where, say when
               // a failure is a regression, and notice an attempt that changed code but not the failures.
               const signature = failing
@@ -4975,8 +5038,11 @@ export class Agent {
               }`;
               this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
               this.persistKernelIndex(reason);
-              // The memories this turn was given did not lead to passing checks (audit doc 15, M3).
-              if (!this.ablations.has("memory")) creditMemoryUse(memoryScope, memoryContext.expanded, -1);
+              // The memories this turn was given did not lead to passing checks (audit doc 15, M3); failures that were all
+              // there before the turn say nothing about them.
+              if (!this.ablations.has("memory") && !onlyAsBefore) {
+                creditMemoryUse(memoryScope, memoryContext.expanded, -1);
+              }
               const verdict = `[Not verified — ${reason}]`;
               this.recordVerdict(verdict);
               yield { type: "content", content: `\n\n${verdict}` };
@@ -5286,10 +5352,9 @@ ${verdict}`,
               if (signal.aborted) continue;
               if ("check" in independent) {
                 const { check, run } = independent;
-                const behaviors = `${check.report.behaviors.length} behavior${check.report.behaviors.length === 1 ? "" : "s"} the request states`;
                 if (run.passed) {
                   independentPass = {
-                    text: `an independent check of ${behaviors} passed`,
+                    text: "an independent check of the request passed",
                     mutations: turnMutationEvents,
                     state: endState,
                   };
@@ -5307,7 +5372,7 @@ ${verdict}`,
                   this.messages.push({
                     role: "user",
                     content: [
-                      `Completion blocked: an independent check of the request fails on your code. A separate agent that never saw your work wrote tests from the request alone, checking ${behaviors}, and the host ran them:`,
+                      "Completion blocked: an independent check of the request fails on your code. A separate agent that never saw your work wrote tests from the request alone, and the host ran them:",
                       `\`${check.report.command}\`:`,
                       describeFailures(run.output),
                       "",
@@ -5315,7 +5380,7 @@ ${verdict}`,
                       "```",
                       check.content.length > 6_000 ? `${check.content.slice(0, 6_000)}\n…` : check.content,
                       "```",
-                      `Fix the code so each failing behavior works as the request states, then run your checks. To try your fix against this test, write it at \`${check.report.testFile}\` and run \`${check.report.command}\`; the host runs its own copy either way. If an assertion expects something the request does not ask for, leave correct code as it is and say which assertion is wrong, quoting the part of the request it contradicts.`,
+                      "Fix the code so each failing behavior works as the request states, then run your checks; the host runs its own copy of this test again when you finish, so do not add it to the project. If an assertion expects something the request does not ask for, leave correct code as it is and say which assertion is wrong, quoting the part of the request it contradicts.",
                     ].join("\n"),
                   });
                   this.messageSeqs.push(null);
@@ -5365,26 +5430,30 @@ ${verdict}`,
                 return { passed: false, output: "", durationMs: 0, state: "timed_out" };
               },
             );
-            const behaviors = `${check.report.behaviors.length} behavior${check.report.behaviors.length === 1 ? "" : "s"} the request states`;
             if (rerun.passed && !ranNoTest(rerun.output)) {
               independentPass = {
-                text: `an independent check of ${behaviors} passed after a repair`,
+                text: "an independent check of the request passed after a repair",
                 mutations: turnMutationEvents,
                 state: endState,
               };
               this.kernel?.recordObservation(`Independent check passed after a repair: \`${check.report.command}\`.`);
-            } else if (!signal.aborted && !ranNoTest(rerun.output) && rerun.state !== "timed_out") {
+            } else if (!signal.aborted) {
+              // A check that failed and then could not run again (it timed out, it collected nothing) leaves its failure
+              // standing: the repair was never checked (review 2026-10-03).
+              const couldNotRun = ranNoTest(rerun.output) || rerun.state === "timed_out";
               const failing = parseFailures(rerun.output)
                 .map((failure) => failure.name)
                 .filter((name): name is string => Boolean(name));
-              const reason = `an independent check of ${behaviors} still fails on the final code (${
-                failing.length > 0
-                  ? `failing: ${failing
-                      .slice(0, 5)
-                      .map((name) => `"${name}"`)
-                      .join(", ")}${failing.length > 5 ? ` and ${failing.length - 5} more` : ""}`
-                  : errorLine(rerun.output)
-              }).`;
+              const reason = couldNotRun
+                ? `an independent check of the request failed, and could not run again on the repaired code (${errorLine(rerun.output) || "it ran out of time"}).`
+                : `an independent check of the request still fails on the final code (${
+                    failing.length > 0
+                      ? `failing: ${failing
+                          .slice(0, 5)
+                          .map((name) => `"${name}"`)
+                          .join(", ")}${failing.length > 5 ? ` and ${failing.length - 5} more` : ""}`
+                      : errorLine(rerun.output)
+                  }).`;
               this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
               this.persistKernelIndex(reason);
               const verdict = `[Not verified — ${reason} Its test, written from the request alone: \`${check.report.command}\`.]`;
@@ -5631,6 +5700,8 @@ ${verdict}`,
         }
       }
     } finally {
+      // However the turn ended (a verdict, a hold, Esc), no independent check stays where the project's runner finds it.
+      if (this.mode === "agent") clearVerifyDir(this.bash.getRootCwd());
       if (this.abortController?.signal === signal) {
         this.abortController = null;
       }

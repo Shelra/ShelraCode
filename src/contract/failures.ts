@@ -163,18 +163,23 @@ export function describeFailures(output: string, tailLines = 12): string {
 
 /**
  * Whether every failure in `after` was already in `before`: a run that fails only the way the code failed before a
- * change, so the change broke nothing more. Failures are matched by test name, else by file (line numbers move with
- * edits) and message; output nothing parses must match as a whole.
+ * change. A failure is its name, its file (line numbers move with edits) and its message together, so the same test
+ * name in another file, or the same compiler code with another message, is a new failure. Only what both outputs
+ * parse in full can be compared: output nothing parses, or a list cut at the parser's limit, is never "within".
  */
 export function failuresWithin(after: string, before: string): boolean {
   const now = parseFailures(after);
   const then = parseFailures(before);
-  if (now.length === 0 || then.length === 0) {
-    return now.length === 0 && then.length === 0 && failureSignature(after) === failureSignature(before);
-  }
+  if (now.length === 0 || then.length === 0 || now.length >= MAX_FAILURES || then.length >= MAX_FAILURES) return false;
   const key = (failure: CheckFailure) =>
-    failure.name?.trim() ??
-    `${(failure.location ?? "").replace(/:\d+(?::\d+)?$/u, "")}|${failure.message.toLowerCase().replace(/\d+/gu, "#")}`;
+    [
+      failure.name?.trim() ?? "",
+      (failure.location ?? "").replace(/:\d+(?::\d+)?$/u, ""),
+      failure.message
+        .toLowerCase()
+        .replace(/\d+(?:\.\d+)?m?s\b/gu, "#")
+        .replace(/0x[0-9a-f]+/gu, "#"),
+    ].join("|");
   const earlier = new Set(then.map(key));
   return now.every((failure) => earlier.has(key(failure)));
 }

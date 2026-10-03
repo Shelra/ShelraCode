@@ -109,9 +109,12 @@ describe("failuresWithin", () => {
     expect(failuresWithin("(fail) connects to the database [3.00ms]\n 4 pass\n 1 fail\n", before)).toBe(true);
   });
 
-  it("does not hold for a new failure, or for output nothing parses that differs", () => {
+  it("does not hold for a new failure, or for anything it cannot compare in full (review 2026-10-03)", () => {
     expect(failuresWithin(`${before}(fail) formats the clock [1.00ms]\n`, before)).toBe(false);
-    expect(failuresWithin("Segmentation fault", "Out of memory")).toBe(false);
-    expect(failuresWithin("Segmentation fault", "Segmentation fault")).toBe(true);
+    // Output nothing parses is never "within", even when it reads the same ("Found 6 errors" against 7).
+    expect(failuresWithin("Segmentation fault", "Segmentation fault")).toBe(false);
+    // A list cut at the parser's limit may hide a new failure past it.
+    const many = Array.from({ length: 13 }, (_, index) => `(fail) case ${index} [1.00ms]`).join("\n");
+    expect(failuresWithin(`${many}\n(fail) a new one [1.00ms]\n`, many)).toBe(false);
   });
 });
