@@ -51,6 +51,11 @@ outside the top-level stream (sub-agents, the end-of-turn memory reflection) are
 counted by the request metric below. A run that hits a limit keeps its work on disk: the verifier tests whatever the
 working tree holds, for both harnesses.
 
+Shelra runs the checks a project states on its final code. The runner sets `SHELRA_CHECK_TIMEOUT_MS=240000`, so a
+whole-repository suite that runs longer than four minutes on the task's one CPU is run again on the packages or tests
+the change touched instead of using up the 50 minutes; a check whose tool the image lacks is reported and not sent
+back. This is part of the harness under test, set the same for every task.
+
 ## Task subsets
 
 `make_subsets.py` builds both files from the pinned Scale checkout and `--check` verifies the committed files:

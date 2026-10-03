@@ -23,7 +23,7 @@ const MISSING_COMMAND_EXITS = new Set([126, 127, 9009]);
  * whose output happens to say "not found" is a failing test, not one of these, so the messages are matched whole.
  */
 const LAUNCH_FAILURE_RE =
-  /command not found|is not recognized as (?:an internal|the name of)|error: (?:Module|Script) not found|^(?:bash|sh|zsh|dash|bun|node|python3?|deno)(?:\.exe)?: (?:line \d+: )?[^:\n]+: No such file or directory/imu;
+  /command not found|is not recognized as (?:an internal|the name of)|error: (?:Module|Script) not found|^(?:bash|sh|zsh|dash|bun|node|python3?|deno)(?:\.exe)?: (?:line \d+: )?[^:\n]+: No such file or directory|^(?:\/bin\/)?(?:sh|dash): \d+: [^:\n]+: not found$/imu;
 /**
  * A module a runtime could not load. tsc, Node and pytest print the same words when the code under test
  * imports something missing (a dependency a decision forbids, say), which is a verdict; only the check's

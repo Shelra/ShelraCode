@@ -34,7 +34,9 @@ criteria and working rules (free models only), is `docs/EXECUTION-PLAN.md`: work
   (`generate_plan` acceptance criteria) are model-driven. When the project states its checks (package.json
   scripts, an AGENTS.md or CLAUDE.md command table, Make/just targets, pyproject/Cargo/go.mod conventions), its
   tests, type-check and lint are the definition of done: the host runs them on the final code (`src/contract/`),
-  reusing a run the agent made after its last change, and sends failures back parsed, for a bounded repair; a plan
+  reusing a run the agent made after its last change, and sends failures back parsed, for a bounded repair (not a
+  check that cannot run there, nor failures it already had before the change; a full run past
+  `SHELRA_CHECK_TIMEOUT_MS` runs again scoped to the change, `src/contract/scope.ts`); a plan
   criterion whose command did not pass before the change (it failed, or was not run) joins them. Without stated
   checks, a real check program must have run after the last change, shell writes included. Tests that existed
   before the request are protected unless it asks to change them (a test the turn only added cases to, or whose

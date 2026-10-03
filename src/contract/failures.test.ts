@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeFailures, failureSignature, parseFailures } from "./failures";
+import { describeFailures, failureSignature, failuresWithin, parseFailures } from "./failures";
 
 // Real outputs, captured 2026-09-23 (bun 1.4.1, vitest 4.1.0, tsc 5), with paths shortened.
 const BUN = `bun test v1.4.1 (4661e494f)
@@ -98,5 +98,20 @@ describe("failureSignature", () => {
     const again = BUN.replace("[0.33ms]", "[1.91ms]").replace("33.00ms", "41.00ms");
     expect(failureSignature(again)).toBe(failureSignature(BUN));
     expect(failureSignature(VITEST)).not.toBe(failureSignature(BUN));
+  });
+});
+
+describe("failuresWithin", () => {
+  const before = "(fail) connects to the database [1.00ms]\n(fail) reads the config [2.00ms]\n 3 pass\n 2 fail\n";
+
+  it("holds when every failure now was already there before the change", () => {
+    expect(failuresWithin(before, before)).toBe(true);
+    expect(failuresWithin("(fail) connects to the database [3.00ms]\n 4 pass\n 1 fail\n", before)).toBe(true);
+  });
+
+  it("does not hold for a new failure, or for output nothing parses that differs", () => {
+    expect(failuresWithin(`${before}(fail) formats the clock [1.00ms]\n`, before)).toBe(false);
+    expect(failuresWithin("Segmentation fault", "Out of memory")).toBe(false);
+    expect(failuresWithin("Segmentation fault", "Segmentation fault")).toBe(true);
   });
 });

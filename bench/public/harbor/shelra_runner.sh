@@ -20,6 +20,10 @@ set -u
 : "${SHELRA_TIME_LIMIT_SEC:=2910}"
 : "${SHELRA_KILL_GRACE_SEC:=30}"
 : "${SHELRA_MODEL_POLICY:=free}"
+# A task has 50 minutes on one CPU: a project check (a whole-repository suite) that runs longer than this is run again
+# scoped to the changed packages or tests (src/contract/scope.ts), instead of using up the task's time.
+: "${SHELRA_CHECK_TIMEOUT_MS:=240000}"
+export SHELRA_CHECK_TIMEOUT_MS
 
 if [ -z "${SHELRA_MODEL:-}" ]; then
   echo "shelra_runner: SHELRA_MODEL is not set" >&2

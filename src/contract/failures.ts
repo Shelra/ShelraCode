@@ -162,6 +162,24 @@ export function describeFailures(output: string, tailLines = 12): string {
 }
 
 /**
+ * Whether every failure in `after` was already in `before`: a run that fails only the way the code failed before a
+ * change, so the change broke nothing more. Failures are matched by test name, else by file (line numbers move with
+ * edits) and message; output nothing parses must match as a whole.
+ */
+export function failuresWithin(after: string, before: string): boolean {
+  const now = parseFailures(after);
+  const then = parseFailures(before);
+  if (now.length === 0 || then.length === 0) {
+    return now.length === 0 && then.length === 0 && failureSignature(after) === failureSignature(before);
+  }
+  const key = (failure: CheckFailure) =>
+    failure.name?.trim() ??
+    `${(failure.location ?? "").replace(/:\d+(?::\d+)?$/u, "")}|${failure.message.toLowerCase().replace(/\d+/gu, "#")}`;
+  const earlier = new Set(then.map(key));
+  return now.every((failure) => earlier.has(key(failure)));
+}
+
+/**
  * A stable identity for a set of failures, so the repair loop can tell "the same failures again" from
  * progress. Numbers, paths and timings are normalized away.
  */

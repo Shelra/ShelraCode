@@ -85,6 +85,50 @@ describe("evaluateTurnContract", () => {
     expect(runCheck).not.toHaveBeenCalled();
     expect(results[0]).toMatchObject({ passed: false, by: "host" });
     expect(results[0]?.detail).toContain("not run");
+    // It vouches for nothing either way: the turn is not sent back to fix it.
+    expect(results[0]?.unrunnable).toContain("not run");
+  });
+
+  it("tells a project check that could not run here from one that failed (2026-10-03)", async () => {
+    const runCheck = vi.fn<ContractCheckRunner>(async (command) =>
+      command === "pyright"
+        ? { passed: false, output: "sh: 1: pyright: not found", durationMs: 1, state: "completed", exitCode: 127 }
+        : command === "python -m pytest"
+          ? { passed: false, output: "", durationMs: 240_000, state: "timed_out", exitCode: null }
+          : { passed: false, output: "1 failed", durationMs: 1, state: "completed", exitCode: 1 },
+    );
+    const results = await evaluateTurnContract({
+      checks: [
+        { kind: "typecheck", command: "pyright", source: "pyright configuration" },
+        { kind: "test", command: "python -m pytest", source: "pytest configuration" },
+        { kind: "lint", command: "ruff check .", source: "ruff configuration" },
+      ],
+      runs: [],
+      workspace,
+      runCheck,
+      timeoutMs: 240_000,
+    });
+    expect(results[0]?.unrunnable).toContain("pyright: not found");
+    expect(results[1]?.unrunnable).toMatch(/^timed out/u);
+    expect(results[2]?.unrunnable).toBeUndefined();
+
+    // The agent's own run is known only by its text: dash, the shell of Debian and Ubuntu images, says it this way.
+    const reused = await evaluateTurnContract({
+      checks: [{ kind: "typecheck", command: "pyright", source: "pyright configuration" }],
+      runs: [
+        {
+          command: "pyright",
+          passed: false,
+          detail: "sh: 1: pyright: not found",
+          fresh: true,
+          beforeFirstChange: false,
+        },
+      ],
+      workspace,
+      runCheck,
+      timeoutMs: 240_000,
+    });
+    expect(reused[0]).toMatchObject({ by: "agent", unrunnable: "sh: 1: pyright: not found" });
   });
 
   it("looks through the script a check runs before running it (audit gap #10)", async () => {

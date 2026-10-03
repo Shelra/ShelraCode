@@ -50,8 +50,8 @@ export interface ContractCheckResult {
   /** A run before the turn's first change passed: a failure now is a regression the turn caused. */
   passedBefore: boolean;
   /**
-   * For a decision's check that failed without reaching a verdict (it timed out, or its script, command or
-   * runtime is missing): why. Such a check vouches for nothing, and says nothing against the change either.
+   * For a check that failed without reaching a verdict (it timed out, or its script, command or runtime is missing,
+   * or running it would do damage): why. Such a check vouches for nothing, and says nothing against the change either.
    */
   unrunnable?: string;
 }
@@ -88,9 +88,13 @@ export function checkDamageReason(command: string, workspace: string): string | 
   return null;
 }
 
-/** Why a failed decision check reached no verdict, or undefined for any other check or a real failure. */
-function unrunnableDecision(check: ContractCheck, end: CheckEnd): string | undefined {
-  return check.kind === "decision" ? (checkCouldNotRun(end, check.command) ?? undefined) : undefined;
+/**
+ * Why a failed check reached no verdict, or undefined for a real failure. A project check that cannot run here (its
+ * tool is not installed, it ran out of time) used to read as a failure the turn was sent back to fix, again and again
+ * (2026-10-03: in SWE-bench Pro's task images `pyright`, `make lint` and whole-repository suites).
+ */
+function unrunnableCheck(check: ContractCheck, end: CheckEnd): string | undefined {
+  return checkCouldNotRun(end, check.command) ?? undefined;
 }
 
 /**
@@ -122,10 +126,7 @@ export async function evaluateTurnContract(input: {
       // is known.
       const unrunnable = latest.passed
         ? undefined
-        : check.kind === "decision"
-          ? (latest.unrunnable ??
-            unrunnableDecision(check, { state: "completed", exitCode: null, output: latest.detail }))
-          : undefined;
+        : (latest.unrunnable ?? unrunnableCheck(check, { state: "completed", exitCode: null, output: latest.detail }));
       decided.set(check, {
         check,
         passed: latest.passed,
@@ -146,8 +147,8 @@ export async function evaluateTurnContract(input: {
         by: "host",
         detail,
         ...before(check),
-        // A decision check that would do damage vouches for nothing either way, as `shelra decisions check` says.
-        ...(check.kind === "decision" ? { unrunnable: detail } : {}),
+        // A check that would do damage vouches for nothing either way, as `shelra decisions check` says.
+        unrunnable: detail,
       });
       continue;
     }
@@ -192,7 +193,7 @@ export async function evaluateTurnContract(input: {
       const unrunnable =
         passed || !run
           ? undefined
-          : unrunnableDecision(check, {
+          : unrunnableCheck(check, {
               state: run.state ?? "completed",
               exitCode: run.exitCode ?? null,
               output: run.output,

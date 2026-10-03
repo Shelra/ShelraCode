@@ -31,7 +31,7 @@ import {
 import { addedDependencies, declaredDependencies, requestAddsDependency } from "../contract/dependency-guard";
 import type { CheckKind } from "../contract/discover";
 import { type DiscoveredCheck, discoverChecks, isSameCheck } from "../contract/discover";
-import { describeFailures, failureSignature, parseFailures } from "../contract/failures";
+import { describeFailures, failureSignature, failuresWithin, parseFailures } from "../contract/failures";
 import {
   type ChangedFile,
   describeRule,
@@ -40,6 +40,7 @@ import {
   type RuleInForce,
   ruleViolations,
 } from "../contract/rule-guards";
+import { SCOPED, scopedCheck } from "../contract/scope";
 import { isTestFile, originalTestToRun, requestAllowsTestEdits } from "../contract/test-protection";
 import { executeEventHooks } from "../hooks/index";
 import type {
@@ -450,6 +451,8 @@ export interface AgentOptions {
   interruptionBackoffMs?: readonly number[];
   /** Injectable MCP discovery timeout; environment values are used by default. */
   mcpTimeoutMs?: number;
+  /** How long one of the project's checks may run on the final code; SHELRA_CHECK_TIMEOUT_MS, else 10 minutes. */
+  checkTimeoutMs?: number;
   /** Harness subsystems switched off to measure what each adds (`shelra bench --ablate`); see ablation.ts. */
   ablate?: readonly Ablation[];
   /** Runs the task contract's checks on the final code; the agent's own shell by default. Tests inject one. */
@@ -723,6 +726,12 @@ export class Agent {
   private readonly modelTimeout: ProviderTimeout;
   private readonly interruptionBackoffMs: readonly number[];
   private readonly mcpTimeoutMs: number;
+  private readonly checkTimeoutMs: number;
+  /**
+   * Project checks whose full run outlasted checkTimeoutMs in this session: later turns run them scoped to the change
+   * (src/contract/scope.ts) instead of waiting for them again.
+   */
+  private readonly slowChecks = new Set<string>();
   private localCostMicros = 0;
   private taskCostMicros = 0;
 
@@ -762,6 +771,8 @@ export class Agent {
     this.interruptionBackoffMs = options.interruptionBackoffMs ?? INTERRUPTION_BACKOFF_MS;
     this.mcpTimeoutMs =
       options.mcpTimeoutMs ?? readPositiveMilliseconds("SHELRA_MCP_TIMEOUT_MS", DEFAULT_MCP_TIMEOUT_MS);
+    this.checkTimeoutMs =
+      options.checkTimeoutMs ?? readPositiveMilliseconds("SHELRA_CHECK_TIMEOUT_MS", CONTRACT_CHECK_TIMEOUT_MS);
     this.ablations = options.ablate?.length ? new Ablations(options.ablate) : NO_ABLATIONS;
     this.webSearch = options.webSearch;
     // Host checks run the way the agent's own commands do: same shell, same sandbox, same workspace.
@@ -3496,6 +3507,10 @@ export class Agent {
     let checkedPasses: string | null = null;
     /** The turn's contract ran and every check passed on the final code. */
     let contractPassed = false;
+    /** Project checks that could not run here in the last contract pass (a missing tool, out of time): no evidence. */
+    let contractCouldNotRun: string[] = [];
+    /** Checks that could not run, already said once this turn. */
+    const couldNotRunNoted = new Set<string>();
     const checkRuns: Array<{
       command: string;
       passed: boolean;
@@ -4609,35 +4624,84 @@ export class Agent {
             // run and reported five times (seen live 2026-09-25).
             (check, index, all) => all.findIndex((other) => isSameCheck(check.command, other)) === index,
           );
+          contractCouldNotRun = [];
           if (contract.length > 0) {
-            const results = await evaluateTurnContract({
-              checks: contract,
-              runs: checkRuns.map((run) => ({
-                command: run.command,
-                passed: run.passed,
-                detail: run.detail,
-                fresh:
-                  foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
-                  run.mutationEvents === turnMutationEvents &&
-                  run.state !== null &&
-                  endState !== null &&
-                  changedPaths(run.state, endState)?.length === 0,
-                beforeFirstChange:
-                  foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
-                  run.mutationEvents === 0 &&
-                  run.state !== null &&
-                  turnStartState !== null &&
-                  changedPaths(turnStartState, run.state)?.length === 0,
-                ...(run.unrunnable ? { unrunnable: run.unrunnable } : {}),
-              })),
-              workspace: turnStartWorkspace,
-              runCheck: (command, options) => {
-                reportStatus("checks", `Running \`${command}\` on the final code`);
-                return this.checkRunner(command, options);
-              },
-              timeoutMs: CONTRACT_CHECK_TIMEOUT_MS,
-              signal,
+            // A project check whose full run outlasts the budget is run again scoped to the files this turn changed
+            // (src/contract/scope.ts), and the session remembers it: later passes go straight to the scoped run, or,
+            // when none can be told, say once that it could not run instead of waiting for it again.
+            const scopes = new Map<ContractCheck, ContractCheck | null>();
+            const scopeOf = (check: ContractCheck) => {
+              if (!scopes.has(check)) scopes.set(check, scopedCheck(check, mutations, turnStartWorkspace));
+              return scopes.get(check) ?? null;
+            };
+            const slow = (check: ContractCheck) => check.kind !== "decision" && this.slowChecks.has(check.command);
+            const tooSlow = contract.filter((check) => slow(check) && scopeOf(check) === null);
+            const minutes = `${Math.round(this.checkTimeoutMs / 60_000)} min`;
+            const evaluate = (checks: readonly ContractCheck[]) =>
+              evaluateTurnContract({
+                checks,
+                runs: checkRuns.map((run) => ({
+                  command: run.command,
+                  passed: run.passed,
+                  detail: run.detail,
+                  fresh:
+                    foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
+                    run.mutationEvents === turnMutationEvents &&
+                    run.state !== null &&
+                    endState !== null &&
+                    changedPaths(run.state, endState)?.length === 0,
+                  beforeFirstChange:
+                    foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
+                    run.mutationEvents === 0 &&
+                    run.state !== null &&
+                    turnStartState !== null &&
+                    changedPaths(turnStartState, run.state)?.length === 0,
+                  ...(run.unrunnable ? { unrunnable: run.unrunnable } : {}),
+                })),
+                workspace: turnStartWorkspace,
+                runCheck: (command, options) => {
+                  reportStatus("checks", `Running \`${command}\` on the final code`);
+                  return this.checkRunner(command, options);
+                },
+                timeoutMs: this.checkTimeoutMs,
+                signal,
+              });
+            let results = await evaluate(
+              contract
+                .filter((check) => !tooSlow.includes(check))
+                .map((check) => (slow(check) ? (scopeOf(check) ?? check) : check)),
+            );
+            const timedOut = results.filter(
+              (result) =>
+                !result.passed &&
+                result.check.kind !== "decision" &&
+                !result.check.source.endsWith(SCOPED) &&
+                /^timed out/u.test(result.unrunnable ?? ""),
+            );
+            for (const result of timedOut) this.slowChecks.add(result.check.command);
+            const narrowed = timedOut.flatMap((result) => {
+              const scoped = scopeOf(result.check);
+              return scoped && !signal.aborted ? [{ result, scoped }] : [];
             });
+            if (narrowed.length > 0) {
+              const again = await evaluate(narrowed.map((item) => item.scoped));
+              results = results.map((result) => {
+                const index = narrowed.findIndex((item) => item.result === result);
+                return index >= 0 ? (again[index] ?? result) : result;
+              });
+            }
+            results = [
+              ...results,
+              ...tooSlow.map((check): (typeof results)[number] => ({
+                check,
+                passed: false,
+                by: "host",
+                detail: `not run: it took longer than ${minutes} earlier in this session`,
+                failedBefore: false,
+                passedBefore: false,
+                unrunnable: `took longer than ${minutes} earlier in this session`,
+              })),
+            ];
             // The host's own runs count as runs: unless something changes, they need not run again.
             const stateAfterChecks = captureWorkspaceState(cwd);
             for (const result of results.filter((item) => item.by === "host")) {
@@ -4651,20 +4715,68 @@ export class Agent {
                 ...(result.unrunnable ? { unrunnable: result.unrunnable } : {}),
               });
             }
-            const failing = results.filter((result) => !result.passed);
+            // A project check that could not run here (its tool is missing, it ran out of time, running it would do
+            // damage) says nothing either way: it is said once and never sent back for repair. A decision's check that
+            // could not run keeps its own message below.
+            const couldNotRun = results.filter(
+              (result) => !result.passed && result.unrunnable !== undefined && result.check.kind !== "decision",
+            );
+            contractCouldNotRun = couldNotRun.map((result) => result.check.command);
+            const unsaid = couldNotRun.filter((result) => !couldNotRunNoted.has(result.check.command));
+            if (unsaid.length > 0) {
+              for (const result of unsaid) couldNotRunNoted.add(result.check.command);
+              this.kernel?.recordObservation(
+                `Task contract: could not run ${unsaid.map((result) => result.check.command).join(", ")}.`,
+              );
+              yield {
+                type: "content",
+                content: `\n\n[Shelra could not run ${unsaid
+                  .map((result) => `\`${result.check.command}\` (${errorLine(result.unrunnable ?? "")})`)
+                  .join(
+                    ", ",
+                  )} here, so ${unsaid.length === 1 ? "it says" : "they say"} nothing about this change.]\n\n`,
+              };
+            }
+            // A check that fails only the way it failed before the turn's first change (the run before the work) broke
+            // nothing more: those failures are not the turn's to fix (a task image whose suite fails for want of a
+            // service). It is reported as such, and a new failure among them is sent back as before.
+            const failedOnlyAsBefore = results.filter((result) => {
+              if (result.passed || couldNotRun.includes(result) || !result.failedBefore) return false;
+              const earlier = checkRuns
+                .filter(
+                  (run) =>
+                    run.mutationEvents === 0 &&
+                    !run.passed &&
+                    isSameCheck(run.command, result.check) &&
+                    run.state !== null &&
+                    turnStartState !== null &&
+                    changedPaths(turnStartState, run.state)?.length === 0,
+                )
+                .at(-1);
+              return earlier !== undefined && failuresWithin(result.detail, earlier.detail);
+            });
+            const failing = results.filter(
+              (result) => !result.passed && !couldNotRun.includes(result) && !failedOnlyAsBefore.includes(result),
+            );
             // A check the turn itself defined can fail the turn; its pass is not evidence (see turnDefined above).
-            const trusted = results.filter((result) => !result.check.source.endsWith(DEFINED_THIS_TURN));
+            const trusted = results.filter(
+              (result) => !result.check.source.endsWith(DEFINED_THIS_TURN) && !couldNotRun.includes(result),
+            );
             contractPassed = failing.length === 0 && trusted.length > 0;
             if (failing.length > 0) checkedNote = null;
             if (failing.length === 0) {
+              const outcomeOf = (result: (typeof results)[number]) =>
+                failedOnlyAsBefore.includes(result)
+                  ? "fails only as it did before this turn, with no new failure"
+                  : "passed";
               for (const result of trusted) {
                 this.turnVerificationEvidence.push(
-                  `${result.check.command} passed (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
+                  `${result.check.command} ${outcomeOf(result)} (${result.by === "host" ? "run by Shelra" : "a fresh run, reused"})`,
                 );
               }
               // A pass that only reused runs keeps the note: nothing changed since the host's own run.
               if (trusted.some((result) => result.by === "host")) {
-                checkedPasses = trusted.map((result) => `\`${result.check.command}\` passed`).join(", ");
+                checkedPasses = trusted.map((result) => `\`${result.check.command}\` ${outcomeOf(result)}`).join(", ");
                 checkedNote = `[Checked by Shelra on the final code: ${checkedPasses}]`;
               }
               const ownPasses = results.filter((result) => result.check.source.endsWith(DEFINED_THIS_TURN));
@@ -4930,9 +5042,9 @@ ${verdict}`,
           }
 
           // Checks the turn defined itself do not stand for the project's: a contract of only those still needs
-          // evidence of its own (turnDefined above).
+          // evidence of its own (turnDefined above), and so does one whose project checks could not run here.
           if (
-            contract.length === turnDefined.length &&
+            contract.length - contractCouldNotRun.length === turnDefined.length &&
             !this.ablations.has("gate") &&
             mutatedThisTurn &&
             (documentsOnly || this.turnVerificationEvidence.length === 0 || unverifiedSinceAudit)

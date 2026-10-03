@@ -1285,6 +1285,111 @@ describe("task contract: the project's own checks decide (audit doc 15, Phase 1.
   });
 });
 
+describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's task images)", () => {
+  async function run(agent: Agent, request: string): Promise<string> {
+    let text = "";
+    for await (const chunk of agent.processMessage(request)) text += (chunk as { content?: string }).content ?? "";
+    return text;
+  }
+
+  it("says once that a check whose tool is missing could not run, and never sends it back", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-unrunnable-check-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test", lint: "golint-x ." } }));
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Done." }], ["src/clock.ts"]);
+    const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+      command.includes("lint")
+        ? { passed: false, output: "sh: golint-x: command not found", durationMs: 5, state: "completed", exitCode: 127 }
+        : { passed: true, output: "3 pass", durationMs: 5 },
+    );
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir, checkRunner });
+
+    const text = await run(agent, "Create a digital clock");
+
+    expect(provider.round).toBe(1);
+    expect(text).toContain("[Shelra could not run `bun run lint` (sh: golint-x: command not found) here");
+    expect(text).toContain("[Checked by Shelra on the final code: `bun run test` passed]");
+    expect(text).not.toContain("Not verified");
+  });
+
+  it("does not send back a suite that fails only as it did before the change, and does send a new failure", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const before = "(fail) connects to the database [1.00ms]\n\n 4 pass\n 1 fail\n";
+    for (const [after, sentBack] of [
+      [before, false],
+      [`${before.replace(" 1 fail", "")}(fail) formats the clock [1.00ms]\n 3 pass\n 2 fail\n`, true],
+    ] as const) {
+      const dir = mkdtempSync(join(tmpdir(), "shelra-failed-before-"));
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+      const provider = new ScenarioProvider([{ type: "text-delta", text: "Done." }], ["src/clock.ts"]);
+      let runs = 0;
+      // The first run is the host's own run before the work; the next ones run on the turn's code.
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => {
+        runs += 1;
+        return { passed: false, output: runs === 1 ? before : after, durationMs: 5, state: "completed", exitCode: 1 };
+      });
+      const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir, checkRunner });
+
+      const text = await run(agent, "Fix the clock formatting in src/clock.ts.");
+
+      if (sentBack) {
+        expect(lastUserText(provider.requests[1])).toContain("formats the clock");
+        expect(text).not.toContain("fails only as it did before this turn");
+      } else {
+        expect(provider.round).toBe(1);
+        expect(text).toContain(
+          "[Checked by Shelra on the final code: `bun run test` fails only as it did before this turn, with no new failure]",
+        );
+      }
+    }
+  });
+
+  it("runs a suite that outlasts the budget again on the changed packages, and remembers it for the next turn", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-slow-suite-"));
+    writeFileSync(join(dir, "go.mod"), "module example.com/app\n");
+    // The second turn edits the same package again.
+    const provider = new ScenarioProvider(
+      [
+        [
+          toolCallEvent("w2", "write_file", { path: "lib/auth/token.go", content: "package auth\n" }),
+          toolResultEvent("w2", "write_file", {
+            success: true,
+            output: "Updated lib/auth/token.go",
+            diff: { filePath: "lib/auth/token.go", additions: 1, removals: 1, patch: "", isNew: false },
+          }),
+          { type: "text-delta", text: "Done again." },
+        ],
+      ],
+      ["lib/auth/token.go"],
+    );
+    const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+      command === "go test ./..."
+        ? { passed: false, output: "", durationMs: 1_000, state: "timed_out", exitCode: null }
+        : { passed: true, output: "ok", durationMs: 5 },
+    );
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      provider,
+      cwd: dir,
+      checkRunner,
+      checkTimeoutMs: 240_000,
+    });
+
+    const text = await run(agent, "Add a token expiry to lib/auth/token.go");
+
+    const commands = checkRunner.mock.calls.map(([command]) => command);
+    expect(commands).toEqual(["go test ./...", "go build ./...", "go vet ./...", "go test ./lib/auth"]);
+    expect(checkRunner.mock.calls[0]?.[1].timeoutMs).toBe(240_000);
+    expect(text).toContain("`go test ./lib/auth` passed");
+    expect(text).not.toContain("Not verified");
+
+    checkRunner.mockClear();
+    await run(agent, "Add a token expiry to lib/auth/token.go");
+    expect(checkRunner.mock.calls.map(([command]) => command)).not.toContain("go test ./...");
+    expect(checkRunner.mock.calls.map(([command]) => command)).toContain("go test ./lib/auth");
+  });
+});
+
 describe("honest exits and test protection (audit doc 15, Phase 1.5)", () => {
   /** A scripted model: each round's events, the last repeated for later rounds. */
   function scripted(

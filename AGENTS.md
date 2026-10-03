@@ -143,6 +143,13 @@ with the test once, the host runs its own copy again on the repair, and a check 
 With no runner a test outside the package can use (Go, Rust, JVM, plain HTML), a checker that changed project files,
 or no report the host can run, the turn audits itself requirement by requirement as before. `--ablate verifier`
 turns the check off; `--ablate audit` turns off both.
+The project's checks hold in a large or unfamiliar project too (2026-10-03, SWE-bench Pro's task images): a check that
+cannot run there (its tool is not installed, it ran out of time, running it would do damage) is said once and never
+sent back for repair; one that fails only the way it failed in the host's run before the work (`failuresWithin`) is
+reported as such, with no new failure, and a new failure among them is sent back as before; and a full run that
+outlasts `SHELRA_CHECK_TIMEOUT_MS` (default 10 minutes) is run again on the packages or tests the change touched
+(`src/contract/scope.ts`: Go packages, pytest files named for the changed modules, `jest --findRelatedTests`,
+`vitest related`), which the session then runs directly.
 A turn that changed a web app's files (html, css, js/ts, vue, svelte, package.json) has the app opened by the host
 before it may end (`src/agent/runtime-smoke.ts`): through the server the session runs, else by serving the folder a
 static-server script names or a plain site's index.html in-process, else by starting Vite on a free port with no
