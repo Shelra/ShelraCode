@@ -4,6 +4,9 @@ This directory contains the current Shelra-first development suite. It is an
 agent-harness benchmark: the subject being improved is Shelra, while the
 model/provider is a recorded controlled variable.
 
+The public benchmark (SWE-bench Pro, Shelra against mini-swe-agent on the same
+free model, run in GitHub Actions) lives in `bench/public/`; see its README.
+
 The suite is intentionally more demanding than a smoke test. It progresses
 from deterministic implementation work to an expert multi-step workflow:
 

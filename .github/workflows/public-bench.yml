@@ -1,0 +1,204 @@
+# Public benchmark: SWE-bench Pro (Scale's validated v2 tasks, Harbor format), harness against harness on the same
+# free OpenRouter model. One arm (harness x model x subset) per dispatch; tasks run one at a time and the run can be
+# resumed from an earlier run's results. Protocol and reporting: bench/public/README.md.
+#
+# Manual dispatch only: never on push or pull_request, so a fork cannot reach the OpenRouter secret.
+name: Public benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Harness under test
+        type: choice
+        options: [shelra, mini-swe-agent]
+        default: shelra
+      model:
+        description: Free OpenRouter model (the same for both harnesses)
+        type: choice
+        options:
+          - nvidia/nemotron-3-ultra-550b-a55b:free
+          - qwen/qwen3.8-27b:free
+        default: nvidia/nemotron-3-ultra-550b-a55b:free
+      subset:
+        description: Task subset (bench/public/swebench-pro-*.txt)
+        type: choice
+        options: [pilot20, headline50]
+        default: pilot20
+      offset:
+        description: First subset index to consider (shard start)
+        type: string
+        default: "0"
+      limit:
+        description: Number of subset entries to consider (0 = all)
+        type: string
+        default: "0"
+      resume_run_id:
+        description: Run id of an earlier dispatch of this same arm, to resume from its results (optional)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read # download the results artifact of an earlier run when resuming
+
+# One benchmark at a time: every run shares the same free daily quota and per-minute rate.
+concurrency:
+  group: public-bench
+  cancel-in-progress: false
+
+env:
+  # Pinned inputs: change them only together with bench/public/README.md.
+  SCALE_REPO: scaleapi/SWE-bench_Pro-os
+  SCALE_COMMIT: 66f92766bba642462d4bbe5479e83f91f9211862
+  HARBOR_VERSION: "0.23.0"
+  SHELRA_TAG: shelra@1.1.9
+  SHELRA_SHA256: d0ee05b73ebc2336576cd18a23408f24aa5b0cb8aaad0924517cfc4026b67b32
+  STEP_LIMIT: "50"
+  TIME_LIMIT_SEC: "2910"
+
+jobs:
+  arm:
+    name: ${{ inputs.agent }} / ${{ inputs.model }} / ${{ inputs.subset }}
+    runs-on: ubuntu-latest
+    # GitHub ends a hosted job at 6 hours; the driver stops starting tasks 70 minutes before its 320-minute budget.
+    timeout-minutes: 350
+    env:
+      AGENT: ${{ inputs.agent }}
+      MODEL: ${{ inputs.model }}
+      SUBSET: ${{ inputs.subset }}
+      OFFSET: ${{ inputs.offset }}
+      LIMIT: ${{ inputs.limit }}
+      RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+    steps:
+      - name: Check out ShelraCode
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate inputs
+        id: inputs
+        run: |
+          set -euo pipefail
+          [[ "$OFFSET" =~ ^[0-9]+$ ]] || { echo "offset must be a non-negative integer"; exit 1; }
+          [[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "limit must be a non-negative integer"; exit 1; }
+          [[ -z "$RESUME_RUN_ID" || "$RESUME_RUN_ID" =~ ^[0-9]+$ ]] || { echo "resume_run_id must be a run id"; exit 1; }
+          case "$MODEL" in openai/*|anthropic/*) echo "refused: no openai/* or anthropic/* models"; exit 1;; esac
+          [[ "$MODEL" == *:free ]] || { echo "refused: free models only"; exit 1; }
+          slug=$(printf '%s' "$MODEL" | sed -E 's/[^A-Za-z0-9._-]+/_/g')
+          echo "artifact=public-bench-${AGENT}-${slug}-${SUBSET}" >> "$GITHUB_OUTPUT"
+
+      - name: Free disk space and move Docker to the larger disk
+        run: |
+          set -uo pipefail
+          df -h / /mnt || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \
+            /usr/local/julia* /opt/az /opt/microsoft || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          sudo swapoff -a >/dev/null 2>&1 && sudo rm -f /mnt/swapfile /swapfile || true
+          root_free=$(df --output=avail -B1 / | tail -1)
+          mnt_free=$(df --output=avail -B1 /mnt 2>/dev/null | tail -1 || echo 0)
+          if [ "${mnt_free:-0}" -gt "$root_free" ]; then
+            sudo systemctl stop docker docker.socket
+            sudo mkdir -p /mnt/docker /etc/docker
+            [ -s /etc/docker/daemon.json ] || echo '{}' | sudo tee /etc/docker/daemon.json >/dev/null
+            sudo jq '. + {"data-root": "/mnt/docker"}' /etc/docker/daemon.json | sudo tee /etc/docker/daemon.json.new >/dev/null
+            sudo mv /etc/docker/daemon.json.new /etc/docker/daemon.json
+            sudo systemctl start docker
+          fi
+          echo "Docker root: $(docker info -f '{{.DockerRootDir}}')"
+          df -h / /mnt || true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Harbor
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "harbor==${HARBOR_VERSION}"
+          harbor --version
+
+      - name: Check out SWE-bench Pro v2 tasks (pinned)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.SCALE_REPO }}
+          ref: ${{ env.SCALE_COMMIT }}
+          path: scale
+          sparse-checkout: v2
+          persist-credentials: false
+
+      - name: Download the ShelraCode release binary
+        if: inputs.agent == 'shelra'
+        run: |
+          set -euo pipefail
+          base="https://github.com/Shelra/ShelraCode/releases/download/${SHELRA_TAG/@/%40}"
+          curl -fsSL --retry 3 -o shelra-linux-x64 "$base/shelra-linux-x64"
+          curl -fsSL --retry 3 -o checksums.txt "$base/checksums.txt"
+          grep ' shelra-linux-x64$' checksums.txt | sha256sum -c -
+          echo "${SHELRA_SHA256}  shelra-linux-x64" | sha256sum -c -
+          chmod +x shelra-linux-x64
+          ./shelra-linux-x64 --version
+
+      - name: Download results of the run being resumed
+        if: inputs.resume_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ steps.inputs.outputs.artifact }}-results
+          path: bench-results
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Run the arm (sequential, resumable)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "$AGENT" = "shelra" ]; then
+            extra+=(--shelra-binary shelra-linux-x64 --shelra-sha256 "$SHELRA_SHA256")
+          fi
+          python bench/public/run_subset.py run \
+            --agent "$AGENT" --model "$MODEL" --subset "$SUBSET" \
+            --offset "$OFFSET" --limit "$LIMIT" \
+            --scale-repo scale --results bench-results --jobs bench-jobs \
+            --step-limit "$STEP_LIMIT" --time-limit "$TIME_LIMIT_SEC" \
+            --budget-minutes 320 --reserve-minutes 70 --docker-prune \
+            "${extra[@]}"
+
+      - name: Summarize
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -d bench-results ]; then
+            python bench/public/collect.py --results bench-results --subset "$SUBSET" --out bench-results/report || true
+            if [ -f bench-results/report/summary.md ]; then cat bench-results/report/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+            cat bench-results/"$AGENT"/*/run-state.json 2>/dev/null || true
+          fi
+
+      - name: Scrub secrets from results and logs
+        if: always()
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: python bench/public/run_subset.py redact bench-results bench-jobs || true
+
+      # One directory per artifact, so the artifact's root is that directory and a resumed run restores it as is.
+      - name: Upload results (needed to resume)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.inputs.outputs.artifact }}-results
+          path: bench-results
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Upload trial logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.inputs.outputs.artifact }}-logs
+          path: bench-jobs
+          if-no-files-found: ignore
+          retention-days: 30

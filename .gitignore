@@ -137,3 +137,8 @@ backend/
 
 # npm tarballs built by scripts/npm-publish.ts
 npm-dist/
+
+# Local runs of the public benchmark (bench/public/run_subset.py and collect.py)
+/bench-results/
+/bench-jobs/
+/bench-report/
