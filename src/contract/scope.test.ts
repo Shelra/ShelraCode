@@ -59,14 +59,14 @@ describe("a check scoped to what a turn changed", () => {
         ["src/a.ts", "README.md"],
         root,
       )?.command,
-    ).toBe("yarn jest --findRelatedTests --passWithNoTests src/a.ts");
+    ).toBe("yarn jest --findRelatedTests src/a.ts");
     expect(
       scopedCheck(
         { kind: "test", command: "npm run test", source: "package.json scripts.test", runs: "vitest run" },
         ["src/a.ts", "src/b.tsx"],
         root,
       )?.command,
-    ).toBe("npx vitest related --run --passWithNoTests src/a.ts src/b.tsx");
+    ).toBe("npx vitest related --run src/a.ts src/b.tsx");
     expect(
       scopedCheck({ kind: "test", command: "npm run test", source: "package.json", runs: "mocha" }, ["src/a.ts"], root),
     ).toBeNull();

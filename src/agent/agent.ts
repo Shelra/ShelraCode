@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   type Dirent,
   existsSync,
@@ -345,11 +346,13 @@ type OriginalTestsOutcome =
   | { passed: false; detail: string }
   | { refused: string };
 
-/** A file's size and modification time: when it changes, an earlier run of its tests no longer speaks for it. */
+/**
+ * A file's content, digested: when it changes, an earlier run of its tests no longer speaks for it. Not its timestamp,
+ * which the run of the originals itself rewrites.
+ */
 function fileStamp(path: string): string {
   try {
-    const stat = statSync(path);
-    return `${stat.size}:${stat.mtimeMs}`;
+    return createHash("sha1").update(readFileSync(path)).digest("hex");
   } catch {
     return "missing";
   }
@@ -2660,6 +2663,8 @@ export class Agent {
     checks: readonly ContractCheck[];
     /** The request: a test deleted with the code it tested stands only when it asks to remove something. */
     request: string;
+    /** Failed runs of the project's checks on the code as the turn found it (the run before the work). */
+    beforeRuns: ReadonlyArray<{ command: string; detail: string }>;
     signal?: AbortSignal;
   }): Promise<OriginalTestsOutcome> {
     const exists = (relative: string) => existsSync(join(input.cwd, relative));
@@ -2680,7 +2685,7 @@ export class Agent {
     const originals: Array<{ path: string; original: string; after: string }> = [];
     const moved: string[] = [];
     for (const file of texts) {
-      const shape = originalTestToRun(file.before, file.after, file.path, exists);
+      const shape = originalTestToRun(file.before, file.after, file.path, exists, existedBefore);
       if ("refused" in shape) return { refused: `${file.path}: ${shape.refused}` };
       originals.push({ path: file.path, original: shape.original, after: file.after });
       moved.push(...shape.movedImports);
@@ -2689,10 +2694,14 @@ export class Agent {
     try {
       for (const { path, original } of originals) writeFileSync(join(input.cwd, path), original);
       for (const check of input.checks) {
-        // A suite too slow to wait for runs on the changed tests alone, as the contract does (src/contract/scope.ts).
-        let command = this.slowChecks.has(check.command)
-          ? (scopedCheck(check, input.paths, input.cwd)?.command ?? check.command)
-          : check.command;
+        // The changed tests alone where the runner takes them reliably (a Go package, pytest files), or when the
+        // suite is too slow to wait for: their own failures, not the rest of the suite's, decide (review 2026-10-03).
+        const precise = scopedCheck(check, kept, input.cwd);
+        let command =
+          precise &&
+          (/^go test /u.test(precise.command) || /pytest /u.test(precise.command) || this.slowChecks.has(check.command))
+            ? precise.command
+            : check.command;
         let run = await this.checkRunner(command, {
           timeoutMs: this.checkTimeoutMs,
           signal: input.signal,
@@ -2700,9 +2709,8 @@ export class Agent {
         });
         if (run.state === "timed_out" && command === check.command) {
           this.slowChecks.add(check.command);
-          const scoped = scopedCheck(check, input.paths, input.cwd);
-          if (scoped) {
-            command = scoped.command;
+          if (precise) {
+            command = precise.command;
             run = await this.checkRunner(command, {
               timeoutMs: this.checkTimeoutMs,
               signal: input.signal,
@@ -2711,6 +2719,9 @@ export class Agent {
           }
         }
         if (run.passed) continue;
+        // Failures the run before the work already had are not the edit's doing.
+        const before = input.beforeRuns.filter((earlier) => isSameCheck(earlier.command, check)).at(-1);
+        if (command === check.command && before && failuresWithin(run.output, before.detail)) continue;
         const couldNotRun = checkCouldNotRun(
           { state: run.state ?? "completed", exitCode: run.exitCode ?? null, output: run.output },
           command,
@@ -2721,11 +2732,17 @@ export class Agent {
       }
       return { passed: true, moved, removed };
     } finally {
+      // Each file back as the turn left it, its timestamp in fractional seconds (a Date loses it under Bun); one that
+      // cannot be written does not stop the others.
       originals.forEach(({ path, after }, index) => {
         const full = join(input.cwd, path);
-        writeFileSync(full, after);
-        const stamp = stamps[index];
-        if (stamp) utimesSync(full, stamp.atime, stamp.mtime);
+        try {
+          writeFileSync(full, after);
+          const stamp = stamps[index];
+          if (stamp) utimesSync(full, stamp.atimeMs / 1000, stamp.mtimeMs / 1000);
+        } catch (error) {
+          recordSwallowedError("test-protection.restore", error);
+        }
       });
     }
   }
@@ -3619,6 +3636,8 @@ export class Agent {
     const couldNotRunNoted = new Set<string>();
     /** Failures that were all there before the turn's first change were sent back once; they are not sent again. */
     let preExistingAsked = false;
+    /** Project checks that outlasted the check budget in this turn: one with no scoped form is not waited for again. */
+    const slowThisTurn = new Set<string>();
     const checkRuns: Array<{
       command: string;
       passed: boolean;
@@ -4374,6 +4393,14 @@ export class Agent {
                 start: turnStartState,
                 checks: turnStartChecks.filter((check) => check.kind === "test"),
                 request: userMessage,
+                beforeRuns: checkRuns.filter(
+                  (run) =>
+                    run.mutationEvents === 0 &&
+                    !run.passed &&
+                    run.state !== null &&
+                    turnStartState !== null &&
+                    changedPaths(turnStartState, run.state)?.length === 0,
+                ),
                 signal,
               }).catch((error: unknown): OriginalTestsOutcome => {
                 recordSwallowedError("test-protection.originals", error);
@@ -4760,7 +4787,8 @@ export class Agent {
               return scopes.get(check) ?? null;
             };
             const slow = (check: ContractCheck) => check.kind !== "decision" && this.slowChecks.has(check.command);
-            const tooSlow = contract.filter((check) => slow(check) && scopeOf(check) === null);
+            // One with no scoped form is not waited for twice in a turn; the next turn tries it again in full.
+            const tooSlow = contract.filter((check) => slowThisTurn.has(check.command) && scopeOf(check) === null);
             const minutes = `${Math.round(this.checkTimeoutMs / 60_000)} min`;
             const evaluate = (checks: readonly ContractCheck[]) =>
               evaluateTurnContract({
@@ -4803,7 +4831,10 @@ export class Agent {
                 !result.check.source.endsWith(SCOPED) &&
                 /^timed out/u.test(result.unrunnable ?? ""),
             );
-            for (const result of timedOut) this.slowChecks.add(result.check.command);
+            for (const result of timedOut) {
+              this.slowChecks.add(result.check.command);
+              slowThisTurn.add(result.check.command);
+            }
             const narrowed = timedOut.flatMap((result) => {
               const scoped = scopeOf(result.check);
               return scoped && !signal.aborted ? [{ result, scoped }] : [];
@@ -4815,16 +4846,22 @@ export class Agent {
                 return index >= 0 ? (again[index] ?? result) : result;
               });
             }
+            // A scoped run that found no test for the changed files ran nothing: nothing to fix, and no pass.
+            results = results.map((result) =>
+              !result.passed && result.check.source.endsWith(SCOPED) && !result.unrunnable && ranNoTest(result.detail)
+                ? { ...result, unrunnable: "no test covers the files this turn changed" }
+                : result,
+            );
             results = [
               ...results,
               ...tooSlow.map((check): (typeof results)[number] => ({
                 check,
                 passed: false,
                 by: "host",
-                detail: `not run: it took longer than ${minutes} earlier in this session`,
+                detail: `not run: it took longer than ${minutes} earlier in this turn`,
                 failedBefore: false,
                 passedBefore: false,
-                unrunnable: `took longer than ${minutes} earlier in this session`,
+                unrunnable: `took longer than ${minutes} earlier in this turn`,
               })),
             ];
             // The host's own runs count as runs: unless something changes, they need not run again.

@@ -1391,6 +1391,34 @@ describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's t
     expect(checkRunner.mock.calls.map(([command]) => command)).not.toContain("go test ./...");
     expect(checkRunner.mock.calls.map(([command]) => command)).toContain("go test ./lib/auth");
   });
+
+  it("counts a scoped run that found no test for the change as no run, not a pass (review 2026-10-03)", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const dir = mkdtempSync(join(tmpdir(), "shelra-scoped-none-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: "jest" } }));
+    // The scripted write does not reach the disk; the scoped run names only files that are there.
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src", "clock.ts"), "export const tick = () => 1;\n");
+    const provider = new ScenarioProvider([{ type: "text-delta", text: "Done." }], ["src/clock.ts"]);
+    const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+      command === "npm run test"
+        ? { passed: false, output: "", durationMs: 1_000, state: "timed_out", exitCode: null }
+        : {
+            passed: false,
+            output: "No tests found, exiting with code 1",
+            durationMs: 5,
+            state: "completed",
+            exitCode: 1,
+          },
+    );
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, { provider, cwd: dir, checkRunner });
+
+    const text = await run(agent, "Create a digital clock");
+
+    expect(checkRunner.mock.calls.map(([command]) => command)).toContain("npx jest --findRelatedTests src/clock.ts");
+    expect(text).toContain("no test covers the files this turn changed");
+    expect(text).not.toContain("Checked by Shelra");
+  });
 });
 
 describe("what the final answer claims (2026-10-03)", () => {
@@ -2901,6 +2929,42 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(seen.at(-1)).toContain("TestExpiry");
       expect(text).toContain("only added to it, and Shelra ran it as it was: it passes on the final code.");
       expect(text).not.toContain("Not verified");
+    }, 60_000);
+
+    it("does not hold an added case when the original fails only as it did before the work (review 2026-10-03)", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      // A suite with a failure of its own, before and after: the run before the work, the original's run, the contract.
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+        passed: false,
+        output: "(fail) needs a database [1.00ms]\n 1 pass\n 1 fail\n",
+        durationMs: 5,
+        state: "completed",
+        exitCode: 1,
+      }));
+      const { provider, requests } = roundsModel([
+        () => [
+          ...write("w1", "src/slug.ts", TRIM_AND_LOWER),
+          ...write("w2", "src/slug.test.ts", `${ORIGINAL_TEST}${ADDED_CASE}`),
+        ],
+        () => [
+          {
+            type: "text-delta",
+            text: "The database test fails before and after; it is not about slugify.",
+          } as ProviderEvent,
+        ],
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, "Fix slugify in src/slug.ts so it lowercases.");
+
+      expect(text).toContain("only added to it, and Shelra ran it as it was");
+      expect(requests.some((request) => lastUserText(request).includes("you changed tests that existed"))).toBe(false);
+      expect(text).toContain("as before this turn");
     }, 60_000);
 
     it("lets a test go with the code it tested when the request removes it, and holds one deleted alone", async () => {

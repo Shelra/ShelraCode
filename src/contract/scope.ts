@@ -124,10 +124,10 @@ export function scopedCheck(
       ? "jest"
       : null;
   if (runner === "vitest") {
-    return scoped(`${execPrefix(command)} vitest related --run --passWithNoTests ${sources.map(quote).join(" ")}`);
+    return scoped(`${execPrefix(command)} vitest related --run ${sources.map(quote).join(" ")}`);
   }
   if (runner === "jest") {
-    return scoped(`${execPrefix(command)} jest --findRelatedTests --passWithNoTests ${sources.map(quote).join(" ")}`);
+    return scoped(`${execPrefix(command)} jest --findRelatedTests ${sources.map(quote).join(" ")}`);
   }
   return null;
 }

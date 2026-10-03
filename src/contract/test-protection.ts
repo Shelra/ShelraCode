@@ -46,18 +46,42 @@ function isImportLine(line: string): boolean {
   return IMPORT_LINE_RE.test(line);
 }
 
-/** The lines that carry meaning: trimmed, blank lines and imports left out. */
-function bodyOf(text: string): string[] {
+/**
+ * The lines that carry meaning, blank lines and imports left out. Python keeps its indentation, which decides what a
+ * line belongs to: asserts moved under an inserted `if False:` are rewritten lines, not kept ones (review 2026-10-03).
+ */
+function bodyOf(text: string, keepIndent: boolean): string[] {
   return lines(text)
     .filter((line) => !isImportLine(line))
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => (keepIndent ? line.trimEnd() : line.trim()))
+    .filter((line) => line.trim() !== "");
 }
 
-function isSubsequence(short: readonly string[], long: readonly string[]): boolean {
+/** The lines of `long` left over once `short` is matched in order, or null when `short` is not in it in order. */
+function addedLines(short: readonly string[], long: readonly string[]): string[] | null {
+  const added: string[] = [];
   let index = 0;
-  for (const line of long) if (index < short.length && line === short[index]) index += 1;
-  return index === short.length;
+  for (const line of long) {
+    if (index < short.length && line === short[index]) index += 1;
+    else added.push(line);
+  }
+  return index === short.length ? added : null;
+}
+
+/**
+ * An added line that can stop a kept test from asserting anything: an early return, a comment opened around code, a
+ * dead branch, a skip, an `.only` that silences the rest.
+ */
+const DISABLES_RE =
+  /^(?:return\b|\/\*|if\s*\(?\s*(?:false|False|0|None)\s*\)?\s*[:{]?\s*$)|\.(?:skip|only|todo)\s*\(|\b(?:xit|xdescribe|xtest|xcontext)\s*\(|@pytest\.mark\.(?:skip|xfail)|@unittest\.(?:skip|expectedFailure)|\bpytest\.skip\(|\bt\.Skip(?:Now|f)?\(|\bself\.skipTest\(|\bthis\.skip\(/u;
+
+/** An import line with its module left out, so a moved module's new import pairs with its old one. */
+function bindingOf(line: string): string {
+  return line
+    .trim()
+    .replace(/(['"])[^'"]+\1/u, "<>")
+    .replace(/^from\s+[\w.]+\s+import\b/u, "from <> import")
+    .replace(/^import\s+[\w.]+(\s+as\s+\w+)?;?$/u, "import <>$1");
 }
 
 const SCRIPT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"];
@@ -102,34 +126,61 @@ export function importCandidates(line: string, testPath: string): string[] {
 
 /**
  * The original of an existing test the turn changed, to run on the final code, when the change can only have added
- * to it: every line it had is still there in order (new cases, new assertions), and an import it lost points at a
- * module that is no longer there (the module moved, so the import had to follow). The original's imports are then
- * the new ones. Null when the change removed or rewrote a line that is not an import: only the request can allow that.
+ * to it: every line it had is still there in order (new cases, new assertions), no added line can skip or cut short
+ * what was kept, and an import it re-pointed followed a module of the project that existed when the turn began and is
+ * gone now (it moved). The original is the old text with only those import lines re-pointed. Refused otherwise: only
+ * the request can allow that change.
  */
 export function originalTestToRun(
   before: string,
   after: string,
   testPath: string,
   exists: (relativePath: string) => boolean,
+  existedBefore: (relativePath: string) => boolean,
 ): { original: string; movedImports: string[] } | { refused: string } {
-  if (!isSubsequence(bodyOf(before), bodyOf(after))) return { refused: "it removed or rewrote a line of the test" };
-  const afterImports = lines(after).filter(isImportLine);
-  const kept = new Set(afterImports.map((line) => line.trim()));
+  const python = testPath.endsWith(".py");
+  const added = addedLines(bodyOf(before, python), bodyOf(after, python));
+  if (added === null) return { refused: "it removed or rewrote a line of the test" };
+  const disabling = added.find((line) => DISABLES_RE.test(line.trim()));
+  if (disabling) return { refused: `it added a line that can skip or cut short a test (\`${disabling.trim()}\`)` };
+  const beforeImports = new Set(
+    lines(before)
+      .filter(isImportLine)
+      .map((line) => line.trim()),
+  );
+  const newImports = lines(after)
+    .filter(isImportLine)
+    .filter((line) => !beforeImports.has(line.trim()));
+  const kept = new Set(
+    lines(after)
+      .filter(isImportLine)
+      .map((line) => line.trim()),
+  );
   const removed = lines(before)
     .filter(isImportLine)
     .filter((line) => !kept.has(line.trim()));
+  if (removed.length === 0) return { original: before, movedImports: [] };
+  const replacement = new Map<string, string>();
+  const used = new Set<string>();
   for (const line of removed) {
     const candidates = importCandidates(line, testPath);
-    if (candidates.length === 0)
-      return { refused: `it changed an import that is not a moved file (\`${line.trim()}\`)` };
+    if (candidates.length === 0 || !candidates.some(existedBefore)) {
+      return { refused: `it changed an import that is not a moved file of the project (\`${line.trim()}\`)` };
+    }
     if (candidates.some(exists)) {
       return { refused: `it re-pointed an import whose module is still there (\`${line.trim()}\`)` };
     }
+    const paired = newImports.find((candidate) => !used.has(candidate) && bindingOf(candidate) === bindingOf(line));
+    if (!paired)
+      return { refused: `it dropped an import without importing the same names from elsewhere (\`${line.trim()}\`)` };
+    used.add(paired);
+    replacement.set(line, paired);
   }
-  if (removed.length === 0) return { original: before, movedImports: [] };
   const eol = before.includes("\r\n") ? "\r\n" : "\n";
   return {
-    original: [...afterImports, ...lines(before).filter((line) => !isImportLine(line))].join(eol),
+    original: lines(before)
+      .map((line) => replacement.get(line) ?? line)
+      .join(eol),
     movedImports: removed.map((line) => line.trim()),
   };
 }
