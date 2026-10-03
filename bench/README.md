@@ -391,9 +391,10 @@ Keys and credentials are process inputs only and are never persisted.
 
 `--ablate` switches harness subsystems off for the product path, to measure what
 each one adds: `memory`, `gate`, `contract` (the gate stays but only asks that
-some check ran after the last change), `audit`, `plan`, `skills`, `context`,
-`subagents`, `web`, or `bare` (all of them, a prompt of environment facts only
-and six basic tools). Each switch removes the subsystem's tools, its guidance in
+some check ran after the last change), `ledger`, `audit`, `verifier` (no
+independent check of the request; the turn audits itself instead), `plan`,
+`skills`, `context`, `subagents`, `web`, `research`, `smoke`, `diagnose`, or
+`bare` (all of them, a prompt of environment facts only and six basic tools). Each switch removes the subsystem's tools, its guidance in
 the prompt and its host behavior; the run records it as `agentConfig.ablation`.
 A capability whose ablation changes nothing has not been shown to exist.
 

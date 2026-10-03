@@ -1918,7 +1918,7 @@ program
   )
   .option(
     "--ablate <list>",
-    "Switch harness subsystems off to measure what each adds (comma-separated): memory, gate, contract, audit, plan, skills, context, subagents, web, or bare",
+    "Switch harness subsystems off to measure what each adds (comma-separated): memory, gate, contract, ledger, audit, verifier, plan, skills, context, subagents, web, research, smoke, diagnose, or bare",
   )
   .option(
     "--no-clean-room",

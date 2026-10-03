@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
@@ -23,6 +23,7 @@ import {
 import {
   type ContractCheck,
   type ContractCheckRunner,
+  type ContractRun,
   checkDamageReason,
   contractChecks,
   evaluateTurnContract,
@@ -30,7 +31,7 @@ import {
 import { addedDependencies, declaredDependencies, requestAddsDependency } from "../contract/dependency-guard";
 import type { CheckKind } from "../contract/discover";
 import { type DiscoveredCheck, discoverChecks, isSameCheck } from "../contract/discover";
-import { describeFailures, failureSignature } from "../contract/failures";
+import { describeFailures, failureSignature, parseFailures } from "../contract/failures";
 import {
   type ChangedFile,
   describeRule,
@@ -208,6 +209,17 @@ import { buildVerifyDetectPrompt, normalizeVerifyRecipe, prepareVerifySandbox } 
 import { runVerifyOrchestration } from "../verify/orchestrator";
 import { type Ablation, Ablations, ablateTools, NO_ABLATIONS } from "./ablation";
 import { AttemptJournal, type RestorePoint } from "./attempt-journal";
+import {
+  parseVerifierReport,
+  ranNoTest,
+  runnableVerifierCommand,
+  testRunnerHint,
+  VERIFIER_MAX_STEPS,
+  VERIFY_DIR,
+  type VerifierReport,
+  verifierCommandProblem,
+  verifierPrompt,
+} from "./behavior-verifier";
 import { createCircleDetector } from "./circles";
 import {
   appendActiveCriteriaBlock,
@@ -314,6 +326,13 @@ const SMOKE_REPAIRS = 2;
 const CONTRACT_CHECK_TIMEOUT_MS = 10 * 60_000;
 /** Marks, in a contract check's source, a check the turn itself defined in a project that stated none. */
 const DEFINED_THIS_TURN = "defined this turn";
+/** How long the independent check's one test file may run; one that runs longer says nothing either way. */
+const INDEPENDENT_CHECK_TIMEOUT_MS = 3 * 60_000;
+/** The independent check of the request: what its author reported, and its test as the author left it. */
+interface IndependentCheck {
+  report: VerifierReport;
+  content: string;
+}
 /** How long a plan criterion's command may run when the host checks that it fails before the change. */
 const CRITERION_PROBE_TIMEOUT_MS = 2 * 60_000;
 /** Text documents: nothing runs them, so a turn that only wrote these gets one fact-check request. */
@@ -2026,6 +2045,7 @@ export class Agent {
     const isVerifyDetect = agentKey === "verify-detect";
     const isVerifyManifest = agentKey === "verify-manifest";
     const isComputer = agentKey === "computer";
+    const isCheck = agentKey === "check";
     const subagents = loadValidSubAgents();
     const custom =
       !isExplore &&
@@ -2036,7 +2056,8 @@ export class Agent {
       !isUiVerify &&
       !isVerifyDetect &&
       !isVerifyManifest &&
-      !isComputer
+      !isComputer &&
+      !isCheck
         ? findCustomSubagent(agentKey, subagents)
         : undefined;
 
@@ -2050,6 +2071,7 @@ export class Agent {
       !isVerifyDetect &&
       !isVerifyManifest &&
       !isComputer &&
+      !isCheck &&
       !custom
     ) {
       const message = `Unknown sub-agent "${agentKey}". Use general, explore, plan, vision, verify, ui-verify, verify-detect, verify-manifest, computer, or a configured name from ~/.shelra/user-settings.json.`;
@@ -2117,7 +2139,9 @@ export class Agent {
                 ? "Starting UI quality pass 1 of 3"
                 : isComputer
                   ? "Preparing computer control pass"
-                  : "Planning delegated work";
+                  : isCheck
+                    ? "Testing the request independently"
+                    : "Planning delegated work";
     let assistantText = "";
     let lastActivity = initialDetail;
     /** Checks the sub-agent itself ran successfully; the parent's gate counts the delegation only with these. */
@@ -2224,7 +2248,7 @@ export class Agent {
           system: childSystem,
           messages: conversation,
           tools: runtime.modelInfo?.supportsClientTools === false ? {} : childTools,
-          maxSteps: Math.min(this.maxToolRounds, isExplore || isPlan ? 60 : 120),
+          maxSteps: Math.min(this.maxToolRounds, request.maxSteps ?? (isExplore || isPlan ? 60 : 120)),
           timeout: patienceAfterSilences(this.modelTimeout, attempts.silences ?? 0),
           signal: withAbortTimeout(signal, this.modelTimeout.totalMs),
           temperature: this.samplingTemperature(attemptModelId, runtime.modelInfo, isExplore || isPlan ? 0.2 : 0.5),
@@ -2447,6 +2471,81 @@ export class Agent {
     await this.fireHook(stopInput, abortSignal).catch(() => {});
 
     return result;
+  }
+
+  /**
+   * The independent check of the request (src/agent/behavior-verifier.ts): a sub-agent with a fresh context writes
+   * tests from the request alone, and the host runs them on the turn's code. `unavailable` says why there is no check
+   * to hold the turn to (no runner a test outside the package can use, no report the host can run, a check that ran
+   * no test); the turn then audits itself as before. `touched` lists project files the sub-agent changed although
+   * it was told not to: its check is not used, and the turn is told to review them.
+   */
+  private async runIndependentCheck(input: {
+    request: string;
+    requirements: string[];
+    changedFiles: string[];
+    workspace: string;
+    signal?: AbortSignal;
+  }): Promise<{ check: IndependentCheck; run: ContractRun } | { unavailable: string; touched?: string[] }> {
+    const runner = testRunnerHint(input.workspace, input.changedFiles);
+    if (!runner) return { unavailable: "no test runner can run a test kept outside the project's packages" };
+    const before = captureWorkspaceState(input.workspace);
+    const result = await this.runTask(
+      {
+        agent: "check",
+        description: "Independent check of the request",
+        prompt: verifierPrompt({ ...input, runner }),
+        maxSteps: VERIFIER_MAX_STEPS,
+      },
+      input.signal,
+    );
+    const touched = changedPaths(before, captureWorkspaceState(input.workspace)) ?? [];
+    if (touched.length > 0) {
+      rmSync(join(input.workspace, VERIFY_DIR), { recursive: true, force: true });
+      return { unavailable: "the checking sub-agent changed project files", touched };
+    }
+    const report = result.success ? parseVerifierReport(result.output ?? "") : null;
+    const problem = !result.success
+      ? "the checking sub-agent did not finish"
+      : !report
+        ? "the checking sub-agent gave no report"
+        : report.result === "error"
+          ? "the checking sub-agent could not make its test run"
+          : verifierCommandProblem(report.command, report.testFile);
+    const content = report && !problem ? readTextOrNull(join(input.workspace, report.testFile)) : null;
+    if (!report || problem || content === null) {
+      rmSync(join(input.workspace, VERIFY_DIR), { recursive: true, force: true });
+      return { unavailable: problem ?? "the checking sub-agent wrote no test file" };
+    }
+    const check: IndependentCheck = {
+      report: { ...report, command: runnableVerifierCommand(report.command, report.testFile) },
+      content,
+    };
+    const run = await this.runIndependentTest(check, input.workspace, input.signal);
+    // A run that ran no test says nothing either way, whatever its exit code.
+    if (ranNoTest(run.output) || run.state === "timed_out") {
+      return { unavailable: `\`${check.report.command}\` ran no test here` };
+    }
+    return { check, run };
+  }
+
+  /**
+   * Runs the independent check's test as its author left it, whatever the turn did to the file since. The file is on
+   * disk only for the run: a project runner such as Vitest also discovers tests under `.shelra/`.
+   */
+  private async runIndependentTest(check: IndependentCheck, workspace: string, signal?: AbortSignal) {
+    const path = join(workspace, check.report.testFile);
+    try {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, check.content);
+      return await this.checkRunner(check.report.command, {
+        timeoutMs: INDEPENDENT_CHECK_TIMEOUT_MS,
+        signal,
+        cwd: workspace,
+      });
+    } finally {
+      rmSync(join(workspace, VERIFY_DIR), { recursive: true, force: true });
+    }
   }
 
   private async runDelegation(request: TaskRequest, abortSignal?: AbortSignal): Promise<ToolResult> {
@@ -3218,6 +3317,10 @@ export class Agent {
     // tests failed on behaviors nothing had exercised.
     const requirementChecklist = isRequirementDense(userMessage) ? extractRequirements(userMessage) : [];
     let requirementAudit: { mutations: number; evidence: number } | null = null;
+    // The independent check that stands in for the audit when it can (src/agent/behavior-verifier.ts): the one that
+    // failed and waits to run again on the repaired code, and what the host saw pass.
+    let independentPending: IndependentCheck | null = null;
+    let independentPass: { text: string; mutations: number; state: WorkspaceState | null } | null = null;
     let turnMutationEvents = 0;
     // What the workspace looked like when the turn started and when the last check passed: the gate
     // compares them with the final state, so a change made through the shell counts, and a check that
@@ -4872,22 +4975,132 @@ ${verdict}`,
             requirementAudit === null
           ) {
             requirementAudit = { mutations: turnMutationEvents, evidence: this.turnVerificationEvidence.length };
-            const audit = [
-              "Before you finish, audit the request requirement by requirement. It states:",
-              // Up to 40 items now that listed features count one each: each is kept to a readable line.
-              ...requirementChecklist.map(
-                (requirement, index) =>
-                  `${index + 1}. ${requirement.length > 240 ? `${requirement.slice(0, 239)}…` : requirement}`,
-              ),
-              "For each numbered item, list every distinct behavior it names. For each behavior, name the code that implements it and the test or command that exercised exactly that behavior, with the output you observed. A behavior nothing exercised is unverified: exercise it now with a real run (a scratch script you delete afterwards, or a new test file when the request allows adding tests; never edit existing tests), fix what fails, run again, and only then report. Do not report done while any stated behavior is unverified.",
-            ].join("\n");
-            this.messages.push({ role: "user", content: audit });
-            this.messageSeqs.push(null);
-            this.kernel?.recordObservation(
-              `Requirement audit requested for ${requirementChecklist.length} stated requirement(s).`,
+            // First an independent check: tests written from the request by a sub-agent that never saw this turn's
+            // reasoning, run by the host. A turn's own audit shares its misreading of the request (2026-10-03: seven
+            // of eight self-caused losses on the core suite ended "done" with a stated behavior broken).
+            let touchedByChecker: string[] = [];
+            if (this.mode === "agent" && !this.ablations.has("verifier")) {
+              reportStatus("checks", "An independent agent is testing the request");
+              const independent = await this.runIndependentCheck({
+                request: userMessage,
+                requirements: requirementChecklist,
+                changedFiles: mutations,
+                workspace: turnStartWorkspace,
+                signal,
+              }).catch((error: unknown): { unavailable: string; touched?: string[] } => {
+                recordSwallowedError("independent-check", error);
+                return { unavailable: "the independent check failed to start" };
+              });
+              if (signal.aborted) continue;
+              if ("check" in independent) {
+                const { check, run } = independent;
+                const behaviors = `${check.report.behaviors.length} behavior${check.report.behaviors.length === 1 ? "" : "s"} the request states`;
+                if (run.passed) {
+                  independentPass = {
+                    text: `an independent check of ${behaviors} passed`,
+                    mutations: turnMutationEvents,
+                    state: endState,
+                  };
+                  this.kernel?.recordObservation(`Independent check passed: \`${check.report.command}\`.`);
+                } else {
+                  independentPending = check;
+                  const failing = parseFailures(run.output);
+                  this.kernel?.recordObservation(
+                    `Independent check failed: \`${check.report.command}\` (${failing.length || "unparsed"} failure(s)).`,
+                  );
+                  yield {
+                    type: "content",
+                    content: `\n\n[An independent check of the request fails on this code${failing.length > 0 ? ` (${failing.length} failing)` : ""}; asking the model to fix it.]\n\n`,
+                  };
+                  this.messages.push({
+                    role: "user",
+                    content: [
+                      `Completion blocked: an independent check of the request fails on your code. A separate agent that never saw your work wrote tests from the request alone, checking ${behaviors}, and the host ran them:`,
+                      `\`${check.report.command}\`:`,
+                      describeFailures(run.output),
+                      "",
+                      "Its test file, which the host keeps and runs again when you finish:",
+                      "```",
+                      check.content.length > 6_000 ? `${check.content.slice(0, 6_000)}\n…` : check.content,
+                      "```",
+                      `Fix the code so each failing behavior works as the request states, then run your checks. To try your fix against this test, write it at \`${check.report.testFile}\` and run \`${check.report.command}\`; the host runs its own copy either way. If an assertion expects something the request does not ask for, leave correct code as it is and say which assertion is wrong, quoting the part of the request it contradicts.`,
+                    ].join("\n"),
+                  });
+                  this.messageSeqs.push(null);
+                  this.persistKernelIndex("Repairing what an independent check of the request found");
+                  continue;
+                }
+              } else {
+                touchedByChecker = independent.touched ?? [];
+                this.kernel?.recordObservation(`No independent check: ${independent.unavailable}.`);
+              }
+            }
+            // No independent check to hold the turn to: it audits itself, requirement by requirement.
+            if (independentPass === null) {
+              const audit = [
+                ...(touchedByChecker.length > 0
+                  ? [
+                      `An independent checker changed ${touchedByChecker.slice(0, 10).join(", ")}, which it was told not to touch: look at those files and undo what is not part of your work.`,
+                    ]
+                  : []),
+                "Before you finish, audit the request requirement by requirement. It states:",
+                // Up to 40 items now that listed features count one each: each is kept to a readable line.
+                ...requirementChecklist.map(
+                  (requirement, index) =>
+                    `${index + 1}. ${requirement.length > 240 ? `${requirement.slice(0, 239)}…` : requirement}`,
+                ),
+                "For each numbered item, list every distinct behavior it names. For each behavior, name the code that implements it and the test or command that exercised exactly that behavior, with the output you observed. A behavior nothing exercised is unverified: exercise it now with a real run (a scratch script you delete afterwards, or a new test file when the request allows adding tests; never edit existing tests), fix what fails, run again, and only then report. Do not report done while any stated behavior is unverified.",
+              ].join("\n");
+              this.messages.push({ role: "user", content: audit });
+              this.messageSeqs.push(null);
+              this.kernel?.recordObservation(
+                `Requirement audit requested for ${requirementChecklist.length} stated requirement(s).`,
+              );
+              this.persistKernelIndex("Auditing the stated requirements");
+              continue;
+            }
+          }
+
+          // The independent check that failed runs again on the repaired code, as its author wrote it. Still failing,
+          // the turn ends unverified: one repair round, as for the project's own checks.
+          if (independentPending !== null) {
+            const check = independentPending;
+            independentPending = null;
+            reportStatus("checks", `Running the independent check again: \`${check.report.command}\``);
+            const rerun = await this.runIndependentTest(check, turnStartWorkspace, signal).catch(
+              (error: unknown): ContractRun => {
+                recordSwallowedError("independent-check", error);
+                return { passed: false, output: "", durationMs: 0, state: "timed_out" };
+              },
             );
-            this.persistKernelIndex("Auditing the stated requirements");
-            continue;
+            const behaviors = `${check.report.behaviors.length} behavior${check.report.behaviors.length === 1 ? "" : "s"} the request states`;
+            if (rerun.passed && !ranNoTest(rerun.output)) {
+              independentPass = {
+                text: `an independent check of ${behaviors} passed after a repair`,
+                mutations: turnMutationEvents,
+                state: endState,
+              };
+              this.kernel?.recordObservation(`Independent check passed after a repair: \`${check.report.command}\`.`);
+            } else if (!signal.aborted && !ranNoTest(rerun.output) && rerun.state !== "timed_out") {
+              const failing = parseFailures(rerun.output)
+                .map((failure) => failure.name)
+                .filter((name): name is string => Boolean(name));
+              const reason = `an independent check of ${behaviors} still fails on the final code (${
+                failing.length > 0
+                  ? `failing: ${failing
+                      .slice(0, 5)
+                      .map((name) => `"${name}"`)
+                      .join(", ")}${failing.length > 5 ? ` and ${failing.length - 5} more` : ""}`
+                  : errorLine(rerun.output)
+              }).`;
+              this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
+              this.persistKernelIndex(reason);
+              const verdict = `[Not verified — ${reason} Its test, written from the request alone: \`${check.report.command}\`.]`;
+              this.recordVerdict(verdict);
+              yield { type: "content", content: `\n\n${verdict}` };
+              yield { type: "done" };
+              return;
+            }
           }
 
           // The local pages the answer names are requested now, on the final state (src/agent/local-urls.ts), before
@@ -4903,6 +5116,14 @@ ${verdict}`,
             [
               checkedNote ? checkedPasses : null,
               lastSmoke?.result.status === "passed" ? describeSmoke(lastSmoke.result) : null,
+              // Only while nothing changed since it passed.
+              independentPass &&
+              independentPass.mutations === turnMutationEvents &&
+              (independentPass.state === null ||
+                endState === null ||
+                changedPaths(independentPass.state, endState)?.length === 0)
+                ? independentPass.text
+                : null,
             ]
               .filter((pass): pass is string => pass !== null)
               .join(", ") || null;

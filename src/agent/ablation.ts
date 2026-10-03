@@ -8,7 +8,8 @@ import type { ToolSet } from "ai";
  * - gate: no completion gate (and so no task contract or requirement audit either)
  * - contract: no task contract; the gate only asks that some check ran after the last change
  * - ledger: no decisions in the prompt, no propose_decision tool and no enforcement of decisions
- * - audit: no requirement audit
+ * - audit: no requirement audit (and so no independent check either)
+ * - verifier: no independent check of the request (src/agent/behavior-verifier.ts); the turn audits itself instead
  * - plan: no plan tools or planning step in the prompt
  * - skills: no skill catalog in the prompt
  * - context: no compiled context appendix
@@ -25,6 +26,7 @@ export const ABLATIONS = [
   "contract",
   "ledger",
   "audit",
+  "verifier",
   "plan",
   "skills",
   "context",

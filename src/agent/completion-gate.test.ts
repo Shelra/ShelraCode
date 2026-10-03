@@ -2298,6 +2298,8 @@ describe("the checks that decide done are the ones the turn started with (audit 
       provider,
       cwd: dir,
       checkRunner,
+      // The turn's own audit, which stands in when there is no independent check of the request.
+      ablate: ["verifier"],
     });
 
     const text = await run(agent, DENSE_REQUEST);
@@ -2601,4 +2603,219 @@ describe("the checks that decide done are the ones the turn started with (audit 
     expect(requests).toHaveLength(1);
     expect(text).toContain("changed during this turn outside its own file edits");
   }, 60_000);
+
+  describe("an independent check of the request (2026-10-03: seven of eight losses were false completions)", () => {
+    const CHECKER_BRIEF = "You are an independent checker";
+    const CHECK_FILE = ".shelra/verify/slug.test.ts";
+    const CHECK_COMMAND = `bun test ${CHECK_FILE}`;
+    const CHECK_TEST =
+      "import { expect, test } from 'bun:test';\nimport { slugify } from '../../src/slug';\ntest('removes trailing hyphens', () => { expect(slugify('a b!')).toBe('a-b'); });\n";
+    const PARTIAL_SLUG = "export const slugify = (s: string) => s.trim().toLowerCase().split(' ').join('-');\n";
+    const FULL_SLUG =
+      "export const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\n";
+    const REPORT = JSON.stringify({
+      testFile: CHECK_FILE,
+      command: CHECK_COMMAND,
+      behaviors: ["trims", "lowercases", "removes trailing hyphens"],
+      result: "failed",
+    });
+
+    /** The turn's model, round by round, and the checker's script, told apart by the checker's brief. */
+    function checkedModel(rounds: Array<() => Step[]>, checker: () => Step[]) {
+      const main: ProviderStreamRequest[] = [];
+      const checks: ProviderStreamRequest[] = [];
+      const provider: ProviderAdapter = {
+        id: "independent-check",
+        defaultModelId: "check-definitions-model",
+        resolveModelRuntime: (modelId) => ({ modelId }),
+        stream: (request) => {
+          const isCheck = lastUserText(request).includes(CHECKER_BRIEF);
+          (isCheck ? checks : main).push(request);
+          const steps = isCheck ? checker() : (rounds[main.length - 1]?.() ?? []);
+          const tools = request.tools as Record<
+            string,
+            { execute?: (input: unknown, options: unknown) => Promise<unknown> }
+          >;
+          return {
+            events: (async function* () {
+              for (const step of steps) {
+                if (!("write" in step)) {
+                  yield step;
+                  continue;
+                }
+                const input = { path: step.write.path, content: step.write.content };
+                yield toolCallEvent(step.write.id, "write_file", input);
+                const output = await tools.write_file?.execute?.(input, { toolCallId: step.write.id, messages: [] });
+                yield toolResultEvent(step.write.id, "write_file", output, input);
+              }
+              if (!isCheck) yield { type: "text-delta", text: "Done." } as ProviderEvent;
+            })(),
+            response: Promise.resolve({ messages: [{ role: "assistant", content: "Done." }] }),
+          };
+        },
+        generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
+        getToolContext: () => ({}),
+      };
+      return { provider, main, checks };
+    }
+
+    /** The project's checks pass; the checker's test passes only on code that removes the hyphens. */
+    function runnerFor(dir: string) {
+      const checkFiles: Array<string | null> = [];
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command, options) => {
+        if (!command.includes(".shelra/verify/")) return { passed: true, output: "1 pass", durationMs: 5 };
+        const path = join(options.cwd ?? dir, CHECK_FILE);
+        checkFiles.push(existsSync(path) ? readFileSync(path, "utf8") : null);
+        const fixed = readFileSync(join(dir, "src", "slug.ts"), "utf8").includes("replace(");
+        return fixed
+          ? { passed: true, output: " 3 pass\n 0 fail\n", durationMs: 5 }
+          : {
+              passed: false,
+              output: "(fail) removes trailing hyphens [0.20ms]\n\n 2 pass\n 1 fail\n",
+              durationMs: 5,
+            };
+      });
+      return { checkRunner, checkFiles };
+    }
+
+    const checkerWritesItsTest = (): Step[] => [
+      ...write("c1", CHECK_FILE, CHECK_TEST),
+      { type: "text-delta", text: `Two of three behaviors pass.\n${REPORT}` },
+    ];
+
+    it("sends what a check written from the request alone finds back for repair, and passes the repaired code", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { checkRunner, checkFiles } = runnerFor(dir);
+      const { provider, main, checks } = checkedModel(
+        [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => write("w2", "src/slug.ts", FULL_SLUG)],
+        checkerWritesItsTest,
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      // The checker starts from the request alone: one message, none of the turn's reasoning, a role of its own.
+      expect(checks).toHaveLength(1);
+      expect(checks[0]?.messages).toHaveLength(1);
+      expect(checks[0]?.system).toContain("You are the Check sub-agent");
+      expect(checks[0]?.system).toContain("Create or change no file outside .shelra/verify/");
+      expect(lastUserText(checks[0])).toContain(DENSE_REQUEST);
+      expect(lastUserText(checks[0])).toContain("Files the other agent changed: src/slug.ts.");
+      // What it found went back to the turn, with its test, and nothing asked the turn to audit itself.
+      expect(main).toHaveLength(2);
+      const repair = lastUserText(main[1]);
+      expect(repair).toContain("an independent check of the request fails on your code");
+      expect(repair).toContain("removes trailing hyphens");
+      expect(repair).toContain("toBe('a-b')");
+      expect(main.some((request) => lastUserText(request).includes("audit the request requirement"))).toBe(false);
+      // The host ran the checker's own test, on disk only while it ran: twice, the second time on the repair.
+      expect(checkFiles).toEqual([CHECK_TEST, CHECK_TEST]);
+      expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
+      expect(text).toContain("[An independent check of the request fails on this code (1 failing)");
+      expect(text).toContain(
+        "[Checked by Shelra on the final code: `bun run test` passed, an independent check of 3 behaviors the request states passed after a repair]",
+      );
+      expect(text).not.toContain("Not verified");
+    }, 60_000);
+
+    it("runs the checker's test for real: Bun fails the partial code, then passes the repair", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { provider, main } = checkedModel(
+        [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => write("w2", "src/slug.ts", FULL_SLUG)],
+        checkerWritesItsTest,
+      );
+      // No injected runner: the project's `bun run test` and the checker's `bun test` both really run.
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(lastUserText(main[1])).toContain("removes trailing hyphens");
+      expect(lastUserText(main[1])).toContain('Expected: "a-b"');
+      expect(text).toContain("an independent check of 3 behaviors the request states passed after a repair");
+      expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
+    }, 120_000);
+
+    it("ends the turn unverified when the check still fails, running its own copy whatever the turn wrote over it", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { checkRunner, checkFiles } = runnerFor(dir);
+      const weakened = "import { test } from 'bun:test';\ntest('removes trailing hyphens', () => {});\n";
+      const { provider, main } = checkedModel(
+        [
+          () => write("w1", "src/slug.ts", PARTIAL_SLUG),
+          // The repair round rewrites the checker's test instead of the code, and disputes it.
+          () => [
+            ...write("w2", CHECK_FILE, weakened),
+            { type: "text-delta", text: "The check is too strict; the code is right." } as ProviderEvent,
+          ],
+        ],
+        checkerWritesItsTest,
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(main).toHaveLength(2);
+      expect(checkFiles).toEqual([CHECK_TEST, CHECK_TEST]);
+      expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
+      expect(text).toContain(
+        '[Not verified — an independent check of 3 behaviors the request states still fails on the final code (failing: "removes trailing hyphens").',
+      );
+      expect(text).not.toContain("Checked by Shelra");
+    }, 60_000);
+
+    it("does not use a check whose author changed the project's code, and has the turn audit itself", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { checkRunner, checkFiles } = runnerFor(dir);
+      const { provider, main } = checkedModel(
+        [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        () => [...write("c0", "src/slug.ts", FULL_SLUG), ...checkerWritesItsTest()],
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      await run(agent, DENSE_REQUEST);
+
+      expect(checkFiles).toEqual([]);
+      const audit = lastUserText(main[1]);
+      expect(audit).toContain("An independent checker changed src/slug.ts, which it was told not to touch");
+      expect(audit).toContain("audit the request requirement by requirement");
+      expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
+    }, 60_000);
+
+    it("leaves the turn to its own audit when switched off", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const { checkRunner } = runnerFor(dir);
+      const { provider, main, checks } = checkedModel(
+        [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        checkerWritesItsTest,
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+        ablate: ["verifier"],
+      });
+
+      await run(agent, DENSE_REQUEST);
+
+      expect(checks).toHaveLength(0);
+      expect(lastUserText(main[1])).toContain("audit the request requirement by requirement");
+    }, 60_000);
+  });
 });

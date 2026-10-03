@@ -27,8 +27,9 @@ criteria and working rules (free models only), is `docs/EXECUTION-PLAN.md`: work
   first); sessions: `src/storage/` (`bun:sqlite`). The bench drives this same path (`src/bench/agent-executor.ts`).
 - **What the harness enforces:** verification before "done" (after a change with no real check the gate asks up to
   three times, then reports `[Not verified …]`; a check piped into another command does not count, and a turn that
-  only wrote documents is asked once to check its facts, then always reported unverified), a requirement audit when
-  a request lists many behaviors, Stop hooks that can refuse completion (the turn then ends `[Not marked
+  only wrote documents is asked once to check its facts, then always reported unverified), an independent check
+  when a request lists many behaviors (tests a fresh sub-agent writes from the request alone, run by the host; the
+  turn audits itself when no such test can run), Stop hooks that can refuse completion (the turn then ends `[Not marked
   complete …]`; the reason is not sent back to the model), and the resilience rule in AGENTS.md. Specs and plans
   (`generate_plan` acceptance criteria) are model-driven. When the project states its checks (package.json
   scripts, an AGENTS.md or CLAUDE.md command table, Make/just targets, pyproject/Cargo/go.mod conventions), its

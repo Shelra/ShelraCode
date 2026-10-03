@@ -387,6 +387,7 @@ export function buildSubagentPrompt(
   const isVerifyDetect = request.agent === "verify-detect";
   const isVerifyManifest = request.agent === "verify-manifest";
   const isComputer = request.agent === "computer";
+  const isCheck = request.agent === "check";
   const mode: AgentMode = isExplore || isPlan || isVerifyDetect ? "ask" : "agent";
   const role = custom
     ? `You are the custom sub-agent "${custom.name}". You can investigate, edit files, and run commands unless the delegated task says otherwise.`
@@ -406,7 +407,9 @@ export function buildSubagentPrompt(
                   ? "You are the Verify sub-agent. You specialize in sandbox-aware local verification using builds, tests, app boot checks, and optional browser smoke tests."
                   : isComputer
                     ? "You are the Computer sub-agent. You specialize in host desktop automation using accessibility snapshots, semantic element refs, screenshots, and careful mouse and keyboard actions."
-                    : "You are the General sub-agent. You investigate, edit files, and run commands to deliver a complete, working result for the delegated task — not a partial attempt.";
+                    : isCheck
+                      ? "You are the Check sub-agent. You find out whether code does what a request asks, by testing it against the request alone: you write one test file and change nothing else."
+                      : "You are the General sub-agent. You investigate, edit files, and run commands to deliver a complete, working result for the delegated task — not a partial attempt.";
 
   const codebaseTools = isLspToolEnabled() ? "`read_file`, `grep`, and `lsp`" : "`read_file` and `grep`";
   const rules = isExplore
@@ -432,97 +435,103 @@ export function buildSubagentPrompt(
             "Read config files, package manifests, scripts, and source layout to understand the project.",
             "Return ONLY a valid JSON object with the VerifyRecipe schema. No markdown, no prose, no explanation outside the JSON.",
           ]
-        : isVerifyManifest
+        : isCheck
           ? [
-              "Focus on creating or updating .shelra/environment.json as the current verification contract for this repository; preserve compatibility until the verifier path is migrated.",
-              "Read package.json and key config files to understand the project, then write .shelra/environment.json.",
-              "Prefer editing only .shelra/environment.json unless the delegated task explicitly requires something else.",
-              "",
-              "SANDBOX ENVIRONMENT (Shuru):",
-              "- OS: Debian GNU/Linux 13 (trixie)",
-              "- Architecture: aarch64 (ARM64)",
-              "- Pre-installed: NOTHING. No node, npm, npx, bun, python3, pip, go, cargo, java, or any runtime.",
-              "- Only basic system tools exist (sh, apt-get, curl, etc).",
-              "- Network access is available during bootstrap and install.",
-              "- The workspace is mounted at /workspace.",
-              "",
-              "MANIFEST REQUIREMENTS:",
-              "- bootstrapCommands: MUST install every runtime and build tool the project needs from scratch via apt-get or curl.",
-              "- For Node.js/Next.js/Vite/etc: `apt-get update && apt-get install -y curl unzip ca-certificates git python3 make g++ pkg-config nodejs npm`",
-              "- For Bun projects: also `curl -fsSL https://bun.sh/install | bash` and shellInitCommands with BUN_INSTALL/PATH exports.",
-              "- For Python: `apt-get update && apt-get install -y python3 python3-pip python3-venv ca-certificates git`",
-              "- For Go: `apt-get update && apt-get install -y golang ca-certificates git`",
-              "- For Rust: `apt-get update && apt-get install -y curl ca-certificates git build-essential && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`",
-              "- installCommands: The package install command (npm install, pip install, etc).",
-              "- buildCommands: Build commands if applicable.",
-              "- testCommands: Test/lint commands if applicable.",
-              "- startCommand + startPort: How to start the app for smoke testing.",
-              "- smokeKind: 'http' if the app has a web UI, 'cli' for CLI tools, 'none' otherwise.",
-              "- Do NOT leave bootstrapCommands empty. The sandbox has nothing.",
-              "",
-              "Return a concise summary of what you wrote and why.",
+              "Create or change no file outside .shelra/verify/, and install nothing: the code under test is not yours to fix.",
+              "Take every expected result from the request, never from the implementation; a test that fails because the code is wrong is your finding.",
+              "End with the JSON report the task asks for, on its own last line.",
             ]
-          : isVision
+          : isVerifyManifest
             ? [
-                "Describe only what is visibly present in the image; never infer or invent details you cannot see.",
-                "When the delegated task states an expectation — a design, a bug report, a required layout — compare the image against it explicitly and state matches and mismatches.",
-                "Call out legibility problems, missing elements, layout or rendering defects, and anything that looks broken.",
-                "Return a concise, structured summary the parent agent can act on directly.",
+                "Focus on creating or updating .shelra/environment.json as the current verification contract for this repository; preserve compatibility until the verifier path is migrated.",
+                "Read package.json and key config files to understand the project, then write .shelra/environment.json.",
+                "Prefer editing only .shelra/environment.json unless the delegated task explicitly requires something else.",
+                "",
+                "SANDBOX ENVIRONMENT (Shuru):",
+                "- OS: Debian GNU/Linux 13 (trixie)",
+                "- Architecture: aarch64 (ARM64)",
+                "- Pre-installed: NOTHING. No node, npm, npx, bun, python3, pip, go, cargo, java, or any runtime.",
+                "- Only basic system tools exist (sh, apt-get, curl, etc).",
+                "- Network access is available during bootstrap and install.",
+                "- The workspace is mounted at /workspace.",
+                "",
+                "MANIFEST REQUIREMENTS:",
+                "- bootstrapCommands: MUST install every runtime and build tool the project needs from scratch via apt-get or curl.",
+                "- For Node.js/Next.js/Vite/etc: `apt-get update && apt-get install -y curl unzip ca-certificates git python3 make g++ pkg-config nodejs npm`",
+                "- For Bun projects: also `curl -fsSL https://bun.sh/install | bash` and shellInitCommands with BUN_INSTALL/PATH exports.",
+                "- For Python: `apt-get update && apt-get install -y python3 python3-pip python3-venv ca-certificates git`",
+                "- For Go: `apt-get update && apt-get install -y golang ca-certificates git`",
+                "- For Rust: `apt-get update && apt-get install -y curl ca-certificates git build-essential && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`",
+                "- installCommands: The package install command (npm install, pip install, etc).",
+                "- buildCommands: Build commands if applicable.",
+                "- testCommands: Test/lint commands if applicable.",
+                "- startCommand + startPort: How to start the app for smoke testing.",
+                "- smokeKind: 'http' if the app has a web UI, 'cli' for CLI tools, 'none' otherwise.",
+                "- Do NOT leave bootstrapCommands empty. The sandbox has nothing.",
+                "",
+                "Return a concise summary of what you wrote and why.",
               ]
-            : isComputer
+            : isVision
               ? [
-                  "Operate carefully on the HOST desktop, not inside the shell sandbox.",
-                  "Start with `computer_snapshot` when possible. It returns stable refs like @e1 that remain valid until the next snapshot.",
-                  "Prefer accessibility refs over coordinates. Use `computer_click`, `computer_type`, `computer_scroll`, and `computer_get` with refs from the latest snapshot.",
-                  "After any meaningful UI transition, launch, dialog open, or menu change, take another `computer_snapshot` before reusing old refs.",
-                  "Use `computer_launch`, `computer_list_windows`, `computer_focus_window`, and `computer_wait` to manage apps and window state.",
-                  "Use `computer_press` for shortcuts like Enter or cmd+k. Use `computer_screenshot` only for visual confirmation or when the accessibility tree is insufficient.",
-                  "If `agent-desktop` is unavailable, permissions are missing, refs go stale, or the state is ambiguous, stop and return the blocker clearly to the parent agent.",
-                  "Do not perform destructive or high-risk desktop actions unless the delegated task explicitly requires them.",
+                  "Describe only what is visibly present in the image; never infer or invent details you cannot see.",
+                  "When the delegated task states an expectation — a design, a bug report, a required layout — compare the image against it explicitly and state matches and mismatches.",
+                  "Call out legibility problems, missing elements, layout or rendering defects, and anything that looks broken.",
+                  "Return a concise, structured summary the parent agent can act on directly.",
                 ]
-              : isUiVerify
+              : isComputer
                 ? [
-                    "Do not make durable source edits. Report precise mismatches and evidence to the parent agent.",
-                    "Run three passes over the same rendered workspace: structure, information hierarchy, then interaction/resilience.",
-                    "Pass 1 checks the single-column log (the only permanent surface), transcript semantics, the live row above the composer, active agents below it, and that the plan, changes, checks and context views appear only when they have something to show.",
-                    "Pass 2 checks density, alignment, wrapping, markers, elapsed-time placement, and whether low-level tool noise is grouped.",
-                    "Pass 3 checks failure/repair/verification visibility, narrow widths, long content, focus/interrupt affordances, and stale or fabricated data.",
-                    "Use terminal output, accessibility snapshots, or screenshots when available. Never claim visual quality from source inspection alone.",
-                    "Treat model-cycle labels such as 'Step N' or 'Model turn started' as a release-blocking failure.",
-                    "Return pass/fail per acceptance criterion, the observed evidence, and a short prioritized repair list.",
+                    "Operate carefully on the HOST desktop, not inside the shell sandbox.",
+                    "Start with `computer_snapshot` when possible. It returns stable refs like @e1 that remain valid until the next snapshot.",
+                    "Prefer accessibility refs over coordinates. Use `computer_click`, `computer_type`, `computer_scroll`, and `computer_get` with refs from the latest snapshot.",
+                    "After any meaningful UI transition, launch, dialog open, or menu change, take another `computer_snapshot` before reusing old refs.",
+                    "Use `computer_launch`, `computer_list_windows`, `computer_focus_window`, and `computer_wait` to manage apps and window state.",
+                    "Use `computer_press` for shortcuts like Enter or cmd+k. Use `computer_screenshot` only for visual confirmation or when the accessibility tree is insufficient.",
+                    "If `agent-desktop` is unavailable, permissions are missing, refs go stale, or the state is ambiguous, stop and return the blocker clearly to the parent agent.",
+                    "Do not perform destructive or high-risk desktop actions unless the delegated task explicitly requires them.",
                   ]
-                : isVerify
+                : isUiVerify
                   ? [
-                      "You are a QA engineer. Your job is to prove the app works end-to-end, not just that it builds.",
-                      "Do not make durable source edits unless the delegated task explicitly asks for fixes.",
-                      "",
-                      "MANDATORY VERIFICATION STEPS (do ALL of these in order):",
-                      "1. Install dependencies (run installCommands from the recipe).",
-                      "2. Build the project (run buildCommands from the recipe).",
-                      "3. Run tests/lint if available (run testCommands from the recipe).",
-                      "4. Start the app (run startCommand from the recipe in the background).",
-                      "5. Wait for the app to be ready (curl readiness check or agent-browser wait).",
-                      "6. Run browser smoke tests like a real human QA tester:",
-                      "   - Open the app in the browser, record a video, take screenshots.",
-                      "   - Navigate the app: click links, buttons, menus. Verify pages load.",
-                      "   - Check for JavaScript console errors.",
-                      "   - Spend 3-5 interactions testing the critical path.",
-                      "7. Stop recording, close browser, then stop the dev server.",
-                      "",
-                      "Do NOT stop after build/lint. Starting the app and testing it in the browser is the most important part.",
-                      "agent-browser commands run on the HOST, not inside the sandbox. They WILL work. Do not skip them.",
-                      "Return a concise verification report. Keep it compact but always include Evidence with artifact file paths.",
+                      "Do not make durable source edits. Report precise mismatches and evidence to the parent agent.",
+                      "Run three passes over the same rendered workspace: structure, information hierarchy, then interaction/resilience.",
+                      "Pass 1 checks the single-column log (the only permanent surface), transcript semantics, the live row above the composer, active agents below it, and that the plan, changes, checks and context views appear only when they have something to show.",
+                      "Pass 2 checks density, alignment, wrapping, markers, elapsed-time placement, and whether low-level tool noise is grouped.",
+                      "Pass 3 checks failure/repair/verification visibility, narrow widths, long content, focus/interrupt affordances, and stale or fabricated data.",
+                      "Use terminal output, accessibility snapshots, or screenshots when available. Never claim visual quality from source inspection alone.",
+                      "Treat model-cycle labels such as 'Step N' or 'Model turn started' as a release-blocking failure.",
+                      "Return pass/fail per acceptance criterion, the observed evidence, and a short prioritized repair list.",
                     ]
-                  : [
-                      "Follow this order: confirm the exact intent of the delegated task, gather enough context, form a short plan for anything beyond a trivial change, execute, then verify before reporting done.",
-                      "Gather context before acting: read the relevant files and search the codebase; when the task depends on an external API, library, framework behavior, or design reference, use `search_web`/`open_web` (or delegate a `plan`/`vision` task) instead of guessing.",
-                      "For anything beyond a one-line fix, state a short plan — the files you will touch and the order of steps — before editing, or delegate to the `plan` sub-agent first when the change is architecturally uncertain.",
-                      "Use tools directly instead of narrating your intent.",
-                      "Never report a task as done without evidence: run the relevant build, lint, or test commands (or delegate to `verify`) and read back the files you changed.",
-                      "If verification fails or the result is incomplete, keep working and fix it rather than stopping early — a fast, unverified answer is worse than a slower, correct one.",
-                      "Only stop short of a fully working result for a genuine blocker (a missing credential, an ambiguous requirement, a destructive action needing approval) — state the blocker plainly instead of guessing past it.",
-                      "Return a concise summary for the parent agent with key outcomes, what you verified, and any open risks.",
-                    ];
+                  : isVerify
+                    ? [
+                        "You are a QA engineer. Your job is to prove the app works end-to-end, not just that it builds.",
+                        "Do not make durable source edits unless the delegated task explicitly asks for fixes.",
+                        "",
+                        "MANDATORY VERIFICATION STEPS (do ALL of these in order):",
+                        "1. Install dependencies (run installCommands from the recipe).",
+                        "2. Build the project (run buildCommands from the recipe).",
+                        "3. Run tests/lint if available (run testCommands from the recipe).",
+                        "4. Start the app (run startCommand from the recipe in the background).",
+                        "5. Wait for the app to be ready (curl readiness check or agent-browser wait).",
+                        "6. Run browser smoke tests like a real human QA tester:",
+                        "   - Open the app in the browser, record a video, take screenshots.",
+                        "   - Navigate the app: click links, buttons, menus. Verify pages load.",
+                        "   - Check for JavaScript console errors.",
+                        "   - Spend 3-5 interactions testing the critical path.",
+                        "7. Stop recording, close browser, then stop the dev server.",
+                        "",
+                        "Do NOT stop after build/lint. Starting the app and testing it in the browser is the most important part.",
+                        "agent-browser commands run on the HOST, not inside the sandbox. They WILL work. Do not skip them.",
+                        "Return a concise verification report. Keep it compact but always include Evidence with artifact file paths.",
+                      ]
+                    : [
+                        "Follow this order: confirm the exact intent of the delegated task, gather enough context, form a short plan for anything beyond a trivial change, execute, then verify before reporting done.",
+                        "Gather context before acting: read the relevant files and search the codebase; when the task depends on an external API, library, framework behavior, or design reference, use `search_web`/`open_web` (or delegate a `plan`/`vision` task) instead of guessing.",
+                        "For anything beyond a one-line fix, state a short plan — the files you will touch and the order of steps — before editing, or delegate to the `plan` sub-agent first when the change is architecturally uncertain.",
+                        "Use tools directly instead of narrating your intent.",
+                        "Never report a task as done without evidence: run the relevant build, lint, or test commands (or delegate to `verify`) and read back the files you changed.",
+                        "If verification fails or the result is incomplete, keep working and fix it rather than stopping early — a fast, unverified answer is worse than a slower, correct one.",
+                        "Only stop short of a fully working result for a genuine blocker (a missing credential, an ambiguous requirement, a destructive action needing approval) — state the blocker plainly instead of guessing past it.",
+                        "Return a concise summary for the parent agent with key outcomes, what you verified, and any open risks.",
+                      ];
 
   const instructionLines = custom?.instruction.trim() ? ["", "SUB-AGENT INSTRUCTIONS:", custom.instruction.trim()] : [];
 
@@ -544,7 +553,10 @@ export function buildSubagentPrompt(
       undefined,
       subagents,
       sandboxSettings,
-      ablations.has("memory") ? undefined : memoryContextFor(memoryRoot, `${request.description}\n${request.prompt}`),
+      // A check starts from the request alone: no project memory either.
+      ablations.has("memory") || isCheck
+        ? undefined
+        : memoryContextFor(memoryRoot, `${request.description}\n${request.prompt}`),
       ablations,
     ),
   ].join("\n");

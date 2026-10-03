@@ -134,6 +134,15 @@ is never a rule: a bug report would block the fix it asks for. A turn that broke
 asks in so many words ("install date-fns", "log the new email", "permanently delete"), or approves what the previous
 answer proposed; naming a package as a suggestion is not permission. A file whose state before the turn is unknown
 (uncommitted edits, no git) is not judged.
+A request that states three or more behaviors gets an independent check once the turn's checks pass
+(`src/agent/behavior-verifier.ts`): a sub-agent on the same model, given only the request and the names of the changed
+files, writes one test file under `.shelra/verify/` from the request alone, and the host runs it itself (a known
+runner on exactly that file, nothing chained). A pass joins the `[Checked by Shelra …]` verdict; a failure goes back
+with the test once, the host runs its own copy again on the repair, and a check that still fails ends the turn
+`[Not verified — …]`. The file is on disk only while it runs, since Vitest also discovers tests under `.shelra/`.
+With no runner a test outside the package can use (Go, Rust, JVM, plain HTML), a checker that changed project files,
+or no report the host can run, the turn audits itself requirement by requirement as before. `--ablate verifier`
+turns the check off; `--ablate audit` turns off both.
 A turn that changed a web app's files (html, css, js/ts, vue, svelte, package.json) has the app opened by the host
 before it may end (`src/agent/runtime-smoke.ts`): through the server the session runs, else by serving the folder a
 static-server script names or a plain site's index.html in-process, else by starting Vite on a free port with no

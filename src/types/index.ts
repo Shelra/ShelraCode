@@ -78,12 +78,16 @@ export type BuiltinSubagentId =
   | "ui-verify"
   | "verify-detect"
   | "verify-manifest"
-  | "computer";
+  | "computer"
+  /** Started only by the host: the independent check of the request (src/agent/behavior-verifier.ts). */
+  | "check";
 
 export interface TaskRequest {
   agent: BuiltinSubagentId | string;
   description: string;
   prompt: string;
+  /** A tighter step bound than the agent's default, for a task the host starts itself. */
+  maxSteps?: number;
 }
 
 export interface TaskRun {
