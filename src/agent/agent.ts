@@ -58,6 +58,7 @@ import type {
   UserPromptSubmitHookInput,
 } from "../hooks/types";
 import { foldPath, inScope } from "../ledger/glob";
+import { checkCouldNotRun } from "../ledger/judge";
 import {
   activeDecisions,
   approveDecision,
@@ -2608,12 +2609,35 @@ export class Agent {
     try {
       for (const { path, original } of originals) writeFileSync(join(input.cwd, path), original);
       for (const check of input.checks) {
-        const run = await this.checkRunner(check.command, {
-          timeoutMs: CONTRACT_CHECK_TIMEOUT_MS,
+        // A suite too slow to wait for runs on the changed tests alone, as the contract does (src/contract/scope.ts).
+        let command = this.slowChecks.has(check.command)
+          ? (scopedCheck(check, input.paths, input.cwd)?.command ?? check.command)
+          : check.command;
+        let run = await this.checkRunner(command, {
+          timeoutMs: this.checkTimeoutMs,
           signal: input.signal,
           cwd: input.cwd,
         });
-        if (!run.passed) return { passed: false, detail: `\`${check.command}\`:\n${describeFailures(run.output)}` };
+        if (run.state === "timed_out" && command === check.command) {
+          this.slowChecks.add(check.command);
+          const scoped = scopedCheck(check, input.paths, input.cwd);
+          if (scoped) {
+            command = scoped.command;
+            run = await this.checkRunner(command, {
+              timeoutMs: this.checkTimeoutMs,
+              signal: input.signal,
+              cwd: input.cwd,
+            });
+          }
+        }
+        if (run.passed) continue;
+        const couldNotRun = checkCouldNotRun(
+          { state: run.state ?? "completed", exitCode: run.exitCode ?? null, output: run.output },
+          command,
+        );
+        if (couldNotRun)
+          return { refused: `\`${command}\` could not run them as they were (${errorLine(couldNotRun)})` };
+        return { passed: false, detail: `\`${command}\`:\n${describeFailures(run.output)}` };
       }
       return { passed: true, moved };
     } finally {

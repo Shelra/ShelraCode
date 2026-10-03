@@ -2782,6 +2782,43 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(readFileSync(join(dir, "src", "slug.test.ts"), "utf8")).toBe(`${ORIGINAL_TEST}${ADDED_CASE}`);
     }, 120_000);
 
+    it("runs the original of a test in a slow suite on its own package", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = mkdtempSync(join(tmpdir(), "shelra-slow-original-"));
+      mkdirSync(join(dir, "lib", "auth"), { recursive: true });
+      writeFileSync(join(dir, "go.mod"), "module example.com/app\n");
+      const original = 'package auth\n\nimport "testing"\n\nfunc TestToken(t *testing.T) {}\n';
+      writeFileSync(join(dir, "lib", "auth", "token_test.go"), original);
+      const seen: string[] = [];
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command) => {
+        if (command === "go test ./lib/auth")
+          seen.push(readFileSync(join(dir, "lib", "auth", "token_test.go"), "utf8"));
+        return command === "go test ./..."
+          ? { passed: false, output: "", durationMs: 1_000, state: "timed_out", exitCode: null }
+          : { passed: true, output: "ok", durationMs: 5 };
+      });
+      const { provider } = roundsModel([
+        () => [
+          ...write("w1", "lib/auth/token.go", "package auth\n"),
+          ...write("w2", "lib/auth/token_test.go", `${original}\nfunc TestExpiry(t *testing.T) {}\n`),
+        ],
+      ]);
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+        checkTimeoutMs: 240_000,
+      });
+
+      const text = await run(agent, "Add a token expiry to lib/auth/token.go.");
+
+      // The original ran on its package, then the turn's version did, in the contract.
+      expect(seen[0]).toBe(original);
+      expect(seen.at(-1)).toContain("TestExpiry");
+      expect(text).toContain("only added to it, and Shelra ran it as it was: it passes on the final code.");
+      expect(text).not.toContain("Not verified");
+    }, 60_000);
+
     it("still holds a changed assertion, whatever was added around it", async () => {
       executeEventHooksMock.mockResolvedValue(emptyHookResult);
       const dir = slugProject();
