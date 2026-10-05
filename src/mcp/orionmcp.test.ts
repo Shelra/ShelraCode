@@ -50,6 +50,17 @@ describe("native ORIONMCP defaults", () => {
       url: fallback.url,
     });
   });
+  it("migrates a saved entry that still points at the pre-OrionBIM ORIONMCP server", () => {
+    const fallback = defaultOrionMcpServer();
+    const legacy = { ...fallback, url: "https://orionmpc-production.up.railway.app/mcp" };
+    expect(withOrionMcpDefault([legacy], fallback)).toEqual([fallback]);
+    expect(withOrionMcpDefault([{ ...legacy, enabled: false }], fallback)[0]).toMatchObject({
+      enabled: false,
+      url: fallback.url,
+    });
+    const own = { ...fallback, url: "https://mcp.example.test/mcp" };
+    expect(withOrionMcpDefault([own], fallback)[0]?.url).toBe("https://mcp.example.test/mcp");
+  });
   it("preserves a saved remote connection, normalizes the identifier, and avoids duplicates", () => {
     const saved = { ...orionMcpHttpServer("https://mcp.example.test/mcp"), id: "ORIONMCP" };
     expect(withOrionMcpDefault([saved, saved])).toEqual([{ ...saved, id: "orionmcp" }]);

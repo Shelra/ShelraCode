@@ -83,9 +83,10 @@ export function registerMcpCommands(root: Command): void {
     });
   orion
     .command("inspect")
-    .description("Use real MCP tools to inspect the live Revit version and documents (read-only)")
-    .action(async () => {
-      const bundle = await buildMcpToolSet([savedOrDefault()], { timeoutMs: 10_000 });
+    .description("Check which Revit OrionBIM sees for you; with --ask, run one real request in it")
+    .option("--ask <request>", "A request for Revit, for example: list the levels of the project")
+    .action(async (options: { ask?: string }) => {
+      const bundle = await buildMcpToolSet([savedOrDefault()], { timeoutMs: options.ask ? 180_000 : 10_000 });
       try {
         if (bundle.errors.length) throw new Error("ORIONMCP connection failed. Run the connection check first.");
         async function invoke(name: string, input: Record<string, unknown>) {
@@ -106,21 +107,24 @@ export function registerMcpCommands(root: Command): void {
         if (bundle.tools[`mcp_${ORIONMCP_ID}__connect_revit`])
           throw new Error("ORIONMCP is not connected yet. Run shelra mcp orionmcp login (one click in the browser).");
         const status = await invoke("orion_status", {});
-        const instanceId = status.revitInstances?.[0]?.instanceId;
-        if (typeof instanceId !== "string")
-          throw new Error("No live Revit instance. Open Revit with the ORIONMCP add-in, then retry.");
-        const revit = await invoke("revit_status", { instanceId });
-        const documents = await invoke("revit_documents_list", { instanceId });
+        if (!status.connected || !Array.isArray(status.revit_sessions) || status.revit_sessions.length === 0)
+          throw new Error(status.message || "No live Revit. Open Revit with OrionBIM signed in, then retry.");
+        let answer = options.ask ? await invoke("ask_revit", { request: options.ask }) : undefined;
+        // A long task answers "running" with an execution id after 45 s; collect it instead of giving up.
+        for (let attempt = 0; answer?.status === "running" && answer.execution_id && attempt < 40; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          answer = await invoke("revit_task_result", { execution_id: answer.execution_id });
+        }
         console.log(
           JSON.stringify(
             {
-              state: "revit_read_verified",
-              instance: revit.result,
-              documents: documents.result,
+              state: answer ? "revit_task_verified" : "revit_connected",
+              revitSessions: status.revit_sessions,
+              ...(answer
+                ? { answer: answer.answer, conversationId: answer.conversation_id, taskStatus: answer.status }
+                : {}),
               transport: savedOrDefault().transport,
-              remoteRevitVerified: status.mode === "remote",
-              dynamoEvaluationVerified: false,
-              llmProviderTested: false,
+              endToEndVerified: Boolean(answer?.ok),
             },
             null,
             2,
