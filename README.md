@@ -379,7 +379,7 @@ capability-gated, while the built-in web research tools are provider-neutral.
 | **Remote control** | Pair **Telegram** from the TUI (`/remote-control` → Telegram): DM your bot, `/pair`, approve the code in-terminal. Keep the CLI running while you ping it from your phone. |
 | **OpenTUI React terminal UI** | Fast, keyboard-driven terminal rendering. |
 | **Skills** | Agent Skills under `.agents/skills/<name>/SKILL.md` (project) or `~/.agents/skills/` (user). Use `/skills` in the TUI to list what's installed. |
-| **MCPs** | Extend with Model Context Protocol servers — configure via `/mcps` in the TUI or `.shelra/settings.json` (`mcpServers`). |
+| **MCPs** | ORIONMCP (Revit / Dynamo) is included by default. Manage connections through `/mcp` / `/mcps` in the TUI or `shelra mcp` in the CLI. MCP settings use `~/.shelra/user-settings.json` (`mcp.servers`). See [ORIONMCP connection](docs/integrations/orionmcp.md). |
 | **Sessions** | Conversations persist; `shelra sessions` lists them and `--session latest` picks up where you left off. |
 | **Headless** | `--prompt` / `-p` for non-interactive runs — pipe it, script it, bench it. |
 | **Hackable** | TypeScript, a clear agent loop, and typed tools — fork it. |

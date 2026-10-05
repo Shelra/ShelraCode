@@ -8,6 +8,7 @@ import type {
   LspSettings,
   NormalizedLspSettings,
 } from "../lsp/types";
+import { withOrionMcpDefault } from "../mcp/orionmcp";
 import { DEFAULT_MODEL, getEffectiveReasoningEffort, normalizeModelId } from "../models/catalog";
 import { type ModelPolicy, parseModelPolicy } from "../models/routing";
 import {
@@ -762,7 +763,7 @@ export function resolveTelegramAudioInputSettings(t: TelegramSettings | undefine
 }
 
 export function loadMcpServers(): McpServerConfig[] {
-  return loadUserSettings().mcp?.servers ?? [];
+  return withOrionMcpDefault(loadUserSettings().mcp?.servers ?? []);
 }
 
 export function saveMcpServers(servers: McpServerConfig[]): void {

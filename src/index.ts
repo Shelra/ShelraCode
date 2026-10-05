@@ -36,6 +36,7 @@ import {
   renderHeadlessPrelude,
 } from "./headless/output";
 import { createOpenRouterIntelligenceProvider } from "./intelligence";
+import { registerMcpCommands } from "./mcp/orionmcp-commands";
 import { type BudgetLimits, parseBudgetUsd } from "./models/budget";
 import { normalizeModelId, primeCatalog } from "./models/catalog";
 import { installLocalModel } from "./models/manager";
@@ -1880,6 +1881,8 @@ program
       config.budget,
     );
   });
+
+registerMcpCommands(program);
 
 program
   .command("setup")

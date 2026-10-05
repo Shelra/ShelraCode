@@ -11,6 +11,14 @@ export interface McpCatalogEntry {
 
 export const POPULAR_MCP_CATALOG: McpCatalogEntry[] = [
   {
+    id: "orionmcp",
+    name: "ORIONMCP — Revit & Dynamo",
+    description:
+      "Connect over HTTPS to query authorized Revit documents and inspect the Dynamo environment. Start with shelra mcp orionmcp login.",
+    directoryUrl: "https://github.com/Orionbim/OrionMPC#readme",
+    starterTransport: "http",
+  },
+  {
     id: "github",
     name: "GitHub",
     description: "Integration with GitHub issues and related workflows.",
