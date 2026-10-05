@@ -12,7 +12,7 @@ describe("ORIONMCP connect tool", () => {
     const result = await run(login);
     expect(login).toHaveBeenCalledWith(ENDPOINT, expect.any(Function));
     expect(result.ok).toBe(true);
-    expect(result.message).toContain("repite");
+    expect(result.message).toContain("DETENTE");
   });
   it("reports a denied or expired login without exposing the underlying error", async () => {
     const result = await run(vi.fn().mockRejectedValue(new Error("secret detail: token=abc")));

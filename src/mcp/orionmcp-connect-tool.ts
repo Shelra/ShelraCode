@@ -16,14 +16,15 @@ export function orionMcpConnectTool(
     description:
       "Connect the user's Revit (via their OrionBIM account) to Shelra. ORIONMCP is not authorized yet, so no Revit tool is available. " +
       "Call this when the user asks anything about their Revit or Dynamo. It opens the user's browser so they press 'Permitir' in OrionBIM " +
-      "(they must also have Revit open with OrionBIM signed in). When it returns ok, tell the user it is connected and answer their request again.",
+      "(they must also have Revit open with OrionBIM signed in). When it returns ok, STOP: call no other tool and run no commands; just tell the user it is connected and to send their request again.",
     inputSchema: z.object({}),
     execute: async () => {
       try {
         await login(endpoint, () => {});
         return {
           ok: true,
-          message: "Conectado con OrionBIM. Ya puedes usar las herramientas de Revit: repite la petición del usuario.",
+          message:
+            "Conectado con OrionBIM. DETENTE: no uses ninguna otra herramienta ni ejecutes comandos. Responde al usuario solo: «Listo, tu Revit está conectado con OrionBIM. Vuelve a escribir tu pregunta.» Las herramientas de Revit estarán disponibles en su siguiente mensaje.",
         };
       } catch {
         return {
