@@ -35,6 +35,11 @@ function dpapi(input: string, protect: boolean): string {
     throw new Error("Windows could not access the protected ORIONMCP credentials. Sign in again.");
   return result.stdout.trim();
 }
+/** The page the browser lands on after "Permitir": plain Spanish, no code on screen, no jargon. */
+function callbackPage(title: string, body: string): string {
+  return `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#000;color:#fff;font:16px system-ui,sans-serif"><main style="max-width:28rem;padding:2rem;border:2px solid #2a2a2a;border-radius:16px;background:#111"><h1 style="font-size:1.5rem;margin:0 0 .75rem">${title}</h1><p style="margin:0;color:#c8c8c8;line-height:1.5">${body}</p></main><script>history.replaceState(null,"","/orionmcp/listo")</script></body></html>`;
+}
+
 export class OrionOAuthProvider implements OAuthClientProvider {
   private record: Credentials;
   private file: string;
@@ -135,19 +140,24 @@ export class OrionOAuthProvider implements OAuthClientProvider {
         req.headers.host !== "127.0.0.1:49931"
       ) {
         res.writeHead(400);
-        res.end("Invalid OAuth callback.");
+        res.end(callbackPage("Enlace no válido", "Vuelve a Shelra y pide conectar tu Revit otra vez."));
         return;
       }
       const code = url.searchParams.get("code");
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
       if (url.searchParams.has("error") || !code) {
         res.writeHead(403);
-        res.end("Connection denied. Return to Shelra.");
+        res.end(
+          callbackPage(
+            "Conexión cancelada",
+            "No se concedió ningún permiso. Puedes cerrar esta pestaña y volver a Shelra.",
+          ),
+        );
         fail(new Error("ORIONMCP connection was denied."));
         return;
       }
-      res.end("ORIONMCP authorization received. Return to Shelra to check the connection.");
+      res.end(callbackPage("Listo, Shelra ya está conectada", "Puedes cerrar esta pestaña y volver a Shelra."));
       finish(code);
     });
     // Attach rejection handling before a denied browser callback can arrive.
