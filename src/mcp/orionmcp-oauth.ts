@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,6 +12,7 @@ import {
   type OAuthTokens,
 } from "@ai-sdk/mcp";
 import { orionMcpHttpServer } from "./orionmcp";
+import { dpapiProtect, dpapiUnprotect } from "./orionmcp-dpapi";
 
 interface Credentials {
   endpoint: string;
@@ -19,21 +20,6 @@ interface Credentials {
   client?: OAuthClientInformation;
   tokens?: OAuthTokens;
   verifier?: string;
-}
-/** Only ORIONMCP credentials are read. DPAPI binds ciphertext to this Windows user. */
-function dpapi(input: string, protect: boolean): string {
-  if (process.platform !== "win32") throw new Error("ORIONMCP OAuth credential storage currently requires Windows.");
-  const script = `Add-Type -AssemblyName System.Security; $raw = [Convert]::FromBase64String([Console]::In.ReadToEnd()); $out = [Security.Cryptography.ProtectedData]::${protect ? "Protect" : "Unprotect"}($raw, $null, [Security.Cryptography.DataProtectionScope]::CurrentUser); [Console]::Out.Write([Convert]::ToBase64String($out))`;
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
-    input,
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 10_000,
-    maxBuffer: 1_048_576,
-  });
-  if (result.status !== 0 || result.error)
-    throw new Error("Windows could not access the protected ORIONMCP credentials. Sign in again.");
-  return result.stdout.trim();
 }
 /** The page the browser lands on after "Permitir": plain Spanish, no code on screen, no jargon. */
 function callbackPage(title: string, body: string): string {
@@ -53,13 +39,13 @@ export class OrionOAuthProvider implements OAuthClientProvider {
     this.file = path.join(root, `${createHash("sha256").update(endpoint).digest("hex")}.bin`);
     this.record = existsSync(this.file)
       ? (JSON.parse(
-          Buffer.from(dpapi(readFileSync(this.file, "utf8"), false), "base64").toString("utf8"),
+          dpapiUnprotect(Buffer.from(readFileSync(this.file, "utf8"), "base64")).toString("utf8"),
         ) as Credentials)
       : { endpoint, redirect: "http://127.0.0.1:49931/orionmcp/callback" };
     if (this.record.endpoint !== endpoint) throw new Error("ORIONMCP credential endpoint mismatch.");
   }
   private save() {
-    const encrypted = dpapi(Buffer.from(JSON.stringify(this.record)).toString("base64"), true);
+    const encrypted = dpapiProtect(Buffer.from(JSON.stringify(this.record))).toString("base64");
     mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 });
     const temporary = `${this.file}.tmp-${randomBytes(8).toString("hex")}`;
     writeFileSync(temporary, encrypted, { mode: 0o600, flag: "wx" });
@@ -206,14 +192,19 @@ export async function loginOrionMcp(
 ) {
   const provider = new OrionOAuthProvider(endpoint, async (url) => {
     if (url.origin !== new URL(endpoint).origin) throw new Error("ORIONMCP authorization origin mismatch.");
-    const script = "$address = [Console]::In.ReadToEnd(); Start-Process -FilePath $address -WindowStyle Hidden";
-    const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
-      input: url.href,
-      encoding: "utf8",
-      windowsHide: true,
-      timeout: 10_000,
+    // Non-blocking: `rundll32 url.dll,FileProtocolHandler` opens the default browser without a shell or a PowerShell start-up.
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("rundll32.exe", ["url.dll,FileProtocolHandler", url.href], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.once("error", () => reject(new Error("Could not open the browser for ORIONMCP login.")));
+      child.once("spawn", () => {
+        child.unref();
+        resolve();
+      });
     });
-    if (result.status !== 0) throw new Error("Could not open the browser for ORIONMCP login.");
     announce("Se abrió tu navegador: pulsa «Permitir» en OrionBIM para conectar Shelra con tu Revit.");
   });
   await provider.login();

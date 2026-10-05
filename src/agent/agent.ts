@@ -153,7 +153,14 @@ import type {
   ProviderModelRuntime,
   ProviderTimeout,
 } from "../providers/types";
-import { failureQuery, researchEnabled, researchTask, researchToolResult, wantsResearch } from "../research/pre-task";
+import {
+  asksAboutOwnRevit,
+  failureQuery,
+  researchEnabled,
+  researchTask,
+  researchToolResult,
+  wantsResearch,
+} from "../research/pre-task";
 import type { WebSearchOptions, WebSearchResult } from "../research/web";
 import { createOpenAICompatibleProvider } from "../runtimes/local-provider";
 import { destructiveCommandReason } from "../security/destructive";
@@ -237,6 +244,7 @@ import { createCircleDetector } from "./circles";
 import { describeUnbackedClaims, unbackedClaims } from "./claim-check";
 import {
   appendActiveCriteriaBlock,
+  appendActiveObjectiveBlock,
   budgetedContextTokens,
   CONTEXT_ESTIMATE_MARGIN,
   type CompactionSettings,
@@ -281,6 +289,7 @@ import {
   withoutAnsi,
 } from "./runtime-smoke";
 import { isOutsideProject } from "./scratch";
+import { toToolResult } from "./tool-result";
 import {
   describeDelegatedEvidence,
   describeVerificationEvidence,
@@ -589,6 +598,18 @@ export interface ProcessMessageMemoryRecall {
 }
 
 export interface ProcessMessageObserver {
+  /** Provider stream activity only; no host notices or prompt content. */
+  onModelProgress?(info: {
+    kind: "text-delta" | "reasoning-delta" | "tool-input" | "tool-call";
+    timestamp: number;
+  }): void;
+  onContextPrepared?(info: {
+    systemChars: number;
+    messagesBeforeChars: number;
+    messagesAfterChars: number;
+    messageCount: number;
+    timestamp: number;
+  }): void;
   onMemory?(info: ProcessMessageMemory): void;
   onMemoryRecall?(info: ProcessMessageMemoryRecall): void;
   onStepStart?(info: ProcessMessageStepStart): void;
@@ -2929,7 +2950,11 @@ export class Agent {
       withAbortTimeout(signal, this.modelTimeout.totalMs),
       this.modelTimeout,
     );
-    const summary = appendActiveCriteriaBlock(rawSummary, this.activeAcceptanceCriteria);
+    const summary = appendActiveObjectiveBlock(
+      appendActiveCriteriaBlock(rawSummary, this.activeAcceptanceCriteria),
+      this.kernel?.snapshot().objective,
+      Math.min(16_000, Math.max(128, Math.floor((contextWindow - settings.reserveTokens) * 0.4))),
+    );
 
     appendCompaction(this.session.id, firstKeptSeq, summary, preparation.tokensBefore);
     this.messages = [createCompactionSummaryMessage(summary), ...preparation.keptMessages];
@@ -3231,6 +3256,7 @@ export class Agent {
       !this.ablations.has("web") &&
       !this.ablations.has("research") &&
       researchEnabled() &&
+      !asksAboutOwnRevit(userMessage) &&
       (wantsResearch(userMessage) || failureSearch !== undefined)
     ) {
       reportStatus("context", "Searching the web for context");
@@ -3836,6 +3862,8 @@ export class Agent {
                 timestamp: Date.now(),
               });
             },
+            onContextPrepared: (info) =>
+              notifyObserver(observer?.onContextPrepared, { ...info, timestamp: Date.now() }),
             onStepFinish: (event) => {
               const currentStep = Math.max(stepNumber, event.stepNumber);
               stepNumber = currentStep;
@@ -3877,6 +3905,14 @@ export class Agent {
               yield { type: "model", modelId: runtime.modelId, servedModelId: roundServed };
             }
 
+            if (
+              part.type === "text-delta" ||
+              part.type === "reasoning-delta" ||
+              part.type === "tool-input" ||
+              part.type === "tool-call"
+            ) {
+              notifyObserver(observer?.onModelProgress, { kind: part.type, timestamp: Date.now() });
+            }
             switch (part.type) {
               case "text-delta":
                 if (part.text) lastStepProducedOutput = true;
@@ -5782,7 +5818,12 @@ ${verdict}`,
   ): Promise<void> {
     this.turnLearned = true;
     if (!this.provider || this.mode !== "agent" || this.ablations.has("memory")) return;
-    if (!digest.userTexts) digest = { ...digest, userTexts: [...this.sessionUserTexts] };
+    // Every closing path keeps the final plan before processMessage removes its live record.
+    digest = {
+      ...digest,
+      ...planSnapshotOf(this.sessionPlan),
+      userTexts: digest.userTexts ?? [...this.sessionUserTexts],
+    };
     const scope = projectMemoryScope(this.bash.getRootCwd());
     if (didWork(digest)) {
       // The closing note says why a turn that reflects ended unverified (failing checks, or held by test protection).
@@ -6165,44 +6206,6 @@ function notifyObserver<T>(listener: ((payload: T) => void) | undefined, payload
     // Observer failures should never break generation.
     recordSwallowedError("observer", error);
   }
-}
-
-function toToolResult(output: unknown): ToolResult {
-  if (output && typeof output === "object" && "success" in output) {
-    const r = output as {
-      success: boolean;
-      output?: string;
-      error?: string;
-      diff?: ToolResult["diff"];
-      plan?: Plan;
-      planUpdate?: ToolResult["planUpdate"];
-      task?: ToolResult["task"];
-      delegation?: ToolResult["delegation"];
-      backgroundProcess?: ToolResult["backgroundProcess"];
-      media?: ToolResult["media"];
-      computer?: ToolResult["computer"];
-      lspDiagnostics?: ToolResult["lspDiagnostics"];
-      refused?: ToolResult["refused"];
-      blocker?: ToolResult["blocker"];
-    };
-    return {
-      success: r.success,
-      output: r.output,
-      error: r.error ?? (r.success ? undefined : r.output),
-      diff: r.diff,
-      plan: r.plan,
-      planUpdate: r.planUpdate,
-      task: r.task,
-      delegation: r.delegation,
-      backgroundProcess: r.backgroundProcess,
-      media: r.media,
-      computer: r.computer,
-      lspDiagnostics: r.lspDiagnostics,
-      ...(r.refused ? { refused: r.refused } : {}),
-      ...(r.blocker ? { blocker: r.blocker } : {}),
-    };
-  }
-  return { success: true, output: String(output) };
 }
 
 function formatSubagentActivity(toolName: string, args?: unknown): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { researchQuery, researchTask, researchToolResult, wantsResearch } from "./pre-task";
+import { asksAboutOwnRevit, researchQuery, researchTask, researchToolResult, wantsResearch } from "./pre-task";
 import type { WebSearchResult } from "./web";
 
 const found = (sources: WebSearchResult["sources"]): WebSearchResult => ({
@@ -97,4 +97,19 @@ describe("research before the work (owner, 2026-09-25)", () => {
     expect(research).toMatchObject({ provider: "unavailable", sources: [], error: "network down" });
     expect(researchToolResult(research)).toMatchObject({ success: false });
   });
+});
+
+describe("questions about the person's own Revit are not researched on the web", () => {
+  it.each([
+    "¿Cuántos niveles tiene mi proyecto de Revit?",
+    "Lista las vistas de mi modelo",
+    "En qué proyecto estoy en OrionBIM",
+    "how many levels does my Revit project have",
+  ])("%s", (request) => expect(asksAboutOwnRevit(request)).toBe(true));
+  it.each([
+    "Escribe un add-in de Revit en C# que cree niveles",
+    "How do I call the Revit API from Python with pyRevit",
+    "Corre los tests del proyecto y haz que pasen.",
+    "Create a web game I can play in my browser",
+  ])("%s", (request) => expect(asksAboutOwnRevit(request)).toBe(false));
 });

@@ -35,6 +35,26 @@ const MEMORY_QUESTION_WORDS = 12;
 const ASKS_FOR_SEARCH_RE =
   /\b(?:busca|buscar|b[uú]squeda|investiga|investigar|googl\w*|documentaci[oó]n|search|research|look\s+up)\b/iu;
 
+/**
+ * A question about the person's OWN Revit model ("how many levels does my project have?") is answered by their live Revit
+ * through ORIONMCP, not by the web: the pre-task search only delays it (up to RESEARCH_TIMEOUT_MS before the first model
+ * round, seen live 2026-10-05) and returns nothing useful. Programming questions about Revit (API, add-ins, scripts) are
+ * still researched.
+ */
+const OWN_REVIT_RE = /\b(?:revit|orionbim|dynamo|rvt)\b/iu;
+const OWN_MODEL_RE =
+  /\b(?:mi|mis|este|esta|el|los|las)\s+(?:proyecto|modelo|niveles|vistas|planos|elementos|muros|puertas|ventanas|familias|par[aá]metros|pilares|vigas|losas|habitaciones)\b/iu;
+const BIM_NOUN_RE =
+  /\b(?:niveles?|vistas?|planos?|elementos?|muros?|puertas?|ventanas?|familias?|par[aá]metros?|pilares?|vigas?|losas?|habitaci\w+)\b/iu;
+const REVIT_CODE_RE =
+  /\b(?:api|plugin|add-?in|script\w*|c#|csharp|python|pyrevit|c[oó]digo|code|compil\w+|sdk|ifc|github)\b/iu;
+
+export function asksAboutOwnRevit(request: string): boolean {
+  const text = request.trim();
+  if (!text || REVIT_CODE_RE.test(text)) return false;
+  return OWN_REVIT_RE.test(text) || (OWN_MODEL_RE.test(text) && BIM_NOUN_RE.test(text));
+}
+
 /** `SHELRA_RESEARCH=off` turns the search before the work off. */
 export function researchEnabled(): boolean {
   return (process.env.SHELRA_RESEARCH ?? "").trim().toLowerCase() !== "off";
