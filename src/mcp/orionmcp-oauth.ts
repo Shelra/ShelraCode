@@ -71,7 +71,7 @@ export class OrionOAuthProvider implements OAuthClientProvider {
   get clientMetadata(): OAuthClientMetadata {
     return {
       redirect_uris: [this.record.redirect],
-      client_name: "Shelra — ORIONMCP",
+      client_name: "Shelra",
       token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
@@ -149,15 +149,17 @@ export class OrionOAuthProvider implements OAuthClientProvider {
       if (url.searchParams.has("error") || !code) {
         res.writeHead(403);
         res.end(
-          callbackPage(
-            "Conexión cancelada",
-            "No se concedió ningún permiso. Puedes cerrar esta pestaña y volver a Shelra.",
-          ),
+          callbackPage("No se conectó", "Cancelaste el permiso. Vuelve a Shelra si quieres intentarlo otra vez."),
         );
         fail(new Error("ORIONMCP connection was denied."));
         return;
       }
-      res.end(callbackPage("Listo, Shelra ya está conectada", "Puedes cerrar esta pestaña y volver a Shelra."));
+      res.end(
+        callbackPage(
+          "Listo: Shelra ya puede usar tu Revit",
+          "Vuelve a Shelra y pregúntale: ¿en qué proyecto estoy? Puedes cerrar esta pestaña.",
+        ),
+      );
       finish(code);
     });
     // Attach rejection handling before a denied browser callback can arrive.
