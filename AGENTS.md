@@ -77,10 +77,12 @@ directory.
   other (see "Providers and routing"); their free plans stop at a quota and bill a key on a billed
   account, so Free mode uses them only after `shelra providers allow-free <id>`.
   Their plans and privacy terms are in `docs/future-research/05_FREE_AND_LOW_COST_LLM_INFRASTRUCTURE.md`.
-- **OmniRoute** (`shelra auth omniroute <key>`, or `/config`): OmniRoute has no public hosted API, so the default is
-  Shelra's own instance (`OMNIROUTE_PRODUCTION_URL` in `src/product/identity.ts`, Railway service `omniroute`, a key
-  required on every call) and the person gives only the key. A gateway the user runs themselves is reached with
-  `OMNIROUTE_BASE_URL` or `--url`, and wins over the default; Shelra never installs, starts or probes one. Its aliases are never Free candidates (its free filters
+- **OmniRoute** (`shelra auth omniroute <key>`, or `/config`): OmniRoute is self-hosted software and its authors' hosted
+  gateway is Cheaper Inference, so the default is that production API (`OMNIROUTE_PRODUCTION_URL` in
+  `src/product/identity.ts` = `https://api.cheaperinference.com/v1`, keys `ci_live_…`, paid from a wallet, never
+  Free mode's) and the person gives only the key. A gateway the user runs themselves is reached with
+  `OMNIROUTE_BASE_URL` or `--url`, and wins over the default; Shelra never installs, starts or probes one. A configured
+  provider that lists nothing keeps its tab in `/models` with the reason (`✗`). Its aliases are never Free candidates (its free filters
   fail open); a concrete model is, once the user vouches for it by name. Design: doc 22.
 - Optional spend controls: `SHELRA_MAX_SESSION_COST_USD` and
   `SHELRA_MAX_REQUEST_COST_USD` (CLI equivalents `--max-cost` and

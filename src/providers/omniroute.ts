@@ -85,6 +85,14 @@ export function omniRouteUpstream(id: string, ownedBy?: string): string | undefi
   return id.slice(0, slash).trim().toLowerCase();
 }
 
+/** A model that is not for chat (an image or video generator) says so in `type` or in the endpoint it is served on. */
+function isChatModel(item: Record<string, unknown>): boolean {
+  const type = typeof item.type === "string" ? item.type.toLowerCase() : "";
+  if (type && type !== "text" && type !== "chat" && type !== "llm" && type !== "model") return false;
+  const endpoint = typeof item.endpoint === "string" ? item.endpoint.toLowerCase() : "";
+  return !/\/(images|videos|audio|embeddings|moderations)\b/u.test(endpoint);
+}
+
 /** Reads a `/v1/models` body into catalog entries. Tolerant: an item it cannot read is skipped, never fatal. */
 export function parseOmniRouteModels(body: unknown, fetchedAt: string): CatalogEntry[] {
   const data = record(body)?.data;
@@ -94,7 +102,7 @@ export function parseOmniRouteModels(body: unknown, fetchedAt: string): CatalogE
   for (const raw of data.slice(0, MAX_MODELS)) {
     const item = record(raw);
     const id = typeof item?.id === "string" ? item.id.trim() : "";
-    if (!item || !id || seen.has(id) || NOT_CHAT.test(id)) continue;
+    if (!item || !id || seen.has(id) || NOT_CHAT.test(id) || !isChatModel(item)) continue;
     seen.add(id);
     const ownedBy = typeof item.owned_by === "string" ? item.owned_by : undefined;
     const router = isOmniRouteRouterId(id, ownedBy);
@@ -103,9 +111,15 @@ export function parseOmniRouteModels(body: unknown, fetchedAt: string): CatalogE
       item.context_length ?? item.context_window ?? item.max_context_length ?? item.contextWindow,
     );
     const pricing = record(item.pricing);
-    const prompt = priceOf(pricing, "prompt", "input");
-    const completion = priceOf(pricing, "completion", "output");
+    // Cheaper Inference's hosted gateway lists prices per million tokens; a self-hosted one, per token.
+    const perMillion = (name: string): number | undefined => {
+      const value = priceOf(pricing, name);
+      return value === undefined ? undefined : value / 1_000_000;
+    };
+    const prompt = priceOf(pricing, "prompt", "input") ?? perMillion("input_per_million");
+    const completion = priceOf(pricing, "completion", "output") ?? perMillion("output_per_million");
     const pricingKnown = prompt !== undefined && completion !== undefined;
+    const capabilities = record(item.capabilities);
     entries.push({
       id: `${OMNIROUTE_PROVIDER_ID}/${id}`,
       category: "cloud",
@@ -116,8 +130,8 @@ export function parseOmniRouteModels(body: unknown, fetchedAt: string): CatalogE
       contextConfidence: context ? "declared" : "fallback",
       capabilities: {
         tools: true,
-        reasoning: REASONING.test(id),
-        vision: VISION.test(id) || item.supports_vision === true,
+        reasoning: capabilities?.reasoning === true || REASONING.test(id),
+        vision: capabilities?.vision === true || VISION.test(id) || item.supports_vision === true,
         ...(item.supports_structured_output === true ? { structuredOutput: true } : {}),
       },
       cost: {

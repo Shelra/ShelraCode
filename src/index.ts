@@ -599,6 +599,18 @@ async function startInteractive(
             ? {
                 getModels: remote.getModels,
                 subscribeModels: (listener: () => void) => remote.routing!.catalog.subscribe(listener),
+                getProviderProblems: () =>
+                  remote
+                    .routing!.catalog.status()
+                    .filter(
+                      (item) => item.status === "stale" || (item.status === "unavailable" && item.modelCount === 0),
+                    )
+                    .map((item) => ({
+                      id: item.providerId,
+                      name: item.name,
+                      reason: item.error ?? "it did not answer",
+                      ...(item.status === "stale" ? { stale: true } : {}),
+                    })),
               }
             : {}),
           onSelectLocalModel: onSelectModel ?? (preferLocal ? prepareLocalModel : undefined),

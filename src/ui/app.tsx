@@ -115,7 +115,7 @@ import {
   missionViewForCommand,
 } from "./mission";
 import { ModelPickerModal } from "./model-picker";
-import { pickerModels } from "./model-picker-data";
+import { nextProviderTab, type ProviderProblem, pickerModels, pickerSearch, providerTabs } from "./model-picker-data";
 import {
   changedFiles,
   describeReasoningEffort,
@@ -628,6 +628,8 @@ export interface AppStartupConfig {
   /** The providers' catalog as it is now, and a way to hear when it changes (it refreshes while the session runs). */
   getModels?: () => ModelInfo[];
   subscribeModels?: (listener: () => void) => () => void;
+  /** The providers that are configured and list no models, with why; `/models` shows them instead of dropping them. */
+  getProviderProblems?: () => { id: string; name: string; reason: string; stale?: boolean }[];
   onSelectLocalModel?: (modelId: string) => Promise<{ success: boolean; error?: string }>;
   onApiKey?: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
   /**
@@ -701,6 +703,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [modelSwitchError, setModelSwitchError] = useState<string | null>(null);
   const [modelPickerIndex, setModelPickerIndex] = useState(0);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
+  /** The provider tab chosen in /models ("" is every provider). */
+  const [modelProviderFilter, setModelProviderFilter] = useState("");
   const [showSandboxPicker, setShowSandboxPicker] = useState(false);
   const [sandboxSettings, setSandboxSettingsState] = useState<SandboxSettings>(() => agent.getSandboxSettings());
   const [sandboxSettingsFocusIndex, setSandboxSettingsFocusIndex] = useState(0);
@@ -1008,16 +1012,48 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     const read = startupConfig.getModels;
     return startupConfig.subscribeModels(() => setCatalogModels(read()));
   }, [startupConfig.subscribeModels, startupConfig.getModels]);
+  const [providerProblems, setProviderProblems] = useState<ProviderProblem[]>(
+    () => startupConfig.getProviderProblems?.() ?? [],
+  );
+  useEffect(() => {
+    if (!startupConfig.subscribeModels || !startupConfig.getProviderProblems) return;
+    const read = startupConfig.getProviderProblems;
+    return startupConfig.subscribeModels(() => setProviderProblems(read()));
+  }, [startupConfig.subscribeModels, startupConfig.getProviderProblems]);
   const pickerOptions = useMemo(() => ({ providerName: providerDisplayName, providerOrder: providerListOrder() }), []);
   const modelCatalog = useMemo(
     () => pickerModels(catalogModels, { ...pickerOptions, mode: undefined, query: "" }),
     [catalogModels, pickerOptions],
   );
-  const filteredModels = useMemo(
-    () => pickerModels(catalogModels, { ...pickerOptions, mode: modelMode, query: modelSearchQuery }),
-    [catalogModels, pickerOptions, modelMode, modelSearchQuery],
+  const modelSearch = useMemo(
+    () =>
+      pickerSearch(catalogModels, {
+        ...pickerOptions,
+        mode: modelMode,
+        query: modelSearchQuery,
+        ...(modelProviderFilter ? { provider: modelProviderFilter } : {}),
+      }),
+    [catalogModels, pickerOptions, modelMode, modelSearchQuery, modelProviderFilter],
+  );
+  const filteredModels = modelSearch.models;
+  const modelProviderTabs = useMemo(
+    () =>
+      modelMode === "free"
+        ? []
+        : providerTabs(catalogModels, {
+            ...pickerOptions,
+            mode: modelMode,
+            query: modelSearchQuery,
+            problems: providerProblems,
+            ...(modelProviderFilter ? { provider: modelProviderFilter } : {}),
+          }),
+    [catalogModels, pickerOptions, modelMode, modelSearchQuery, modelProviderFilter, providerProblems],
   );
   const filteredModelIds = filteredModels.map((m) => m.id);
+  // A provider tab belongs to one opening of the picker.
+  useEffect(() => {
+    if (!showModelPicker) setModelProviderFilter("");
+  }, [showModelPicker]);
   const selectLocalModel = useCallback(
     /** Resolves true only when the model is actually switched. */
     async (modelId: string): Promise<boolean> => {
@@ -4213,6 +4249,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           }
           return;
         }
+        if (key.name === "tab") {
+          // Tab and shift+tab walk the provider tabs; a tab the search leaves empty is skipped.
+          if (modelMode !== "free") {
+            setModelProviderFilter((active) => nextProviderTab(modelProviderTabs, active, key.shift ? -1 : 1));
+            setModelPickerIndex(0);
+          }
+          return;
+        }
         if (key.name === "backspace") {
           setModelSearchQuery((q) => q.slice(0, -1));
           setModelPickerIndex(0);
@@ -4681,6 +4725,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       openResumePicker,
       resumePicker,
       configScreen,
+      modelProviderTabs,
+      modelMode,
     ],
   );
   useKeyboard(handleKey);
@@ -5369,6 +5415,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           allModels={catalogModels}
           mode={modelMode}
           providerName={providerDisplayName}
+          providerTabs={modelProviderTabs}
+          activeProvider={modelProviderFilter}
+          fuzzy={modelSearch.fuzzy}
+          totalModels={modelSearch.total}
           reasoningEffortByModel={reasoningEffortByModel}
           switching={switchingModel}
           error={modelSwitchError}

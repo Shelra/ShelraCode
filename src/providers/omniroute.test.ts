@@ -586,3 +586,52 @@ describe("OmniRoute in the router: the fail-open defense", () => {
     expect(result.error).toBeInstanceOf(NoFreeRouteError);
   }, 15_000);
 });
+
+describe("the hosted gateway's model list (Cheaper Inference, the production default)", () => {
+  // The shape its /v1/models answers with: prices per million tokens as strings, capabilities as an object, a type.
+  const body = {
+    data: [
+      {
+        id: "claude-sonnet-5.5",
+        owned_by: "Anthropic",
+        type: "text",
+        endpoint: "/v1/chat/completions",
+        context_length: 200_000,
+        is_free: false,
+        capabilities: { vision: true, reasoning: true, streaming: true },
+        pricing: { input_per_million: "3.000000", output_per_million: "15.000000" },
+      },
+      {
+        id: "deepseek-v4.1-flash",
+        owned_by: "DeepSeek",
+        type: "text",
+        endpoint: "/v1/chat/completions",
+        context_length: 128_000,
+        capabilities: { vision: false, reasoning: false },
+        pricing: { input_per_million: "0.140000", output_per_million: "0.280000" },
+      },
+      { id: "nano-banana", type: "image", endpoint: "/v1/images/generations", pricing: { input_per_million: "0" } },
+      { id: "seedance-2.0", type: "video", endpoint: "/v1/videos/generations" },
+    ],
+  };
+
+  it("lists the chat models only, with their real prices, context and capabilities", () => {
+    const entries = parseOmniRouteModels(body, "2026-10-07T00:00:00.000Z");
+    expect(entries.map((entry) => entry.id)).toEqual(["omniroute/claude-sonnet-5.5", "omniroute/deepseek-v4.1-flash"]);
+    const sonnet = entries[0];
+    expect(sonnet?.cost).toMatchObject({ pricingKnown: true, free: false });
+    expect(sonnet?.cost.prompt).toBeCloseTo(0.000003, 9);
+    expect(sonnet?.cost.completion).toBeCloseTo(0.000015, 9);
+    expect(sonnet?.contextWindow).toBe(200_000);
+    expect(sonnet?.capabilities).toMatchObject({ vision: true, reasoning: true });
+    expect(entries[1]?.capabilities).toMatchObject({ vision: false, reasoning: false });
+  });
+
+  it("is never Free mode's, whatever its prices say", () => {
+    const flagged = {
+      data: [{ id: "tiny", type: "text", is_free: true, pricing: { input_per_million: "0", output_per_million: "0" } }],
+    };
+    const [entry] = parseOmniRouteModels(flagged, "2026-10-07T00:00:00.000Z");
+    expect(entry?.cost.free).toBe(false);
+  });
+});

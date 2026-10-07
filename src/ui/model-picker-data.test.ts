@@ -3,10 +3,14 @@ import type { ModelInfo } from "../types/index";
 import {
   AUTO_FREE_ID,
   describeFreeSources,
+  formatProviderTabs,
+  nextProviderTab,
   type PickerOptions,
   pickerItems,
   pickerModels,
+  pickerSearch,
   priceLabel,
+  providerTabs,
   windowItems,
 } from "./model-picker-data";
 
@@ -158,5 +162,175 @@ describe("priceLabel and describeFreeSources", () => {
   it("counts Free mode's routes per provider", () => {
     expect(describeFreeSources(CATALOG, providerName)).toBe("1 OpenRouter");
     expect(describeFreeSources([], providerName)).toBe("no free model is available yet");
+  });
+});
+
+describe("search filters and ranking", () => {
+  const WIDE = [
+    model("openrouter", "vendor/llama-3.3-70b-instruct:free", { contextWindow: 131_072 }),
+    model("openrouter", "vendor/tiny-8b:free", { contextWindow: 8_000, supportsClientTools: false }),
+    model("openrouter", "anthropic/claude-sonnet", {
+      freeStatus: "paid",
+      inputPrice: 0.000003,
+      outputPrice: 0.000015,
+      supportsVision: true,
+      contextWindow: 1_000_000,
+    }),
+    model("groq", "llama-3.3-70b-versatile", { freeStatus: "free-plan", contextWindow: 131_072 }),
+    model("groq", "openai/gpt-oss-120b", { reasoning: true, freeStatus: "free-plan", contextWindow: 131_072 }),
+    model("gemini", "gemini-2.5-flash", { supportsVision: true, freeStatus: "free-plan", contextWindow: 1_048_576 }),
+    model("local", "qwen-7b", { category: "local", provider: undefined, freeStatus: undefined }),
+  ];
+  const ids = (query: string, extra: Partial<PickerOptions> = {}) =>
+    pickerModels(WIDE, options({ query, ...extra })).map((m) => m.id);
+
+  it("filters by provider with @ or provider:, by the start of a provider's id or name", () => {
+    expect(ids("@groq")).toEqual(["groq/llama-3.3-70b-versatile", "groq/openai/gpt-oss-120b"]);
+    expect(ids("provider:goog")).toEqual(["gemini/gemini-2.5-flash"]);
+    expect(ids("@groq llama")).toEqual(["groq/llama-3.3-70b-versatile"]);
+    expect(ids("@nothing")).toEqual([]);
+  });
+
+  it("filters by price, capability and context size", () => {
+    // A local model costs nothing, so it is free too.
+    expect(ids("free tools")).toEqual(["openrouter/vendor/llama-3.3-70b-instruct:free", "local/qwen-7b"]);
+    expect(ids("ctx>500k")).toEqual(["openrouter/anthropic/claude-sonnet", "gemini/gemini-2.5-flash"]);
+    expect(ids("1m+")).toEqual(["openrouter/anthropic/claude-sonnet", "gemini/gemini-2.5-flash"]);
+    expect(ids("ctx<16k")).toEqual(["openrouter/vendor/tiny-8b:free"]);
+    expect(ids("local")).toEqual(["local/qwen-7b"]);
+    // A bare size in a model name is text, not a context filter.
+    expect(ids("70b")).toEqual(["openrouter/vendor/llama-3.3-70b-instruct:free", "groq/llama-3.3-70b-versatile"]);
+  });
+
+  it("excludes with a leading minus", () => {
+    expect(ids("llama -groq")).toEqual(["openrouter/vendor/llama-3.3-70b-instruct:free"]);
+    expect(ids("@openrouter -paid -free")).toEqual([]);
+    expect(ids("vision -paid")).toEqual(["gemini/gemini-2.5-flash"]);
+    expect(ids("-")).toHaveLength(WIDE.length);
+  });
+
+  it("ranks a provider named, then a name that starts with the word, ahead of a match inside", () => {
+    // "llama" starts the name of Groq's and is inside OpenRouter's id path after a slash: both rank as word starts,
+    // and the provider group with the better hit leads.
+    expect(ids("gemini")[0]).toBe("gemini/gemini-2.5-flash");
+    const qwen = pickerModels(
+      [
+        model("openrouter", "vendor/not-quite-qwen"),
+        model("groq", "qwen-32b", { freeStatus: "free-plan" }),
+        model("gemini", "alias-of-qwen-thing", { freeStatus: "free-plan" }),
+      ],
+      options({ query: "qwen" }),
+    ).map((m) => m.id);
+    expect(qwen[0]).toBe("groq/qwen-32b");
+  });
+
+  it("keeps a provider's models together under one heading when ranking", () => {
+    const result = pickerModels(WIDE, options({ query: "llama" }));
+    const providers = result.map((m) => m.provider);
+    expect(providers).toEqual([...providers].sort((a, b) => providers.indexOf(a) - providers.indexOf(b)));
+    expect(new Set(providers).size).toBe(providers.filter((p, i) => providers.indexOf(p) === i).length);
+  });
+
+  it("falls back to the closest names when nothing matches exactly", () => {
+    const missed = pickerSearch(WIDE, options({ query: "glama" }));
+    expect(missed.fuzzy).toBe(true);
+    expect(missed.models.map((m) => m.id)).toContain("groq/llama-3.3-70b-versatile");
+    expect(pickerSearch(WIDE, options({ query: "zzzqq" }))).toMatchObject({ fuzzy: false, models: [] });
+    const typo = pickerSearch(WIDE, options({ query: "gptoss" }));
+    expect(typo.fuzzy).toBe(true);
+    expect(typo.models.map((m) => m.id)).toEqual(["groq/openai/gpt-oss-120b"]);
+    // A query that matches exactly never reports fuzzy.
+    expect(pickerSearch(WIDE, options({ query: "gpt-oss" })).fuzzy).toBe(false);
+  });
+
+  it("offers provider tabs with what the search finds in each, and a chosen tab narrows the list", () => {
+    const tabs = providerTabs(WIDE, options({ query: "llama" }));
+    expect(tabs.map((t) => [t.id, t.count])).toEqual([
+      ["", 2],
+      ["openrouter", 1],
+      ["groq", 1],
+    ]);
+    expect(providerTabs(WIDE, options()).map((t) => t.label)).toEqual([
+      "All",
+      "OpenRouter",
+      "Groq",
+      "Google Gemini",
+      "Local",
+    ]);
+    expect(ids("", { provider: "groq" })).toEqual(["groq/llama-3.3-70b-versatile", "groq/openai/gpt-oss-120b"]);
+    // The chosen tab stays listed even when the search finds nothing in it.
+    const none = providerTabs(WIDE, options({ query: "claude", provider: "groq" }));
+    expect(none.find((t) => t.id === "groq")?.count).toBe(0);
+  });
+
+  it("cycles through the tabs that have models, wrapping, and never lands on an empty one", () => {
+    const tabs = providerTabs(WIDE, options({ query: "llama" }));
+    expect(nextProviderTab(tabs, "", 1)).toBe("openrouter");
+    expect(nextProviderTab(tabs, "openrouter", 1)).toBe("groq");
+    expect(nextProviderTab(tabs, "groq", 1)).toBe("");
+    expect(nextProviderTab(tabs, "", -1)).toBe("groq");
+  });
+
+  it("fits the tabs in the room it has, keeping the active one in view", () => {
+    const tabs = providerTabs(WIDE, options());
+    const wide = formatProviderTabs(tabs, "", 120);
+    expect(wide).toBe("[All 7]  OpenRouter 3  Groq 2  Google Gemini 1  Local 1");
+    const narrow = formatProviderTabs(tabs, "local", 30);
+    expect(narrow.length).toBeLessThanOrEqual(30);
+    expect(narrow).toContain("[Local 1]");
+  });
+});
+
+describe("a configured provider that lists nothing", () => {
+  const problems = [{ id: "omniroute", name: "OmniRoute", reason: "OmniRoute refused the key (HTTP 401)." }];
+  const base = [
+    model("openrouter", "vendor/a:free"),
+    model("groq", "openai/gpt-oss-120b", { freeStatus: "free-plan" }),
+  ];
+
+  it("keeps its tab, marked, after the providers that list models", () => {
+    const tabs = providerTabs(base, options({ problems }));
+    expect(tabs.map((t) => [t.id, t.count, t.problem ? "problem" : ""])).toEqual([
+      ["", 2, ""],
+      ["openrouter", 1, ""],
+      ["groq", 1, ""],
+      ["omniroute", 0, "problem"],
+    ]);
+    expect(formatProviderTabs(tabs, "", 120)).toBe("[All 2]  OpenRouter 1  Groq 1  OmniRoute ✗");
+    expect(formatProviderTabs(tabs, "omniroute", 120)).toContain("[OmniRoute ✗]");
+  });
+
+  it("can be chosen with Tab, so the reason can be read, and does not distort the counts", () => {
+    const tabs = providerTabs(base, options({ problems }));
+    expect(nextProviderTab(tabs, "groq", 1)).toBe("omniroute");
+    expect(nextProviderTab(tabs, "omniroute", 1)).toBe("");
+    expect(tabs[0]?.count).toBe(2);
+    // Chosen, it lists nothing, and the search never invents models for it.
+    expect(pickerModels(base, options({ provider: "omniroute", problems })).map((m) => m.id)).toEqual([]);
+  });
+
+  it("is not shown as a problem once it lists models", () => {
+    const withModels = [...base, model("omniroute", "auto/coding", { freeStatus: "unproven" })];
+    const tabs = providerTabs(withModels, options({ problems }));
+    expect(tabs.find((t) => t.id === "omniroute")).toMatchObject({ count: 1 });
+    expect(tabs.find((t) => t.id === "omniroute")?.problem).toBeUndefined();
+  });
+});
+
+describe("a provider that answers from its last good list", () => {
+  const stale = [{ id: "groq", name: "Groq", reason: "Groq refused the key (HTTP 401).", stale: true }];
+  const base = [
+    model("openrouter", "vendor/a:free"),
+    model("groq", "openai/gpt-oss-120b", { freeStatus: "free-plan" }),
+  ];
+
+  it("keeps its models and count, and carries a warning the tab shows with a mark", () => {
+    const tabs = providerTabs(base, options({ problems: stale }));
+    expect(tabs.find((t) => t.id === "groq")).toMatchObject({ count: 1, warning: "Groq refused the key (HTTP 401)." });
+    expect(tabs.find((t) => t.id === "groq")?.problem).toBeUndefined();
+    expect(formatProviderTabs(tabs, "", 120)).toBe("[All 2]  OpenRouter 1  Groq 1 !");
+    expect(pickerModels(base, options({ provider: "groq", problems: stale })).map((m) => m.id)).toEqual([
+      "groq/openai/gpt-oss-120b",
+    ]);
   });
 });

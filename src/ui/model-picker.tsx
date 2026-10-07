@@ -5,9 +5,11 @@ import {
   AUTO_FREE_ID,
   capabilityWords,
   describeFreeSources,
+  formatProviderTabs,
   HEADER_ROW_LINES,
   MODEL_ROW_LINES,
   type PickerMode,
+  type ProviderTab,
   pickerItems,
   priceLabel,
   windowItems,
@@ -28,6 +30,13 @@ export interface ModelPickerProps {
   allModels: readonly ModelInfo[];
   mode: PickerMode;
   providerName: (providerId: string) => string;
+  /** The provider tabs ("All" first) with what the search finds in each, and the one chosen ("" is All). */
+  providerTabs?: readonly ProviderTab[];
+  activeProvider?: string;
+  /** Nothing matched exactly, so the list shows the closest names. */
+  fuzzy?: boolean;
+  /** How many models the catalog holds, for "12 of 312". */
+  totalModels?: number;
   reasoningEffortByModel: Record<string, ReasoningEffort>;
   switching: boolean;
   error: string | null;
@@ -37,6 +46,21 @@ function priceColor(t: Theme, model: ModelInfo): string {
   if (model.freeStatus === "free") return t.accent;
   if (model.freeStatus === "paid") return t.warning;
   return t.textDim;
+}
+
+/**
+ * The key hints on one line: when they do not fit, the least needed ones go (the page keys first, then the reasoning
+ * keys), so the line never ends in a cut word.
+ */
+function fitHints(parts: readonly string[], room: number): string {
+  const drop = ["pgup/pgdn jump", "left/right reasoning", "up/down move"];
+  let kept = parts.filter(Boolean);
+  const join = (list: readonly string[]) => list.join("  ");
+  for (const name of drop) {
+    if (join(kept).length <= room) break;
+    kept = kept.filter((part) => part !== name);
+  }
+  return clip(join(kept), room);
 }
 
 /** Fits `text` in `room` cells, ending in an ellipsis when it must be cut. */
@@ -60,6 +84,10 @@ export function ModelPickerModal({
   allModels,
   mode,
   providerName,
+  providerTabs = [],
+  activeProvider = "",
+  fuzzy = false,
+  totalModels,
   reasoningEffortByModel,
   switching,
   error,
@@ -79,8 +107,16 @@ export function ModelPickerModal({
       : [];
   const items = pickerItems(models, providerName);
   const listLines = items.reduce((sum, item) => sum + (item.kind === "header" ? HEADER_ROW_LINES : MODEL_ROW_LINES), 0);
+  const activeProblem = providerTabs.find((tab) => tab.id === activeProvider && tab.problem !== undefined);
+  const activeWarning = providerTabs.find((tab) => tab.id === activeProvider && tab.warning !== undefined);
+  // With a single provider the row would read like a label: say where the others come from.
+  const oneProvider = providerTabs.length === 2;
+  // The provider tabs (a row), a note under them when the list is not exact, and the blank line after, in Mixed only.
+  const showTabs = mode !== "free" && providerTabs.length > 1;
+  const warningLine = activeWarning !== undefined && mode !== "free";
+  const tabLines = (showTabs ? 1 : 0) + (warningLine ? 1 : 0) + (fuzzy ? 1 : 0) + (showTabs || fuzzy ? 1 : 0);
   // Borders, the title, the search box and its gaps, the key hints and the error line when there is one.
-  const chrome = 8 + (error ? 1 : 0) + infoLines.length + (infoLines.length > 0 ? 1 : 0);
+  const chrome = 8 + (error ? 1 : 0) + infoLines.length + (infoLines.length > 0 ? 1 : 0) + tabLines;
   const panelHeight = Math.max(chrome + 3, Math.min(Math.max(listLines, 2) + chrome, Math.floor(height * 0.85)));
   const capacity = Math.max(2, panelHeight - chrome);
   const selectedKey = selected ? `model-${selected.id}` : undefined;
@@ -90,6 +126,8 @@ export function ModelPickerModal({
   const top = Math.max(1, Math.floor((height - panelHeight) / 2));
   const modeLabel = mode === "free" ? "Free · Auto" : mode === "mixed" ? "Mixed" : "";
   const count = models.filter((model) => model.id !== AUTO_FREE_ID).length;
+  const narrowed = Boolean(searchQuery) || activeProvider !== "";
+  const countLabel = narrowed && totalModels !== undefined ? `${count} of ${totalModels}` : `${count}`;
 
   return (
     <box
@@ -115,7 +153,7 @@ export function ModelPickerModal({
           <SectionBadge
             t={t}
             label="Models"
-            detail={[modeLabel, mode === "free" ? "" : `${count}`].filter(Boolean).join(" · ")}
+            detail={[modeLabel, mode === "free" ? "" : countLabel].filter(Boolean).join(" · ")}
           />
           <text fg={t.textMuted}>{"esc"}</text>
         </box>
@@ -125,11 +163,37 @@ export function ModelPickerModal({
               clip(searchQuery, room)
             ) : (
               <span style={{ fg: t.textMuted }}>
-                {mode === "free" ? "Search..." : "Search provider, model, tools, vision, free..."}
+                {mode === "free" ? "Search..." : "Search a model, or @provider free paid tools vision ctx>100k"}
               </span>
             )}
           </text>
         </box>
+        {showTabs ? (
+          <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingBottom={fuzzy || warningLine ? 0 : 1}>
+            <text fg={t.textMuted} wrapMode="none">
+              {oneProvider
+                ? clip(`${formatProviderTabs(providerTabs, activeProvider, room)}   more providers: /config`, room)
+                : formatProviderTabs(providerTabs, activeProvider, room)}
+            </text>
+          </box>
+        ) : null}
+        {warningLine ? (
+          <box flexShrink={0} paddingLeft={2} paddingRight={2}>
+            <text fg={t.warning} wrapMode="none">
+              {clip(
+                `! ${activeWarning?.label}: last refresh failed (${activeWarning?.warning}); showing its last list`,
+                room,
+              )}
+            </text>
+          </box>
+        ) : null}
+        {fuzzy ? (
+          <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingBottom={1}>
+            <text fg={t.warning} wrapMode="none">
+              {clip("No exact match: showing the closest names", room)}
+            </text>
+          </box>
+        ) : null}
         {infoLines.length > 0 ? (
           <box flexShrink={0} flexDirection="column" paddingLeft={2} paddingRight={2} paddingBottom={1}>
             {infoLines.map((line) => (
@@ -198,9 +262,31 @@ export function ModelPickerModal({
               <text fg={t.textDim} wrapMode="none">{`${view.below} more below`}</text>
             </box>
           ) : null}
-          {models.length === 0 ? (
-            <box paddingLeft={2}>
-              <text fg={t.textMuted}>{"No models match your search"}</text>
+          {models.length === 0 && activeProblem ? (
+            <box paddingLeft={2} paddingRight={2} flexDirection="column">
+              <text fg={t.warning} wrapMode="word">
+                {`${activeProblem.label} is set up but lists no models: ${activeProblem.problem}`}
+              </text>
+              <text fg={t.textDim} wrapMode="none">
+                {clip("tab moves on; it is checked again every few minutes", room)}
+              </text>
+            </box>
+          ) : null}
+          {models.length === 0 && !activeProblem ? (
+            <box paddingLeft={2} paddingRight={2} flexDirection="column">
+              <text fg={t.textMuted} wrapMode="none">
+                {clip(searchQuery ? `No models match "${searchQuery}"` : "No models to list", room)}
+              </text>
+              {mode !== "free" ? (
+                <text fg={t.textDim} wrapMode="none">
+                  {clip(
+                    activeProvider !== ""
+                      ? "tab searches every provider; try fewer words or -word to exclude"
+                      : "try @provider, free, paid, tools, vision, ctx>100k or fewer words",
+                    room,
+                  )}
+                </text>
+              ) : null}
             </box>
           ) : null}
         </box>
@@ -209,8 +295,15 @@ export function ModelPickerModal({
           <text fg={switching ? t.accent : t.textMuted} wrapMode="none">
             {switching
               ? "Preparing model..."
-              : clip(
-                  `${supportsReasoning ? "left/right reasoning  " : ""}up/down move  pgup/pgdn jump  enter select  esc close`,
+              : fitHints(
+                  [
+                    mode === "free" ? "" : "tab provider",
+                    supportsReasoning ? "left/right reasoning" : "",
+                    "up/down move",
+                    "pgup/pgdn jump",
+                    "enter select",
+                    "esc close",
+                  ],
                   room,
                 )}
           </text>

@@ -24,11 +24,12 @@ export const ACCOUNT_API_URL = "https://api.shelra.dev";
 export const ACCOUNT_WEB_URL = "https://www.shelra.dev";
 /**
  * The OmniRoute gateway Shelra's users reach, ending in `/v1` (owner, 2026-10-07: every provider asks for its key
- * alone and points at production). OmniRoute itself has no public hosted API, so this is Shelra's own instance, on
- * Railway (service `omniroute`, key required on every /v1 call). A person who runs their own gateway overrides it
- * with `OMNIROUTE_BASE_URL` or `shelra auth omniroute --url`.
+ * alone and points at production). OmniRoute is self-hosted software, and its authors' hosted gateway is Cheaper
+ * Inference, whose documented production API is this one (keys start with `ci_live_`, paid from a wallet, so Free mode
+ * never uses it: https://www.cheaperinference.com/docs). A person who runs their own OmniRoute overrides it with
+ * `OMNIROUTE_BASE_URL` or `shelra auth omniroute --url`.
  */
-export const OMNIROUTE_PRODUCTION_URL = "https://omniroute.shelra.dev/v1";
+export const OMNIROUTE_PRODUCTION_URL = "https://api.cheaperinference.com/v1";
 /** A token made on the website for a script or CI, used instead of a stored login. */
 export const ACCOUNT_TOKEN_ENV = "SHELRA_TOKEN";
 

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import type { ModelInfo } from "../types/index";
 import { ModelPickerModal } from "./model-picker";
-import { AUTO_FREE_ID, pickerModels } from "./model-picker-data";
+import { AUTO_FREE_ID, type PickerOptions, pickerSearch, providerTabs } from "./model-picker-data";
 import { dark } from "./theme";
 
 const NAMES: Record<string, string> = {
@@ -63,9 +63,18 @@ function picker(
   mode: "free" | "mixed",
   all: ModelInfo[],
   size: { width: number; height: number },
-  extra: { query?: string; selected?: number } = {},
+  extra: { query?: string; selected?: number; provider?: string; problems?: PickerOptions["problems"] } = {},
 ) {
-  const models = pickerModels(all, { mode, query: extra.query ?? "", providerName, providerOrder: ORDER });
+  const search = {
+    mode,
+    query: extra.query ?? "",
+    providerName,
+    providerOrder: ORDER,
+    ...(extra.problems ? { problems: extra.problems } : {}),
+    ...(extra.provider ? { provider: extra.provider } : {}),
+  };
+  const found = pickerSearch(all, search);
+  const models = found.models;
   return (
     <ModelPickerModal
       t={dark}
@@ -78,6 +87,10 @@ function picker(
       allModels={all}
       mode={mode}
       providerName={providerName}
+      providerTabs={mode === "free" ? [] : providerTabs(all, search)}
+      activeProvider={extra.provider ?? ""}
+      fuzzy={found.fuzzy}
+      totalModels={found.total}
       reasoningEffortByModel={{}}
       switching={false}
       error={null}
@@ -142,7 +155,46 @@ describe("ModelPickerModal in Mixed mode", () => {
     expect(groq).toContain("Groq · ");
     expect(groq).not.toContain("OpenRouter · ");
     const none = await frameOf(picker("mixed", all, size, { query: "zzzzzz" }), size.width, size.height);
-    expect(none).toContain("No models match your search");
+    expect(none).toContain('No models match "zzzzzz"');
+    expect(none).toContain("try @provider, free, paid, tools, vision, ctx>100k");
+  });
+
+  for (const size of SIZES) {
+    it(`shows provider tabs with counts, the active one marked, and fits at ${size.width}x${size.height}`, async () => {
+      const all = catalog(40);
+      const all_ = await frameOf(picker("mixed", all, size), size.width, size.height);
+      expect(all_).toContain("[All 40]");
+      expect(all_).toContain("OpenRouter 10");
+      expect(all_).toContain("tab provider");
+      const groq = await frameOf(picker("mixed", all, size, { provider: "groq" }), size.width, size.height);
+      expect(groq).toContain("[Groq 10]");
+      expect(groq).toContain("10 of 40");
+      expect(groq).not.toContain("OpenRouter · ");
+      for (const line of groq.split(String.fromCharCode(10))) expect(line.length).toBeLessThanOrEqual(size.width);
+    });
+  }
+
+  it("says when it shows the closest names instead of exact matches, and what a narrowed search found", async () => {
+    const size = { width: 100, height: 30 };
+    const all = [model("groq", "openai/gpt-oss-120b"), model("openrouter", "vendor/other-70b:free")];
+    const close = await frameOf(picker("mixed", all, size, { query: "gptoss" }), size.width, size.height);
+    expect(close).toContain("No exact match: showing the closest names");
+    expect(close).toContain("1 of 2");
+    const filtered = await frameOf(picker("mixed", all, size, { query: "@groq free" }), size.width, size.height);
+    expect(filtered).toContain("[All 1]");
+    expect(filtered).toContain("@groq free");
+  });
+
+  it("offers a way out when a provider tab holds nothing for the search", async () => {
+    const size = { width: 100, height: 30 };
+    const all = [model("groq", "openai/gpt-oss-120b"), model("openrouter", "vendor/other-70b:free")];
+    const frame = await frameOf(
+      picker("mixed", all, size, { query: "other", provider: "groq" }),
+      size.width,
+      size.height,
+    );
+    expect(frame).toContain("[Groq 0]");
+    expect(frame).toContain("tab searches every provider");
   });
 
   it("tells a free model from one on a free plan Shelra cannot see the billing of, and from a paid one", async () => {
@@ -151,5 +203,56 @@ describe("ModelPickerModal in Mixed mode", () => {
     expect(frame).toContain("free plan, not declared");
     expect(frame).toContain("$3.00/M in");
     expect(frame).toMatch(/\bfree · 131K ctx/u);
+  });
+});
+
+describe("ModelPickerModal with a provider that lists nothing", () => {
+  const problems = [{ id: "omniroute", name: "OmniRoute", reason: "OmniRoute refused the key (HTTP 401)." }];
+  const all = [model("openrouter", "vendor/a:free"), model("groq", "openai/gpt-oss-120b", { freeStatus: "free-plan" })];
+
+  for (const size of SIZES) {
+    it(`shows it as a tab with a cross, and says why when chosen, at ${size.width}x${size.height}`, async () => {
+      const tabs = await frameOf(picker("mixed", all, size, { problems }), size.width, size.height);
+      expect(tabs).toContain("OmniRoute ✗");
+      const chosen = await frameOf(
+        picker("mixed", all, size, { problems, provider: "omniroute" }),
+        size.width,
+        size.height,
+      );
+      expect(chosen).toContain("[OmniRoute ✗]");
+      expect(chosen).toContain("OmniRoute is set up but lists no models");
+      expect(chosen).toContain("refused the key");
+      expect(chosen).toContain("HTTP 401");
+      expect(chosen).not.toContain("No models match");
+      for (const line of chosen.split(String.fromCharCode(10))) expect(line.length).toBeLessThanOrEqual(size.width);
+    });
+  }
+});
+
+describe("ModelPickerModal hints and warnings", () => {
+  const all = [model("openrouter", "vendor/a:free"), model("groq", "openai/gpt-oss-120b", { freeStatus: "free-plan" })];
+
+  for (const size of SIZES) {
+    it(`never cuts a key hint in the middle, and says why a stale provider is marked, at ${size.width}x${size.height}`, async () => {
+      const stale = [{ id: "groq", name: "Groq", reason: "HTTP 401", stale: true }];
+      const frame = await frameOf(
+        picker("mixed", all, size, { problems: stale, provider: "groq" }),
+        size.width,
+        size.height,
+      );
+      expect(frame).toContain("Groq 1 !");
+      expect(frame).toContain("Groq: last refresh failed (HTTP 401)");
+      const hint = frame.split(String.fromCharCode(10)).find((line) => line.includes("enter select")) ?? "";
+      expect(hint).toContain("esc close");
+      expect(hint).not.toContain("…");
+    });
+  }
+
+  it("says where more providers come from when only one is connected", async () => {
+    const size = { width: 100, height: 30 };
+    const one = [model("openrouter", "vendor/a:free")];
+    const frame = await frameOf(picker("mixed", one, size), size.width, size.height);
+    expect(frame).toContain("[All 1]  OpenRouter 1");
+    expect(frame).toContain("more providers: /config");
   });
 });

@@ -456,7 +456,10 @@ a paid model: a route counts as free only when Shelra can show it (OpenRouter's 
 prices) or you declared it (`shelra providers allow-free groq` says your Groq key
 has no billing; `shelra providers allow-free omniroute 'opencode-free/*'` names
 gateway models you know are free). **Mixed** lets you pick any model of any
-provider in `/models`. `shelra providers` shows what is connected and what Free
+provider in `/models`, where you can search by name and filter as you type:
+`@groq` (a provider), `free` `paid` `local`, `tools` `vision` `reasoning`, `ctx>100k` or `64k+` (context), and a leading
+minus to exclude (`-paid`, `-@groq`). Results are ranked by match, `Tab` and `Shift+Tab` step through the provider
+tabs, and when nothing matches exactly the closest names are shown. `shelra providers` shows what is connected and what Free
 mode may run. Design: `docs/architecture/22-PROVIDER-ROUTING.md`.
 
 ```bash
