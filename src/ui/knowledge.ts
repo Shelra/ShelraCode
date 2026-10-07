@@ -4,10 +4,10 @@
  * same stores the agent uses, so the panel can never disagree with what the model is given.
  */
 
+import { listSkills } from "../extend/skills";
 import { detectStaleness } from "../memory/retrieval";
 import { listMemoryRecords, listUserMemoryRecords, projectMemoryScope } from "../memory/store";
 import type { MemoryRecord } from "../memory/types";
-import { discoverSkills } from "../utils/skills";
 import { compactCwd } from "./paths";
 
 export type KnowledgeTab = "memory" | "skills" | "user";
@@ -95,13 +95,19 @@ export function buildKnowledge(workspace: string, now = Date.now(), home?: strin
   const user = listUserMemoryRecords()
     .map((record) => rowFor(record, "user", workspace, now))
     .sort(byType);
-  const skills = discoverSkills(workspace).map<SkillRow>((skill) => ({
+  const skills = listSkills(workspace).map<SkillRow>((skill) => ({
     key: `${skill.scope}:${skill.name}`,
     name: skill.name,
     description: skill.description,
     scope: skill.scope === "user" ? "global" : "project",
-    location: compactCwd(skill.rootDir, 48, home),
-    warnings: skill.review.flags.map((flag) => REVIEW_TEXT[flag] ?? flag),
+    location: compactCwd(skill.dir, 48, home),
+    warnings: [
+      ...skill.flags.map((flag) => REVIEW_TEXT[flag] ?? flag),
+      ...(skill.enabled ? [] : ["turned off in settings"]),
+      ...(skill.invocation === "explicit" ? ["runs only when you name it"] : []),
+      ...(skill.status === "candidate" ? ["candidate: not used automatically until you promote it"] : []),
+      ...skill.diagnostics.filter((note) => note.startsWith("error:")).map((note) => note.slice(7)),
+    ],
   }));
   return { memory, user, skills };
 }

@@ -7,6 +7,7 @@ import {
   listTraces,
   newTraceEvents,
   readTrace,
+  recordExtensionEvent,
   recordUiEvent,
   redact,
   startTurnTrace,
@@ -47,6 +48,44 @@ const call = (id: string, name: string, args: Record<string, unknown>) => ({
 });
 
 describe("session trace", () => {
+  it("distinguishes host content from the first real provider activity", () => {
+    const dir = traceHere();
+    const trace = startTurnTrace({
+      sessionId: "first-model",
+      cwd: "/w",
+      model: "m",
+      mode: "agent",
+      request: "Build it",
+    });
+    trace.chunk({ type: "content", content: "[Research completed]" });
+    trace.observe(undefined).onModelProgress?.({ kind: "tool-input", timestamp: Date.now() + 50 });
+    trace.end();
+    const end = readTrace(listTraces(dir)[0]?.path ?? "").at(-1)!;
+    expect(end.firstModelActivityMs as number).toBeGreaterThanOrEqual((end.firstContentMs as number) + 50);
+    expect(end).not.toHaveProperty("firstTokenMs");
+  });
+  it("correlates interleaved turns and records context sizes without adding prompt bodies", () => {
+    const dir = traceHere();
+    const first = startTurnTrace({ sessionId: "shared", cwd: "/work", model: "m", mode: "agent", request: "one" });
+    const second = startTurnTrace({ sessionId: "shared", cwd: "/work", model: "m", mode: "agent", request: "two" });
+    first.observe(undefined).onContextPrepared?.({
+      systemChars: 100,
+      messagesBeforeChars: 10000,
+      messagesAfterChars: 2000,
+      messageCount: 5,
+      timestamp: Date.now(),
+    });
+    first.end();
+    second.end();
+    const events = readTrace(listTraces(dir)[0]?.path ?? "");
+    const starts = events.filter((event) => event.kind === "turn");
+    expect(starts[0]?.runId).not.toBe(starts[1]?.runId);
+    const context = events.find((event) => event.kind === "context");
+    expect(context).toMatchObject({ runId: starts[0]?.runId, messagesBeforeChars: 10000, messagesAfterChars: 2000 });
+    expect(context).not.toHaveProperty("request");
+    expect(context).toHaveProperty("elapsedMs");
+  });
+
   it("records a turn as it went: request, models, notices, tools, text and verdict", () => {
     const dir = traceHere();
     const trace = startTurnTrace({
@@ -227,6 +266,19 @@ describe("verbose session trace (SHELRA_TRACE=verbose)", () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ kind: "ui", action: "mode", to: "mixed" });
     expect(formatTraceEvent(events[0] as never, false, true)).toContain("[ui-sessi] ");
+  });
+
+  it("masks secrets inside lists and objects an extension event carries, not only top-level text", () => {
+    const dir = traceHere();
+    const key = `sk-or-v1-${"0123456789abcdef".repeat(4)}`;
+    recordExtensionEvent("ext-session", "hook", {
+      evidence: [`curl -H 'Authorization: Bearer ${key}' x`],
+      nested: { command: `deploy ${key}` },
+      plain: `key ${key}`,
+    });
+    const text = JSON.stringify(readTrace(listTraces(dir)[0]?.path ?? ""));
+    expect(text).toContain("extension");
+    expect(text).not.toContain("0123456789abcdef0123456789abcdef");
   });
 
   it("watches every session, reading only what each appended, and waits for a line still being written", () => {

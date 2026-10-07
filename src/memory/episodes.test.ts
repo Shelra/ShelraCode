@@ -216,14 +216,15 @@ describe("open plans (doc 21, Phase B)", () => {
     expect(lines).toContain("3. Move the importer — to do");
   });
 
-  it("drops a plan once every step is done, and lists at most three", () => {
+  it("drops completed plans, retains unchecked claims, and lists at most three", () => {
     const scope = projectMemoryScope(scratch("shelra-episodes-plans-"));
     appendEpisode(scope, episodeFrom(digest({ plan: refactor(["complete"]) }), "verified"));
     appendEpisode(
       scope,
       episodeFrom(digest({ plan: refactor(["complete", "complete", "complete", "claimed"]) }), "verified"),
     );
-    expect(openPlans(readEpisodes(scope))).toEqual([]);
+    expect(openPlans(readEpisodes(scope))).toHaveLength(1);
+    expect(describeOpenPlans(openPlans(readEpisodes(scope))).join("\n")).toContain("claimed, not checked");
     for (const title of ["A", "B", "C", "D"]) {
       appendEpisode(
         scope,
@@ -236,10 +237,25 @@ describe("open plans (doc 21, Phase B)", () => {
   it("does not call a plan open when its turn ended on its own without moving a step, unless the turn was cut", () => {
     const scope = projectMemoryScope(scratch("shelra-episodes-plans-"));
     const untracked = { title: "Yearly tax summary", steps: [{ title: "Write it", status: "pending" as const }] };
-    appendEpisode(scope, episodeFrom(digest({ plan: untracked }), "unverified"));
+    appendEpisode(scope, episodeFrom(digest({ plan: untracked }), "verified"));
     expect(openPlans(readEpisodes(scope))).toEqual([]);
     const cut = { title: "Module layout refactor", steps: [{ title: "Move money", status: "pending" as const }] };
     appendEpisode(scope, episodeFrom(digest({ plan: cut }), "interrupted"));
     expect(openPlans(readEpisodes(scope)).map((item) => item.plan.title)).toEqual(["Module layout refactor"]);
+  });
+
+  it("retains an unfinished pending plan when its turn ended unverified", () => {
+    const scope = projectMemoryScope(scratch("shelra-episodes-unverified-"));
+    const plan = { title: "Reports module", steps: [{ title: "Write tax reports", status: "pending" as const }] };
+    appendEpisode(scope, episodeFrom(digest({ plan }), "unverified"));
+    expect(openPlans(readEpisodes(scope)).map((item) => item.plan.title)).toEqual(["Reports module"]);
+  });
+
+  it("keeps claimed steps visible as unresolved work after a restart", () => {
+    const scope = projectMemoryScope(scratch("shelra-episodes-claimed-"));
+    const plan = { title: "API migration", steps: [{ title: "Migrate routes", status: "claimed" as const }] };
+    appendEpisode(scope, episodeFrom(digest({ plan }), "unverified"));
+    expect(openPlans(readEpisodes(scope))).toHaveLength(1);
+    expect(describeOpenPlans(openPlans(readEpisodes(scope))).join("\n")).toContain("claimed, not checked");
   });
 });

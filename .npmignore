@@ -8,7 +8,8 @@ biome.json
 # Nested migration reference checkout — never publish this
 ShelraCode/
 
-# The account service is deployed on its own, never shipped inside the CLI package
+# The website and the account service are their own repositories, never shipped inside the CLI package
+frontend/
 backend/
 
 # Repo-only tooling / config

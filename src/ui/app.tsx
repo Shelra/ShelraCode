@@ -4,9 +4,13 @@ import type { KeyBinding, KeyEvent, ScrollBoxRenderable, TextareaRenderable } fr
 import { decodePasteBytes, type PasteEvent, parseKeypress } from "@opentui/core";
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import os from "os";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Agent, type ProcessMessageObserver } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
+import type { ConfigServices } from "../config/services";
+import { asFencedText, runExtensionCommand, splitCommand } from "../extend/commands";
+import { projectRootFor } from "../extend/settings";
+import { listSkills } from "../extend/skills";
 import { type HookIssue, setHookIssueListener } from "../hooks/index";
 import { importForeignChat, listForeignChats, SOURCE_NAMES } from "../import/index";
 import type { Decision } from "../ledger/types";
@@ -26,6 +30,7 @@ import {
   getSupportedReasoningEfforts,
   normalizeModelId,
 } from "../models/catalog";
+import { providerDisplayName, providerListOrder } from "../providers/default-registry";
 import { SessionStore } from "../storage/index";
 import { createTelegramBridge, type TelegramBridgeHandle } from "../telegram/bridge";
 import { approvePairingCode } from "../telegram/pairing";
@@ -48,6 +53,7 @@ import { MODES } from "../types/index";
 import { processAtMentions } from "../utils/at-mentions.js";
 import { FileIndex } from "../utils/file-index.js";
 import { copyTextToHostClipboard } from "../utils/host-clipboard";
+import { perfCount, perfTime } from "../utils/perf-probe";
 import { recordUiEvent } from "../utils/session-trace";
 import {
   type CustomSubagentConfig,
@@ -72,7 +78,6 @@ import {
   saveRecapsEnabled,
   saveUserSettings,
 } from "../utils/settings";
-import { discoverSkills } from "../utils/skills";
 import { formatSubagentName } from "../utils/subagent-display";
 import { checkForUpdate, runUpdate, type UpdateCheckResult } from "../utils/update-checker";
 import { type ActivityPhrase, describeStatusStage, describeToolCall, phraseText, reasoningPreview } from "./activity";
@@ -88,10 +93,13 @@ import { SectionBadge } from "./components/badge";
 import { BtwOverlay, type BtwState } from "./components/btw-overlay.js";
 import { SuggestionOverlay } from "./components/SuggestionOverlay.js";
 import { TextArea } from "./components/text-area";
+import { ConfigView } from "./config/view";
 import { DiffView } from "./diff-view";
 import { GLYPH } from "./glyphs";
 import { HelpModal } from "./help-modal";
+import { useBufferedCallback } from "./hooks/use-buffered-callback";
 import { useHiddenScrollbar } from "./hooks/use-hidden-scrollbar";
+import { isPinnedToEnd, useTranscriptWindow } from "./hooks/use-transcript-window";
 import { type TypeaheadState, useTypeahead } from "./hooks/useTypeahead.js";
 import { buildKnowledge, type KnowledgeTab } from "./knowledge";
 import { KnowledgeModal, knowledgeRowsFor } from "./knowledge-modal";
@@ -106,6 +114,8 @@ import {
   missionTabForKey,
   missionViewForCommand,
 } from "./mission";
+import { ModelPickerModal } from "./model-picker";
+import { pickerModels } from "./model-picker-data";
 import {
   changedFiles,
   describeReasoningEffort,
@@ -113,11 +123,15 @@ import {
   phaseLabel,
   projectTranscript,
   resolvePlanState,
+  reuseTranscriptItems,
   type SessionUsageSummary,
+  sameSnapshot,
+  sameUsageSummary,
   summarizeChanges,
   summarizeChecks,
   summarizeMemoryStatus,
   summarizeSessionUsage,
+  type TranscriptItem,
   type TurnThought,
   type UiActivityEvent,
   upsertActivity,
@@ -358,6 +372,13 @@ const BUILTIN_TYPED_SLASH_COMMANDS = new Set([
   "/clear",
   "/model",
   "/models",
+  "/config",
+  "/settings",
+  "/setup",
+  "/logout",
+  "/signout",
+  "/login",
+  "/whoami",
   "/sandbox",
   "/recap",
   "/recaps",
@@ -604,6 +625,9 @@ export interface AppStartupConfig {
   maxToolRounds: number;
   version: string;
   localModels?: ModelInfo[];
+  /** The providers' catalog as it is now, and a way to hear when it changes (it refreshes while the session runs). */
+  getModels?: () => ModelInfo[];
+  subscribeModels?: (listener: () => void) => () => void;
   onSelectLocalModel?: (modelId: string) => Promise<{ success: boolean; error?: string }>;
   onApiKey?: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
   /**
@@ -612,6 +636,12 @@ export interface AppStartupConfig {
    */
   modelMode?: ModelMode;
   onSetModelMode?: (mode: ModelMode) => Promise<{ success: boolean; error?: string; modelId?: string }>;
+  /** What `/config` works on: the providers and keys, the defaults, the account. Absent where there is no account. */
+  configServices?: () => ConfigServices;
+  /** The person signed out from `/config` or `/logout`: the process says so and ends. */
+  onSignedOut?: () => void;
+  /** Who is signed in, for `/login`. */
+  accountEmail?: () => string | null;
 }
 
 export type ModelMode = "free" | "mixed";
@@ -633,7 +663,11 @@ interface ActiveTurnState {
   flushedAssistantChars: number;
 }
 
+/** How often streamed reasoning reaches the screen: the thinking line holds a sentence far longer than this. */
+const REASONING_REFRESH_MS = 250;
+
 export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) {
+  perfCount("App.render");
   const renderer = useRenderer();
   const [motionPreference, setMotionPreference] = useState<MotionPreference>(() => loadMotionPreference());
   const t = resolveTheme();
@@ -674,6 +708,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [sandboxSettingsEditBuffer, setSandboxSettingsEditBuffer] = useState("");
   const [showRecapPicker, setShowRecapPicker] = useState(false);
   /** /resume: the saved chats listed, the cursor, whether they span every folder, and why one would not open. */
+  /** `/config` (and `/logout`, which opens it on the sign-out question) is on screen. */
+  const [configScreen, setConfigScreen] = useState<{ start?: "confirm-signout" } | null>(null);
   const [resumePicker, setResumePicker] = useState<{
     chats: ResumeChat[];
     index: number;
@@ -955,33 +991,32 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
   const modeInfo = MODES.find((m) => m.id === mode)!;
   const modelInfo = agent.getModelInfo() ?? getModelInfo(model);
-  const contextStats = modelInfo ? agent.getContextStats(modelInfo.contextWindow, streamContent) : null;
+  const contextStats = modelInfo
+    ? perfTime("getContextStats", () => agent.getContextStats(modelInfo.contextWindow, streamContent))
+    : null;
   const memoryVersion = activityEvents.reduce((count, event) => (event.kind === "memory" ? count + 1 : count), 0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-read only when the memory engine reports a write
   const memoryStatus = useMemo(
     () => summarizeMemoryStatus(readMemoryIndex(projectMemoryScope(agent.getCwd()))),
     [agent, memoryVersion],
   );
-  const skillCount = useMemo(() => discoverSkills(agent.getCwd()).length, [agent]);
+  const skillCount = useMemo(() => listSkills(agent.getCwd()).filter((skill) => skill.enabled).length, [agent]);
+  // The catalog refreshes in the background; the picker follows it without a restart.
+  const [catalogModels, setCatalogModels] = useState<ModelInfo[]>(startupConfig.localModels ?? []);
+  useEffect(() => {
+    if (!startupConfig.subscribeModels || !startupConfig.getModels) return;
+    const read = startupConfig.getModels;
+    return startupConfig.subscribeModels(() => setCatalogModels(read()));
+  }, [startupConfig.subscribeModels, startupConfig.getModels]);
+  const pickerOptions = useMemo(() => ({ providerName: providerDisplayName, providerOrder: providerListOrder() }), []);
   const modelCatalog = useMemo(
-    () =>
-      [...(startupConfig.localModels ?? [])].sort((a, b) => {
-        const aCloud = a.category === "cloud";
-        const bCloud = b.category === "cloud";
-        if (aCloud !== bCloud) return Number(bCloud) - Number(aCloud);
-        const aFree = aCloud && a.pricingKnown !== false && a.inputPrice === 0 && a.outputPrice === 0;
-        const bFree = bCloud && b.pricingKnown !== false && b.inputPrice === 0 && b.outputPrice === 0;
-        return Number(bFree) - Number(aFree) || a.name.localeCompare(b.name);
-      }),
-    [startupConfig.localModels],
+    () => pickerModels(catalogModels, { ...pickerOptions, mode: undefined, query: "" }),
+    [catalogModels, pickerOptions],
   );
-  const filteredModels = modelSearchQuery
-    ? modelCatalog.filter(
-        (m) =>
-          m.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
-          m.id.toLowerCase().includes(modelSearchQuery.toLowerCase()),
-      )
-    : modelCatalog;
+  const filteredModels = useMemo(
+    () => pickerModels(catalogModels, { ...pickerOptions, mode: modelMode, query: modelSearchQuery }),
+    [catalogModels, pickerOptions, modelMode, modelSearchQuery],
+  );
   const filteredModelIds = filteredModels.map((m) => m.id);
   const selectLocalModel = useCallback(
     /** Resolves true only when the model is actually switched. */
@@ -1593,7 +1628,18 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setScheduleModalIndex((idx) => Math.max(0, Math.min(idx, Math.max(0, scheduleRows.length - 1))));
   }, [scheduleRows.length]);
 
+  // Streamed content follows the end of the log only while the reader is there: a reader who scrolled up
+  // to look at earlier work must not be pulled back down every 50 ms (seen 2026-10-06).
   const scrollToBottom = useCallback(() => {
+    try {
+      if (!isPinnedToEnd(scrollRef.current)) return;
+      scrollRef.current?.scrollTo(scrollRef.current?.scrollHeight ?? 99999);
+    } catch {
+      /* */
+    }
+  }, []);
+  // The reader's own move (sending a message, opening a chat) always goes to the end.
+  const jumpToBottom = useCallback(() => {
     try {
       scrollRef.current?.scrollTo(scrollRef.current?.scrollHeight ?? 99999);
     } catch {
@@ -1601,7 +1647,20 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     }
   }, []);
 
+  const assistantUpdates = useBufferedCallback(() => {
+    setStreamContent(sanitizeContent(contentAccRef.current));
+    scrollToBottom();
+  });
+  // The thinking line shows one sentence and holds it for 1.6 s (THOUGHT_DWELL_MS), so its source needs no
+  // faster refresh than a few times a second: at 20 a second every delta redrew the whole screen for nothing.
+  const reasoningUpdates = useBufferedCallback(
+    () => setStreamReasoning(reasoningRef.current.text),
+    REASONING_REFRESH_MS,
+  );
+
   const clearLiveTurnUi = useCallback(() => {
+    assistantUpdates.cancel();
+    reasoningUpdates.cancel();
     setStreamContent("");
     setStreamReasoning("");
     setActiveToolCalls([]);
@@ -1611,7 +1670,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     setLiveTurnSourceLabel(null);
     setLiveStatus(null);
     contentAccRef.current = "";
-  }, []);
+  }, [assistantUpdates, reasoningUpdates]);
 
   useEffect(() => {
     setHookIssueListener((issue) => setHookIssues((current) => [...current.slice(-2), issue]));
@@ -1630,11 +1689,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         reasoning.steps += 1;
       }
       reasoning.text = `${reasoning.text}${delta}`.slice(-1600);
-      setStreamReasoning(reasoning.text);
+      reasoningUpdates.schedule();
       setLiveStatus(null);
       enterPhase("thinking");
     },
-    [enterPhase],
+    [enterPhase, reasoningUpdates],
   );
 
   const closeReasoning = useCallback(() => {
@@ -1644,10 +1703,17 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     reasoning.startedAt = null;
   }, []);
 
-  const syncKernelState = useCallback(() => {
-    setKernelState(agent.getKernelState());
-    setUsageSummary(summarizeSessionUsage(agent.getSessionUsage()));
+  // A poll that finds nothing new keeps the state it has: a fresh object would redraw the whole screen.
+  const pollKernelState = useCallback(() => {
+    const next = agent.getKernelState();
+    setKernelState((current) => (sameSnapshot(current, next) ? current : next));
   }, [agent]);
+
+  const syncKernelState = useCallback(() => {
+    pollKernelState();
+    const usage = summarizeSessionUsage(agent.getSessionUsage());
+    setUsageSummary((current) => (sameUsageSummary(current, usage) ? current : usage));
+  }, [agent, pollKernelState]);
 
   const recordActivity = useCallback((event: UiActivityEvent) => {
     setActivityEvents((current) => upsertActivity(current, event));
@@ -1735,9 +1801,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   useEffect(() => {
     syncKernelState();
     if (!isProcessing) return;
-    const id = setInterval(syncKernelState, 100);
+    // The kernel snapshot is cheap; the usage ledger is a database read, and steps report their own usage.
+    let ticks = 0;
+    const id = setInterval(() => {
+      ticks += 1;
+      if (ticks % 10 === 0) syncKernelState();
+      else pollKernelState();
+    }, 100);
     return () => clearInterval(id);
-  }, [isProcessing, syncKernelState]);
+  }, [isProcessing, pollKernelState, syncKernelState]);
 
   useEffect(() => {
     if (!isProcessing && !activeSubagent && !delegations.some((delegation) => delegation.status === "running")) return;
@@ -1748,7 +1820,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
   const refreshDelegations = useCallback(async () => {
     try {
-      setDelegations(await agent.getDelegations());
+      const next = await agent.getDelegations();
+      setDelegations((current) => (sameSnapshot(current, next) ? current : next));
     } catch {
       // Agent telemetry must not interrupt the conversation surface.
     }
@@ -1798,6 +1871,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   );
 
   const flushPendingAssistantMessage = useCallback(() => {
+    assistantUpdates.cancel();
     const activeTurn = activeTurnRef.current;
     if (!activeTurn) return;
 
@@ -1825,15 +1899,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
     contentAccRef.current = "";
     setStreamContent("");
-  }, []);
+  }, [assistantUpdates]);
 
   const applyLocalAssistantDelta = useCallback(
     (delta: string) => {
       contentAccRef.current += delta;
-      setStreamContent(sanitizeContent(contentAccRef.current));
-      setTimeout(scrollToBottom, 10);
+      assistantUpdates.schedule();
     },
-    [scrollToBottom],
+    [assistantUpdates],
   );
 
   const applyTelegramAssistantPreview = useCallback(
@@ -1843,10 +1916,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
       activeTurn.latestAssistantText = fullContent;
       contentAccRef.current = getUnflushedTelegramAssistantContent(fullContent, activeTurn.flushedAssistantChars);
-      setStreamContent(sanitizeContent(contentAccRef.current));
-      setTimeout(scrollToBottom, 10);
+      assistantUpdates.schedule();
     },
-    [scrollToBottom],
+    [assistantUpdates],
   );
 
   const showLiveToolCalls = useCallback(
@@ -2199,6 +2271,33 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   }, []);
 
   /** Free ⇄ Mixed (ctrl+f, /free). Free leaves a paid model for the best free one; Mixed keeps the current model. */
+  /** The services of the open settings screen, built once per opening so its screens share one view of the keys. */
+  const configServicesRef = useRef<ConfigServices | null>(null);
+  const openConfig = useCallback(
+    (start?: "confirm-signout") => {
+      if (!startupConfig.configServices) {
+        showNotice("Settings are not available in this session", 3200);
+        return;
+      }
+      if (isProcessingRef.current) {
+        showNotice("Open settings after this turn (esc stops it)", 3600);
+        return;
+      }
+      configServicesRef.current = startupConfig.configServices();
+      setConfigScreen(start ? { start } : {});
+    },
+    [showNotice, startupConfig.configServices],
+  );
+  const showLoginNotice = useCallback(() => {
+    const email = startupConfig.accountEmail?.();
+    showNotice(email ? `Signed in as ${email}. /logout signs out.` : "Not signed in. Restart Shelra to sign in.", 4200);
+  }, [showNotice, startupConfig.accountEmail]);
+  /** The mode and model may have changed in the settings: the badge and the model name follow what the session runs. */
+  const refreshModelsAfterConfig = useCallback(() => {
+    const running = agent.getModel();
+    if (running) setModel(running);
+  }, [agent]);
+
   /** Switches to `target`, or to the other mode when none is given (ctrl+f). */
   const toggleModelMode = useCallback(
     async (target?: ModelMode) => {
@@ -2707,13 +2806,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         setResumePicker(null);
         // The header already names the chat; the notice only confirms the switch, short enough for 80 columns.
         showNotice(chat.foreign ? `${SOURCE_NAMES[chat.foreign.source]} chat continued` : "Chat continued", 3200);
-        setTimeout(scrollToBottom, 50);
+        setTimeout(jumpToBottom, 50);
       } catch (cause) {
         const error = cause instanceof Error ? cause.message : "The chat could not be opened.";
         setResumePicker((picker) => picker && { ...picker, error });
       }
     },
-    [agent, showNotice, showSession, scrollToBottom],
+    [agent, showNotice, showSession, jumpToBottom],
   );
 
   const processMessage = useCallback(
@@ -2744,7 +2843,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       await coordinatorRef.current.run(async () => {
         beginLiveTurn({ kind: "local", agent });
         setMessages((prev) => [...prev, buildUserEntry((displayText ?? text).trim())]);
-        setTimeout(scrollToBottom, 50);
+        setTimeout(jumpToBottom, 50);
         await new Promise((r) => setTimeout(r, 0));
         let turnHadError = false;
         let turnHadAuthError = false;
@@ -2880,7 +2979,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       enterPhase,
       finalizeActiveTurn,
       noteReasoning,
-      scrollToBottom,
+      jumpToBottom,
       sessionTitle,
       showLiveToolCalls,
       syncKernelState,
@@ -3031,6 +3130,22 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     };
   }, [agent, scrollToBottom]);
 
+  const runExtensionSlash = useCallback(
+    (name: string, args: string[]) => {
+      void runExtensionCommand({ root: projectRootFor(agent.getCwd()), cwd: agent.getCwd() }, name, args).then(
+        (result) => {
+          if (result.openAgentEditor) {
+            openAgentsModal();
+            return;
+          }
+          if (result.output) setMessages((prev) => [...prev, buildAssistantEntry(asFencedText(result.output))]);
+          setTimeout(jumpToBottom, 10);
+        },
+      );
+    },
+    [agent, jumpToBottom, openAgentsModal],
+  );
+
   const handleCommand = useCallback(
     (cmd: string): boolean => {
       const c = cmd.trim().toLowerCase();
@@ -3051,6 +3166,18 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       if (c === "/tasks" || c === "/delegations") {
         setInspectorTab("agents");
         setShowInspector(true);
+        return true;
+      }
+      if (c === "/config" || c === "/settings" || c === "/setup") {
+        openConfig();
+        return true;
+      }
+      if (c === "/logout" || c === "/signout") {
+        openConfig("confirm-signout");
+        return true;
+      }
+      if (c === "/login" || c === "/whoami") {
+        showLoginNotice();
         return true;
       }
       if (c === "/model" || c === "/models") {
@@ -3097,8 +3224,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
         openMcpModal();
         return true;
       }
-      if (c === "/agents" || c === "/agent") {
-        openAgentsModal();
+      // Skills, agents, hooks, instructions, prompt and doctor share their services with the model's tools
+      // (src/extend/commands.ts); the result is shown in the log like any other answer from Shelra.
+      const extension = /^\/(skills?|agents?|hooks?|instructions|rules|prompt|doctor)(?:\s+(.*))?$/iu.exec(cmd.trim());
+      if (extension) {
+        runExtensionSlash((extension[1] as string).toLowerCase(), splitCommand(extension[2] ?? ""));
         return true;
       }
       if (c === "/schedule" || c === "/schedules") {
@@ -3179,7 +3309,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     [
       agent,
       handleExit,
-      openAgentsModal,
+      runExtensionSlash,
       openEffortPicker,
       openMcpModal,
       openRecapPicker,
@@ -3193,6 +3323,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       subAgents,
       toggleModelMode,
       openResumePicker,
+      openConfig,
+      showLoginNotice,
     ],
   );
 
@@ -3209,6 +3341,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           break;
         case "import":
           openResumePicker(false, true);
+          break;
+        case "config":
+          openConfig();
+          break;
+        case "logout":
+          openConfig("confirm-signout");
+          break;
+        case "login":
+          showLoginNotice();
           break;
         case "models":
           setShowModelPicker(true);
@@ -3256,7 +3397,11 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           openMcpModal();
           break;
         case "agents":
-          openAgentsModal();
+        case "hooks":
+        case "instructions":
+        case "prompt":
+        case "doctor":
+          runExtensionSlash(item.id, []);
           break;
         case "plan":
         case "diff":
@@ -3305,7 +3450,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     },
     [
       handleExit,
-      openAgentsModal,
+      runExtensionSlash,
       openEffortPicker,
       openMcpModal,
       openRecapPicker,
@@ -3320,6 +3465,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       toggleModelMode,
       openKnowledge,
       openResumePicker,
+      openConfig,
+      showLoginNotice,
     ],
   );
 
@@ -3333,6 +3480,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     showSandboxPicker ||
     showRecapPicker ||
     !!resumePicker ||
+    !!configScreen ||
     showMotionPicker ||
     showEffortPicker ||
     showWalletPicker ||
@@ -3419,6 +3567,8 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
 
   const handleKey = useCallback(
     (key: KeyEvent) => {
+      // The settings screen reads its own keys.
+      if (configScreen) return;
       if (btwState) {
         if (isEscapeKey(key) || key.name === "return") {
           dismissBtw();
@@ -4034,6 +4184,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           setModelPickerIndex((i) => Math.min(filteredModelIds.length - 1, i + 1));
           return;
         }
+        if (key.name === "pageup" || key.name === "pagedown") {
+          const step = key.name === "pageup" ? -6 : 6;
+          setModelPickerIndex((i) => Math.max(0, Math.min(filteredModelIds.length - 1, i + step)));
+          return;
+        }
+        if (key.name === "home" || key.name === "end") {
+          setModelPickerIndex(key.name === "home" ? 0 : Math.max(0, filteredModelIds.length - 1));
+          return;
+        }
         if (key.name === "left" || key.name === "right") {
           const sel = filteredModelIds[modelPickerIndex];
           if (sel) {
@@ -4521,12 +4680,15 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       continueSavedChat,
       openResumePicker,
       resumePicker,
+      configScreen,
     ],
   );
   useKeyboard(handleKey);
 
   const handlePaste = useCallback(
     (event: PasteEvent) => {
+      // A key pasted into the settings screen is read there, not by the prompt.
+      if (configScreen) return;
       if (!hasApiKeyRef.current) {
         event.preventDefault();
         openApiKeyModal();
@@ -4552,7 +4714,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
       replacePasteBlocks([...pasteBlocksRef.current, block]);
       inputRef.current?.insertText(getPasteBlockToken(block));
     },
-    [openApiKeyModal, replacePasteBlocks],
+    [openApiKeyModal, replacePasteBlocks, configScreen],
   );
 
   const handleSubmit = useCallback(() => {
@@ -4590,17 +4752,17 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     if (isProcessingRef.current) {
       queuedMessagesRef.current.push({ text: enhancedMessage, displayText });
       setQueuedMessages(queuedMessagesRef.current.map((msg) => msg.displayText));
-      setTimeout(scrollToBottom, 10);
+      setTimeout(jumpToBottom, 10);
       return;
     }
     processMessage(enhancedMessage, displayText);
-  }, [agent, clearLiveTurnUi, handleCommand, openApiKeyModal, processMessage, replacePasteBlocks, scrollToBottom]);
+  }, [agent, clearLiveTurnUi, handleCommand, openApiKeyModal, processMessage, replacePasteBlocks, jumpToBottom]);
 
   const inspectorPlan = useMemo(
     () => resolvePlanState(messages) ?? publishedPlan ?? activePlan,
     [activePlan, messages, publishedPlan],
   );
-  const inspectorChangedFiles = changedFiles(messages, kernelState);
+  const inspectorChangedFiles = useMemo(() => changedFiles(messages, kernelState), [messages, kernelState]);
   const originalIntent = messages.find((entry) => entry.type === "user")?.content ?? null;
   const currentActivity = useMemo(() => {
     if (activeSubagent) {
@@ -4635,16 +4797,22 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const _currentActivityElapsedMs = currentActivityStartedAt ? Math.max(0, nowTick - currentActivityStartedAt) : null;
   const inspectorContextSummary = agent.getContextSummary();
   const inspectorContextStats: InspectorContextStats | null = contextStats;
-  const transcriptItems = useMemo(
-    () =>
+  const previousItemsRef = useRef<TranscriptItem[]>([]);
+  const transcriptItems = useMemo(() => {
+    const projected = perfTime("projectTranscript", () =>
       projectTranscript(messages, {
         durations: toolDurations,
         thoughts: turnThoughts,
         recalls: turnRecalls,
         live: isProcessing,
       }),
-    [messages, toolDurations, turnThoughts, turnRecalls, isProcessing],
-  );
+    );
+    const items = reuseTranscriptItems(previousItemsRef.current, projected);
+    previousItemsRef.current = items;
+    return items;
+  }, [messages, toolDurations, turnThoughts, turnRecalls, isProcessing]);
+  // Only the end of a long log is mounted: every mounted item costs layout on every frame.
+  const { startIndex: mountedFrom, hiddenCount: earlierCount } = useTranscriptWindow(transcriptItems, scrollRef);
   // While the agent works on an unfinished plan, the checklist sits under the log where it is always
   // in view; the history keeps the line that created it and folds to `✓ Plan 4/4` when the turn ends.
   let lastAnswerIndex = -1;
@@ -4741,6 +4909,56 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     [agent, missionTab],
   );
 
+  // Keep the completed transcript mounted without reconciling it for each streamed delta or clock tick.
+  const transcriptViews = useMemo(
+    () =>
+      (mountedFrom > 0 ? transcriptItems.slice(mountedFrom) : transcriptItems).map((item) => {
+        perfCount("transcriptViews.item");
+        if (item.kind === "message") {
+          return (
+            <MessageView
+              key={item.id}
+              entry={item.entry}
+              index={item.sourceIndex}
+              t={t}
+              expandedMessages={expandedMessages}
+              paced={item.sourceIndex === lastAnswerIndex}
+              reducedMotion={reducedMotion}
+              onReveal={scrollToBottom}
+            />
+          );
+        }
+        if (item.kind === "thought") {
+          return <ThoughtView key={item.id} t={t} item={item} width={chatWidth - 10} detailed={showDetails} />;
+        }
+        if (item.kind === "summary") return <TurnSummaryLine key={item.id} t={t} item={item} />;
+        return (
+          <TranscriptActivityView
+            key={item.id}
+            t={t}
+            item={item}
+            width={chatWidth - 10}
+            detailed={showDetails}
+            livePlan={item.id === latestPlanItemId && !showLivePlan ? inspectorPlan : null}
+          />
+        );
+      }),
+    [
+      transcriptItems,
+      mountedFrom,
+      t,
+      expandedMessages,
+      lastAnswerIndex,
+      reducedMotion,
+      scrollToBottom,
+      chatWidth,
+      showDetails,
+      latestPlanItemId,
+      showLivePlan,
+      inspectorPlan,
+    ],
+  );
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: copy-on-mouse-up on the root surface
     <box
@@ -4777,40 +4995,14 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
                 // lands below the messages instead of above them.
                 contentOptions={{ justifyContent: "flex-end" }}
               >
-                {transcriptItems.map((item) => {
-                  if (item.kind === "message") {
-                    return (
-                      <MessageView
-                        key={item.id}
-                        entry={item.entry}
-                        index={item.sourceIndex}
-                        t={t}
-                        expandedMessages={expandedMessages}
-                        paced={item.sourceIndex === lastAnswerIndex}
-                        reducedMotion={reducedMotion}
-                        onReveal={scrollToBottom}
-                      />
-                    );
-                  }
-                  if (item.kind === "thought") {
-                    return (
-                      <ThoughtView key={item.id} t={t} item={item} width={chatWidth - 10} detailed={showDetails} />
-                    );
-                  }
-                  if (item.kind === "summary") {
-                    return <TurnSummaryLine key={item.id} t={t} item={item} />;
-                  }
-                  return (
-                    <TranscriptActivityView
-                      key={item.id}
-                      t={t}
-                      item={item}
-                      width={chatWidth - 10}
-                      detailed={showDetails}
-                      livePlan={item.id === latestPlanItemId && !showLivePlan ? inspectorPlan : null}
-                    />
-                  );
-                })}
+                {earlierCount > 0 ? (
+                  <box paddingLeft={3} flexShrink={0}>
+                    <text fg={t.textDim}>
+                      {`${GLYPH.collapsed} ${earlierCount} earlier ${earlierCount === 1 ? "entry" : "entries"} · scroll up to load them`}
+                    </text>
+                  </box>
+                ) : null}
+                {transcriptViews}
                 {liveTurnSourceLabel && (activeToolCalls.length > 0 || streamContent || isProcessing) && (
                   <box paddingLeft={3} marginTop={1} flexShrink={0}>
                     <text fg={t.textMuted}>{liveTurnSourceLabel}</text>
@@ -5173,7 +5365,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           width={width}
           height={height}
           searchQuery={modelSearchQuery}
-          filteredModels={filteredModels}
+          models={filteredModels}
+          allModels={catalogModels}
+          mode={modelMode}
+          providerName={providerDisplayName}
           reasoningEffortByModel={reasoningEffortByModel}
           switching={switchingModel}
           error={modelSwitchError}
@@ -5201,6 +5396,20 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           height={height}
           error={resumePicker.error}
           now={new Date()}
+        />
+      )}
+      {configScreen && startupConfig.configServices && (
+        <ConfigView
+          variant="config"
+          {...(configScreen.start ? { start: configScreen.start } : {})}
+          services={configServicesRef.current ?? startupConfig.configServices()}
+          theme={t}
+          onClose={(result) => {
+            setConfigScreen(null);
+            configServicesRef.current = null;
+            if (result.signedOut) startupConfig.onSignedOut?.();
+            else refreshModelsAfterConfig();
+          }}
         />
       )}
       {showMotionPicker && <MotionPickerModal t={t} motion={motionPreference} width={width} height={height} />}
@@ -5335,12 +5544,6 @@ const TEXTAREA_KEYBINDINGS: KeyBinding[] = [
   { name: "return", action: "submit" },
   { name: "return", shift: true, action: "newline" },
 ];
-
-function formatTokenCount(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
-  return String(tokens);
-}
 
 function contextMeterText(stats: ContextStats, wide: boolean): string {
   return `${Math.round(stats.ratioRemaining * 100)}% ${wide ? "context left" : "left"}`;
@@ -5835,7 +6038,7 @@ function PacedMarkdown({
   return <Markdown content={visible} t={t} streaming={streaming || visible.length < content.length} />;
 }
 
-export function MessageView({
+function MessageViewImpl({
   entry,
   index,
   t,
@@ -5853,6 +6056,7 @@ export function MessageView({
   reducedMotion?: boolean;
   onReveal?: () => void;
 }) {
+  perfCount("MessageView.render");
   switch (entry.type) {
     case "user":
       return (
@@ -6007,6 +6211,8 @@ export function MessageView({
       return <text fg={t.textMuted}>{entry.content}</text>;
   }
 }
+
+export const MessageView = memo(MessageViewImpl);
 
 const MAX_LSP_RESULT_LINES = 10;
 
@@ -6781,138 +6987,6 @@ function TelegramPairModal({
       </box>
     </box>
   );
-}
-
-/* ── Model Picker ────────────────────────────────────────────── */
-
-function ModelPickerModal({
-  t,
-  currentModel,
-  selectedIndex,
-  width,
-  height,
-  searchQuery,
-  filteredModels,
-  reasoningEffortByModel,
-  switching,
-  error,
-}: {
-  t: Theme;
-  currentModel: string;
-  selectedIndex: number;
-  width: number;
-  height: number;
-  searchQuery: string;
-  filteredModels: ModelInfo[];
-  reasoningEffortByModel: Record<string, ReasoningEffort>;
-  switching: boolean;
-  error: string | null;
-}) {
-  const listRef = useRef<ScrollBoxRenderable>(null);
-  useEffect(() => {
-    const m = filteredModels[selectedIndex];
-    if (m) listRef.current?.scrollChildIntoView(`model-${m.id}`);
-  }, [selectedIndex, filteredModels]);
-
-  const itemCount = Math.max(filteredModels.length, 1);
-  const selectedModel = filteredModels[selectedIndex];
-  const selectedSupportsReasoning = !!selectedModel && getSupportedReasoningEfforts(selectedModel.id).length > 0;
-  const contentHeight = itemCount * 2 + 6;
-  const maxH = Math.floor(height * 0.6);
-  const panelHeight = Math.min(contentHeight, maxH);
-  const top = bottomAlignedModalTop(height, panelHeight);
-  const overlayBg = t.overlay;
-  return (
-    <box
-      position="absolute"
-      left={0}
-      top={0}
-      width={width}
-      height={height}
-      alignItems="center"
-      paddingTop={top}
-      backgroundColor={overlayBg}
-    >
-      <box
-        width={Math.min(60, width - 6)}
-        height={panelHeight}
-        backgroundColor={t.background}
-        border={["top", "right", "bottom", "left"]}
-        borderStyle="single"
-        borderColor={t.border}
-        flexDirection="column"
-      >
-        <box flexShrink={0} flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-          <SectionBadge t={t} label="Models" />
-          <text fg={t.textMuted}>{"esc"}</text>
-        </box>
-        <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
-          <text fg={t.text}>{searchQuery || <span style={{ fg: t.textMuted }}>{"Search..."}</span>}</text>
-        </box>
-        <scrollbox scrollbarOptions={scrollbarStyle(t)} ref={listRef} flexGrow={1} minHeight={0}>
-          {filteredModels.map((m, idx) => {
-            const selected = idx === selectedIndex;
-            const current = m.id === currentModel;
-            const supportedReasoningEfforts = getSupportedReasoningEfforts(m.id);
-            const reasoningEffort =
-              getEffectiveReasoningEffort(m.id, reasoningEffortByModel[normalizeModelId(m.id)]) ?? "auto";
-            return (
-              <box
-                key={m.id}
-                id={`model-${m.id}`}
-                backgroundColor={selected ? t.selectedBg : undefined}
-                paddingLeft={2}
-                paddingRight={2}
-                width="100%"
-              >
-                <box width="100%" flexDirection="column">
-                  <box width="100%" flexDirection="row" justifyContent="space-between">
-                    <text fg={current ? t.accent : selected ? t.selected : t.text}>{m.name}</text>
-                    {supportedReasoningEfforts.length > 0 ? (
-                      <text fg={selected ? t.primary : t.textMuted}>{`[${reasoningEffort}]`}</text>
-                    ) : null}
-                  </box>
-                  <text fg={selected ? t.textMuted : t.textDim}>{modelMetadataLabel(m)}</text>
-                </box>
-              </box>
-            );
-          })}
-          {filteredModels.length === 0 && (
-            <box paddingLeft={2}>
-              <text fg={t.textMuted}>{"No models match your search"}</text>
-            </box>
-          )}
-        </scrollbox>
-        <box flexShrink={0} paddingLeft={2} paddingRight={2} paddingTop={1}>
-          {error ? <text fg={t.diffRemovedFg}>{error}</text> : null}
-          <text fg={switching ? t.accent : t.textMuted}>
-            {switching
-              ? "Preparing model..."
-              : selectedSupportsReasoning
-                ? "left/right reasoning  enter select  esc close"
-                : "enter select  esc close"}
-          </text>
-        </box>
-      </box>
-    </box>
-  );
-}
-
-function modelMetadataLabel(model: ModelInfo): string {
-  const price =
-    model.pricingKnown === false
-      ? "price unavailable"
-      : model.inputPrice === 0 && model.outputPrice === 0
-        ? "free"
-        : `$${(model.inputPrice * 1_000_000).toFixed(2)}/M in · $${(model.outputPrice * 1_000_000).toFixed(2)}/M out`;
-  const capabilities = [
-    model.supportsClientTools ? "tools" : undefined,
-    model.reasoning ? "reasoning" : undefined,
-    model.supportsVision ? "vision" : undefined,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  return `${model.category === "cloud" ? price : "local"} · ${formatTokenCount(model.contextWindow)} ctx${capabilities ? ` · ${capabilities}` : ""}`;
 }
 
 function SandboxPickerModal({

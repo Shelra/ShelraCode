@@ -27,7 +27,8 @@ const OPENROUTER_ROUTER_IDS = new Set(["openrouter/free", "openrouter/auto", "op
 
 export interface OpenRouterProviderOptions {
   modelId?: string;
-  entries?: readonly CatalogEntry[];
+  /** The provider's catalog, or a function returning its current one (the catalog refreshes during a session). */
+  entries?: readonly CatalogEntry[] | (() => readonly CatalogEntry[]);
   baseURL?: string;
   maxRetries?: number;
   appTitle?: string;
@@ -163,8 +164,10 @@ function fallbackModelInfo(modelId: string) {
 export class OpenRouterProviderAdapter implements ProviderAdapter {
   readonly id = "openrouter";
   readonly supportsBatch = false;
+  /** Refuses a model that is not free when the session is in Free mode (`paidModelRefusal`). */
+  readonly enforcesFreePolicy = true;
   readonly defaultModelId: string;
-  private readonly entries: readonly CatalogEntry[];
+  private readonly entriesSource: readonly CatalogEntry[] | (() => readonly CatalogEntry[]);
   private readonly transport: ProviderAdapter;
   private readonly quarantined = new Set<string>();
   private readonly quarantineStorePath: string | null | undefined;
@@ -174,7 +177,7 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
 
   constructor(apiKey: string, options: OpenRouterProviderOptions = {}) {
     this.defaultModelId = canonicalModelId(options.modelId ?? "openrouter/free");
-    this.entries = options.entries ?? [];
+    this.entriesSource = options.entries ?? [];
     this.quarantineStorePath = options.quarantineStorePath;
     this.policy = options.policy ?? "free";
     this.strictModel = options.strictModel === true;
@@ -210,6 +213,10 @@ export class OpenRouterProviderAdapter implements ProviderAdapter {
           }),
       },
     );
+  }
+
+  private get entries(): readonly CatalogEntry[] {
+    return typeof this.entriesSource === "function" ? this.entriesSource() : this.entriesSource;
   }
 
   /** Reads the upstream provider name from the response stream without consuming it. */

@@ -7,6 +7,12 @@ export interface SlashMenuItem {
 
 export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   { id: "models", label: "models", description: "Choose a model", aliases: ["model", "mode"] },
+  {
+    id: "config",
+    label: "config",
+    description: "Providers, keys, default mode and model",
+    aliases: ["settings", "setup", "keys", "providers"],
+  },
   { id: "free", label: "free", description: "Free models only, never a paid one (ctrl+f switches)" },
   { id: "mixed", label: "mixed", description: "Any model you pick, paid or free (ctrl+f switches)", aliases: ["paid"] },
   { id: "plan", label: "plan", description: "The plan and what is left" },
@@ -18,8 +24,22 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   { id: "verify", label: "verify", description: "Run local verification" },
   { id: "review", label: "review", description: "Review recent changes" },
   { id: "memory", label: "memory", description: "What Shelra knows about this project" },
-  { id: "skills", label: "skills", description: "Skills available to Shelra" },
-  { id: "agents", label: "agents", description: "Custom sub-agents" },
+  { id: "skills", label: "skills", description: "Skills: browse, search, run one with /<name> <args>" },
+  {
+    id: "agents",
+    label: "agents",
+    description: "Agents defined here, their limits and recent runs",
+    aliases: ["agent"],
+  },
+  { id: "hooks", label: "hooks", description: "What runs on events; approve a project's hooks", aliases: ["hook"] },
+  {
+    id: "instructions",
+    label: "instructions",
+    description: "SHELRA.md and rules in force, and where each comes from",
+    aliases: ["rules", "shelra.md"],
+  },
+  { id: "prompt", label: "prompt", description: "The custom system prompt in force" },
+  { id: "doctor", label: "doctor", description: "Check skills, agents, hooks and instructions for problems" },
   {
     id: "tasks",
     label: "tasks",
@@ -60,6 +80,8 @@ export const SLASH_MENU_ITEMS: SlashMenuItem[] = [
   { id: "schedule", label: "schedule", description: "Scheduled runs" },
   { id: "wallet", label: "wallet", description: "Wallet and payments" },
   { id: "remote-control", label: "remote-control", description: "Remote control" },
+  { id: "login", label: "login", description: "Who is signed in to ShelraCode", aliases: ["account", "whoami"] },
+  { id: "logout", label: "logout", description: "Sign out of ShelraCode", aliases: ["signout"] },
   { id: "update", label: "update", description: "Update ShelraCode" },
   { id: "exit", label: "exit", description: "Quit Shelra" },
 ];

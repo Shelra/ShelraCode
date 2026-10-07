@@ -2,6 +2,9 @@ import { stat } from "fs/promises";
 import path from "path";
 import { ripgrep } from "ripgrep";
 import type { ToolResult } from "../types/index";
+import { perfCount } from "../utils/perf-probe";
+import { type RipgrepRun, ripgrepOffThread } from "./ripgrep-client";
+import { trimRipgrepOutput } from "./ripgrep-output";
 
 const MAX_MATCHES = 100;
 const MAX_LINE_LENGTH = 2000;
@@ -21,6 +24,13 @@ interface RipgrepMatch {
     absolute_offset: number;
     submatches: Array<{ match: { text: string }; start: number; end: number }>;
   };
+}
+
+interface GrepRow {
+  file: string;
+  line: number;
+  text: string;
+  mtime: number;
 }
 
 function buildArgs(params: GrepParams): string[] {
@@ -46,29 +56,45 @@ function cleanPath(file: string): string {
   return path.normalize(file.replace(/^\.[\\/]/, ""));
 }
 
+/**
+ * The matches of ripgrep's JSON output. The output was already cut to the first MAX_RANKED_MATCHES matches and
+ * counted (see `trimRipgrepOutput`), so this parses at most a few thousand lines.
+ */
 function parseMatches(stdout: string): RipgrepMatch["data"][] {
-  if (!stdout.trim()) return [];
+  const matches: RipgrepMatch["data"][] = [];
+  for (const line of stdout.split(String.fromCharCode(10))) {
+    if (!line) continue;
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed.type !== "match") continue;
+      matches.push({
+        ...parsed.data,
+        path: { ...parsed.data.path, text: cleanPath(parsed.data.path.text) },
+      });
+    } catch {
+      // skip malformed lines
+    }
+  }
+  return matches;
+}
 
-  return stdout
-    .trim()
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .flatMap((line) => {
-      try {
-        const parsed = JSON.parse(line);
-        if (parsed.type === "match") {
-          return [
-            {
-              ...parsed.data,
-              path: { ...parsed.data.path, text: cleanPath(parsed.data.path.text) },
-            },
-          ];
-        }
-      } catch {
-        // skip malformed lines
-      }
-      return [];
-    });
+/** One search: on the worker thread when there is one, else in this process. */
+async function search(args: string[], searchCwd: string): Promise<RipgrepRun> {
+  const env = cleanEnv();
+  const offThread = await ripgrepOffThread(args, env, searchCwd);
+  if (offThread) {
+    perfCount("grep.offThread");
+    return offThread;
+  }
+  perfCount("grep.inProcess");
+  const result = await ripgrep(args, { buffer: true, env, preopens: { ".": searchCwd } });
+  const trimmed = trimRipgrepOutput((result.stdout as string | undefined) ?? "");
+  return {
+    code: result.code ?? 1,
+    stdout: trimmed.stdout,
+    total: trimmed.total,
+    stderr: (result.stderr as string | undefined) ?? "",
+  };
 }
 
 async function getFileMtimes(files: string[], cwd: string): Promise<Map<string, number>> {
@@ -112,17 +138,13 @@ export async function executeGrep(params: GrepParams, cwd: string): Promise<Tool
   const args = buildArgs({ ...params, path: searchTarget });
 
   try {
-    const result = await ripgrep(args, {
-      buffer: true,
-      env: cleanEnv(),
-      preopens: { ".": searchCwd },
-    });
+    const result = await search(args, searchCwd);
 
-    const stdout = (result.stdout as string) ?? "";
-    const code = result.code ?? 1;
+    const stdout = result.stdout;
+    const code = result.code;
 
     if (code !== 0 && code !== 1 && code !== 2) {
-      const stderr = (result.stderr as string) ?? "";
+      const stderr = result.stderr;
       return { success: false, error: stderr.trim() || `ripgrep failed with code ${code}` };
     }
 
@@ -131,6 +153,7 @@ export async function executeGrep(params: GrepParams, cwd: string): Promise<Tool
     }
 
     const matches = parseMatches(stdout);
+    const matchCount = result.total;
     if (matches.length === 0) {
       const msg = code === 2 ? "No matches found.\n(Some paths were inaccessible and skipped)" : "No matches found.";
       return { success: true, output: msg };
@@ -141,16 +164,13 @@ export async function executeGrep(params: GrepParams, cwd: string): Promise<Tool
     const uniqueFiles = [...new Set(matches.map((m) => rebase(m.path.text)))];
     const mtimes = await getFileMtimes(uniqueFiles, cwd);
 
-    const rows = matches
-      .map((m) => ({
-        file: rebase(m.path.text),
-        line: m.line_number,
-        text: m.lines.text.replace(/\n$/, ""),
-        mtime: mtimes.get(rebase(m.path.text)) ?? 0,
-      }))
-      .sort((a, b) => b.mtime - a.mtime);
+    const rows: GrepRow[] = matches.map((m) => {
+      const file = rebase(m.path.text);
+      return { file, line: m.line_number, text: m.lines.text.replace(/\n$/, ""), mtime: mtimes.get(file) ?? 0 };
+    });
+    rows.sort((a, b) => b.mtime - a.mtime);
 
-    const total = rows.length;
+    const total = matchCount;
     const truncated = total > MAX_MATCHES;
     const display = truncated ? rows.slice(0, MAX_MATCHES) : rows;
 

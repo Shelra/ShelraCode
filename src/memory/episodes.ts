@@ -184,9 +184,9 @@ export interface OpenPlan {
   plan: PlanSnapshot;
 }
 
-const FINISHED_STEP = new Set(["complete", "claimed"]);
-/** Turns that ended on their own: a plan none of whose steps they moved says nothing about what is left. */
-const ENDED_NORMALLY = new Set<TurnOutcome>(["verified", "unverified", "answered"]);
+const FINISHED_STEP = new Set(["complete"]);
+/** Only a verified turn can retire an untracked plan; unverified work still needs attention. */
+const ENDED_NORMALLY = new Set<TurnOutcome>(["verified"]);
 
 /**
  * The plans still open in this project, newest first: for each plan (by title), the latest snapshot the episodes hold,

@@ -102,6 +102,7 @@ vi.mock("../hooks/index", () => ({
 }));
 
 import { Agent, patienceAfterSilences } from "./agent";
+import * as promptBuilders from "./prompts";
 
 /** Agents under test work in a throwaway folder: their memory and workspace scans never touch this repository. */
 const testWorkspace = makeTestWorkspace(joinTestPath(testTmpdir(), "shelra-agent-test-"));
@@ -232,6 +233,43 @@ function apiError(statusCode: number, message: string): APICallError {
 
 const answer = (text: string): Round => ({ events: [{ type: "text-delta", text }], text });
 
+describe("context telemetry during streaming", () => {
+  it("updates token estimates without repeatedly reading memory, instructions and skills", () => {
+    const agent = agentFor(new ScriptedProvider([answer("Done.")]));
+    const build = vi.spyOn(promptBuilders, "buildSystemPrompt");
+    try {
+      const initial = agent.getContextStats(262_144);
+      for (let i = 1; i <= 100; i++) agent.getContextStats(262_144, "stream ".repeat(i));
+      expect(build).toHaveBeenCalledTimes(1);
+      expect(agent.getContextStats(262_144, "stream ".repeat(100)).usedTokens).toBeGreaterThan(initial.usedTokens);
+      agent.setMode("ask");
+      agent.getContextStats(262_144);
+      expect(build).toHaveBeenCalledTimes(2);
+      agent.startNewSession();
+      agent.getContextStats(262_144);
+      expect(build).toHaveBeenCalledTimes(3);
+    } finally {
+      build.mockRestore();
+    }
+  });
+
+  it("reuses the actual model request prompt after a turn instead of rebuilding it for the UI", async () => {
+    const provider = new ScriptedProvider([answer("Done.")]);
+    const agent = agentFor(provider);
+    for await (const _chunk of agent.processMessage("Explain the project")) {
+      // drain
+    }
+    const build = vi.spyOn(promptBuilders, "buildSystemPrompt");
+    try {
+      expect(agent.getContextStats(262_144).usedTokens).toBeGreaterThan(0);
+      agent.getContextStats(262_144, "next delta");
+      expect(build).not.toHaveBeenCalled();
+    } finally {
+      build.mockRestore();
+    }
+  });
+});
+
 function agentFor(provider: ScriptedProvider) {
   executeEventHooksMock.mockResolvedValue(emptyHookResult);
   return new Agent(undefined, undefined, "primary-model", undefined, {
@@ -307,7 +345,7 @@ describe("a model writing a large file (seen live 2026-09-25)", () => {
   });
 });
 
-describe("research before the work (owner, 2026-09-25)", () => {
+describe("initial research only when requested (owner, 2026-10-05)", () => {
   const search = vi.fn(async (query: string) => ({
     success: true,
     query,
@@ -339,12 +377,12 @@ describe("research before the work (owner, 2026-09-25)", () => {
     const provider = new ScriptedProvider([answer("Planned the level.")]);
     const agent = researching(provider);
     const chunks: Array<{ type: string; toolCalls?: Array<{ function: { name: string } }> }> = [];
-    for await (const chunk of agent.processMessage("Create the classic Super Mario Bros game as a web game.")) {
+    for await (const chunk of agent.processMessage("Search the web for level design for a Super Mario Bros game.")) {
       chunks.push(chunk as never);
     }
 
     expect(search).toHaveBeenCalledTimes(1);
-    expect(search.mock.calls[0]?.[0]).toBe("Create the classic Super Mario Bros game as a web game.");
+    expect(search.mock.calls[0]?.[0]).toBe("Search the web for level design for a Super Mario Bros game.");
     const sent = sentMessages(provider, 0);
     const call = sent.find((message) => message.role === "assistant");
     const result = sent.find((message) => message.role === "tool");
@@ -362,10 +400,24 @@ describe("research before the work (owner, 2026-09-25)", () => {
       // drain
     }
     const off = researching(new ScriptedProvider([answer("Planned.")]), ["research"]);
-    for await (const _chunk of off.processMessage("Create the classic Super Mario Bros game as a web game.")) {
+    for await (const _chunk of off.processMessage("Search the web for Super Mario Bros level design.")) {
       // drain
     }
     expect(search).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Create the classic Super Mario Bros game as a web game.",
+    "verifica en revit, si el addin esta apuntando a la url de backend en produccion",
+  ])("reaches the model without an initial search for ordinary work: %s", async (request) => {
+    const provider = new ScriptedProvider([answer("Reviewed.")]);
+    const agent = researching(provider);
+    for await (const _chunk of agent.processMessage(request)) {
+      // drain
+    }
+    expect(provider.requests.length).toBeGreaterThan(0);
+    expect(search).not.toHaveBeenCalled();
+    expect(JSON.stringify(sentMessages(provider, 0))).not.toContain('"toolName":"search_web"');
   });
 });
 

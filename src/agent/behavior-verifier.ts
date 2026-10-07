@@ -42,7 +42,11 @@ export function testRunnerHint(workspace: string, changedFiles: readonly string[
     const scripts = (manifest.scripts ?? {}) as Record<string, unknown>;
     const test = typeof scripts.test === "string" ? scripts.test : "";
     const deps = { ...(manifest.dependencies ?? {}), ...(manifest.devDependencies ?? {}) } as Record<string, unknown>;
-    const bun = existsSync(join(workspace, "bun.lock")) || existsSync(join(workspace, "bun.lockb"));
+    // A dependency-free Bun project need not have a lockfile. Its declared check still establishes the runtime.
+    const bun =
+      existsSync(join(workspace, "bun.lock")) ||
+      existsSync(join(workspace, "bun.lockb")) ||
+      /^\s*bun(?:\s|$)/u.test(test);
     const runPackage = bun ? "bunx" : "npx";
     if (/\bvitest\b/u.test(test) || "vitest" in deps) return `Vitest: \`${runPackage} vitest run <file>\``;
     if (/\bjest\b/u.test(test) || "jest" in deps) return `Jest: \`${runPackage} jest <file>\``;

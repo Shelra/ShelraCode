@@ -3,7 +3,7 @@ export type MotionPreference = "full" | "reduced";
 export type ColorMode = "truecolor" | "256";
 
 /**
- * The Shelra palette: the tokens of the approved landing page (`frontend/src/app/globals.css`), each
+ * The Shelra palette: the tokens of the approved landing page (`src/app/globals.css` of `Shelra/Shelracode-frontend`), each
  * with its xterm-256 fallback. A terminal has no alpha, so the site's alpha tokens are blended on base
  * here. Warning and error are the only colours the site does not have; they colour text and glyphs,
  * and the one surface they tint is a diff's removed line (the owner asked for red and green change

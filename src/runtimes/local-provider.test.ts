@@ -12,6 +12,36 @@ function streamResponse(chunks: Array<Record<string, unknown>>): Response {
 }
 
 describe("OpenAI-compatible tool protocol", () => {
+  it("releases the parent abort listener after the stream finishes", async () => {
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, "addEventListener");
+    const removed = vi.spyOn(controller.signal, "removeEventListener");
+    const provider = createOpenAICompatibleProvider("test-key", "https://provider.test/v1", "test-model", {
+      fetch: async () =>
+        streamResponse([
+          {
+            id: "done",
+            model: "test-model",
+            choices: [{ index: 0, delta: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+          },
+        ]),
+    });
+    const stream = provider.stream({
+      modelId: "test-model",
+      system: "Test",
+      messages: [{ role: "user", content: "hello" }],
+      maxSteps: 1,
+      signal: controller.signal,
+    });
+    for await (const _part of stream.events) {
+      /* drain */
+    }
+    await stream.response;
+    const bridge = added.mock.calls.find(([name]) => name === "abort");
+    expect(bridge).toBeDefined();
+    expect(removed.mock.calls.some(([name, listener]) => name === "abort" && listener === bridge?.[1])).toBe(true);
+  });
+
   it("repairs a scalar tool call before the next provider request", async () => {
     const requests: Array<Record<string, unknown>> = [];
     const execute = vi.fn(async ({ command }: { command: string }) => `ran:${command}`);
@@ -85,6 +115,7 @@ describe("OpenAI-compatible tool protocol", () => {
 
   it("clears old tool results from the later requests of a long generation", async () => {
     const requests: Array<Record<string, unknown>> = [];
+    const contextSizes: Array<{ messagesBeforeChars: number; messagesAfterChars: number }> = [];
     const fetchImpl: typeof fetch = async (_input, init) => {
       requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       const n = requests.length;
@@ -122,6 +153,7 @@ describe("OpenAI-compatible tool protocol", () => {
     const response = provider.stream({
       modelId: "test-model",
       system: "Read files when needed.",
+      onContextPrepared: (info) => contextSizes.push(info),
       messages: [{ role: "user", content: "read eight files" }],
       tools: {
         read_file: tool({
@@ -137,6 +169,8 @@ describe("OpenAI-compatible tool protocol", () => {
     const final = await response.response;
 
     expect(requests).toHaveLength(9);
+    expect(contextSizes).toHaveLength(9);
+    expect(contextSizes.at(-1)?.messagesAfterChars).toBeLessThan(contextSizes.at(-1)?.messagesBeforeChars ?? 0);
     const sent = (requests[8]?.messages as Array<Record<string, unknown>>)
       .filter((message) => message.role === "tool")
       .map((message) => String(message.content));

@@ -10,8 +10,10 @@ import type { MemoryRecord, MemoryScope } from "./types";
  * checks then passed (its credit, audit doc 15 M3: being retrieved is not the same as helping) and that came from a
  * trustworthy source is reusable capability, not just a fact. A skill changes how Shelra works in this project, and
  * that must never happen silently (docs/architecture/18-MEMORY-V2.md §8): the procedure is proposed under
- * `.shelra/memory/skill-proposals/`, and only `shelra memory promote <slug>` writes `.agents/skills/<slug>/SKILL.md`,
- * where the skill loader surfaces it. A changed procedure is proposed again; a declined one is not, until it changes.
+ * `.shelra/memory/skill-proposals/`, and only `shelra memory promote <slug>` writes `.shelra/skills/<slug>/SKILL.md`,
+ * where the skill registry surfaces it as a candidate: a candidate is never selected by the agent on its own (it runs
+ * when the user names it) until a person validates it with `/skills promote <name>`, so a procedure learned from a few
+ * passing turns cannot start steering work silently. A changed procedure is proposed again; a declined one is not, until it changes.
  */
 
 export interface PromotionOptions {
@@ -39,7 +41,7 @@ const PROPOSALS_DIR = "skill-proposals";
 const DECLINED_FILE = "declined.json";
 
 export function skillPathFor(workspace: string, slug: string): string {
-  return join(workspace, ".agents", "skills", slug, "SKILL.md");
+  return join(workspace, ".shelra", "skills", slug, "SKILL.md");
 }
 
 function proposalsDir(scope: MemoryScope): string {
@@ -53,6 +55,10 @@ function renderSkill(record: MemoryRecord): string {
     "---",
     `name: ${record.slug}`,
     `description: "${description.replace(/\\/gu, "\\\\")}"`,
+    // A candidate runs only when the user names it, until a person validates it (`/skills promote <name>`).
+    "metadata:",
+    "  shelra-status: candidate",
+    `  shelra-provenance: "promoted from project memory ${record.slug}"`,
     "---",
     "",
     `# ${record.index.title}`,
@@ -168,11 +174,14 @@ export function approveSkillProposal(
   const proposal = listSkillProposals(scope, workspace).find((item) => item.slug === slug);
   if (!proposal) return { ok: false, message: `No skill proposal "${slug}". shelra memory skills lists them.` };
   const path = skillPathFor(workspace, slug);
-  mkdirSync(join(workspace, ".agents", "skills", slug), { recursive: true });
+  mkdirSync(join(workspace, ".shelra", "skills", slug), { recursive: true });
   writeFileSync(path, proposal.content, "utf8");
   rmSync(join(proposalsDir(scope), `${slug}.md`), { force: true });
   recordMemoryPromotion(scope, slug, `skill written to ${path} on the user's approval`);
-  return { ok: true, message: `${proposal.replaces ? "Updated" : "Added"} the skill ${path}.` };
+  return {
+    ok: true,
+    message: `${proposal.replaces ? "Updated" : "Added"} the skill ${path} as a candidate: the agent does not pick it on its own until you validate it with /skills promote ${slug}.`,
+  };
 }
 
 /** Drops a proposal and does not propose the same revision again. */

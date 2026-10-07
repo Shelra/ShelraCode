@@ -121,7 +121,9 @@ describe("shelra login", () => {
 
     const account = await login({ apiUrl: API, deviceName: "laptop", io, fetchImpl });
 
-    expect(account).toEqual({ apiUrl: API, token: "shr_new", tokenId: "tok-2", email: "alice@example.com" });
+    expect(account).toMatchObject({ apiUrl: API, token: "shr_new", tokenId: "tok-2", email: "alice@example.com" });
+    // The login says when it was confirmed, so the offline grace has a start.
+    expect(account.verifiedAt).toBeTruthy();
     expect(getStoredAccount()).toEqual(account);
     const otp = calls.find((c) => c.url.endsWith("/auth/v1/otp"));
     expect(otp?.headers.apikey).toBe("sb_publishable_x");

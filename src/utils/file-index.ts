@@ -1,8 +1,9 @@
-import { execSync } from "child_process";
+import { execFile } from "child_process";
 import { basename, resolve } from "path";
 import { findGitRoot } from "./git-root.js";
 
 const REFRESH_TTL_MS = 30_000;
+const EOL = String.fromCharCode(10);
 const BINARY_EXTENSIONS = new Set([
   ".png",
   ".jpg",
@@ -56,25 +57,49 @@ function isBinaryPath(filePath: string): boolean {
   return BINARY_EXTENSIONS.has(filePath.slice(ext).toLowerCase());
 }
 
-function collectFiles(cwd: string): string[] {
+/**
+ * The project's files, listed beside the event loop: this ran `execSync` with a five second ceiling, so typing `@`
+ * in a big repository held the whole terminal for as long as git took.
+ */
+function collectFiles(cwd: string): Promise<string[]> {
   const gitRoot = findGitRoot(cwd);
-  try {
-    const cmd = gitRoot
-      ? "git ls-files --cached --others --exclude-standard"
-      : "find . -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' | head -5000";
-    const raw = execSync(cmd, {
-      cwd: gitRoot ?? cwd,
-      encoding: "utf-8",
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 5000,
+  const run = (file: string, args: string[], dir: string): Promise<string | null> =>
+    new Promise((resolve) => {
+      execFile(
+        file,
+        args,
+        { cwd: dir, encoding: "utf8", maxBuffer: 10 * 1024 * 1024, timeout: 5000, windowsHide: true },
+        (error, stdout) => resolve(error ? null : String(stdout)),
+      );
     });
-    return raw
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !isBinaryPath(l));
-  } catch {
-    return [];
-  }
+  const listing = gitRoot
+    ? run("git", ["ls-files", "--cached", "--others", "--exclude-standard"], gitRoot)
+    : run(
+        "find",
+        [
+          ".",
+          "-type",
+          "f",
+          "-not",
+          "-path",
+          "*/node_modules/*",
+          "-not",
+          "-path",
+          "*/.git/*",
+          "-not",
+          "-path",
+          "*/dist/*",
+        ],
+        cwd,
+      ).then((raw) => (raw === null ? null : raw.split(EOL).slice(0, 5000).join(EOL)));
+  return listing.then((raw) =>
+    raw === null
+      ? []
+      : raw
+          .split(EOL)
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !isBinaryPath(l)),
+  );
 }
 
 function scoreMatch(filePath: string, query: string): number {
@@ -110,9 +135,24 @@ export class FileIndex {
     this.baseDir = findGitRoot(cwd) ?? cwd;
   }
 
-  async refresh(): Promise<void> {
-    this.files = collectFiles(this.cwd);
-    this.lastRefresh = Date.now();
+  private refreshing: Promise<void> | null = null;
+
+  /** One listing at a time: a call while one is running waits for it instead of starting another git process. */
+  refresh(): Promise<void> {
+    if (this.refreshing) return this.refreshing;
+    const cwd = this.cwd;
+    const run = collectFiles(cwd)
+      .then((files) => {
+        // The folder changed while git was listing the old one: keep what is there, and list again next time.
+        if (cwd !== this.cwd) return;
+        this.files = files;
+        this.lastRefresh = Date.now();
+      })
+      .finally(() => {
+        if (this.refreshing === run) this.refreshing = null;
+      });
+    this.refreshing = run;
+    return run;
   }
 
   updateCwd(cwd: string): void {
@@ -120,6 +160,8 @@ export class FileIndex {
       this.cwd = cwd;
       this.baseDir = findGitRoot(cwd) ?? cwd;
       this.lastRefresh = 0;
+      // A listing of the old folder may still be running; the next call lists the new one.
+      this.refreshing = null;
     }
   }
 

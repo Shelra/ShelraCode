@@ -1,5 +1,7 @@
 import { getModelInfo } from "../models/catalog";
+import { providerDisplayName } from "../providers/default-registry";
 import { formatResetShort } from "../providers/limits";
+import { AUTO_FREE_MODEL_ID } from "../routing/model-ref";
 
 /** The model answering a turn: the one it runs on, and for a router (`openrouter/auto`) the model that answered. */
 export interface AnsweringModel {
@@ -24,7 +26,13 @@ function shortName(modelId: string): string {
 export function answeringModelLabel(answering: AnsweringModel | null, chosenModelId: string): string | null {
   if (!answering) return null;
   if (answering.servedModelId) {
-    return `${shortName(answering.servedModelId)} · ${ROUTER_LABELS[answering.modelId] ?? "fallback"}`;
+    // Auto Free names the provider that answered ("Qwen3 Coder · Groq"; through a gateway, "… · OmniRoute"), because
+    // which provider a request landed on is the part of the choice the user did not make.
+    const via =
+      answering.modelId === AUTO_FREE_MODEL_ID
+        ? providerDisplayName(answering.servedModelId.split("/")[0] ?? "")
+        : (ROUTER_LABELS[answering.modelId] ?? "fallback");
+    return `${shortName(answering.servedModelId)} · ${via}`;
   }
   if (answering.modelId === chosenModelId) return null;
   return getModelInfo(answering.modelId)?.name ?? answering.modelId;
@@ -32,7 +40,7 @@ export function answeringModelLabel(answering: AnsweringModel | null, chosenMode
 
 /** A model that costs nothing to call: the free router, a `:free` variant, or a known zero price (a local model). */
 export function isFreeModelId(modelId: string): boolean {
-  if (modelId === "openrouter/free" || modelId.endsWith(":free")) return true;
+  if (modelId === "openrouter/free" || modelId === AUTO_FREE_MODEL_ID || modelId.endsWith(":free")) return true;
   const info = getModelInfo(modelId);
   return info !== undefined && info.pricingKnown !== false && info.inputPrice === 0 && info.outputPrice === 0;
 }

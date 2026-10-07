@@ -1,5 +1,5 @@
 import { RGBA, SyntaxStyle } from "@opentui/core";
-import { Fragment, type ReactNode, useMemo } from "react";
+import { Fragment, memo, type ReactNode, useMemo } from "react";
 import { type CodeTokenKind, MAX_HIGHLIGHT_LINES, splitFences, tokenizeLine } from "./code-highlight";
 import { type Block, type InlineSpan, type ListItem, parseBlocks, parseInline } from "./markdown-blocks";
 import type { Theme } from "./theme";
@@ -152,6 +152,92 @@ function CodeBlock({ t, code, lang }: { t: Theme; code: string; lang: string }) 
 
 type Node = { kind: "code"; lang: string; text: string } | { kind: "block"; block: Block };
 
+/** What a node says, as one string: two nodes with the same signature draw the same thing. */
+function nodeSignature(node: Node): string {
+  if (node.kind === "code") return `c\u0001${node.lang}\u0001${node.text}`;
+  const { block } = node;
+  switch (block.type) {
+    case "heading":
+      return `h${block.level}\u0001${block.text}`;
+    case "paragraph":
+    case "quote":
+      return `${block.type}\u0001${block.text}`;
+    case "list":
+      return `l\u0001${block.items.map((item) => `${item.depth}${item.ordered ? "o" : "b"}${item.marker} ${item.text}`).join("\u0002")}`;
+    case "rule":
+      return "r";
+    case "table":
+      return `t\u0001${block.raw}`;
+  }
+}
+
+interface NodeViewProps {
+  node: Node;
+  signature: string;
+  t: Theme;
+  gap: number;
+  live: boolean;
+  syntaxStyle: SyntaxStyle;
+  tableOptions: typeof TABLE_OPTIONS & { borderColor: string };
+}
+
+function renderNode(props: NodeViewProps): ReactNode {
+  const { node, t, live, syntaxStyle, tableOptions } = props;
+  if (node.kind === "code") return <CodeBlock t={t} code={node.text} lang={node.lang} />;
+  const { block } = node;
+  switch (block.type) {
+    case "heading":
+      return <Heading t={t} level={block.level} text={block.text} />;
+    case "paragraph":
+      return <text>{inlineNodes(t, parseInline(block.text), { fg: t.text })}</text>;
+    case "list":
+      return <List t={t} items={block.items} />;
+    case "quote":
+      return (
+        <box border={["left"]} borderColor={t.textDim} paddingLeft={1} flexShrink={0}>
+          <text>{inlineNodes(t, parseInline(block.text), { fg: t.mdItalic, italic: true })}</text>
+        </box>
+      );
+    case "rule":
+      return <box height={1} border={["top"]} borderColor={t.mdHr} flexShrink={0} />;
+    case "table":
+      return (
+        <markdown
+          content={block.raw}
+          syntaxStyle={syntaxStyle}
+          conceal={true}
+          // @ts-expect-error MarkdownProps omits inherited Renderable.selectable; needed for TUI text selection
+          selectable={true}
+          tableOptions={tableOptions}
+          streaming={live}
+          flexShrink={0}
+        />
+      );
+  }
+}
+
+/**
+ * One block of an answer. While an answer streams only its last block changes, but the whole text is parsed
+ * again on every tick; without this, every earlier block was rebuilt and re-laid-out each time, so a tick cost
+ * grew with the length of the answer (29 ms for 32,000 characters, measured 2026-10-06).
+ */
+const NodeView = memo(
+  function NodeView(props: NodeViewProps) {
+    return (
+      <box marginTop={props.gap} flexShrink={0}>
+        {renderNode(props)}
+      </box>
+    );
+  },
+  (previous, next) =>
+    previous.signature === next.signature &&
+    previous.gap === next.gap &&
+    previous.live === next.live &&
+    previous.t === next.t &&
+    previous.syntaxStyle === next.syntaxStyle &&
+    previous.tableOptions === next.tableOptions,
+);
+
 export function Markdown({ content, t, streaming = false }: { content: string; t: Theme; streaming?: boolean }) {
   const syntaxStyle = useMemo(() => buildSyntaxStyle(t), [t]);
   const tableOptions = useMemo(() => ({ ...TABLE_OPTIONS, borderColor: t.border }), [t.border]);
@@ -167,40 +253,6 @@ export function Markdown({ content, t, streaming = false }: { content: string; t
 
   if (nodes.length === 0) return null;
 
-  const renderNode = (node: Node, live: boolean): ReactNode => {
-    if (node.kind === "code") return <CodeBlock t={t} code={node.text} lang={node.lang} />;
-    const { block } = node;
-    switch (block.type) {
-      case "heading":
-        return <Heading t={t} level={block.level} text={block.text} />;
-      case "paragraph":
-        return <text>{inlineNodes(t, parseInline(block.text), { fg: t.text })}</text>;
-      case "list":
-        return <List t={t} items={block.items} />;
-      case "quote":
-        return (
-          <box border={["left"]} borderColor={t.textDim} paddingLeft={1} flexShrink={0}>
-            <text>{inlineNodes(t, parseInline(block.text), { fg: t.mdItalic, italic: true })}</text>
-          </box>
-        );
-      case "rule":
-        return <box height={1} border={["top"]} borderColor={t.mdHr} flexShrink={0} />;
-      case "table":
-        return (
-          <markdown
-            content={block.raw}
-            syntaxStyle={syntaxStyle}
-            conceal={true}
-            // @ts-expect-error MarkdownProps omits inherited Renderable.selectable; needed for TUI text selection
-            selectable={true}
-            tableOptions={tableOptions}
-            streaming={live}
-            flexShrink={0}
-          />
-        );
-    }
-  };
-
   return (
     <box flexDirection="column" flexShrink={0}>
       {nodes.map((node, index) => {
@@ -208,12 +260,18 @@ export function Markdown({ content, t, streaming = false }: { content: string; t
         // Breathing room between blocks, except directly under a heading: it belongs to what follows.
         const underSmallHeading =
           previous?.kind === "block" && previous.block.type === "heading" && previous.block.level > 1;
-        const gap = index === 0 || underSmallHeading ? 0 : 1;
         return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: nodes are append-only while a message streams
-          <box key={index} marginTop={gap} flexShrink={0}>
-            {renderNode(node, streaming && index === nodes.length - 1)}
-          </box>
+          <NodeView
+            // biome-ignore lint/suspicious/noArrayIndexKey: nodes are append-only while a message streams
+            key={index}
+            node={node}
+            signature={nodeSignature(node)}
+            t={t}
+            gap={index === 0 || underSmallHeading ? 0 : 1}
+            live={streaming && index === nodes.length - 1}
+            syntaxStyle={syntaxStyle}
+            tableOptions={tableOptions}
+          />
         );
       })}
     </box>

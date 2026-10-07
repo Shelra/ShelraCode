@@ -167,8 +167,9 @@ export class LocalProviderAdapter implements ProviderAdapter {
     // The caller's signal still cancels; the watchdog additionally cuts a silent upstream after
     // the idle budget instead of holding the turn open until an outer timeout.
     const watchdog = new AbortController();
+    const abortFromParent = () => watchdog.abort(request.signal?.reason);
     if (request.signal?.aborted) watchdog.abort(request.signal.reason);
-    else request.signal?.addEventListener("abort", () => watchdog.abort(request.signal?.reason), { once: true });
+    else request.signal?.addEventListener("abort", abortFromParent, { once: true });
     const clearing: ToolResultClearing = { boundary: 0 };
     const stalled = createStallDetector();
     const result = streamText({
@@ -213,9 +214,17 @@ export class LocalProviderAdapter implements ProviderAdapter {
       ...(request.reasoningEffort
         ? { providerOptions: { [this.id]: { reasoning: { effort: request.reasoningEffort } } } }
         : {}),
-      prepareStep: ({ messages }) => ({
-        messages: clearStaleToolResults(normalizeModelMessages(messages), clearing),
-      }),
+      prepareStep: ({ messages }) => {
+        const normalized = normalizeModelMessages(messages);
+        const prepared = clearStaleToolResults(normalized, clearing);
+        request.onContextPrepared?.({
+          systemChars: request.system.length,
+          messagesBeforeChars: JSON.stringify(normalized).length,
+          messagesAfterChars: JSON.stringify(prepared).length,
+          messageCount: prepared.length,
+        });
+        return { messages: prepared };
+      },
       experimental_repairToolCall: async ({ toolCall, inputSchema }) => {
         let repairedInput = repairToolInput(toolCall.toolName, toolCall.input);
         // Second pass, schema-aware: a JSON value where the tool wants a JSON string.
@@ -276,11 +285,18 @@ export class LocalProviderAdapter implements ProviderAdapter {
       },
     });
 
+    const events = normalizeProviderEvents(
+      // Never tighter than the patience the caller asked for (a round retried after a silence waits longer).
+      withIdleWatchdog(result.fullStream as AsyncIterable<unknown>, idleBudget(request.timeout?.chunkMs), watchdog),
+    );
     return {
-      events: normalizeProviderEvents(
-        // Never tighter than the patience the caller asked for (a round retried after a silence waits longer).
-        withIdleWatchdog(result.fullStream as AsyncIterable<unknown>, idleBudget(request.timeout?.chunkMs), watchdog),
-      ),
+      events: (async function* () {
+        try {
+          yield* events;
+        } finally {
+          request.signal?.removeEventListener("abort", abortFromParent);
+        }
+      })(),
       response: Promise.resolve(result.response).then((response) => ({
         messages: response.messages as readonly unknown[],
       })),

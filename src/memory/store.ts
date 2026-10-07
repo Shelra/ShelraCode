@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -13,6 +14,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { withRecall } from "./dynamics";
+import { withMemoryLock } from "./lock";
 import {
   MEMORY_TYPES,
   type MemoryDeleteResult,
@@ -54,6 +56,15 @@ const IDENTIFIER_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const INDEX_LINE_PATTERN = /^-\s*\[(.+?)\]\((.+?)\)\s*—\s*(.*)$/;
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 const SOURCES: readonly MemorySource[] = ["human", "observed", "inference", "web"];
+
+function safeMemoryMutation<T>(scope: MemoryScope, label: string, fallback: T, operation: () => T): T {
+  try {
+    return withMemoryLock(memoryDir(scope), operation);
+  } catch (error) {
+    recordSwallowedError(`memory.${label}`, error);
+    return fallback;
+  }
+}
 
 function validateIdentifier(value: string, label: string): void {
   if (!IDENTIFIER_PATTERN.test(value)) {
@@ -149,7 +160,7 @@ export function isCurrentMemory(record: MemoryRecord): boolean {
 }
 
 function writeFileAtomic(path: string, content: string): void {
-  const tmp = `${path}.tmp`;
+  const tmp = `${path}.tmp-${randomUUID()}`;
   writeFileSync(tmp, content, "utf8");
   renameSync(tmp, path);
 }
@@ -399,6 +410,10 @@ export function listMemoryRecords(scope: MemoryScope): MemoryRecord[] {
  * `memory_write` tool (model-initiated) and tests.
  */
 export function writeMemoryEntry(scope: MemoryScope, input: MemoryWriteInput): MemoryWriteResult {
+  return withMemoryLock(memoryDir(scope), () => writeMemoryEntryUnlocked(scope, input));
+}
+
+function writeMemoryEntryUnlocked(scope: MemoryScope, input: MemoryWriteInput): MemoryWriteResult {
   validateIdentifier(input.slug, "slug");
   if (!input.title.trim()) throw new Error("Memory entry title must not be empty.");
   if (!input.hook.trim()) throw new Error("Memory entry hook must not be empty.");
@@ -514,6 +529,9 @@ export function readMemoryVersions(scope: MemoryScope, slug: string): MemoryEntr
  * of refusing it (doc 18 §4.4). Returns false when the entry is missing. Never throws.
  */
 export function archiveMemoryEntry(scope: MemoryScope, slug: string, detail: string): boolean {
+  return safeMemoryMutation(scope, "archive", false, () => archiveMemoryEntryUnlocked(scope, slug, detail));
+}
+function archiveMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail: string): boolean {
   try {
     const entry = readMemoryEntry(scope, slug).entry;
     if (!entry) return false;
@@ -590,6 +608,9 @@ export function listArchivedEntries(scope: MemoryScope): ArchivedEntry[] {
  * A superseded entry stays history. Returns false when there is nothing archived under that name. Never throws.
  */
 export function recallArchivedEntry(scope: MemoryScope, slug: string): boolean {
+  return safeMemoryMutation(scope, "recall-archive", false, () => recallArchivedEntryUnlocked(scope, slug));
+}
+function recallArchivedEntryUnlocked(scope: MemoryScope, slug: string): boolean {
   try {
     const entry = readMemoryEntry(scope, slug).entry;
     if (!entry || entry.frontmatter.metadata.status !== "archived") return false;
@@ -636,6 +657,9 @@ export function recallArchivedEntry(scope: MemoryScope, slug: string): boolean {
  * is missing. Never throws.
  */
 export function deliverReminder(scope: MemoryScope, slug: string, detail: string): boolean {
+  return safeMemoryMutation(scope, "reminder", false, () => deliverReminderUnlocked(scope, slug, detail));
+}
+function deliverReminderUnlocked(scope: MemoryScope, slug: string, detail: string): boolean {
   try {
     const entry = readMemoryEntry(scope, slug).entry;
     if (!entry || entry.frontmatter.metadata.type !== "reminder") return false;
@@ -668,6 +692,11 @@ export function replacesNote(oldHook: string, until: string): string {
  * false when either entry is missing. Never throws.
  */
 export function supersedeMemoryEntry(scope: MemoryScope, oldSlug: string, bySlug: string, detail?: string): boolean {
+  return safeMemoryMutation(scope, "supersede", false, () =>
+    supersedeMemoryEntryUnlocked(scope, oldSlug, bySlug, detail),
+  );
+}
+function supersedeMemoryEntryUnlocked(scope: MemoryScope, oldSlug: string, bySlug: string, detail?: string): boolean {
   try {
     if (oldSlug === bySlug) return false;
     const old = readMemoryEntry(scope, oldSlug).entry;
@@ -732,6 +761,9 @@ function normalizeTags(tags: readonly string[] | undefined): string[] | undefine
  * Never throws.
  */
 export function recordRecall(scope: MemoryScope, slugs: readonly string[]): void {
+  safeMemoryMutation(scope, "recall", undefined, () => recordRecallUnlocked(scope, slugs));
+}
+function recordRecallUnlocked(scope: MemoryScope, slugs: readonly string[]): void {
   for (const slug of slugs) {
     try {
       const { entry } = readMemoryEntry(scope, slug);
@@ -754,6 +786,9 @@ export function namedCommands(text: string): string[] {
  * a failure to touch a file never affects the turn.
  */
 export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): void {
+  safeMemoryMutation(scope, "use", undefined, () => recordMemoryUseUnlocked(scope, slugs));
+}
+function recordMemoryUseUnlocked(scope: MemoryScope, slugs: readonly string[]): void {
   const now = new Date().toISOString();
   for (const slug of slugs) {
     try {
@@ -776,6 +811,9 @@ export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): v
  * this, not how often an entry was retrieved.
  */
 export function creditMemoryUse(scope: MemoryScope, slugs: readonly string[], delta: 1 | -1): void {
+  safeMemoryMutation(scope, "credit", undefined, () => creditMemoryUseUnlocked(scope, slugs, delta));
+}
+function creditMemoryUseUnlocked(scope: MemoryScope, slugs: readonly string[], delta: 1 | -1): void {
   for (const slug of slugs) {
     try {
       const { entry } = readMemoryEntry(scope, slug);
@@ -790,6 +828,9 @@ export function creditMemoryUse(scope: MemoryScope, slugs: readonly string[], de
 
 /** Marks an entry as re-checked against reality now without changing its content. */
 export function confirmMemoryEntry(scope: MemoryScope, slug: string, detail?: string): boolean {
+  return safeMemoryMutation(scope, "confirm", false, () => confirmMemoryEntryUnlocked(scope, slug, detail));
+}
+function confirmMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail?: string): boolean {
   try {
     const { entry } = readMemoryEntry(scope, slug);
     if (!entry) return false;
@@ -835,6 +876,9 @@ export function reconfirmByPassingCommands(scope: MemoryScope, commands: readonl
  * safely, don't corrupt" philosophy as `writeMemoryEntry`.
  */
 export function deleteMemoryEntry(scope: MemoryScope, slug: string, detail?: string): MemoryDeleteResult {
+  return withMemoryLock(memoryDir(scope), () => deleteMemoryEntryUnlocked(scope, slug, detail));
+}
+function deleteMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail?: string): MemoryDeleteResult {
   validateIdentifier(slug, "slug");
 
   const dir = memoryDir(scope);
@@ -879,6 +923,9 @@ export interface ReflectionAuditRecord {
 
 /** Why memory changed (or did not) after a turn — the audit trail for automatic capture. */
 export function appendReflectionAudit(scope: MemoryScope, record: ReflectionAuditRecord): void {
+  safeMemoryMutation(scope, "audit", undefined, () => appendReflectionAuditUnlocked(scope, record));
+}
+function appendReflectionAuditUnlocked(scope: MemoryScope, record: ReflectionAuditRecord): void {
   try {
     const path = join(memoryDir(scope), REFLECTIONS_FILE);
     ensureMemoryDir(scope);

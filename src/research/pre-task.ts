@@ -1,20 +1,10 @@
-import { isShortFollowUp } from "../contract/check-definitions";
 import { looksInjectionShaped } from "../memory/gate";
-import { searchTerms } from "../memory/terms";
 import { searchWeb, type WebSearchOptions, type WebSearchResult, type WebSearchSource } from "./web";
 
 /**
- * Research before the work (owner, 2026-09-25: "before planning or working, search Google for context that backs the
- * plan and the actions; the model gets more information about the objective"). Before the first model round of a work
- * turn, the host runs one web search on the request and hands the model the results the way its own `search_web`
- * call would, as a tool result.
- *
- * It reverses the 2026-09-17 removal of a forced search (doc 14 §23.2) with that removal's two failures designed out:
- * the old search ran before every prompt, "hello" included, and pasted untrusted snippets into the system prompt,
- * where a live prompt injection had been caught. Now a greeting, an approval or a question about memory is not
- * researched, and the results are data in a tool result, JSON-encoded, saying what they are and where they came from,
- * with any result that reads like an instruction withheld: Anthropic's guidance for untrusted content
- * (platform.claude.com, "Mitigate jailbreaks and prompt injections", checked 2026-09-25).
+ * Initial research is opt-in per request (owner, 2026-10-05): ordinary work should start with local context,
+ * not a mandatory web search. The model still has search_web/open_web for external facts it needs while working.
+ * Explicit searches arrive as JSON-encoded, untrusted tool results; instruction-shaped snippets are withheld.
  */
 
 /** The whole search, every provider in the chain included, gets at most this long; the turn never waits longer. */
@@ -23,23 +13,19 @@ const MAX_RESULTS = 5;
 const SNIPPET_CHARS = 300;
 const QUERY_WORDS = 32;
 
-/** A request about Shelra's own memory is answered from memory, not from the web. */
-const ABOUT_MEMORY_RE = /\b(?:memoria|memory|memories|recu[eé]rdame|remind me|remember)\b/iu;
-/** A question about memory is short ("¿Qué tienes en la memoria?"); a longer request that mentions memory is work. */
-const MEMORY_QUESTION_WORDS = 12;
 /**
  * A request that asks for a search gets one, whatever else it mentions. Seen live 2026-09-25: "…si necesitas contexto
  * realiza una búsqueda profunda en google, documentación… puedes consultar la memoria" was not researched, because it
  * mentioned memory, and the model went straight to editing.
  */
 const ASKS_FOR_SEARCH_RE =
-  /\b(?:busca|buscar|b[uú]squeda|investiga|investigar|googl\w*|documentaci[oó]n|search|research|look\s+up)\b/iu;
+  /\b(?:(?:busca\w*|b[uú]squeda|search\w*|investiga\w*|research|look\s+up)\s+(?:(?:en|on|the|la|el|por|for|a|una|profunda|deep)\s+)*(?:web|internet|google|online)|(?:consulta\w*|consult|busca\w*|b[uú]squeda|search\w*|investiga\w*|research|look\s+up)\s+(?:(?:la|el|the|en|a|una|oficial|official|profunda|deep)\s+)*(?:documentaci[oó]n|documentation))\b/iu;
 
 /**
  * A question about the person's OWN Revit model ("how many levels does my project have?") is answered by their live Revit
  * through ORIONMCP, not by the web: the pre-task search only delays it (up to RESEARCH_TIMEOUT_MS before the first model
- * round, seen live 2026-10-05) and returns nothing useful. Programming questions about Revit (API, add-ins, scripts) are
- * still researched.
+ * round, seen live 2026-10-05) and returns nothing useful. Research intent is evaluated separately: neither a live
+ * model question nor an add-in inspection forces a search, and an explicit web search is honored for either.
  */
 const OWN_REVIT_RE = /\b(?:revit|orionbim|dynamo|rvt)\b/iu;
 const OWN_MODEL_RE =
@@ -60,13 +46,13 @@ export function researchEnabled(): boolean {
   return (process.env.SHELRA_RESEARCH ?? "").trim().toLowerCase() !== "off";
 }
 
-/** Whether a request is work worth researching: not a greeting, an approval, or a question about memory. */
+/** Only an explicit request for external research starts a search before the model. */
 export function wantsResearch(request: string): boolean {
-  const text = request.trim();
-  if (!text || isShortFollowUp(text)) return false;
-  if (ASKS_FOR_SEARCH_RE.test(text)) return true;
-  if (ABOUT_MEMORY_RE.test(text) && text.split(/\s+/u).length <= MEMORY_QUESTION_WORDS) return false;
-  return searchTerms(text).length >= 3;
+  const text = request.trim().replace(/```[\s\S]*?```|`[^`]*`|"[^"]*"/gu, " ");
+  if (/\b(?:no|sin|don't|do not|never)\s+(?:\w+\s+){0,2}(?:busc\w*|search\w*|research|investiga\w*)\b/iu.test(text))
+    return false;
+  if (/^(?:¿?por\s*qu[eé]|why)\b/iu.test(text)) return false;
+  return ASKS_FOR_SEARCH_RE.test(text);
 }
 
 /** A line that reports an error, as a runtime or a tool prints it. */

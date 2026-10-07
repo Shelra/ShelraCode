@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createStallDetector,
   isProviderStreamIdleError,
@@ -91,6 +91,37 @@ describe("provider stream boundary", () => {
 });
 
 describe("idle watchdog", () => {
+  it.each([0, 180_000])("settles cancellation during a hung read with idle budget %s", async (idleMs) => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      let release: (() => void) | undefined;
+      const source = (async function* () {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        yield { type: "text-delta", text: "late" };
+      })();
+      const parts: unknown[] = [];
+      let finished = false;
+      const run = (async () => {
+        for await (const part of withIdleWatchdog(source, idleMs, controller)) parts.push(part);
+        finished = true;
+      })();
+      await vi.advanceTimersByTimeAsync(1);
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(1);
+      const finishedAtCancellation = finished;
+      release?.();
+      await run;
+      expect(finishedAtCancellation).toBe(true);
+      expect(parts).toEqual([{ type: "abort" }]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("cuts a silent stream after the idle budget and emits one error part", async () => {
     const controller = new AbortController();
     async function* silent() {

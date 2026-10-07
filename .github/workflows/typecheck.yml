@@ -30,7 +30,17 @@ jobs:
     - name: Type Check
       run: bun run typecheck
 
+    # Free mode must never reach a paid model, whatever provider answers: these tests are the guard and run on every push.
+    - name: Provider routing and Free-mode policy tests
+      run: >-
+        bunx vitest run --pool=forks --exclude ".shelra/**" --exclude "ShelraCode/**"
+        src/routing/ src/providers/ src/models/ src/startup/ src/agent/free-mode-routing.test.ts
+        src/agent/resilience.test.ts src/cli/ src/ui/model-picker-data.test.ts
+
+    - name: Model picker render tests
+      run: bun test src/ui/model-picker.test.tsx
+
     - name: Build standalone binary
       run: bun run build:binary
 
-  # The account service (backend/) is kept out of this repository (owner, 2026-09-25), so CI no longer checks it.
+  # The website (Shelra/Shelracode-frontend) and the account service (Shelra/Shelracode-backend) have their own CI.

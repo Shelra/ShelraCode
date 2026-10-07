@@ -1,9 +1,9 @@
-import { createTwoFilesPatch } from "diff";
 import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { dirname } from "path";
 import { summarizeDiagnostics, syncFileWithLsp } from "../lsp/runtime";
 import type { LspDiagnosticFile } from "../lsp/types";
 import { resolveWorkspacePath } from "../security/workspace-guard";
+import { boundedPatch } from "./bounded-diff";
 import { dominantLineEnding, normalizeLineEndings, restoreLineEndings } from "./line-endings";
 
 export interface FileDiff {
@@ -39,17 +39,7 @@ export function withPowerShellEncoding(filePath: string, content: string): strin
 }
 
 function computeDiff(filePath: string, before: string, after: string): FileDiff {
-  const patch = createTwoFilesPatch(filePath, filePath, before, after, "", "", {
-    context: 3,
-  });
-
-  let additions = 0;
-  let removals = 0;
-  for (const line of patch.split("\n")) {
-    if (line.startsWith("+") && !line.startsWith("+++")) additions++;
-    if (line.startsWith("-") && !line.startsWith("---")) removals++;
-  }
-
+  const { additions, removals, patch } = boundedPatch(filePath, before, after);
   return { filePath, additions, removals, patch, isNew: before === "" };
 }
 

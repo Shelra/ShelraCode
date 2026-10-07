@@ -42,6 +42,19 @@ function changesAfter(cwd: string, edit: () => void, allowed: string[] = []): st
 }
 
 describe("what a check runs, as the turn started with it (audit doc 17, S10)", () => {
+  it("does not treat a test script's imported application modules as check definitions", () => {
+    const cwd = workspace({
+      "package.json": pkg({ test: "bun verify.ts" }),
+      "bun.lock": "",
+      "verify.ts": 'import {total} from "./invoice"; if(total([2,3])!==5) throw Error("bad total");',
+      "invoice.ts": "export function total(items:number[]) { return items.length; }",
+    });
+    const before = snapshotCheckDefinitions(cwd);
+    const definitions = recordDefinitionFiles(cwd);
+    put(cwd, "invoice.ts", "export function total(items:number[]) { return items.reduce((sum,n)=>sum+n,0); }");
+    expect(changedCheckDefinitions(before, cwd)).toEqual([]);
+    expect(runsChangedDefinition("bun run test", cwd, cwd, definitions, new Set(["invoice.ts"]))).toBe(false);
+  });
   it("sees a check script rewritten to pass whatever the code does", () => {
     const cwd = workspace({ "package.json": pkg({ test: "bun test" }), "bun.lock": "" });
     expect(changesAfter(cwd, () => put(cwd, "package.json", pkg({ test: "echo 1 pass" })))).toEqual([

@@ -46,6 +46,13 @@ export interface ProviderStreamRequest {
   timeout?: ProviderTimeout;
   signal?: AbortSignal;
   onStepStart?: (stepNumber: number) => void;
+  /** Payload sizes after per-step history clearing; numeric metadata only, no prompt contents. */
+  onContextPrepared?: (info: {
+    systemChars: number;
+    messagesBeforeChars: number;
+    messagesAfterChars: number;
+    messageCount: number;
+  }) => void;
   onStepFinish?: (event: {
     stepNumber: number;
     finishReason: string;
@@ -58,6 +65,8 @@ export interface ProviderStreamRequest {
     responseMessages?: readonly unknown[];
     /** The model that answered this step, as the provider reported it: a router's pick, a server-side fallback. */
     servedModelId?: string;
+    /** The provider that ran the step when a gateway or router says so; may differ from the one that was asked. */
+    servedProviderId?: string;
   }) => void;
   onFinish?: (usage: ProviderUsage) => void;
   /**
@@ -66,6 +75,11 @@ export interface ProviderStreamRequest {
    * saw as `detail`). The last step's tool calls are its final step.
    */
   onHostStop?: (reason: HostStopReason, detail?: string) => void;
+  /**
+   * The provider moved the request to another route before anything reached the caller (the first one failed): a
+   * sentence saying what failed and where it went, for the transcript.
+   */
+  onRouteChange?: (notice: string) => void;
   /** The caller's own conditions for ending the generation, checked after each step like the host's. */
   hostStops?: ReadonlyArray<(steps: ReadonlyArray<HostStopStep>) => { reason: HostStopReason; detail: string } | null>;
 }

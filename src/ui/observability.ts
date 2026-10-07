@@ -225,6 +225,37 @@ export function changedFiles(entries: ChatEntry[], kernel: KernelState | null): 
   return [...paths].sort((left, right) => left.localeCompare(right));
 }
 
+const sameStrings = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
+/** True when two usage summaries say the same thing, so a poll that found nothing new can keep the old object. */
+export function sameUsageSummary(left: SessionUsageSummary, right: SessionUsageSummary): boolean {
+  return (
+    left.inputTokens === right.inputTokens &&
+    left.outputTokens === right.outputTokens &&
+    left.totalTokens === right.totalTokens &&
+    left.costMicros === right.costMicros &&
+    left.eventCount === right.eventCount &&
+    left.lastUpdatedAt === right.lastUpdatedAt &&
+    sameStrings(left.models, right.models) &&
+    sameStrings(left.sources, right.sources)
+  );
+}
+
+/**
+ * True when a polled snapshot equals the one already in state. A React state setter given a fresh object
+ * re-renders the whole screen even when nothing changed; polling every 100 ms made that ten times a second.
+ */
+export function sameSnapshot<T>(left: T, right: T): boolean {
+  if (left === right) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
 export function summarizeSessionUsage(events: UsageEvent[]): SessionUsageSummary {
   const summary: SessionUsageSummary = {
     inputTokens: 0,
@@ -253,6 +284,70 @@ export function summarizeSessionUsage(events: UsageEvent[]): SessionUsageSummary
   summary.models = [...models].sort((left, right) => left.localeCompare(right));
   summary.sources = [...sources].sort((left, right) => left.localeCompare(right));
   return summary;
+}
+
+const sameLines = (left: readonly string[] | undefined, right: readonly string[] | undefined) =>
+  left === right || (!!left && !!right && left.length === right.length && left.every((line, i) => line === right[i]));
+
+function sameRow(left: ActivityRowModel, right: ActivityRowModel): boolean {
+  return (
+    left.id === right.id &&
+    left.tone === right.tone &&
+    left.verb === right.verb &&
+    left.object === right.object &&
+    left.meta === right.meta &&
+    left.operation === right.operation &&
+    left.diff === right.diff &&
+    sameLines(left.lines, right.lines) &&
+    sameLines(left.tail, right.tail)
+  );
+}
+
+function sameItem(left: TranscriptItem, right: TranscriptItem): boolean {
+  if (left.kind !== right.kind || left.id !== right.id) return false;
+  switch (left.kind) {
+    case "message":
+      return (
+        left.entry === (right as TranscriptMessageItem).entry &&
+        left.sourceIndex === (right as TranscriptMessageItem).sourceIndex
+      );
+    case "thought": {
+      const other = right as TranscriptThoughtItem;
+      return left.durationMs === other.durationMs && left.text === other.text && left.steps === other.steps;
+    }
+    case "summary": {
+      const other = right as TranscriptSummaryItem;
+      return (
+        left.durationMs === other.durationMs &&
+        sameSnapshot(left.changes, other.changes) &&
+        sameSnapshot(left.checks, other.checks)
+      );
+    }
+    case "activity": {
+      const other = right as TranscriptActivityItem;
+      return (
+        left.group === other.group &&
+        left.at === other.at &&
+        left.rows.length === other.rows.length &&
+        left.rows.every((row, index) => sameRow(row, other.rows[index] as ActivityRowModel))
+      );
+    }
+  }
+}
+
+/**
+ * A projection rebuilds every item, so every item looked new and every view re-rendered whenever one tool
+ * result arrived (13 renders per message over a turn, measured). Items that say the same thing keep the object
+ * they had, which lets the views skip rendering.
+ */
+export function reuseTranscriptItems(previous: readonly TranscriptItem[], next: TranscriptItem[]): TranscriptItem[] {
+  if (previous.length === 0) return next;
+  const known = new Map<string, TranscriptItem>();
+  for (const item of previous) known.set(item.id, item);
+  return next.map((item) => {
+    const old = known.get(item.id);
+    return old && sameItem(old, item) ? old : item;
+  });
 }
 
 /**

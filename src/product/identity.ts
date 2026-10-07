@@ -14,6 +14,23 @@ export const MODEL_ENV = "SHELRA_MODEL";
 export const MAX_TOKENS_ENV = "SHELRA_MAX_TOKENS";
 export const BACKGROUND_CHILD_ENV = "SHELRA_BACKGROUND_CHILD";
 export const HOOK_EVENT_ENV = "SHELRA_HOOK_EVENT";
+/**
+ * The ShelraCode account (owner, 2026-10-06: the account is required to use Shelra). The CLI signs in at the website
+ * and talks to the API; both are fixed here, never read from the environment, because a project's `.env` must not be
+ * able to send a person's sign-in somewhere else. `shelra login --api-url/--web-url` stores another pair, for
+ * development, with the token it obtains.
+ */
+export const ACCOUNT_API_URL = "https://api.shelra.dev";
+export const ACCOUNT_WEB_URL = "https://www.shelra.dev";
+/**
+ * The OmniRoute gateway Shelra's users reach, ending in `/v1` (owner, 2026-10-07: every provider asks for its key
+ * alone and points at production). OmniRoute itself has no public hosted API, so this is Shelra's own instance, on
+ * Railway (service `omniroute`, key required on every /v1 call). A person who runs their own gateway overrides it
+ * with `OMNIROUTE_BASE_URL` or `shelra auth omniroute --url`.
+ */
+export const OMNIROUTE_PRODUCTION_URL = "https://omniroute.shelra.dev/v1";
+/** A token made on the website for a script or CI, used instead of a stored login. */
+export const ACCOUNT_TOKEN_ENV = "SHELRA_TOKEN";
 
 export function getHomeDir(): string {
   return process.env.HOME || process.env.USERPROFILE || os.homedir();

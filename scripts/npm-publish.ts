@@ -35,9 +35,13 @@ const version = semverValid((flag("--version") ?? "").replace(/^shelra@/u, "").r
 const assetsDir = flag("--assets");
 const out = flag("--out") ?? join(ROOT, "npm-dist");
 const distTag = flag("--tag");
+/** A one-time password for npm's two-factor check; without it npm asks in the terminal. */
+const otp = flag("--otp");
 const publish = argv.includes("--publish");
 if (!version) {
-  console.error("usage: --version <x.y.z> [--assets <dir>] [--out <dir>] [--publish] [--tag <dist-tag>]");
+  console.error(
+    "usage: --version <x.y.z> [--assets <dir>] [--out <dir>] [--publish] [--tag <dist-tag>] [--otp <code>]",
+  );
   process.exit(2);
 }
 
@@ -156,9 +160,11 @@ for (const tarball of tarballs) {
   const args = ["publish", tarball.file, "--access", "public"];
   if (process.env.GITHUB_ACTIONS === "true") args.push("--provenance");
   if (distTag) args.push("--tag", distTag);
-  const result = npm(args);
-  if (!result.ok) {
-    console.error(`npm publish ${tarball.name}@${version} failed:\n${result.output}`);
+  if (otp) args.push("--otp", otp);
+  // The terminal goes through: npm asks for its two-factor confirmation there when no token bypasses it.
+  const result = spawnSync("npm", args, { stdio: "inherit", shell: process.platform === "win32" });
+  if (result.status !== 0) {
+    console.error(`npm publish ${tarball.name}@${version} failed; run this script again to publish what is left.`);
     process.exit(1);
   }
   console.log(`published ${tarball.name}@${version}`);

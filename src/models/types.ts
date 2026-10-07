@@ -22,6 +22,13 @@ export interface CatalogCost {
   free: boolean;
   /** False when the provider omitted one of the prices; zero is not then treated as free. */
   pricingKnown?: boolean;
+  /**
+   * What the zero (or the "free") rests on, set by the provider's definition; see `classifyFreeEligibility`.
+   * `published-zero`: the provider's own pricing says zero and Shelra trusts it. `free-tier`: a free plan that a
+   * billed key would exceed. `unverified`: a gateway's catalog, not authoritative. Unset reads as `published-zero`
+   * on OpenRouter and as unverified everywhere else.
+   */
+  basis?: "published-zero" | "free-tier" | "unverified";
 }
 
 export interface LocalCatalogState {
@@ -45,6 +52,10 @@ export interface CloudCatalogState {
   notes: string[];
   moderated?: boolean;
   expiresAt?: number;
+  /** A router or gateway alias that picks the model serving each request (`auto`, a combo): never a Free candidate. */
+  router?: boolean;
+  /** The provider a gateway forwards this model to, when its id names one (`groq/…` through OmniRoute). */
+  upstream?: string;
 }
 
 export interface CatalogEntry {

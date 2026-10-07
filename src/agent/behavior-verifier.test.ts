@@ -148,6 +148,15 @@ describe("the runner a test outside the packages can use", () => {
     expect(testRunnerHint(project({}), ["tool.py"])).toContain("unittest");
   });
 
+  it("uses Bun for a custom Bun check even when the dependency-free project has no lockfile", () => {
+    expect(
+      testRunnerHint(project({ "package.json": '{"scripts":{"test":"bun verify.ts"}}' }), ["invoice.ts"]),
+    ).toContain("bun test ./<file>");
+    expect(
+      testRunnerHint(project({ "package.json": '{"scripts":{"test":"bun run scripts/check.ts"}}' }), ["src/api.ts"]),
+    ).toContain("bun test ./<file>");
+  });
+
   it("gives none where a test must live inside the package, or for files no runner tests", () => {
     expect(testRunnerHint(project({ "go.mod": "module x\n" }), ["main.go"])).toBeNull();
     expect(testRunnerHint(project({ "Cargo.toml": "[package]\n" }), ["src/lib.rs"])).toBeNull();

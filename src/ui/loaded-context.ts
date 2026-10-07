@@ -1,9 +1,10 @@
 import os from "node:os";
 import path from "node:path";
-import { loadHooksConfig } from "../hooks/index";
+import { listAgents } from "../extend/agents";
+import { listSkills } from "../extend/skills";
+import { resolveHooks } from "../hooks/index";
 import { listInstructionFiles } from "../utils/instructions";
-import { loadMcpServers, loadValidSubAgents } from "../utils/settings";
-import { discoverSkills } from "../utils/skills";
+import { loadMcpServers } from "../utils/settings";
 
 /** What a session has in its context besides the conversation: the answer to `/context`'s "what is loaded". */
 export interface LoadedContext {
@@ -34,22 +35,24 @@ function attempt<T>(read: () => T, fallback: T): T {
 
 /** Reads the configuration a session loads. Every source is optional, so a broken one costs only its own row. */
 export function gatherLoadedContext(cwd: string): LoadedContext {
-  const hooksConfig = attempt(() => loadHooksConfig(), {});
-  const events = Object.entries(hooksConfig)
-    .filter(([, matchers]) => (matchers ?? []).some((matcher) => matcher.hooks.length > 0))
-    .map(([event]) => event);
-  const commands = Object.values(hooksConfig).reduce(
-    (sum, matchers) => sum + (matchers ?? []).reduce((inner, matcher) => inner + matcher.hooks.length, 0),
-    0,
+  const hooks = attempt(
+    () => resolveHooks(cwd).hooks.filter((hook) => hook.state === "active" || hook.state === "modified"),
+    [],
   );
+  const events = [...new Set(hooks.map((hook) => hook.event))];
+  const commands = hooks.length;
 
   return {
     rules: attempt(() => listInstructionFiles(cwd), []).map((file) => shorten(file, cwd)),
-    skills: attempt(() => discoverSkills(cwd), []).map((skill) => skill.name),
+    skills: attempt(() => listSkills(cwd), [])
+      .filter((skill) => skill.enabled)
+      .map((skill) => skill.name),
     hooks: { commands, events },
     agents: {
       builtIn: [...BUILT_IN_AGENTS],
-      custom: attempt(() => loadValidSubAgents(), []).map((agent) => agent.name),
+      custom: attempt(() => listAgents(cwd), [])
+        .filter((agent) => agent.enabled && !agent.rejected)
+        .map((agent) => agent.name),
     },
     mcp: attempt(() => loadMcpServers(), [])
       .filter((server) => server.enabled)

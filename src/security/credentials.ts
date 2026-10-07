@@ -7,9 +7,16 @@ import { getProductUserDir } from "../product/identity";
 export interface StoredAccount {
   /** The account service that issued the token; every later call goes there, whatever the environment says. */
   apiUrl: string;
+  /** The website that shows the sign-in page, when it is not the default (development). */
+  webUrl?: string;
   token: string;
   tokenId: string;
   email: string | null;
+  name?: string | null;
+  /** When the token stops working (ISO 8601); null for one that never does. Unknown for a login made before expiry existed. */
+  expiresAt?: string | null;
+  /** The last time the service confirmed the token (ISO 8601): offline grace counts from here. */
+  verifiedAt?: string;
 }
 
 /** A free provider's credentials (`shelra auth groq|gemini|cloudflare`); see src/providers/free-providers.ts. */

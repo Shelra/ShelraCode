@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { ToolResult } from "../types/index";
-import { extractToolResultFromOutput } from "./tool-results";
+import { extractToolResultFromOutput, isOutputSuccess } from "./tool-results";
 
 describe("transcript media tool results", () => {
+  it.each([
+    { success: "false", output: "failed" },
+    { isError: true, content: [{ type: "text", text: "Database connection refused" }] },
+    { type: "json", value: { isError: true, content: [{ type: "text", text: "Database connection refused" }] } },
+  ])("does not promote malformed or failed results to successful resumed evidence: %j", (output) => {
+    expect(extractToolResultFromOutput(output)?.success).toBe(false);
+    expect(isOutputSuccess(output)).toBe(false);
+  });
   it("preserves media metadata when stored tool output is normalized", () => {
     const mediaResult: ToolResult = {
       success: true,

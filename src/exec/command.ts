@@ -166,7 +166,6 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
       if (timeoutTimer) clearTimeout(timeoutTimer);
       if (forceTimer) clearTimeout(forceTimer);
       if (memoryTimer) clearInterval(memoryTimer);
-      untrack();
       options.signal?.removeEventListener("abort", onAbort);
     };
 
@@ -174,6 +173,12 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
       if (settled) return;
       settled = true;
       cleanup();
+      // A descendant can keep inherited pipes open even after the kill request. Release those readers when
+      // the safety deadline wins; retain the PID for the exit sweep until a real close event arrives.
+      if (killedReason) {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+      }
       void finish(state, exitCode, timedOut, extra).then(resolve);
     };
 
@@ -187,8 +192,14 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
     }
 
     const onAbort = (): void => {
+      if (settled || killedReason) return;
       killedReason = "abort";
       void killProcessTree(child.pid, 500);
+      forceTimer = setTimeout(
+        () =>
+          settle("killed", null, false, "\nCancellation requested, but the process tree did not close within 5000ms."),
+        5_000,
+      );
     };
     options.signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -208,10 +219,18 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
     });
 
     child.on("error", (error: Error) => {
+      untrack();
       settle("spawn_error", null, false, `Failed to start shell: ${error.message}`);
     });
 
+    child.on("exit", () => {
+      // On Windows an exited PID can be reused while descendants still hold its pipes, before close arrives.
+      // POSIX still owns a process group containing those descendants, so retain its group until close.
+      if (process.platform === "win32") untrack();
+    });
+
     child.on("close", (code: number | null) => {
+      untrack();
       if (killedReason === "timeout") {
         settle("timed_out", null, true, `\nProcess tree killed after ${timeoutMs}ms timeout.`);
         return;
@@ -265,6 +284,7 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
 
     if (timeoutMs > 0 && Number.isFinite(timeoutMs)) {
       timeoutTimer = setTimeout(() => {
+        if (settled || killedReason) return;
         killedReason = "timeout";
         void killProcessTree(child.pid, 500);
         // If the tree refuses to die, do not hang the caller forever; cleanup clears it once the child closes.

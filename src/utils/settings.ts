@@ -195,6 +195,21 @@ export interface UserSettings {
    * paid or free. A `--model-policy` flag overrides it for one run.
    */
   modelMode?: "free" | "mixed";
+  /**
+   * The provider Mixed mode starts on when no model was picked (owner, 2026-10-06): its router, or its best model.
+   * Free mode is automatic and ignores it. Set in `/config`.
+   */
+  defaultProvider?: string;
+  /** True once the first-run setup was finished or skipped; `/logout` clears it so the setup runs again. */
+  onboarded?: boolean;
+  /** Where a local OmniRoute gateway listens (not secret; its key is in the credential store). */
+  omniroute?: { baseUrl?: string };
+  /**
+   * What the user declared for Free mode, which Shelra cannot see for itself: providers whose key has no billing
+   * (a free plan that stops at its quota), and model patterns they vouch for (`opencode-free/*`, relative to the
+   * provider). Without a declaration a free plan or a gateway's model is not proven free and Free mode skips it.
+   */
+  freeAccess?: { freePlanProviders?: string[]; freeModels?: Record<string, string[]> };
   /** Last validated local selection; the runtime is still rediscovered on boot. */
   localRuntimeId?: string;
   lastLocalHealthCheck?: string;

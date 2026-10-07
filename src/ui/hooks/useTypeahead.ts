@@ -1,5 +1,6 @@
 import type { TextareaRenderable } from "@opentui/core";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { recordSwallowedError } from "../../utils/diagnostics.js";
 import type { FileIndex } from "../../utils/file-index.js";
 
 const AT_TOKEN_RE = /(^|\s)@([\w\-./\\~][\w\-./\\~:]*|"[^"]*"?)$/u;
@@ -56,6 +57,8 @@ export function useTypeahead(
   const [selectedIndex, setSelectedIndex] = useState(0);
   const tokenRef = useRef<TokenInfo | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const requestRef = useRef(0);
+  const mountedRef = useRef(true);
   const lastTextRef = useRef("");
   const lastCursorRef = useRef<number | null>(null);
   const onAcceptRef = useRef(onAccept);
@@ -100,14 +103,29 @@ export function useTypeahead(
   }, [suggestions.length]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!fileIndex) return;
 
     const poll = () => {
       const ta = inputRef.current;
-      if (!ta) return;
+      // The prompt can be destroyed (a panel replaced it, the app is closing) while this timer is still due: reading
+      // a destroyed edit buffer throws, and a throw inside a timer would take the terminal UI down with it.
+      if (!ta || ta.isDestroyed) return;
 
-      const text = ta.plainText;
-      const cursor = ta.cursorOffset;
+      let text: string;
+      let cursor: number;
+      try {
+        text = ta.plainText;
+        cursor = ta.cursorOffset;
+      } catch {
+        return;
+      }
 
       if (text === lastTextRef.current && cursor === lastCursorRef.current && tokenRef.current) return;
       lastTextRef.current = text;
@@ -122,10 +140,17 @@ export function useTypeahead(
       tokenRef.current = token;
       const searchQuery = token.token.replace(/^@/, "").replace(/^"/, "").replace(/"$/, "");
 
-      fileIndex.match(searchQuery, 8).then((results) => {
-        setSuggestions(results);
-        setSelectedIndex(0);
-      });
+      // The latest request wins: an answer that arrives after a newer question was asked is stale.
+      const request = ++requestRef.current;
+      fileIndex
+        .match(searchQuery, 8)
+        .then((results) => {
+          if (!mountedRef.current || request !== requestRef.current) return;
+          setSuggestions(results);
+          setSelectedIndex(0);
+        })
+        // A failing file index means no suggestions, not an unhandled rejection.
+        .catch((error) => recordSwallowedError("typeahead file index", error));
     };
 
     pollRef.current = setInterval(poll, 100);

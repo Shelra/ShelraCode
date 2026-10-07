@@ -253,6 +253,18 @@ export function appendActiveCriteriaBlock(
   return `${summary.trim()}\n${block}`;
 }
 
+/** Keep the host's current request independently of the summarizer's interpretation. */
+export function appendActiveObjectiveBlock(summary: string, objective: string | undefined, maxChars = 16_000): string {
+  if (!objective?.trim()) return summary;
+  const bound = Math.max(128, Math.floor(maxChars));
+  const kept =
+    objective.length <= bound
+      ? objective
+      : `${objective.slice(0, Math.floor(bound / 2))}\n[Objective excerpt: middle omitted to fit context; consult the original transcript.]\n${objective.slice(-Math.floor(bound / 2))}`;
+  // JSON marks the user's words as data and prevents their Markdown from changing the checkpoint structure.
+  return `${summary.trim()}\n\n## Current User Objective (host copy; summary cannot replace it)\n${JSON.stringify(kept)}`;
+}
+
 export function isCompactionSummaryMessage(message: ModelMessage | undefined): boolean {
   return message?.role === "system" && typeof message.content === "string"
     ? message.content.startsWith(COMPACTION_SUMMARY_HEADER)
@@ -266,7 +278,22 @@ export function getCompactionSummaryText(message: ModelMessage | undefined): str
   return message.content.slice(COMPACTION_SUMMARY_HEADER.length).trim();
 }
 
+/**
+ * The context meter asks for the whole conversation's size on every redraw, and sizing a long tool result
+ * means serialising it. Messages are never edited in place (a change builds a new object), so a message is
+ * sized once; a different `content` reference is a different message and is sized again.
+ */
+const tokenEstimates = new WeakMap<object, { content: unknown; tokens: number }>();
+
 export function estimateMessageTokens(message: ModelMessage): number {
+  const known = tokenEstimates.get(message);
+  if (known && known.content === message.content) return known.tokens;
+  const tokens = computeMessageTokens(message);
+  tokenEstimates.set(message, { content: message.content, tokens });
+  return tokens;
+}
+
+function computeMessageTokens(message: ModelMessage): number {
   let chars = 0;
 
   switch (message.role) {

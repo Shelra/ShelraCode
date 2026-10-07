@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   closeSync,
@@ -92,10 +93,13 @@ export type TraceKind =
   | "thinking"
   | "step"
   | "status"
+  | "context"
+  | "progress"
   | "tool"
   | "result"
   | "memory"
   | "recall"
+  | "extension"
   | "ui"
   | "error"
   | "end";
@@ -139,6 +143,42 @@ export function recordUiEvent(sessionId: string | null, action: string, fields: 
     append(settings.dir, sessionName(sessionId), "ui", { action, ...clean });
   } catch {
     // Tracing must never affect the UI.
+  }
+}
+
+const MAX_MASK_DEPTH = 4;
+const MAX_MASK_ITEMS = 50;
+
+/** Masks and cuts every string inside a value, however deep, so a list of commands or sources cannot carry a secret. */
+function maskValue(value: unknown, depth: number): unknown {
+  if (typeof value === "string") return clip(redact(value), MAX_FIELD_CHARS);
+  if (value === null || typeof value !== "object") return value;
+  if (depth >= MAX_MASK_DEPTH) return "[nested value cut]";
+  if (Array.isArray(value)) return value.slice(0, MAX_MASK_ITEMS).map((item) => maskValue(item, depth + 1));
+  return Object.fromEntries(
+    Object.entries(value)
+      .slice(0, MAX_MASK_ITEMS)
+      .map(([key, item]) => [key, maskValue(item, depth + 1)]),
+  );
+}
+
+/**
+ * Something the extension system did: a skill loaded, an agent started or finished, a hook ran, a definition written,
+ * the instructions in force at the start of a turn. Recorded at the normal trace level (it is the audit of what
+ * changed how Shelra behaved), with every text field masked and cut. Never throws.
+ */
+export function recordExtensionEvent(
+  sessionId: string | null,
+  action: string,
+  fields: Record<string, unknown> = {},
+): void {
+  try {
+    const settings = traceSettings();
+    if (!settings) return;
+    const clean = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, maskValue(value, 0)]));
+    append(settings.dir, sessionName(sessionId), "extension", { action, ...clean });
+  } catch {
+    // Tracing must never affect the turn.
   }
 }
 
@@ -204,6 +244,15 @@ export function startTurnTrace(input: {
   const { dir, verbose } = settings;
   const session = sessionName(input.sessionId);
   const started = Date.now();
+  const runId = randomUUID();
+  // Content includes host notices; this is not provider time to first token.
+  let firstContentMs: number | undefined;
+  let firstModelActivityMs: number | undefined;
+  let lastModelActivityMs: number | undefined;
+  let firstToolMs: number | undefined;
+  let stageStarted = started;
+  let stage: string | undefined;
+  const stageDurationsMs: Record<string, number> = {};
   let text = "";
   let textSince = Date.now();
   let thinking = "";
@@ -214,7 +263,8 @@ export function startTurnTrace(input: {
   let failedTools = 0;
   let reasoningChars = 0;
   const toolStarts = new Map<string, number>();
-  const write = (kind: TraceKind, fields: Record<string, unknown>) => append(dir, session, kind, fields);
+  const write = (kind: TraceKind, fields: Record<string, unknown>) =>
+    append(dir, session, kind, { runId, elapsedMs: Date.now() - started, ...fields });
   const flushText = () => {
     // Host notes are recorded as notices already.
     const body = text.replace(/^\[[^\n]*\]$/gmu, "").trim();
@@ -250,6 +300,7 @@ export function startTurnTrace(input: {
         switch (chunk.type) {
           case "content": {
             const content = chunk.content ?? "";
+            if (content) firstContentMs ??= Date.now() - started;
             if (thinking) flushThinking();
             text += content;
             for (const notice of noticesIn(content)) {
@@ -269,6 +320,7 @@ export function startTurnTrace(input: {
             break;
           }
           case "reasoning":
+            if (chunk.content) firstContentMs ??= Date.now() - started;
             reasoningChars += chunk.content?.length ?? 0;
             if (verbose) {
               thinking += chunk.content ?? "";
@@ -285,6 +337,7 @@ export function startTurnTrace(input: {
             flushThinking();
             flushText();
             for (const call of chunk.toolCalls ?? []) {
+              firstToolMs ??= Date.now() - started;
               write("tool", {
                 id: call.id,
                 name: call.function.name,
@@ -305,6 +358,7 @@ export function startTurnTrace(input: {
               output: clip(chunk.toolResult?.output ?? "", MAX_FIELD_CHARS),
               ...(chunk.toolResult?.error ? { error: clip(chunk.toolResult.error, MAX_FIELD_CHARS) } : {}),
             });
+            if (id) toolStarts.delete(id);
             break;
           }
           case "error":
@@ -317,6 +371,27 @@ export function startTurnTrace(input: {
     },
     observe(observer) {
       const traced: ProcessMessageObserver = {
+        onModelProgress: (info) => {
+          guard(() => {
+            lastModelActivityMs = info.timestamp - started;
+            if (firstModelActivityMs === undefined) {
+              firstModelActivityMs = lastModelActivityMs;
+              write("progress", { source: "provider", event: info.kind, firstModelActivityMs });
+            }
+          });
+          observer?.onModelProgress?.(info);
+        },
+        onContextPrepared: (info) => {
+          guard(() =>
+            write("context", {
+              systemChars: info.systemChars,
+              messagesBeforeChars: info.messagesBeforeChars,
+              messagesAfterChars: info.messagesAfterChars,
+              messageCount: info.messageCount,
+            }),
+          );
+          observer?.onContextPrepared?.(info);
+        },
         onToolStart: (info) => {
           guard(() => toolStarts.set(info.toolCall.id, Date.now()));
           observer?.onToolStart?.(info);
@@ -370,6 +445,11 @@ export function startTurnTrace(input: {
           observer?.onStepFinish?.(info);
         },
         onStatus: (info) => {
+          guard(() => {
+            if (stage) stageDurationsMs[stage] = (stageDurationsMs[stage] ?? 0) + info.timestamp - stageStarted;
+            stage = info.stage;
+            stageStarted = info.timestamp;
+          });
           if (verbose) guard(() => write("status", { stage: info.stage, detail: clip(info.detail, MAX_NOTICE_CHARS) }));
           observer?.onStatus?.(info);
         },
@@ -388,6 +468,7 @@ export function startTurnTrace(input: {
     },
     end() {
       guard(() => {
+        if (stage) stageDurationsMs[stage] = (stageDurationsMs[stage] ?? 0) + Date.now() - stageStarted;
         flushThinking();
         flushText();
         write("end", {
@@ -395,6 +476,12 @@ export function startTurnTrace(input: {
           tools,
           failedTools,
           reasoningChars,
+          firstContentMs,
+          firstModelActivityMs,
+          lastModelActivityMs,
+          firstToolMs,
+          stageDurationsMs,
+          pendingTools: [...toolStarts.keys()],
           ...(verdict ? { verdict } : lastNotice ? { lastNotice } : {}),
         });
       });

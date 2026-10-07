@@ -6,6 +6,9 @@ import { CLI_NAME, PRODUCT_NAME } from "../src/product/identity";
 const projectRoot = path.resolve(import.meta.dir, "..");
 const distDirectory = path.join(projectRoot, "dist");
 const entrypoint = path.join(projectRoot, "src", "index.ts");
+// Modules that run on a worker thread are loaded by path at run time, so the bundler must be told to emit them: the
+// search tool runs ripgrep there (src/tools/grep-worker.ts), and without the file it falls back to the main thread.
+const workerEntrypoints = [path.join(projectRoot, "src", "tools", "grep-worker.ts")];
 
 // OpenTUI loads the native package for the current operating system at runtime.
 // Keeping these packages external in the JavaScript bundle avoids shipping a
@@ -59,7 +62,7 @@ function assertPlaywrightRequiresRewritten(): void {
 }
 
 const bundle = await Bun.build({
-  entrypoints: [entrypoint],
+  entrypoints: [entrypoint, ...workerEntrypoints],
   outdir: distDirectory,
   target: "bun",
   conditions: ["browser"],
@@ -123,7 +126,7 @@ const compileOptions: Bun.CompileBuildOptions = {
 };
 
 const executable = await Bun.build({
-  entrypoints: [entrypoint],
+  entrypoints: [entrypoint, ...workerEntrypoints],
   target: "bun",
   conditions: ["browser"],
   // Standalone binaries cannot depend on the source checkout's node_modules.

@@ -6,7 +6,7 @@
   `<scrollbox>`), and the JSX runtime comes from `jsxImportSource`, so no `import React` for JSX.
 - Colours only through `theme.ts` (the approved web palette with xterm-256 fallbacks); no raw hex in
   components. No gradients, shadows or glows. Every status is a glyph plus a colour, never colour alone.
-- The approved `frontend/` UI is the visual reference, and `docs/ui/DESIGN-SYSTEM.md` records how it
+- The approved website UI (`Shelra/Shelracode-frontend`) is the visual reference, and `docs/ui/DESIGN-SYSTEM.md` records how it
   translates to terminal cells; keep it in step with `theme.ts` and `acceptance.test.ts`.
 - The log is the only permanent surface. A plan, a load or a turn summary appears when it exists, and the
   detail opens on demand (`/plan`, `/diff`, `/checks`, `/context`). Something with nothing to show never draws.
@@ -23,3 +23,10 @@
   80x24 and 120x40. The owner uses Windows Terminal and Warp.
 - UI deliverables get three rendered passes, each improving on the last (owner's rule). Load the
   `terminal-ui` skill for TUI work.
+- Responsiveness (measured 2026-10-06, `docs/audits/2026-10-ui-responsiveness.md`): every mounted renderable costs layout
+  on every frame, so the log mounts only its last 150 items and reaching the top mounts 100 more
+  (`transcript-window.ts`, `hooks/use-transcript-window.ts`). Nothing on the render path may call into the agent for
+  something that grows with the session (`getContextStats` is cached per message); polled snapshots go through
+  `sameSnapshot` so an unchanged poll does not redraw; streamed text must not re-render its finished blocks
+  (`markdown.tsx` memoizes each block). `scrollToBottom` follows the end only while the reader is there; sending a
+  message uses `jumpToBottom`. Re-measure with `bun run scripts/perf/ui-stress.tsx` (`SHELRA_PERF_WARM=<turns>`).

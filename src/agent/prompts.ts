@@ -1,3 +1,7 @@
+import { listAgents, type ResolvedAgent } from "../extend/agents";
+import { pathsMentionedIn } from "../extend/instructions";
+import { formatSkillCatalog, skillIndex } from "../extend/skills";
+import { applySystemPromptCustomization, resolveSystemPrompt } from "../extend/system-prompt";
 import { formatDecisionsForPrompt } from "../ledger/prompt";
 import { listDecisions } from "../ledger/store";
 import { isLspToolEnabled } from "../lsp/runtime";
@@ -32,13 +36,7 @@ import { isShuruSupported } from "../tools/bash";
 import type { AgentMode, TaskRequest } from "../types/index";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { loadCustomInstructions } from "../utils/instructions";
-import {
-  type CustomSubagentConfig,
-  loadValidSubAgents,
-  type SandboxMode,
-  type SandboxSettings,
-} from "../utils/settings";
-import { discoverSkills, formatSkillsForPrompt } from "../utils/skills";
+import type { CustomSubagentConfig, SandboxMode, SandboxSettings } from "../utils/settings";
 import { type Ablations, NO_ABLATIONS } from "./ablation";
 import { todayLine } from "./prompt-date";
 import { scratchLineFor } from "./scratch";
@@ -163,15 +161,34 @@ BEHAVIOR:
   };
 }
 
-function formatCustomSubagentsPromptSection(subagents: CustomSubagentConfig[]): string {
-  if (subagents.length === 0) return "";
+const AGENT_CATALOG_MAX = 20;
+const AGENT_CATALOG_ENTRY = 160;
 
-  const lines = subagents.map((agent) => {
-    const instruction = agent.instruction.trim() || "(none)";
-    return `### ${agent.name}\n- model: ${agent.model}\n- instruction:\n${instruction}`;
+/**
+ * The specialists the model may delegate to, as name and description only: an agent's own instructions (which can be
+ * long) are loaded when it is launched, not in every prompt. The older `subAgents` list in user-settings is part of the
+ * same registry.
+ */
+function formatAgentCatalog(root: string): string {
+  let agents: ReturnType<typeof listAgents>;
+  try {
+    agents = listAgents(root).filter((agent) => agent.enabled && !agent.rejected);
+  } catch (error) {
+    recordSwallowedError("extend.agents.catalog", error);
+    return "";
+  }
+  if (agents.length === 0) return "";
+  const lines = agents.slice(0, AGENT_CATALOG_MAX).map((agent) => {
+    const description = agent.description.replace(/\s+/gu, " ").trim();
+    const clipped =
+      description.length > AGENT_CATALOG_ENTRY ? `${description.slice(0, AGENT_CATALOG_ENTRY - 1)}…` : description;
+    return `- ${agent.name} [${agent.readOnly ? "read-only" : "can edit"}]: ${clipped}`;
   });
-
-  return `\n\nCUSTOM SUB-AGENTS:\nUser-defined foreground sub-agents from ~/.shelra/user-settings.json. When one matches the task, call the task tool with agent set to the exact name.\n\n${lines.join("\n\n")}\n`;
+  const more =
+    agents.length > AGENT_CATALOG_MAX
+      ? `\n(${agents.length - AGENT_CATALOG_MAX} more: extensions({ action: "list", kind: "agent" }))`
+      : "";
+  return `\n\nAGENTS (specialists defined for this project; delegate with the task tool, agent set to the exact name; each runs with its own instructions, tools and limits, and you check what it returns):\n${lines.join("\n")}${more}\n`;
 }
 
 export function buildSystemPrompt(
@@ -183,9 +200,14 @@ export function buildSystemPrompt(
   sandboxSettings?: SandboxSettings,
   memoryContext?: MemoryContext,
   ablations: Ablations = NO_ABLATIONS,
-  turn: { root?: string; request?: string } = {},
+  turn: { root?: string; request?: string; paths?: string[] } = {},
 ): string {
-  const custom = loadCustomInstructions(cwd);
+  // Files the request is about switch on the rules scoped to them (src/extend/instructions.ts).
+  const ruleRoot = turn.root ?? cwd;
+  const ruleRelevantPaths = [
+    ...new Set([...(turn.paths ?? []), ...(turn.request ? pathsMentionedIn(turn.request) : [])]),
+  ];
+  const custom = loadCustomInstructions(cwd, { paths: ruleRelevantPaths });
   const customSection = custom
     ? `\n\nCUSTOM INSTRUCTIONS:\n${custom}\n\nFollow the above alongside standard instructions.\n`
     : "";
@@ -213,18 +235,21 @@ ${workspaceLines}`;
     ? ""
     : formatDecisionsForPrompt(listDecisions(turn.root ?? cwd), { ...(turn.request ? { request: turn.request } : {}) });
   const decisionsSection = decisionsText ? `\n\n${decisionsText}\n` : "";
-  const skillsText = ablations.has("skills") ? null : formatSkillsForPrompt(discoverSkills(cwd));
+  const skillsText = ablations.has("skills") ? null : formatSkillCatalog(skillIndex(ruleRoot, cwd), turn.request ?? "");
   const skillsSection = skillsText ? `\n\n${skillsText}\n` : "";
-  const subagentsSection = ablations.has("subagents")
-    ? ""
-    : formatCustomSubagentsPromptSection(subagents ?? loadValidSubAgents());
+  void subagents;
+  const subagentsSection = ablations.has("subagents") ? "" : formatAgentCatalog(ruleRoot);
   const sandboxSection = formatSandboxPromptSection(sandboxMode, sandboxSettings);
 
   const planSection = planContext
     ? `\n\nAPPROVED PLAN:\nThe following plan has been approved by the user. Execute it now.\n${planContext}\n`
     : "";
 
-  return `${modePrompts(isLspToolEnabled(), ablations)[mode]}${sandboxSection}${customSection}${decisionsSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
+  const base = applySystemPromptCustomization(
+    modePrompts(isLspToolEnabled(), ablations)[mode],
+    resolveSystemPrompt(ruleRoot),
+  );
+  return `${base}${sandboxSection}${customSection}${decisionsSection}${memorySection}${skillsSection}${subagentsSection}${planSection}
 
 ${workspaceLines}`;
 }
@@ -369,6 +394,24 @@ Current working directory: ${cwd}
 ${todayLine()}`;
 }
 
+/** The working rules of a registry agent: read-only or not, and the shape of what it reports back. */
+function agentRules(agent: ResolvedAgent): string[] {
+  const report =
+    "End with a report that keeps four things apart: verified facts (each with the file, line or command output that shows it), hypotheses (what you suspect and have not confirmed), changes you made (the files), and work left. A confident statement without evidence is a hypothesis.";
+  if (agent.record.readOnly) {
+    return [
+      "Do not create, modify, or delete files, and do not run a command that changes anything: the host refuses those calls, so use read_file, grep and plain listing, search or git-inspection commands.",
+      "Read what the delegated task needs, cite the specific files and output you actually saw, and say what you could not check.",
+      report,
+    ];
+  }
+  return [
+    "Work only on the delegated scope. Read before you change; make the smallest change that does the task; run the checks that exercise it and read their result.",
+    "Another agent may be working in the same project: if a write is refused because a file is held by another agent, do not retry or work around it; do a different part of the task or report it.",
+    report,
+  ];
+}
+
 export function buildSubagentPrompt(
   request: TaskRequest,
   cwd: string,
@@ -379,6 +422,8 @@ export function buildSubagentPrompt(
   ablations: Ablations = NO_ABLATIONS,
   /** The session's workspace, whose memory the brief gets; the shell may have moved into a folder inside it. */
   memoryRoot: string = cwd,
+  /** A specialist from the agent registry, resolved once at launch: its tool policy, preloaded skills and limits. */
+  agent: ResolvedAgent | null = null,
 ): string {
   const isExplore = request.agent === "explore";
   const isPlan = request.agent === "plan";
@@ -389,7 +434,7 @@ export function buildSubagentPrompt(
   const isVerifyManifest = request.agent === "verify-manifest";
   const isComputer = request.agent === "computer";
   const isCheck = request.agent === "check";
-  const mode: AgentMode = isExplore || isPlan || isVerifyDetect ? "ask" : "agent";
+  const mode: AgentMode = isExplore || isPlan || isVerifyDetect || agent?.record.readOnly ? "ask" : "agent";
   const role = custom
     ? `You are the custom sub-agent "${custom.name}". You can investigate, edit files, and run commands unless the delegated task says otherwise.`
     : request.agent === "explore"
@@ -412,8 +457,11 @@ export function buildSubagentPrompt(
                       ? "You are the Check sub-agent. You find out whether code does what a request asks, by testing it against the request alone: you write one test file and change nothing else."
                       : "You are the General sub-agent. You investigate, edit files, and run commands to deliver a complete, working result for the delegated task — not a partial attempt.";
 
+  const specialistRole = agent
+    ? `You are the "${agent.record.name}" agent: ${agent.record.description.replace(/\s+/gu, " ").trim()} ${agent.record.readOnly ? "You are read-only: you cannot change anything, and the host refuses any command that is not a plain read." : "You can investigate, edit files, and run commands within the tools you were given."}`
+    : null;
   const codebaseTools = isLspToolEnabled() ? "`read_file`, `grep`, and `lsp`" : "`read_file` and `grep`";
-  const rules = isExplore
+  const builtInRules = isExplore
     ? [
         "Do not create, modify, or delete files.",
         `Prefer ${codebaseTools} over broad shell exploration for codebase questions.`,
@@ -534,16 +582,32 @@ export function buildSubagentPrompt(
                         "Return a concise summary for the parent agent with key outcomes, what you verified, and any open risks.",
                       ];
 
-  const instructionLines = custom?.instruction.trim() ? ["", "SUB-AGENT INSTRUCTIONS:", custom.instruction.trim()] : [];
+  const preloaded = (agent?.preloaded ?? []).flatMap((skill) => [
+    "",
+    `<skill_content name="${skill.name}" version="${skill.hash}">`,
+    skill.text.trim(),
+    "</skill_content>",
+  ]);
+  const instructionLines = [
+    ...(custom?.instruction.trim() ? ["", "SUB-AGENT INSTRUCTIONS:", custom.instruction.trim()] : []),
+    ...(preloaded.length > 0
+      ? [
+          "",
+          "SKILLS LOADED FOR THIS TASK (follow them where they apply; loading a skill does not complete its procedure):",
+          ...preloaded,
+        ]
+      : []),
+    ...(agent && agent.notes.length > 0 ? ["", ...agent.notes.map((note) => `Note: ${note}`)] : []),
+  ];
 
   return [
-    role,
+    specialistRole ?? role,
     ...instructionLines,
     "",
     "You are helping a parent agent. Do not address the end user directly.",
     "Focus tightly on the delegated scope and summarize what matters back to the parent agent.",
     "",
-    ...rules,
+    ...(agent ? agentRules(agent) : builtInRules),
     "",
     `Delegated task: ${request.description}`,
     "",

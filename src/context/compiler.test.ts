@@ -86,9 +86,9 @@ describe("host context compiler", () => {
     expect(classifyTurn("thanks, that is all").kind).toBe("conversation");
   });
 
-  it("attaches nothing to a conversation turn", () => {
+  it("attaches nothing to a conversation turn", async () => {
     const root = scratch("shelra-context-chat-", { "package.json": '{"scripts":{"test":"bun test"}}' });
-    expect(compileContextPacket(root, "What is a closure?")).toEqual({
+    expect(await compileContextPacket(root, "What is a closure?")).toEqual({
       classification: { kind: "conversation", reason: "no repository or mutation signal" },
       promptAppendix: "",
       files: [],
@@ -96,7 +96,7 @@ describe("host context compiler", () => {
     });
   });
 
-  it("supplies the project's checks, its git state and the files the request names", () => {
+  it("supplies the project's checks, its git state and the files the request names", async () => {
     const root = repository("shelra-context-git-", {
       "package.json": JSON.stringify({ scripts: { test: "bun test", lint: "biome check .", build: "bun build" } }),
       "src/parser.ts": "export function parse() {}\n",
@@ -109,7 +109,7 @@ describe("host context compiler", () => {
     mkdirSync(join(root, "vendor"));
     writeFileSync(join(root, "vendor", "parser.ts"), "ignored copy\n");
 
-    const packet = compileContextPacket(root, "Fix the bug in parser.ts, then update `src/other.ts:12`.");
+    const packet = await compileContextPacket(root, "Fix the bug in parser.ts, then update `src/other.ts:12`.");
 
     expect(packet.files).toEqual(["src/other.ts", "src/parser.ts"]);
     expect(packet.promptAppendix).toContain(`Workspace root: ${root}`);
@@ -134,14 +134,14 @@ describe("host context compiler", () => {
     expect(packet.truncated).toBe(false);
   });
 
-  it("lists a small project's files, never their contents, for a request that names none", () => {
+  it("lists a small project's files, never their contents, for a request that names none", async () => {
     const root = repository("shelra-context-unnamed-", {
       "package.json": '{"name":"fixture"}',
       "README.md": "README BODY SHOULD NOT BE INJECTED",
       "src/index.ts": "export const a = 1;\n",
     });
 
-    const packet = compileContextPacket(root, "revisa el proyecto");
+    const packet = await compileContextPacket(root, "revisa el proyecto");
 
     expect(packet.files).toEqual([]);
     expect(packet.promptAppendix).toContain("The project states no test, type-check or lint command.");
@@ -150,14 +150,14 @@ describe("host context compiler", () => {
     expect(packet.promptAppendix).not.toContain("README BODY");
   });
 
-  it("leaves tool state out of a small project's list, and lists nothing it could not walk to the end", () => {
+  it("leaves tool state out of a small project's list, and lists nothing it could not walk to the end", async () => {
     // A project that forgot to ignore .shelra: git lists it, the packet does not.
     const tracked = repository("shelra-context-tool-state-", {
       "package.json": '{"name":"fixture"}',
       "src/index.ts": "export const a = 1;\n",
       ".shelra/memory/MEMORY.md": "- [x](x.md)\n",
     });
-    const packet = compileContextPacket(tracked, "revisa el proyecto");
+    const packet = await compileContextPacket(tracked, "revisa el proyecto");
     expect(packet.promptAppendix).toContain("Files in this project (2):\n- package.json\n- src/index.ts");
     expect(packet.promptAppendix).not.toContain(".shelra");
 
@@ -169,7 +169,7 @@ describe("host context compiler", () => {
       "internal/target/target.go": "package target\n",
       "build/out.js": "console.log(1);\n",
     });
-    expect(compileContextPacket(cli, "revisa el proyecto").promptAppendix).toContain(
+    expect((await compileContextPacket(cli, "revisa el proyecto")).promptAppendix).toContain(
       "Files in this project (4):\n- internal/target/target.go\n- package.json\n- src/commands/build/index.test.ts\n- src/commands/build/index.ts",
     );
 
@@ -179,7 +179,7 @@ describe("host context compiler", () => {
       "app/__pycache__/calc.cpython-312.pyc": "x",
       "web/node_modules/dep/index.js": "module.exports = 1;\n",
     });
-    const listed = compileContextPacket(script, "revisa el proyecto").promptAppendix;
+    const listed = (await compileContextPacket(script, "revisa el proyecto")).promptAppendix;
     expect(listed).toContain("Files in this project (1):\n- app/calc.py");
     expect(listed).not.toContain("__pycache__");
     expect(listed).not.toContain("node_modules");
@@ -189,12 +189,12 @@ describe("host context compiler", () => {
       "pom.xml": "<project/>",
       "src/main/java/com/example/app/service/impl/Service.java": "class Service {}\n",
     });
-    const truncated = compileContextPacket(deep, "revisa el proyecto");
+    const truncated = await compileContextPacket(deep, "revisa el proyecto");
     expect(truncated.promptAppendix).not.toContain("Files in this project");
     // Three repositories and a walk: 2.5 s alone, past the default 5 s on a busy machine running the full suite.
   }, 20_000);
 
-  it("gives a larger project no file list, only the tests of the files the request names", () => {
+  it("gives a larger project no file list, only the tests of the files the request names", async () => {
     const filler = Object.fromEntries(
       Array.from({ length: 45 }, (_, index) => [`src/module${index}.ts`, `export const m${index} = ${index};\n`]),
     );
@@ -207,7 +207,7 @@ describe("host context compiler", () => {
       "src/queues.test.ts": "// another module's tests\n",
     });
 
-    const packet = compileContextPacket(root, "Implement runQueue in src/queue.ts");
+    const packet = await compileContextPacket(root, "Implement runQueue in src/queue.ts");
 
     expect(packet.files).toEqual(["src/queue.ts"]);
     expect(packet.promptAppendix).not.toContain("Files in this project");
@@ -218,16 +218,19 @@ describe("host context compiler", () => {
     expect(packet.promptAppendix).not.toContain("src/queues.test.ts");
   });
 
-  it("ignores names outside the workspace and names that do not exist", () => {
+  it("ignores names outside the workspace and names that do not exist", async () => {
     const root = scratch("shelra-context-outside-", { "src/index.ts": "export const a = 1;\n" });
 
-    const packet = compileContextPacket(root, "Read ../secret.txt, missing.ts, https://example.com/a.ts and src/*.ts");
+    const packet = await compileContextPacket(
+      root,
+      "Read ../secret.txt, missing.ts, https://example.com/a.ts and src/*.ts",
+    );
 
     expect(packet.files).toEqual([]);
     expect(packet.promptAppendix).not.toContain("Files the request names");
   });
 
-  it("finds a bare name outside git with a bounded walk that survives a directory cycle", () => {
+  it("finds a bare name outside git with a bounded walk that survives a directory cycle", async () => {
     const root = scratch("shelra-context-cycle-", {
       "package.json": '{"name":"cycle"}',
       "src/index.ts": "export const a = 1;\n",
@@ -236,17 +239,39 @@ describe("host context compiler", () => {
     // `loop` points back at the directory that contains it.
     symlinkSync(root, join(root, "src", "loop"), "junction");
 
-    const packet = compileContextPacket(root, "fix index.ts and read the src/ folder");
+    const packet = await compileContextPacket(root, "fix index.ts and read the src/ folder");
 
     expect(packet.files).toEqual(["src/", "lib/index.ts", "src/index.ts"]);
     expect(packet.promptAppendix).toContain("- index.ts: lib/index.ts, src/index.ts");
     expect(packet.promptAppendix).toContain("Git: this workspace is not in a git repository.");
   });
 
-  it("stays within the character budget", () => {
+  it("stays within the character budget", async () => {
     const root = scratch("shelra-context-budget-", { "package.json": '{"scripts":{"test":"bun test"}}' });
-    const packet = compileContextPacket(root, "Fix the project", 60);
+    const packet = await compileContextPacket(root, "Fix the project", 60);
     expect(packet.promptAppendix.length).toBeLessThanOrEqual(60 + "\n[context truncated by host]".length);
     expect(packet.truncated).toBe(true);
+  });
+});
+
+describe("host context compiler and the event loop", () => {
+  it("lets the terminal run while git answers, instead of holding it for every command", async () => {
+    const eol = String.fromCharCode(10);
+    const files: Record<string, string> = { "src/queue.ts": `export const q = 1;${eol}` };
+    for (let i = 0; i < 300; i += 1) files[`src/generated-${i}.ts`] = `export const v${i} = ${i};${eol}`;
+    const root = repository("shelra-context-loop-", files);
+    writeFileSync(join(root, "src/queue.ts"), `export const q = 2;${eol}`);
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+    }, 1);
+    try {
+      const packet = await compileContextPacket(root, "Fix the bug in src/queue.ts");
+      expect(packet.promptAppendix).toContain("src/queue.ts");
+    } finally {
+      clearInterval(timer);
+    }
+    // The blocking version let none of them run until it had finished.
+    expect(ticks).toBeGreaterThan(2);
   });
 });

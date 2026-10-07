@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type { Plan, PlanStepStatus } from "../types/index";
 import {
   type ActivityPhrase,
@@ -232,7 +232,7 @@ function RowView({
  * A run of same-kind operations. Reads and searches fold into one counted line by default; edits,
  * commands and checks always keep their own row because each carries its own evidence.
  */
-export function TranscriptActivityView({
+function TranscriptActivityViewImpl({
   t,
   item,
   width,
@@ -302,6 +302,8 @@ export function TranscriptActivityView({
     </box>
   );
 }
+
+export const TranscriptActivityView = memo(TranscriptActivityViewImpl);
 
 /**
  * The plan as a checklist in the log. Unfinished, it shows the steps around the one being worked on
@@ -390,7 +392,7 @@ export function PlanBlock({ t, plan, width, detailed }: { t: Theme; plan: Plan; 
 }
 
 /** The last line of a turn that changed files or ran a check: `─ 2 files +6 -1 · tests ✓ · 42s`. */
-export function TurnSummaryLine({ t, item }: { t: Theme; item: TranscriptSummaryItem }) {
+function TurnSummaryLineImpl({ t, item }: { t: Theme; item: TranscriptSummaryItem }) {
   const groups = turnSummaryGroups(item);
   if (groups.length === 0) return null;
   const colorOf = (tone: SummaryTone): string => {
@@ -420,10 +422,12 @@ export function TurnSummaryLine({ t, item }: { t: Theme; item: TranscriptSummary
   );
 }
 
+export const TurnSummaryLine = memo(TurnSummaryLineImpl);
+
 type SummaryTone = ReturnType<typeof turnSummaryGroups>[number][number]["tone"];
 
 /** "Thought for 8s" - the model's own reasoning, shown only when the user asks for detail. */
-export function ThoughtView({
+function ThoughtViewImpl({
   t,
   item,
   width,
@@ -456,6 +460,8 @@ export function ThoughtView({
     </box>
   );
 }
+
+export const ThoughtView = memo(ThoughtViewImpl);
 
 /* ── Live ────────────────────────────────────────────────────────── */
 

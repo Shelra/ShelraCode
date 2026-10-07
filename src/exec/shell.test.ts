@@ -2,10 +2,36 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
   buildShellInvocation,
+  createShellErrorFilter,
   normalizeShellErrorLine,
   powerShellParseHint,
   translateForWindowsPowerShell,
 } from "./shell";
+
+describe("newline-free stderr", () => {
+  it("streams a long line in bounded pieces without losing its text", () => {
+    const filter = createShellErrorFilter();
+    const chunk = "x".repeat(4096);
+    let output = "";
+    for (let i = 0; i < 256; i++) output += filter.push(chunk);
+    const pending = filter.flush();
+    expect(pending.length).toBeLessThanOrEqual(65_536);
+    expect(output + pending).toBe(chunk.repeat(256));
+  });
+});
+
+describe("PowerShell mixed command exit status", () => {
+  it.skipIf(process.platform !== "win32")("does not hide a cmdlet failure behind a previous native exit 0", () => {
+    const invocation = buildShellInvocation('bun -e "process.exit(0)"; Get-Item -LiteralPath __shelra_audit_missing__');
+    const result = spawnSync(invocation.file, invocation.args, {
+      encoding: "utf8",
+      timeout: 15_000,
+      windowsHide: true,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).not.toBe(0);
+  });
+});
 
 describe("translateForWindowsPowerShell", () => {
   it("rewrites a top-level && chain into a $?-guarded sequence", () => {

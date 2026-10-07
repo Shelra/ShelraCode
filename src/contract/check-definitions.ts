@@ -1215,7 +1215,15 @@ function addToolingFile(context: ResolveContext, path: string, file: string, dep
     const found = candidates.find((candidate) => context.reader(candidate) !== null);
     if (!found) continue;
     const loadedFile = toProjectPath(context.workspace, found);
-    if (loadedFile.startsWith("..") || loadedFile.includes("node_modules/") || isTestFile(loadedFile)) continue;
+    // A verifier imports both its harness helpers and the program it tests. Only tooling belongs to the
+    // immutable check definition; hashing application imports made every legitimate bug fix look like cheating.
+    if (
+      loadedFile.startsWith("..") ||
+      loadedFile.includes("node_modules/") ||
+      isTestFile(loadedFile) ||
+      !TOOLING_FILE_RE.test(loadedFile)
+    )
+      continue;
     addToolingFile(context, found, loadedFile, depth + 1);
   }
 }

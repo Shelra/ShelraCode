@@ -88,6 +88,8 @@ export interface TaskRequest {
   prompt: string;
   /** A tighter step bound than the agent's default, for a task the host starts itself. */
   maxSteps?: number;
+  /** Skills to preload for this run, by name, on top of the ones the agent's definition lists. */
+  skills?: string[];
 }
 
 export interface TaskRun {
@@ -97,6 +99,10 @@ export interface TaskRun {
   activity?: string;
   /** Checks the sub-agent itself ran successfully; a delegation counts as verification only with these. */
   evidence?: string[];
+  /** The id of the run record (`/agents`, the `extensions` tool's runs view). */
+  runId?: string;
+  /** Files the sub-agent changed, as the host saw its tool results. */
+  changedFiles?: string[];
 }
 
 export type DelegationStatus = "running" | "complete" | "error";
@@ -316,6 +322,12 @@ export interface ModelInfo {
   maxOutputTokens?: number;
   category?: "local" | "cloud";
   provider?: string;
+  /**
+   * What Shelra can prove about the model's cost, for the model picker (see `classifyFreeEligibility`): `free` may run
+   * in Free mode; `free-plan` is a free plan on a key not declared free; `unproven` has no authoritative price; `router`
+   * picks the model that serves each request; `paid` has a price.
+   */
+  freeStatus?: "free" | "free-plan" | "unproven" | "router" | "paid";
 }
 
 export type AgentMode = "agent" | "plan" | "ask";

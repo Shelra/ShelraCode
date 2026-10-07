@@ -2705,7 +2705,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(text).not.toContain("Not verified");
     }, 60_000);
 
-    it("runs the project's checks before the work when asked to check or fix it, and searches their error (owner, 2026-09-25)", async () => {
+    it("runs local checks before a repair without forcing a web search for their error", async () => {
       executeEventHooksMock.mockResolvedValue(emptyHookResult);
       const previous = process.env.SHELRA_RESEARCH;
       process.env.SHELRA_RESEARCH = "on";
@@ -2737,7 +2737,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
         const first = JSON.stringify(requests[0]?.messages);
         expect(first).toMatch(/\[Shelra ran `[^`]*run build` before the task began, on the project as you found it\]/u);
         expect(first).toContain("TS1005");
-        expect(queries[0]).toBe("tsc error TS1005: ',' expected.");
+        expect(queries).toEqual([]);
       } finally {
         if (previous === undefined) delete process.env.SHELRA_RESEARCH;
         else process.env.SHELRA_RESEARCH = previous;

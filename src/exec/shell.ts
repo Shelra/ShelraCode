@@ -49,7 +49,7 @@ const POWERSHELL_EPILOGUE = [
   "",
   "$__shelraOk = $?",
   "$__shelraCode = $LASTEXITCODE",
-  "if ($null -eq $__shelraCode) { if ($__shelraOk) { $__shelraCode = 0 } else { $__shelraCode = 1 } }",
+  "if (-not $__shelraOk) { if ($null -eq $__shelraCode -or $__shelraCode -eq 0) { $__shelraCode = 1 } } elseif ($null -eq $__shelraCode) { $__shelraCode = 0 }",
   "$host.SetShouldExit($__shelraCode)",
   "",
 ].join("\n");
@@ -442,10 +442,21 @@ export function normalizeShellErrorLine(line: string): string | null {
  */
 export function createShellErrorFilter(): { push(chunk: string): string; flush(): string } {
   let pending = "";
+  // Native tools can emit arbitrarily long lines (binary output, minified JSON, progress logs). Waiting for
+  // their newline defeated bounded capture and repeatedly split the growing buffer on the event loop.
+  const maxPendingChars = 65_536;
+  let passthrough = false;
   const convert = (line: string): string | null => normalizeShellErrorLine(line);
 
   return {
     push(chunk: string): string {
+      if (passthrough) {
+        const newline = chunk.indexOf("\n");
+        if (newline < 0) return chunk;
+        passthrough = false;
+        const prefix = chunk.slice(0, newline + 1);
+        return prefix + this.push(chunk.slice(newline + 1));
+      }
       pending += chunk;
       const lines = pending.split("\n");
       pending = lines.pop() ?? "";
@@ -453,6 +464,12 @@ export function createShellErrorFilter(): { push(chunk: string): string; flush()
       for (const line of lines) {
         const cleaned = convert(line);
         if (cleaned !== null) out.push(`${cleaned.replace(/\r$/, "")}\n`);
+      }
+      if (pending.length > maxPendingChars) {
+        // Oversized CLIXML is retained as raw evidence instead of parsing an unbounded XML record.
+        out.push(pending);
+        pending = "";
+        passthrough = true;
       }
       return out.join("");
     },

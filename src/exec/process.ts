@@ -14,7 +14,6 @@ interface ProcessHandle {
 }
 
 const PORT_PATTERN = /(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0)[:/](\d{2,5})/iu;
-const handles = new Map<string, ProcessHandle>();
 
 function findPort(text: string): number | undefined {
   const match = PORT_PATTERN.exec(text);
@@ -97,6 +96,7 @@ async function waitForReady(handle: ProcessHandle, options: ProcessStartOptions)
 
 /** Starts a long-running process and waits for a bounded readiness signal. */
 export class ProcessManager {
+  private readonly handles = new Map<string, ProcessHandle>();
   async start(options: ProcessStartOptions): Promise<ManagedProcess> {
     if (options.signal?.aborted) throw new Error("Process start was cancelled");
     const invocation = buildShellInvocation(options.command);
@@ -134,26 +134,26 @@ export class ProcessManager {
       errorOutput: new BoundedCapture(DEFAULT_CAPTURE_CHARS),
       settled: false,
     };
-    handles.set(id, handle);
+    this.handles.set(id, handle);
     wireOutput(handle);
     try {
       await waitForReady(handle, options);
       return managed;
     } catch (error) {
-      handles.delete(id);
+      this.handles.delete(id);
       throw error;
     }
   }
 
   async stop(id: string): Promise<void> {
-    const handle = handles.get(id);
+    const handle = this.handles.get(id);
     if (!handle) return;
-    handles.delete(id);
+    this.handles.delete(id);
     await killProcessTree(handle.child.pid, 500);
     closeHandle(handle, "stopped", null);
   }
 
   async stopAll(): Promise<void> {
-    await Promise.all([...handles.keys()].map((id) => this.stop(id)));
+    await Promise.all([...this.handles.keys()].map((id) => this.stop(id)));
   }
 }

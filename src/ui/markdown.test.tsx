@@ -1,5 +1,6 @@
 import { RGBA } from "@opentui/core";
 import { testRender } from "@opentui/react/test-utils";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { Markdown } from "./markdown";
 import { dark, dark256, type Theme } from "./theme";
@@ -82,5 +83,41 @@ describe("Markdown", () => {
   it("does not leak the markers of half-typed emphasis as a message streams", async () => {
     const { frame } = await render(dark, "Almost **bold");
     expect(frame).toContain("Almost **bold");
+  });
+});
+
+const BLANK_LINE = String.fromCharCode(10, 10);
+describe("Markdown while an answer streams", () => {
+  it("draws again only the block that grew, so a tick does not cost more as the answer gets longer", async () => {
+    // A theme that counts how often a token is read: a block that draws reads its colours.
+    let reads = 0;
+    const counting = new Proxy(dark, {
+      get(target, key, receiver) {
+        reads += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const paragraphs = Array.from({ length: 12 }, (_, i) => `Paragraph ${i} explains one more finding in plain words.`);
+    const answer = paragraphs.join(BLANK_LINE);
+    let grow: (text: string) => void = () => {};
+    function Host() {
+      const [text, setText] = useState(answer);
+      grow = setText;
+      return <Markdown t={counting} content={text} streaming />;
+    }
+    const screen = await testRender(<Host />, { width: 80, height: 30 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await screen.renderOnce();
+    const firstDraw = reads;
+    expect(firstDraw).toBeGreaterThan(12);
+
+    reads = 0;
+    grow(`${answer} and a little more`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await screen.renderOnce();
+    expect(screen.captureCharFrame()).toContain("and a little more");
+    // One block plus the container: a small fraction of what drawing all twelve cost.
+    expect(reads).toBeLessThan(firstDraw / 4);
+    screen.renderer.destroy();
   });
 });

@@ -28,7 +28,15 @@ const AuthConfigBody = z.object({
   supabasePublishableKey: z.string().startsWith("sb_publishable_"),
 });
 
-const DeviceTokenBody = z.object({ id: z.string(), name: z.string(), prefix: z.string(), createdAt: z.string() });
+const DeviceTokenBody = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
+  createdAt: z.string(),
+  kind: z.enum(["cli", "ci"]).optional(),
+  /** When the token stops working; null for one that never does. */
+  expiresAt: z.string().nullable().optional(),
+});
 
 const IssuedTokenBody = DeviceTokenBody.extend({ token: z.string().startsWith("shr_") });
 
@@ -37,6 +45,7 @@ const MeBody = z.object({
     id: z.string(),
     email: z.string().nullable(),
     name: z.string().nullable(),
+    avatarUrl: z.string().nullable().optional(),
     createdAt: z.string(),
   }),
   credential: z.discriminatedUnion("type", [
@@ -45,7 +54,11 @@ const MeBody = z.object({
   ]),
 });
 
+/** What the browser login hands back: the device token (shown once) and who it is for. */
+const ExchangedBody = IssuedTokenBody.extend({ email: z.string().nullable(), displayName: z.string().nullable() });
+
 export type AuthConfig = z.infer<typeof AuthConfigBody>;
+export type ExchangedLogin = z.infer<typeof ExchangedBody>;
 export type IssuedToken = z.infer<typeof IssuedTokenBody>;
 export type Me = z.infer<typeof MeBody>;
 
@@ -75,10 +88,11 @@ async function call<T>(
   path: string,
   init: RequestInit,
   fetchImpl: FetchLike,
+  timeoutMs = 15_000,
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetchImpl(`${apiUrl}${path}`, { ...init, signal: AbortSignal.timeout(15_000) });
+    response = await fetchImpl(`${apiUrl}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new AccountError(`Could not reach the account service at ${apiUrl} (${reason}).`);
@@ -121,8 +135,35 @@ export function createDeviceToken(
   );
 }
 
-export function getMe(apiUrl: string, token: string, fetchImpl: FetchLike = fetch): Promise<Me> {
-  return call(MeBody, apiUrl, "/v1/me", { method: "GET", headers: { authorization: `Bearer ${token}` } }, fetchImpl);
+/**
+ * Trades the one-time code the website produced, and the secret only this process holds, for a device token.
+ * No credential is sent: the code and the verifier are the proof.
+ */
+export function exchangeLoginCode(
+  apiUrl: string,
+  code: string,
+  codeVerifier: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<ExchangedLogin> {
+  return call(
+    ExchangedBody,
+    apiUrl,
+    "/v1/cli/token",
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, codeVerifier }) },
+    fetchImpl,
+  );
+}
+
+/** Who a token belongs to. A start-up check passes a short `timeoutMs`: the account must not hold the terminal. */
+export function getMe(apiUrl: string, token: string, fetchImpl: FetchLike = fetch, timeoutMs?: number): Promise<Me> {
+  return call(
+    MeBody,
+    apiUrl,
+    "/v1/me",
+    { method: "GET", headers: { authorization: `Bearer ${token}` } },
+    fetchImpl,
+    timeoutMs,
+  );
 }
 
 export async function revokeDeviceToken(

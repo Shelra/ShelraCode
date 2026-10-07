@@ -176,23 +176,37 @@ export async function* withIdleWatchdog(
   idleMs: number,
   controller: AbortController,
 ): AsyncIterable<unknown> {
-  if (idleMs <= 0) {
-    yield* source;
+  if (controller.signal.aborted) {
+    yield { type: "abort" };
     return;
   }
   const iterator = source[Symbol.asyncIterator]();
+  let onAbort: () => void = () => {};
+  const aborted = new Promise<{ aborted: true }>((resolve) => {
+    onAbort = () => resolve({ aborted: true });
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+  });
   try {
     while (true) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const idle = new Promise<{ idle: true }>((resolveIdle) => {
-        timer = setTimeout(() => resolveIdle({ idle: true }), idleMs);
+        if (idleMs > 0) timer = setTimeout(() => resolveIdle({ idle: true }), idleMs);
       });
       const next = iterator.next().then((result) => ({ idle: false as const, result }));
       // If the timer wins, this pending read settles later (or never); it must not surface as
       // an unhandled rejection when the abort tears the stream down.
       next.catch(() => undefined);
-      const outcome = await Promise.race([next, idle]);
-      if (timer) clearTimeout(timer);
+      const outcome = await (async () => {
+        try {
+          return await Promise.race([next, idle, aborted]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      })();
+      if ("aborted" in outcome || controller.signal.aborted) {
+        yield { type: "abort" };
+        return;
+      }
       if (outcome.idle) {
         const error = new ProviderStreamIdleError(idleMs);
         controller.abort(error);
@@ -203,6 +217,7 @@ export async function* withIdleWatchdog(
       yield outcome.result.value;
     }
   } finally {
+    controller.signal.removeEventListener("abort", onAbort);
     // Do not await: a source suspended inside a hung read would never settle its return().
     const closing = iterator.return?.();
     if (closing) closing.catch(() => undefined);

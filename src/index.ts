@@ -4,6 +4,8 @@ import type { KeyEvent } from "@opentui/core";
 import { InvalidArgumentError, program } from "commander";
 import * as dotenv from "dotenv";
 import packageJson from "../package.json" with { type: "json" };
+import { signOutAccount } from "./account/commands";
+import { type AccountStatus, checkAccount, describeBlocked } from "./account/session";
 import { ABLATIONS, parseAblations } from "./agent/ablation";
 import { Agent } from "./agent/agent";
 import { completeDelegation, failDelegation, loadDelegation } from "./agent/delegations";
@@ -27,6 +29,21 @@ import { formatRepeatSummary, type RepeatTaskOutcome, summarizeRepeats } from ".
 import { runBenchmark } from "./bench/runner";
 import { createShelraBenchmarkExecutor } from "./bench/shelra-executor";
 import type { BenchmarkManifest } from "./bench/types";
+import {
+  allowFree,
+  buildProviderRows,
+  denyFree,
+  formatModelCatalog,
+  formatProviderTable,
+} from "./cli/providers-command";
+import { needsOnboarding } from "./config/preferences";
+import { createProviderAdmin } from "./config/provider-admin";
+import { createConfigServices } from "./config/services";
+import { runExtensionCommand, splitCommand } from "./extend/commands";
+import { describeHooks } from "./extend/hooks-admin";
+import { flushRuns } from "./extend/runs";
+import { projectRootFor } from "./extend/settings";
+import { resolveSystemPrompt, setSessionPromptFlags } from "./extend/system-prompt";
 import { inspectHardware } from "./hardware/profile";
 import {
   createHeadlessJsonlEmitter,
@@ -35,6 +52,7 @@ import {
   renderHeadlessChunk,
   renderHeadlessPrelude,
 } from "./headless/output";
+import { awaitBackgroundHooks } from "./hooks/index";
 import { createOpenRouterIntelligenceProvider } from "./intelligence";
 import { registerMcpCommands } from "./mcp/orionmcp-commands";
 import { type BudgetLimits, parseBudgetUsd } from "./models/budget";
@@ -42,17 +60,8 @@ import { normalizeModelId, primeCatalog } from "./models/catalog";
 import { installLocalModel } from "./models/manager";
 import { fetchOpenRouterCatalog, isOpenRouterBaseURL } from "./models/openrouter";
 import type { ModelRecommendation } from "./models/recommendation";
-import {
-  isGuaranteedFree,
-  type ModelPolicy,
-  modelAfterModeChange,
-  parseModelPolicy,
-  resolveCatalogModel,
-  routeCatalogModel,
-  startupModelRequest,
-} from "./models/routing";
+import { type ModelPolicy, parseModelPolicy, rankedFreeModels, routeCatalogModel } from "./models/routing";
 import type { CatalogEntry } from "./models/types";
-import { catalogEntryToModelInfo } from "./models/types";
 import {
   API_KEY_ENV,
   CLI_NAME,
@@ -63,32 +72,44 @@ import {
   PRODUCT_NAME,
 } from "./product/identity";
 import { type CredentialFallbackSource, credentialFallbackChain, thenFallback } from "./providers/credential-fallback";
+import { createDefaultRegistry, defaultResolveDeps } from "./providers/default-registry";
+import { OMNIROUTE_API_KEY_ENV } from "./providers/definitions/omniroute";
 import {
   configuredFreeProviders,
   createFreeProvider,
   FREE_PROVIDER_IDS,
   FREE_PROVIDERS,
-  type FreeProviderId,
   freeProviderCliError,
   freeProviderFallbackSources,
   isFreeProviderId,
   outsideFreeMode,
   requireFreeProvider,
 } from "./providers/free-providers";
+import {
+  isValidOmniRouteBaseURL,
+  normalizeOmniRouteBaseURL,
+  OMNIROUTE_BASE_URL_ENV,
+  OMNIROUTE_DEFAULT_BASE_URL,
+} from "./providers/omniroute";
 import { createOpenRouterProvider } from "./providers/openrouter";
 import { selectLocalRoute } from "./router/local-first";
+import { declareFreePlanForSession, loadFreeAttestations } from "./routing/attestations";
+import { isAutoFreeModel, parseModelRef } from "./routing/model-ref";
+import { createRoutingRuntime, type RoutingRuntime } from "./routing/runtime";
 import { installManagedRuntime, resolveRuntimeInstallPlan } from "./runtimes/bootstrap";
 import { discoverLocalRuntimes, disposeLocalRuntimes } from "./runtimes/discovery";
 import type { LocalModelCandidate, LocalRuntimeDiscovery } from "./runtimes/types";
 import {
   clearOpenRouterApiKey,
   clearProviderCredential,
+  getStoredAccount,
   saveOpenRouterApiKey,
   saveProviderCredential,
 } from "./security/credentials";
 import { runOnboarding } from "./setup/onboarding";
 import { startInstalledLocalModel } from "./startup/local-fallback";
 import { probeLocalModel, runStartup } from "./startup/orchestrator";
+import { configureRoutedSession } from "./startup/routed-session";
 import type { StartupProgress, StartupResult } from "./startup/types";
 import {
   createBenchmarkRun,
@@ -168,6 +189,10 @@ async function releaseTrackedLocalRuntimes(): Promise<void> {
 interface RemoteModelSetup {
   models: ModelInfo[];
   catalog: CatalogEntry[];
+  /** The routing runtime of a session on the user's providers; absent for a custom endpoint. */
+  routing?: RoutingRuntime;
+  /** The catalog's models as they are now (it refreshes while the session runs). */
+  getModels?: () => ModelInfo[];
   modelId: string;
   selectModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
   /** The session's model mode, and a way to switch it (Free runs free models only; Mixed any model). */
@@ -227,28 +252,75 @@ function openRouterFreeFallbackSources(): CredentialFallbackSource[] {
 }
 
 /**
- * A session on a free provider the user chose (`--provider`): its default model unless one is named.
- * When it cannot serve a turn, the other configured free providers take over, then OpenRouter Free.
+ * A session on the provider the user named with `--provider`: its model is `provider/model` (the preset's first when
+ * none is named). Naming a provider for a run is the user's own choice of that provider's key for it, so a free-plan
+ * provider counts as declared free for this run; routing then treats it like any other model.
  */
-function configureFreeProviderSession(agent: Agent, id: FreeProviderId, model: string | undefined): void {
-  const preset = FREE_PROVIDERS[id];
-  const configured = requireFreeProvider(id);
-  const modelId = model?.trim() || (preset.models[0] as string);
-  agent.setProvider(createFreeProvider(configured, modelId), modelId);
-  const others = configuredFreeProviders().filter((provider) => provider.preset.id !== id);
-  // One chain for both failures, so each provider is tried once per session whichever way it is reached;
-  // a rejected key ends on an installed local model only once that chain is spent.
-  const next = thenFallback(
-    outsideFreeMode(credentialFallbackChain(freeProviderFallbackSources(others))),
-    credentialFallbackChain(openRouterFreeFallbackSources()),
-  );
-  agent.setProviderFallback(next);
-  agent.setCredentialFallback(thenFallback(next, installedLocalModelFallback));
+async function configureProviderSession(
+  agent: Agent,
+  providerId: string,
+  model: string | undefined,
+  policy: ModelPolicy,
+): Promise<RemoteModelSetup> {
+  const registry = createDefaultRegistry();
+  const definition = registry.get(providerId);
+  if (!definition) {
+    throw new Error(
+      `Unknown provider "${providerId}". Use one of: ${registry
+        .list()
+        .map((item) => item.id)
+        .join(", ")}.`,
+    );
+  }
+  const preset = isFreeProviderId(providerId) ? FREE_PROVIDERS[providerId] : undefined;
+  const wanted = model?.trim() || preset?.models[0];
+  if (!wanted) {
+    throw new Error(`Name a ${definition.name} model with -m (for example -m ${providerId}/<model>).`);
+  }
+  const canonical = wanted.toLowerCase().startsWith(`${providerId}/`) ? wanted : `${providerId}/${wanted}`;
+  if (definition.freePlan && !definition.selfEnforcing) declareFreePlanForSession(providerId);
+  return routedSetup(agent, { requestedModel: canonical, policy, explicitModelSelection: true });
+}
+
+/** The routed session as the terminal UI and the headless runs consume it. */
+async function routedSetup(
+  agent: Agent,
+  input: {
+    requestedModel: string | undefined;
+    policy: ModelPolicy;
+    explicitModelSelection: boolean;
+    openRouterKey?: string;
+  },
+): Promise<RemoteModelSetup> {
+  const session = await configureRoutedSession(agent, {
+    ...input,
+    localFallback: installedLocalModelFallback,
+    pickedModel: () => loadProjectSettings().model ?? loadUserSettings().defaultModel,
+    defaultProvider: () => loadUserSettings().defaultProvider,
+    saveMode: saveModelMode,
+    onExplicitModelAccepted: (modelId) => {
+      // A model named with -m becomes the default only once the session accepted it (Free refuses a paid one).
+      if (pendingDefaultModel && input.requestedModel === pendingDefaultModel) {
+        saveUserSettings({ defaultModel: modelId });
+        pendingDefaultModel = undefined;
+      }
+    },
+  });
+  return {
+    models: session.models(),
+    catalog: [...session.runtime.catalog.snapshot().entries],
+    routing: session.runtime,
+    getModels: session.models,
+    modelId: session.modelId,
+    selectModel: session.selectModel,
+    policy: session.policy,
+    setPolicy: session.setPolicy,
+  };
 }
 
 async function configureRemoteProvider(
   agent: Agent,
-  apiKey: string,
+  apiKey: string | undefined,
   baseURL: string,
   requestedModel: string | undefined,
   policy: ModelPolicy,
@@ -256,8 +328,9 @@ async function configureRemoteProvider(
 ): Promise<RemoteModelSetup> {
   // Every agent and child process of this session reads the mode from here (`sessionModelPolicy`).
   process.env[MODEL_POLICY_ENV] = policy;
-  if (!isOpenRouterBaseURL(baseURL)) {
-    agent.setApiKey(apiKey, baseURL);
+  if (baseURL && !isOpenRouterBaseURL(baseURL)) {
+    // The user's own OpenAI-compatible endpoint (SHELRA_BASE_URL): one endpoint, one key, no routing across providers.
+    agent.setApiKey(apiKey as string, baseURL);
     // A key this endpoint rejects: continue on OpenRouter Free with a configured OpenRouter key,
     // then on an installed local model. Free, so no spend is started without the user.
     // No model of this endpoint can serve the turn: continue on a free provider the user configured, as an
@@ -279,161 +352,20 @@ async function configureRemoteProvider(
       policy,
     };
   }
-
-  const catalog = await fetchOpenRouterCatalog({ apiKey, baseURL });
-  // The mode can change during the session (ctrl+f or /mode in the terminal UI); every route reads it here.
-  let activePolicy = policy;
-  const canUseFreeRouterWithoutCatalog =
-    policy === "free" && (!explicitModelSelection || requestedModel === "openrouter/free");
-  if (catalog.entries.length === 0 && !canUseFreeRouterWithoutCatalog) {
-    throw new Error(catalog.error ?? "OpenRouter returned no usable models. Try again with network access.");
-  }
-  primeCatalog(catalog.entries);
-  // The key the session runs on; a rejected key's fallback replaces it, and the model picker follows.
-  let activeApiKey = apiKey;
-  // The model the session chose on OpenRouter (at startup or in the picker), paid or not.
-  let chosenModelId = "";
-
-  const selectModel = async (modelId: string | undefined): Promise<{ success: boolean; error?: string }> => {
-    try {
-      // A model picked in the picker runs in Mixed mode whatever it costs; Free mode refuses a paid one.
-      const route = routeCatalogModel(catalog.entries, {
-        requestedModel: modelId,
-        policy: activePolicy,
-        requiresTools: true,
-      });
-      const provider = createOpenRouterProvider(activeApiKey, {
-        modelId: route.modelId,
-        entries: catalog.entries,
-        baseURL,
-        // OpenRouter currently accepts at most three model ids in its
-        // server-side fallback array.
-        fallbackModels: route.candidates.map((entry) => entry.id).slice(0, 3),
-        requireParameters: true,
-        policy: activePolicy,
-      });
-      agent.setProvider(provider, route.modelId);
-      chosenModelId = route.modelId;
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  };
-
-  // An explicit model or a still-free saved preference wins. Otherwise the free policy picks the most
-  // capable free model, with the free router as the last fallback (see startupModelRequest).
-  const effectiveRequestedModel = startupModelRequest(catalog.entries, {
+  return routedSetup(agent, {
     requestedModel,
     policy,
     explicitModelSelection,
+    ...(apiKey ? { openRouterKey: apiKey } : {}),
   });
-  const route = routeCatalogModel(catalog.entries, {
-    // The free router is a real OpenRouter model endpoint and remains usable
-    // when catalog discovery is temporarily unavailable. A stale paid saved
-    // preference is ignored under strict Free policy; it is never a spending
-    // approval and must not block the cloud-first startup.
-    requestedModel: effectiveRequestedModel,
-    policy,
-    requiresTools: true,
-  });
-  const provider = createOpenRouterProvider(apiKey, {
-    modelId: route.modelId,
-    entries: catalog.entries,
-    baseURL,
-    fallbackModels: route.candidates.map((entry) => entry.id).slice(0, 3),
-    requireParameters: true,
-    policy,
-  });
-  agent.setProvider(provider, route.modelId);
-  chosenModelId = route.modelId;
-  if (explicitModelSelection && pendingDefaultModel && requestedModel === pendingDefaultModel) {
-    saveUserSettings({ defaultModel: pendingDefaultModel });
-    pendingDefaultModel = undefined;
-  }
-  // Another key keeps the model it is handed only when the session chose that model or it is free here: an
-  // id handed over from elsewhere (a model another provider was serving) can name a paid model on
-  // OpenRouter, which nobody approved. Otherwise the session's own choice, or the free router under the free
-  // policy.
-  const fallbackModel = (modelId: string): string => {
-    const entry = resolveCatalogModel(catalog.entries, modelId);
-    if (modelId === chosenModelId || modelId === "openrouter/free" || (entry && isGuaranteedFree(entry)))
-      return modelId;
-    return activePolicy === "free" && !explicitModelSelection ? "openrouter/free" : chosenModelId;
-  };
-  // A key OpenRouter rejects: continue with another OpenRouter key the user configured (a stale
-  // environment variable next to a newer saved key), on the same model and policy, then on an
-  // installed local model.
-  agent.setCredentialFallback(
-    credentialFallbackChain([
-      ...listOpenRouterApiKeys()
-        .filter((entry) => entry.key !== apiKey)
-        .map(
-          ({ key, source }): CredentialFallbackSource =>
-            async (request) => {
-              activeApiKey = key;
-              const modelId = fallbackModel(request.modelId);
-              return {
-                provider: createOpenRouterProvider(key, {
-                  modelId,
-                  entries: catalog.entries,
-                  baseURL,
-                  fallbackModels: route.candidates.map((entry) => entry.id).slice(0, 3),
-                  requireParameters: true,
-                  policy: activePolicy,
-                }),
-                modelId,
-                label: `the OpenRouter key from ${source}`,
-              };
-            },
-        ),
-      installedLocalModelFallback,
-    ]),
-  );
-  // No OpenRouter model can serve the turn (the day's free quota spent, none answering): continue on
-  // another free provider the user configured (Groq, Gemini, Cloudflare), whose notice states its plan.
-  agent.setProviderFallback(
-    outsideFreeMode(credentialFallbackChain(freeProviderFallbackSources(configuredFreeProviders()))),
-  );
-  // Switching the mode starts from the model a restart in that mode would: Mixed runs the model the user picked, or
-  // the auto router when they picked none; Free keeps a free model and otherwise takes the best free ones. A session
-  // already moved to another free provider (the day's OpenRouter quota spent) stays there on a switch to Free. A switch
-  // that fails in any way keeps the mode and the model as they were, so the session never runs a paid model while it
-  // says Free, and it never throws into the terminal UI.
-  const setPolicy = async (next: ModelPolicy): Promise<{ success: boolean; error?: string; modelId?: string }> => {
-    const previous = activePolicy;
-    try {
-      activePolicy = next;
-      if (next === "free" && agent.getProviderId() !== "openrouter") {
-        process.env[MODEL_POLICY_ENV] = next;
-        saveModelMode(next);
-        return { success: true, modelId: agent.getModel() };
-      }
-      const picked = loadProjectSettings().model ?? loadUserSettings().defaultModel;
-      const result = await selectModel(modelAfterModeChange(catalog.entries, chosenModelId, next, picked));
-      if (!result.success) {
-        activePolicy = previous;
-        return { ...result, modelId: chosenModelId };
-      }
-      process.env[MODEL_POLICY_ENV] = next;
-      saveModelMode(next);
-      return { ...result, modelId: chosenModelId };
-    } catch (error) {
-      activePolicy = previous;
-      return { success: false, error: error instanceof Error ? error.message : String(error), modelId: chosenModelId };
-    }
-  };
-  return {
-    models: catalog.entries.map(catalogEntryToModelInfo),
-    catalog: catalog.entries,
-    modelId: route.modelId,
-    selectModel,
-    policy,
-    setPolicy,
-  };
 }
 
 function exitAfterRuntimeCleanup(code: number): void {
-  void releaseTrackedLocalRuntimes().finally(() => process.exit(code));
+  // Delegated-run records are written asynchronously and hooks started without being awaited may still be running: both
+  // get a bounded moment to finish, so a run that ended just before the exit is on record and no hook is cut off.
+  void Promise.allSettled([releaseTrackedLocalRuntimes(), flushRuns(), awaitBackgroundHooks(1_500)]).finally(() =>
+    process.exit(code),
+  );
 }
 
 const exitCleanlyOnSigterm = () => {
@@ -453,6 +385,45 @@ process.on("unhandledRejection", (reason) => {
   exitAfterRuntimeCleanup(1);
 });
 
+/**
+ * The account is required to use Shelra (owner, 2026-10-06). A headless run with no valid login stops here with what
+ * to do; the terminal UI gets the status and shows its sign-in screen instead. A login that is about to expire, or
+ * that is being trusted without the service, is said once on stderr.
+ */
+async function requireAccount(headless: boolean): Promise<AccountStatus> {
+  const status = await checkAccount();
+  if (status.state === "ok") {
+    if (headless) {
+      if (status.expiresInDays !== null) {
+        process.stderr.write(
+          `Your ShelraCode login ends in ${status.expiresInDays} day${status.expiresInDays === 1 ? "" : "s"}: run \`${CLI_NAME} login\` to renew it.\n`,
+        );
+      }
+      if (status.offline) {
+        process.stderr.write("The account service could not be reached; continuing on the last confirmed login.\n");
+      }
+    }
+    return status;
+  }
+  if (headless) {
+    process.stderr.write(`${describeBlocked(status, CLI_NAME)}\n`);
+    process.exit(1);
+  }
+  return status;
+}
+
+/** Why the sign-in screen is up, in words for the person. */
+function signInReason(status: Exclude<AccountStatus, { state: "ok" }>): string {
+  switch (status.state) {
+    case "signed-out":
+      return "Sign in to your ShelraCode account to use Shelra. It takes a minute and opens your browser.";
+    case "invalid":
+      return `${status.reason} Sign in again to continue.`;
+    case "offline-too-long":
+      return `ShelraCode could not confirm your login since ${status.since.slice(0, 10)}. Connect to the internet and sign in again.`;
+  }
+}
+
 async function startInteractive(
   apiKey: string | undefined,
   baseURL: string,
@@ -465,6 +436,8 @@ async function startInteractive(
   preferLocal = false,
   modelPolicy: ModelPolicy = "free",
   budget: BudgetLimits = {},
+  account: AccountStatus = { state: "signed-out" },
+  modelPolicyFromFlag = false,
 ) {
   // Cloud Free is the normal product path. Local inference is initialized only
   // when the user explicitly selects --local.
@@ -479,7 +452,9 @@ async function startInteractive(
   const { createElement } = await import("react");
   const { App } = await import("./ui/app");
   const { CloudStartupScreen, StartupScreen } = await import("./ui/startup");
-  const savedCloudModel = !model && agent.getModel().startsWith("openrouter/") ? agent.getModel() : undefined;
+  const { AccountLoginScreen } = await import("./ui/account-login");
+  const { ConfigView } = await import("./ui/config/view");
+  const savedCloudModel = !model ? savedProviderModel(agent.getModel()) : undefined;
   const requestedCloudModel = model || savedCloudModel;
 
   const renderer = await createCliRenderer({
@@ -492,6 +467,8 @@ async function startInteractive(
     },
   });
 
+  /** Said after the terminal UI is gone: what signing out from `/config` or `/logout` did. */
+  let farewell: string | undefined;
   const onExit = () => {
     startupAbort?.abort();
     installAbort?.abort();
@@ -502,6 +479,7 @@ async function startInteractive(
     trackLocalRuntimes(undefined);
     void Promise.all([agent.cleanup(), disposeLocalRuntimes(startupDiscovery)]).finally(() => {
       renderer.destroy();
+      if (farewell) console.log(farewell);
       process.exit(0);
     });
   };
@@ -616,9 +594,40 @@ async function startInteractive(
           baseURL: currentBaseURL,
           model: agent.getModel(),
           localModels: [...(preferLocal ? localModels.map(toModelInfo) : []), ...cloudModels],
+          ...(remote?.routing && remote.getModels
+            ? {
+                getModels: remote.getModels,
+                subscribeModels: (listener: () => void) => remote.routing!.catalog.subscribe(listener),
+              }
+            : {}),
           onSelectLocalModel: onSelectModel ?? (preferLocal ? prepareLocalModel : undefined),
           onApiKey: !preferLocal ? configureRemoteApiKey : undefined,
           ...modes,
+          configServices: () =>
+            createConfigServices({
+              live: {
+                ...(setPolicy ? { setMode: (mode) => setPolicy(mode === "free" ? "free" : "mixed") } : {}),
+                ...(remote?.getModels ? { models: remote.getModels } : {}),
+                ...(remote?.routing
+                  ? {
+                      refreshCatalog: () =>
+                        Promise.race([
+                          remote.routing!.refresh(),
+                          new Promise<void>((resolve) => setTimeout(resolve, 8_000)),
+                        ]).then(() => undefined),
+                      providersChanged: () =>
+                        void remote.routing!.reload().catch((error) => recordSwallowedError("providers reload", error)),
+                    }
+                  : {}),
+                signOut: async () => {
+                  const result = await signOutAccount();
+                  if (result.signedOut) farewell = `${result.message} Run \`${CLI_NAME}\` to sign in again.`;
+                  return { ok: result.signedOut, message: result.message };
+                },
+              },
+            }),
+          onSignedOut: onExit,
+          accountEmail: () => getStoredAccount()?.email ?? null,
           maxToolRounds,
           sandboxMode,
           sandboxSettings,
@@ -790,16 +799,110 @@ async function startInteractive(
     }
   };
 
+  /** Signs in inside the terminal UI: opens the browser, accepts a pasted code, retries until it works or the person quits. */
+  const signIn = (reason: string): Promise<void> =>
+    new Promise((resolve) => {
+      type View = Parameters<typeof AccountLoginScreen>[0];
+      let view = { phase: "starting", reason } as Pick<View, "phase" | "reason" | "url" | "opened" | "error" | "email">;
+      let attempt: AbortController | null = null;
+      let pendingPaste: ((code: string | null) => void) | null = null;
+      const show = (patch: Partial<typeof view>) => {
+        view = { ...view, ...patch };
+        renderRoot(createElement(AccountLoginScreen, { ...view, onSubmitCode, onRetry: () => void start(), onExit }));
+      };
+      const onSubmitCode = (code: string) => pendingPaste?.(code);
+      const quiet = { ask: async () => null, say: () => {}, warn: () => {} };
+      const start = async () => {
+        attempt?.abort();
+        const mine = new AbortController();
+        attempt = mine;
+        pendingPaste = null;
+        show({ phase: "starting", error: undefined, url: undefined });
+        try {
+          const { loginWithBrowser } = await import("./account/commands");
+          const signedIn = await loginWithBrowser({
+            io: quiet,
+            signal: mine.signal,
+            readPasted: () =>
+              new Promise<string | null>((done) => {
+                pendingPaste = done;
+              }),
+            onEvent: (event) => {
+              if (event.type === "url") show({ phase: "waiting", url: event.url, opened: event.opened });
+              if (event.type === "received") show({ phase: "exchanging" });
+            },
+          });
+          show({ phase: "signed-in", email: signedIn.email });
+          setTimeout(resolve, 900);
+        } catch (error) {
+          if (mine.signal.aborted) return;
+          show({ phase: "error", error: error instanceof Error ? error.message : String(error) });
+        }
+      };
+      void start();
+    });
+
+  /**
+   * The first-run setup (and the one after `/logout`): a person at the keyboard connects providers and picks the
+   * defaults before the session starts. What they save is what the session below reads.
+   */
+  const runSetup = async () => {
+    if (
+      preferLocal ||
+      !needsOnboarding({
+        settings: loadUserSettings(),
+        hasProvider: Boolean(currentApiKey) || anyProviderConfigured(),
+        interactive: true,
+      })
+    ) {
+      return;
+    }
+    // The startup screen's keys (r to retry, q to quit) must not read what is typed into the setup.
+    if (startupKeyHandler) renderer.keyInput.off("keypress", startupKeyHandler);
+    try {
+      await new Promise<void>((resolve) => {
+        renderRoot(
+          createElement(ConfigView, {
+            variant: "onboarding",
+            services: createConfigServices(),
+            onClose: () => resolve(),
+          }),
+        );
+      });
+    } finally {
+      if (startupKeyHandler) renderer.keyInput.on("keypress", startupKeyHandler);
+    }
+    // A mode chosen in the setup applies now, unless this run was given one with --model-policy.
+    if (!modelPolicyFromFlag) modelPolicy = parseModelPolicy(loadUserSettings().modelMode) ?? modelPolicy;
+  };
+
   initializeLocal = async () => {
     if (initializing || installing) return;
     initializing = true;
+    // Required before anything else, local models included: the person signs in, then the session starts.
+    if (account.state !== "ok") {
+      try {
+        await signIn(signInReason(account));
+        account = await checkAccount();
+      } finally {
+        initializing = false;
+      }
+      if (account.state !== "ok") return;
+      initializing = true;
+    }
+    try {
+      await runSetup();
+    } catch (error) {
+      recordSwallowedError("setup", error);
+    }
     if (!preferLocal) {
       renderCloudStartup({
         state: "detecting-models",
-        message: "Connecting to OpenRouter",
-        detail: "The primary route is Free cloud models. Local inference remains available with --local.",
+        message: "Connecting to your model providers",
+        detail:
+          "Free mode picks the best free model from every provider you configured. Local inference remains available with --local.",
       });
-      if (!currentApiKey) {
+      if (!currentApiKey && !anyProviderConfigured()) {
         renderApp([]);
         initializing = false;
         return;
@@ -886,7 +989,7 @@ async function startInteractive(
   } else {
     renderCloudStartup({
       state: "booting",
-      message: "Preparing OpenRouter Free mode",
+      message: "Preparing Free mode",
       detail: "Cloud models are primary. No local model download is started.",
     });
   }
@@ -915,15 +1018,29 @@ function formatBytes(value: number): string {
   return `${(value / 1024 ** 3).toFixed(1)} GB`;
 }
 
+/** A saved default that names one of the providers (`openrouter/…`, `groq/…`): a cloud model, not a local one. */
+function savedProviderModel(modelId: string): string | undefined {
+  if (!modelId) return undefined;
+  const ref = parseModelRef(modelId, createDefaultRegistry().ids());
+  return ref.legacy ? undefined : ref.canonical;
+}
+
+/** True when at least one provider is configured: a key, a saved credential, or an OmniRoute address. */
+function anyProviderConfigured(): boolean {
+  return createDefaultRegistry().configured(defaultResolveDeps()()).length > 0;
+}
+
 /** Explains what a `--remote` run is missing before any turn is attempted. */
 function getRemoteConfigurationError(apiKey: string | undefined, baseURL: string): string | undefined {
-  if (!apiKey) {
-    return `Cloud mode needs an OpenRouter API key. Set OPENROUTER_API_KEY, run \`${CLI_NAME} auth openrouter <key>\`, or pass --api-key. Use --local for local inference.`;
+  if (baseURL && !isOpenRouterBaseURL(baseURL)) {
+    // The user's own endpoint: one URL and one key.
+    return apiKey ? undefined : `Your endpoint ${baseURL} needs an API key. Pass --api-key or set ${API_KEY_ENV}.`;
   }
-  if (!baseURL) {
-    return `Cloud mode needs a provider URL. Set SHELRA_BASE_URL or pass --base-url.`;
-  }
-  return undefined;
+  if (apiKey || anyProviderConfigured()) return undefined;
+  return `Cloud mode needs a model provider. Set one up with \`${CLI_NAME} auth <provider>\` or an environment variable:\n${createDefaultRegistry()
+    .list()
+    .map((definition) => `  ${definition.name}: ${definition.setupHint}`)
+    .join("\n")}\nUse --local for local inference.`;
 }
 
 async function configureLocalProvider(
@@ -991,9 +1108,9 @@ async function runHeadless(
   preferLocal = false,
   modelPolicy: ModelPolicy = "free",
   budget: BudgetLimits = {},
-  freeProvider?: FreeProviderId,
+  providerFlag?: string,
 ) {
-  if (freeProvider) {
+  if (providerFlag) {
     const agent = new Agent(undefined, undefined, model, maxToolRounds, {
       session,
       sandboxMode,
@@ -1001,10 +1118,10 @@ async function runHeadless(
       budget,
     });
     try {
-      configureFreeProviderSession(agent, freeProvider, model);
+      await configureProviderSession(agent, providerFlag, model, modelPolicy);
     } catch (error) {
       process.stderr.write(
-        `ShelraCode could not configure ${FREE_PROVIDERS[freeProvider].name}: ${error instanceof Error ? error.message : String(error)}\n`,
+        `ShelraCode could not configure ${providerFlag}: ${error instanceof Error ? error.message : String(error)}\n`,
       );
       process.exitCode = 1;
       await agent.cleanup();
@@ -1019,7 +1136,7 @@ async function runHeadless(
     sandboxSettings,
     budget,
   });
-  const savedCloudModel = !model && agent.getModel().startsWith("openrouter/") ? agent.getModel() : undefined;
+  const savedCloudModel = !model ? savedProviderModel(agent.getModel()) : undefined;
   const requestedCloudModel = model || savedCloudModel;
   let localSetup: { dispose: () => Promise<void> } | undefined;
   const remoteError = preferLocal ? undefined : getRemoteConfigurationError(apiKey, baseURL);
@@ -1154,7 +1271,7 @@ async function runAutonomousHeadless(
     sandboxSettings,
     budget,
   });
-  const savedCloudModel = !model && agent.getModel().startsWith("openrouter/") ? agent.getModel() : undefined;
+  const savedCloudModel = !model ? savedProviderModel(agent.getModel()) : undefined;
   const requestedCloudModel = model || savedCloudModel;
   try {
     const remote = await configureRemoteProvider(
@@ -1165,12 +1282,19 @@ async function runAutonomousHeadless(
       modelPolicy,
       Boolean(model),
     );
+    // The kernel talks to OpenRouter directly: Auto Free means its best free model, or its router.
+    const openRouterEntries = remote.catalog.filter((entry) => entry.provider === "openrouter");
+    const intelligenceModel = isAutoFreeModel(remote.modelId)
+      ? modelPolicy === "free"
+        ? (rankedFreeModels(openRouterEntries)[0] ?? "openrouter/free")
+        : "openrouter/auto"
+      : remote.modelId;
     const intelligence = createOpenRouterIntelligenceProvider({
       apiKey,
       baseURL,
-      entries: remote.catalog,
+      entries: openRouterEntries,
       policy: modelPolicy,
-      modelId: remote.modelId,
+      modelId: intelligenceModel,
       maxCostUsd: budget.maxTaskUsd ?? budget.maxSessionUsd ?? budget.maxDayUsd,
     });
     const objectiveBudget = budget.maxTaskUsd ?? budget.maxSessionUsd ?? budget.maxDayUsd;
@@ -1411,6 +1535,8 @@ async function runBenchCommand(options: {
               throw new Error(`Unknown provider "${providerOption}". Use one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
             }
             if (agentName !== "shelra") throw new Error("--provider runs the product path, `--agent shelra`.");
+            // Naming the provider for the run is the explicit choice of its key.
+            declareFreePlanForSession(providerOption);
             const preset = FREE_PROVIDERS[providerOption];
             const configured = requireFreeProvider(providerOption);
             const modelId = options.model?.trim() || (preset.models[0] as string);
@@ -1616,7 +1742,7 @@ async function runBackgroundDelegation(jobPath: string, options: CliOptions) {
       sandboxSettings,
       budget,
     });
-    const savedCloudModel = !model && agent.getModel().startsWith("openrouter/") ? agent.getModel() : undefined;
+    const savedCloudModel = !model ? savedProviderModel(agent.getModel()) : undefined;
     const requestedCloudModel = model || savedCloudModel;
     const remoteError = preferLocal ? undefined : getRemoteConfigurationError(apiKey, baseURL);
     if (remoteError) throw new Error(remoteError);
@@ -1675,22 +1801,23 @@ function resolveConfig(options: CliOptions) {
   const modelPolicy = resolveModelPolicy(options.modelPolicy);
   const budget = resolveBudget(options);
   const providerOption = stringOption(options.provider)?.toLowerCase();
-  if (providerOption && !isFreeProviderId(providerOption)) {
-    throw new Error(`Unknown provider "${providerOption}". Use one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
+  const knownProviders = createDefaultRegistry().list();
+  if (providerOption && !knownProviders.some((definition) => definition.id === providerOption)) {
+    throw new Error(`Unknown provider "${providerOption}". Use one of: ${knownProviders.map((d) => d.id).join(", ")}.`);
   }
-  const freeProvider = providerOption && isFreeProviderId(providerOption) ? providerOption : undefined;
+  const provider = providerOption || undefined;
 
   // A model named for another provider (`--provider`) is that provider's id, not a default for the next session.
   // A local model is saved now; a cloud model once routing accepts it (`configureRemoteProvider`), so a paid model
   // Free mode refused never becomes the default another agent starts from.
-  if (typeof options.model === "string" && !freeProvider) {
+  if (typeof options.model === "string" && !provider) {
     if (options.local === true && options.remote !== true)
       saveUserSettings({ defaultModel: normalizeModelId(options.model) });
     else pendingDefaultModel = normalizeModelId(options.model);
   }
 
   return {
-    freeProvider,
+    provider,
     apiKey,
     baseURL,
     model,
@@ -1745,7 +1872,10 @@ program
   .option("--local", "Use the managed local model instead of cloud routing")
   .option(
     "--provider <id>",
-    `Run a headless prompt (-p) on another free provider with its own key: ${FREE_PROVIDER_IDS.join(", ")}`,
+    `Run a headless prompt (-p) on one provider: ${createDefaultRegistry()
+      .list()
+      .map((definition) => definition.id)
+      .join(", ")} (its models are provider/model; -m names one)`,
   )
   .option(
     "--model-policy <policy>",
@@ -1766,6 +1896,13 @@ program
   .option("-s, --session <id>", "Continue a saved session by id, or use 'latest'")
   .option("--background-task-file <path>", "Run a persisted background delegation")
   .option("--max-tool-rounds <n>", "Max tool execution rounds", "400")
+  .option("--append-system-prompt <text>", "Add instructions after Shelra's own system prompt (it is kept whole)")
+  .option("--append-system-prompt-file <path>", "Add the text of a file after Shelra's own system prompt")
+  .option(
+    "--system-prompt-file <path>",
+    "Replace the opening role paragraph of the system prompt with a file's text; the operating rules and every check the host enforces stay",
+  )
+  .option("--profile <name>", "Use a named prompt profile from .shelra/prompts or ~/.shelra/prompts")
   .option("--update", `Update ${CLI_NAME} to the latest version and exit`)
   .action(async (message: string[], options) => {
     if (options.update) {
@@ -1777,6 +1914,30 @@ program
 
     changeDirectoryOrExit(options.directory);
 
+    // A custom system prompt (src/extend/system-prompt.ts): checked before anything starts, so a missing file is a
+    // clear error at the command line and not a silent no-op in the middle of a session.
+    {
+      const flags = {
+        ...(typeof options.appendSystemPrompt === "string" ? { append: options.appendSystemPrompt } : {}),
+        ...(typeof options.appendSystemPromptFile === "string" ? { appendFile: options.appendSystemPromptFile } : {}),
+        ...(typeof options.systemPromptFile === "string" ? { file: options.systemPromptFile } : {}),
+        ...(typeof options.profile === "string" ? { profile: options.profile } : {}),
+      };
+      if (Object.keys(flags).length > 0) {
+        setSessionPromptFlags(flags);
+        const problems = resolveSystemPrompt(process.cwd()).problems;
+        if (problems.length > 0) {
+          for (const problem of problems) console.error(`System prompt: ${problem}`);
+          process.exit(1);
+        }
+      }
+    }
+
+    // A run with no person at the keyboard stops here without a valid account; the terminal UI asks to sign in.
+    const account = await requireAccount(
+      Boolean(options.backgroundTaskFile || options.prompt || options.autonomous || options.verify),
+    );
+
     if (options.backgroundTaskFile) {
       await runBackgroundDelegation(options.backgroundTaskFile, options);
       return;
@@ -1784,7 +1945,7 @@ program
 
     const config = resolveConfig(options);
     const providerError = freeProviderCliError({
-      provider: config.freeProvider,
+      provider: config.provider,
       prompt: Boolean(options.prompt),
       autonomous: options.autonomous === true,
       verify: options.verify === true,
@@ -1861,7 +2022,7 @@ program
         config.preferLocal,
         config.modelPolicy,
         config.budget,
-        config.freeProvider,
+        config.provider,
       );
       return;
     }
@@ -1879,6 +2040,8 @@ program
       config.preferLocal,
       config.modelPolicy,
       config.budget,
+      account,
+      Boolean(options.modelPolicy),
     );
   });
 
@@ -1955,6 +2118,7 @@ program
   .option("--pair-code-file <path>", "Pairing code file", "telegram-pair-code.txt")
   .action(async (options) => {
     changeDirectoryOrExit(options.directory);
+    await requireAccount(true);
     const config = resolveConfig(options);
 
     process.off("SIGTERM", exitCleanlyOnSigterm);
@@ -1975,55 +2139,45 @@ program
   });
 
 async function listModels(refresh = false, json = false): Promise<void> {
-  const remote = await fetchOpenRouterCatalog({
-    apiKey: getApiKey(),
-    baseURL: getBaseURL() || undefined,
-    ...(refresh ? { ttlMs: 0 } : {}),
-  });
-  const local = await discoverLocalRuntimes(undefined, AbortSignal.timeout(60_000)).catch(() => null);
-  primeCatalog(remote.entries);
+  const runtime = createRoutingRuntime();
+  let local: LocalRuntimeDiscovery | null = null;
   try {
+    await runtime.catalog.loadCached();
+    await runtime.catalog.refresh({ force: refresh });
+    local = await discoverLocalRuntimes(undefined, AbortSignal.timeout(60_000)).catch(() => null);
+    const entries = runtime.catalog.snapshot().entries;
+    primeCatalog(entries);
+    const statuses = runtime.catalog.status();
     if (json) {
       console.log(
         JSON.stringify({
           local: local?.models ?? [],
-          openrouter: remote.entries,
-          source: remote.source,
-          error: remote.error,
+          // Kept for tools that read the OpenRouter catalog from here.
+          openrouter: entries.filter((entry) => entry.provider === "openrouter"),
+          providers: Object.fromEntries(
+            runtime.registry.list().map((definition) => [
+              definition.id,
+              {
+                status: statuses.find((row) => row.providerId === definition.id),
+                models: entries.filter((entry) => entry.provider === definition.id),
+              },
+            ]),
+          ),
         }),
       );
       return;
     }
     console.log(`\n${PRODUCT_NAME} model catalog:\n`);
-    console.log("  OPENROUTER (PRIMARY / FREE DEFAULT):");
-    if (remote.entries.length === 0) {
-      console.log(`    no cloud metadata available${remote.error ? ` (${remote.error})` : ""}`);
+    const text = formatModelCatalog(runtime.registry, entries, loadFreeAttestations());
+    if (text.trim() === "") {
+      console.log("  no cloud models available: run `shelra providers` to see what is configured and why\n");
     } else {
-      const displayEntries = [...remote.entries].sort(
-        (a, b) => Number(b.cost.free) - Number(a.cost.free) || a.name.localeCompare(b.name),
+      console.log(text);
+    }
+    for (const row of statuses.filter((item) => item.status === "unavailable" || item.status === "stale")) {
+      console.log(
+        `  ${row.name}: ${row.status === "stale" ? "showing the last known list" : "not answering"}${row.error ? ` (${row.error})` : ""}`,
       );
-      for (const entry of displayEntries.slice(0, 100)) {
-        const keyState = entry.state.kind === "cloud" && !entry.state.apiKeyConfigured ? ", needs API key" : "";
-        const price =
-          entry.cost.pricingKnown === false
-            ? "price unknown; not Free-policy eligible"
-            : entry.cost.free
-              ? "free"
-              : `$${(entry.cost.prompt * 1_000_000).toFixed(2)}/M input`;
-        const capabilities = [
-          entry.capabilities.tools ? "tools" : undefined,
-          entry.capabilities.reasoning ? "reasoning" : undefined,
-          entry.capabilities.vision ? "vision" : undefined,
-        ]
-          .filter(Boolean)
-          .join(", ");
-        console.log(
-          `    ${entry.id} - ${entry.name} (${price}, ${formatContext(entry.contextWindow)} context${capabilities ? `, ${capabilities}` : ""}${keyState})`,
-        );
-      }
-      if (displayEntries.length > 100)
-        console.log(`    ... and ${displayEntries.length - 100} more; use --json for the full catalog`);
-      console.log(`    catalog source: ${remote.source}`);
     }
     if (local?.models.length) {
       console.log("\n  LOCAL (SECONDARY / --local):");
@@ -2035,22 +2189,23 @@ async function listModels(refresh = false, json = false): Promise<void> {
     }
     console.log();
   } finally {
+    runtime.dispose();
     await disposeLocalRuntimes(local ?? undefined);
   }
 }
 
 const modelsCommand = program
   .command("models")
-  .description("List discovered local and OpenRouter models")
+  .description("List the models of every configured provider, and local ones")
   .action(async (options) => {
     await listModels(options.refresh === true, options.json === true);
   });
 
 modelsCommand
-  .option("--refresh", "Refresh the OpenRouter catalog")
+  .option("--refresh", "Refresh every provider's catalog")
   .option("--json", "Print machine-readable catalog data")
   .command("list")
-  .description("List discovered local and OpenRouter models")
+  .description("List the models of every configured provider, and local ones")
   .option("--refresh")
   .option("--json")
   .action(async (options) => {
@@ -2059,23 +2214,96 @@ modelsCommand
 
 modelsCommand
   .command("refresh")
-  .description("Refresh the OpenRouter model catalog")
+  .description("Refresh every provider's model catalog")
   .action(async () => {
     await listModels(true);
   });
 
 modelsCommand
   .command("use <model>")
-  .description("Persist an explicit model selection")
+  .description("Persist an explicit model selection (provider/model; used in Mixed mode, Free mode chooses by itself)")
   .action(async (model: string) => {
-    const remote = await fetchOpenRouterCatalog({ apiKey: getApiKey(), baseURL: getBaseURL() || undefined, ttlMs: 0 });
-    const route = routeCatalogModel(remote.entries, {
-      requestedModel: model,
-      requiresTools: true,
-      policy: "custom",
-    });
-    saveUserSettings({ defaultModel: route.modelId });
-    console.log(`Saved ${route.modelId} as the default model (explicit selection).`);
+    const runtime = createRoutingRuntime();
+    try {
+      await runtime.catalog.loadCached();
+      await runtime.catalog.refresh();
+      const ref = parseModelRef(model, runtime.registry.ids());
+      const definition = runtime.registry.get(ref.providerId);
+      if (
+        !definition ||
+        !runtime.registry.configured(runtime.resolveDeps()).some((item) => item.definition.id === ref.providerId)
+      ) {
+        console.error(
+          `${definition?.name ?? ref.providerId} is not configured: ${definition?.setupHint ?? "see `shelra providers`"}.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      const known = runtime.catalog.entriesOf(ref.providerId);
+      if (known.length > 0 && !known.some((entry) => entry.id.toLowerCase() === ref.canonical.toLowerCase())) {
+        console.error(
+          `Model "${ref.canonical}" is not in the ${definition.name} catalog. Run \`shelra models\` to list them.`,
+        );
+        process.exitCode = 1;
+        return;
+      }
+      saveUserSettings({ defaultModel: ref.canonical });
+      console.log(
+        `Saved ${ref.canonical} as the default model (explicit selection). Mixed mode runs it; Free mode keeps choosing the best free model by itself.`,
+      );
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+const providersCommand = program
+  .command("providers")
+  .description("Which model providers Shelra can use, and which of their models Free mode may run")
+  .option("--refresh", "Ask every provider for its models again")
+  .option("--json", "Print machine-readable status")
+  .action(async (options) => {
+    const runtime = createRoutingRuntime();
+    try {
+      await runtime.catalog.loadCached();
+      await runtime.catalog.refresh({ force: options.refresh === true });
+      const rows = buildProviderRows(
+        runtime.registry,
+        runtime.catalog.status(),
+        runtime.catalog.snapshot().entries,
+        loadFreeAttestations(),
+      );
+      if (options.json === true) {
+        console.log(JSON.stringify({ mode: sessionModelPolicy(), providers: rows }));
+        return;
+      }
+      console.log(`\n${formatProviderTable(rows)}\n`);
+      console.log(
+        "Free mode runs only models Shelra can show are free: a provider's own price of zero, or a free plan on a key you declared has no billing.",
+      );
+      console.log();
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+providersCommand
+  .command("allow-free <provider> [patterns...]")
+  .description(
+    "Declare what Shelra cannot see: that a provider's key has no billing, or (for a gateway such as OmniRoute) which models are free, by name or prefix like 'opencode-free/*'",
+  )
+  .action((provider: string, patterns: string[]) => {
+    const result = allowFree(createDefaultRegistry(), provider, patterns);
+    (result.ok ? console.log : console.error)(result.message);
+    if (!result.ok) process.exitCode = 1;
+  });
+
+providersCommand
+  .command("deny-free <provider>")
+  .description("Withdraw a declaration made with allow-free")
+  .action((provider: string) => {
+    const result = denyFree(createDefaultRegistry(), provider);
+    (result.ok ? console.log : console.error)(result.message);
+    if (!result.ok) process.exitCode = 1;
   });
 
 program
@@ -2398,44 +2626,118 @@ for (const id of ["groq", "gemini"] as const) {
     });
 }
 authCommand
-  .command("cloudflare <accountId> <apiToken>")
-  .description(`Store a Cloudflare Workers AI account id and API token securely (${FREE_PROVIDERS.cloudflare.plan})`)
-  .action((accountId: string, apiToken: string) => {
-    saveProviderCredential("cloudflare", { apiKey: apiToken, accountId });
-    console.log("Cloudflare Workers AI credentials saved. Key material is never printed or logged.");
-  });
-// A stored free provider is a fallback of every session: removing its key is how a person opts out.
-authCommand
-  .command("remove <provider>")
-  .description(`Remove a stored key: openrouter, ${FREE_PROVIDER_IDS.join(", ")}`)
-  .action((provider: string) => {
-    const id = provider.trim().toLowerCase();
-    if (id === "openrouter") clearOpenRouterApiKey();
-    else if (isFreeProviderId(id)) clearProviderCredential(id);
-    else {
-      console.error(`Unknown provider "${provider}". Use openrouter or one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
+  .command("cloudflare <apiToken> [accountId]")
+  .description(
+    `Store a Cloudflare Workers AI API token securely (${FREE_PROVIDERS.cloudflare.plan}); its account id is found from the token, or pass it as a second argument`,
+  )
+  .action(async (first: string, second: string | undefined) => {
+    // The id used to come first (`cloudflare <accountId> <apiToken>`); an account id is 32 hex characters, so either order works.
+    const isAccountId = (value: string | undefined) => /^[0-9a-f]{32}$/iu.test(value ?? "");
+    const swapped = isAccountId(first) && second !== undefined && !isAccountId(second);
+    const apiToken = swapped ? (second as string) : first;
+    const accountId = swapped ? first : second;
+    const result = await createProviderAdmin().connect(
+      "cloudflare",
+      { apiKey: apiToken, ...(accountId ? { accountId } : {}) },
+      { keepIfUnreachable: true },
+    );
+    if (!result.ok) {
+      console.error(
+        result.needs
+          ? `${result.error}\nRun again with the account id: ${CLI_NAME} auth cloudflare <apiToken> <accountId>`
+          : result.error,
+      );
       process.exitCode = 1;
       return;
     }
-    const name = id === "openrouter" ? "OpenRouter" : FREE_PROVIDERS[id as FreeProviderId].name;
+    console.log(result.warning ?? "Cloudflare Workers AI credentials saved. Key material is never printed or logged.");
+  });
+// OmniRoute is a gateway the user runs: Shelra stores where it listens and, if it asks for one, its endpoint key. It
+// never installs or starts it.
+authCommand
+  .command("omniroute [apiKey]")
+  .description(
+    `Connect OmniRoute with its key (Shelra's own gateway is the default). For a gateway you run yourself, give its address too (--url, a default install listens at ${OMNIROUTE_DEFAULT_BASE_URL})`,
+  )
+  .option("--url <url>", "Where your own OmniRoute listens")
+  .action((apiKey: string | undefined, options: { url?: string }) => {
+    const baseUrl = options.url?.trim();
+    if (!baseUrl && !apiKey) {
+      console.error(
+        `Give OmniRoute's key: ${CLI_NAME} auth omniroute <apiKey> (or, for a gateway you run yourself, --url ${OMNIROUTE_DEFAULT_BASE_URL} [apiKey])`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (baseUrl) {
+      if (!isValidOmniRouteBaseURL(baseUrl)) {
+        console.error(`"${baseUrl}" is not an http(s) address.`);
+        process.exitCode = 1;
+        return;
+      }
+      saveUserSettings({ omniroute: { baseUrl: normalizeOmniRouteBaseURL(baseUrl) } });
+      console.log(
+        `OmniRoute address saved: ${normalizeOmniRouteBaseURL(baseUrl)}. Shelra does not install or start OmniRoute.`,
+      );
+    }
+    if (apiKey) {
+      saveProviderCredential("omniroute", { apiKey });
+      console.log("OmniRoute endpoint key saved. Key material is never printed or logged.");
+    }
+    console.log(
+      `Free mode uses nothing from OmniRoute until you name models you know are free: ${CLI_NAME} providers allow-free omniroute '<provider>/<model>*'`,
+    );
+  });
+// A stored provider key is a fallback of every session: removing it is how a person opts out.
+authCommand
+  .command("remove <provider>")
+  .description(
+    `Remove a stored key: ${createDefaultRegistry()
+      .list()
+      .map((definition) => definition.id)
+      .join(", ")}`,
+  )
+  .action((provider: string) => {
+    const id = provider.trim().toLowerCase();
+    const registry = createDefaultRegistry();
+    const definition = registry.get(id);
+    if (!definition) {
+      console.error(
+        `Unknown provider "${provider}". Use one of: ${registry
+          .list()
+          .map((item) => item.id)
+          .join(", ")}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (id === "openrouter") clearOpenRouterApiKey();
+    else clearProviderCredential(id);
+    if (id === "omniroute") saveUserSettings({ omniroute: undefined });
     const envNames =
-      id === "openrouter" ? ["OPENROUTER_API_KEY", "KEY_OPENROUTER"] : FREE_PROVIDERS[id as FreeProviderId].keyEnv;
+      id === "openrouter"
+        ? ["OPENROUTER_API_KEY", "KEY_OPENROUTER"]
+        : id === "omniroute"
+          ? [OMNIROUTE_BASE_URL_ENV, OMNIROUTE_API_KEY_ENV]
+          : isFreeProviderId(id)
+            ? [...FREE_PROVIDERS[id].keyEnv]
+            : [];
     const stillSet = envNames.filter((name) => process.env[name]?.trim());
-    console.log(`Removed the stored ${name} key.`);
+    console.log(`Removed the stored ${definition.name} ${id === "omniroute" ? "address and key" : "key"}.`);
     if (stillSet.length > 0) console.log(`${stillSet.join(", ")} is still set in the environment and still wins.`);
   });
 
 // The ShelraCode account (backend/). Only these commands reach the account service; the agent never does.
 program
   .command("login")
-  .description("Connect this machine to your ShelraCode account with a code sent by email")
-  .requiredOption(
-    "--api-url <url>",
-    "Account service URL (no public service is deployed yet; a local backend/ listens on http://localhost:3001)",
+  .description(
+    "Sign in to your ShelraCode account: opens your browser to approve this machine (--email: a code by email)",
   )
-  .option("--email <email>", "Account email (asked when omitted)")
-  .option("--name <name>", "Name for this machine's token (default: shelra on <hostname>)")
-  .action(async (options: { apiUrl: string; email?: string; name?: string }) => {
+  .option("--email [email]", "Sign in with a code sent by email instead of the browser (works over SSH)")
+  .option("--api-url <url>", "Account service URL (development only; needs --web-url)")
+  .option("--web-url <url>", "Website with the sign-in page (development only)")
+  .option("--name <name>", "Name for this machine's login (default: shelra on <hostname>)")
+  .action(async (options: { apiUrl?: string; webUrl?: string; email?: string | boolean; name?: string }) => {
     const { runLogin } = await import("./account/commands");
     process.exitCode = await runLogin(options);
   });
@@ -2566,6 +2868,54 @@ program
     const daemon = new SchedulerDaemon();
     await daemon.start();
   });
+
+// Skills, agents, hooks, instructions and the custom system prompt: the same commands as the terminal UI's slash
+// commands, over the same services the model's own tools use (src/extend/commands.ts).
+async function runExtensionCli(name: string, args: string[], options: { yes?: boolean } = {}): Promise<void> {
+  changeDirectoryOrExit(stringOption(program.opts<CliOptions>().directory));
+  const context = { root: projectRootFor(process.cwd()), cwd: process.cwd() };
+  // Approving a hook lets a command from a repository file run on this machine: show it and ask first.
+  if (name === "hooks" && args[0] === "approve" && options.yes !== true) {
+    console.log(describeHooks(process.cwd()));
+    if (!process.stdin.isTTY) {
+      console.error(
+        "\nApproving needs a person: run it in a terminal, or pass --yes to say you have read the commands above.",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const { createInterface } = await import("node:readline/promises");
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = (await rl.question("\nApprove the pending hooks listed above? [y/N] ")).trim().toLowerCase();
+    rl.close();
+    if (answer !== "y" && answer !== "yes") {
+      console.log("Nothing approved.");
+      return;
+    }
+  }
+  const result = await runExtensionCommand(context, name, args);
+  if (result.output) console.log(result.output);
+  if (!result.ok) process.exitCode = 1;
+}
+
+for (const [name, description] of [
+  ["skills", "List, inspect, validate, switch and import skills (SKILL.md folders)"],
+  ["agents", "List and inspect the agents defined for this project, and their recent runs"],
+  ["hooks", "List hooks, approve the ones a repository defines, test one, see what ran"],
+  ["instructions", "Show the instructions in force (SHELRA.md, rules, AGENTS.md) and where each comes from"],
+  ["doctor", "Check skills, agents, hooks and instructions for problems and missing dependencies"],
+  ["prompt", "Show the custom system prompt in force"],
+  ["extensions", "What other agents left in this project (compat), and import it: `extensions import --apply`"],
+] as const) {
+  program
+    .command(`${name} [args...]`)
+    .description(description)
+    .allowUnknownOption(true)
+    .option("--yes", "hooks approve: say you have read the commands")
+    .action(async (args: string[], options: { yes?: boolean }) => {
+      await runExtensionCli(name, splitCommand(args.join(" ")).length > 0 ? args : [], options);
+    });
+}
 
 await program.parseAsync();
 

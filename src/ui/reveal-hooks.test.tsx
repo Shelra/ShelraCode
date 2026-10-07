@@ -1,12 +1,96 @@
 import { testRender } from "@opentui/react/test-utils";
 import { act, useState } from "react";
 import { describe, expect, it } from "vitest";
+import { useBufferedCallback } from "./hooks/use-buffered-callback";
 import { usePacedText } from "./reveal";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Each test streams its own words, so one test's progress can never pass for another's. */
 const words = (word: string, count: number) => `${word} `.repeat(count);
+
+describe("stream update buffering", () => {
+  it.each([
+    [80, 24],
+    [120, 40],
+    [80, 24],
+  ])("renders a burst intact with one update at %sx%s", async (width, height) => {
+    let push = (_delta: string) => {};
+    let finish = () => {};
+    let accumulated = "";
+    let paints = 0;
+    function Harness() {
+      const [text, setText] = useState("");
+      const updates = useBufferedCallback(() => {
+        paints += 1;
+        setText(accumulated);
+      });
+      push = (delta) => {
+        accumulated += delta;
+        updates.schedule();
+      };
+      finish = updates.flush;
+      return <text>{text || "Waiting for response"}</text>;
+    }
+    const screen = await testRender(<Harness />, { width, height });
+    try {
+      await act(async () => {
+        for (const delta of "Response arrived without losing a single character.") push(delta);
+      });
+      expect(paints).toBe(0);
+      // Finishing at a tool boundary must show the final characters even before the deadline.
+      await act(async () => finish());
+      await screen.renderOnce();
+      expect(screen.captureCharFrame()).toContain(accumulated);
+      await sleep(80);
+      expect(paints).toBe(1);
+    } finally {
+      screen.renderer.destroy();
+    }
+  });
+
+  it("keeps painting while deltas arrive faster than its deadline", async () => {
+    let schedule = () => {};
+    let paints = 0;
+    function Harness() {
+      const updates = useBufferedCallback(() => paints++);
+      schedule = updates.schedule;
+      return <text>Streaming</text>;
+    }
+    const screen = await testRender(<Harness />, { width: 80, height: 24 });
+    try {
+      for (let i = 0; i < 15; i++) {
+        schedule();
+        await sleep(10);
+      }
+      expect(paints).toBeGreaterThan(0);
+      expect(paints).toBeLessThan(15);
+    } finally {
+      screen.renderer.destroy();
+    }
+  });
+
+  it("drops queued updates on cancellation and unmount", async () => {
+    let schedule = () => {};
+    let cancel = () => {};
+    let paints = 0;
+    function Harness() {
+      const updates = useBufferedCallback(() => paints++);
+      schedule = updates.schedule;
+      cancel = updates.cancel;
+      return <text>Streaming</text>;
+    }
+    const screen = await testRender(<Harness />, { width: 80, height: 24 });
+    schedule();
+    cancel();
+    await sleep(80);
+    expect(paints).toBe(0);
+    schedule();
+    screen.renderer.destroy();
+    await sleep(80);
+    expect(paints).toBe(0);
+  });
+});
 
 describe("usePacedText", () => {
   it("keeps revealing while a model streams faster than a tick", async () => {

@@ -10,10 +10,12 @@ const found = (sources: WebSearchResult["sources"]): WebSearchResult => ({
   output: "",
 });
 
-describe("research before the work (owner, 2026-09-25)", () => {
-  it("researches work, not a greeting, an approval or a question about memory", () => {
-    expect(wantsResearch("Create the classic Super Mario Bros game as a web game I can play in my browser")).toBe(true);
-    expect(wantsResearch("Corre los tests del proyecto y haz que pasen.")).toBe(true);
+describe("initial research only when requested (owner, 2026-10-05)", () => {
+  it("starts ordinary work from local context without forcing a search", () => {
+    expect(wantsResearch("Create the classic Super Mario Bros game as a web game I can play in my browser")).toBe(
+      false,
+    );
+    expect(wantsResearch("Corre los tests del proyecto y haz que pasen.")).toBe(false);
     expect(wantsResearch("hola")).toBe(false);
     expect(wantsResearch("sí, continúa")).toBe(false);
     expect(wantsResearch("¿Qué tienes en la memoria documentado?")).toBe(false);
@@ -21,13 +23,34 @@ describe("research before the work (owner, 2026-09-25)", () => {
     expect(wantsResearch("Que tienes en la memoria del proyecto guardado?")).toBe(false);
   });
 
+  it.each([
+    "verifica en revit, si el addin esta apuntando a la url de backend en produccion",
+    "Busca la URL de backend en los archivos del addin",
+    "Search the repository for the backend URL",
+    "Investiga por qué falla el addin de Revit",
+    "Research the bug in the local repository",
+    "Actualiza la documentación del proyecto",
+    "No busques en Google para este cambio",
+    "Don't search the web, inspect the addin locally",
+    "porque con cualquier mensaje de entrada lo primero es busca en google? no es necesario",
+  ])("does not send local work or search complaints to the web: %s", (request) => {
+    expect(wantsResearch(request)).toBe(false);
+  });
+
+  it.each([
+    "Busca en Google la documentación oficial de Revit",
+    "Search the web for the Revit API documentation",
+    "Consulta la documentación oficial de Bun",
+    "Look up official documentation for the latest Revit API changes",
+  ])("honors an explicit external search: %s", (request) => expect(wantsResearch(request)).toBe(true));
+
   it("researches a request that asks for a search, even when it mentions memory (seen live 2026-09-25)", () => {
     expect(
       wantsResearch(
         "continuemos el proyecto verifica que todo funcione correcto, arregla lo necesario y deja el localhost activo para testear y probar. si necesitas contexto realiza una busqueda profunda en google documentacion y todo lo necesario puedes consultar la memoria y buscar errores",
       ),
     ).toBe(true);
-    expect(wantsResearch("Revisa la memoria y luego investiga cómo migrar el proyecto a Vite 6")).toBe(true);
+    expect(wantsResearch("Revisa la memoria y luego busca en la web cómo migrar el proyecto a Vite 6")).toBe(true);
   });
 
   it("searches the request's first sentences, without code or markup, in at most 32 words", () => {

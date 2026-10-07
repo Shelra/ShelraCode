@@ -1,26 +1,11 @@
+import { toToolResult } from "../agent/tool-result";
 import type { ToolResult } from "../types/index";
 
 export function extractToolResultFromOutput(output: unknown): ToolResult | null {
   if (!output || typeof output !== "object") return null;
 
-  if ("success" in output) {
-    const result = output as ToolResult;
-    return {
-      success: Boolean(result.success),
-      output: result.output,
-      error: result.error,
-      diff: result.diff,
-      plan: result.plan,
-      planUpdate: result.planUpdate,
-      task: result.task,
-      delegation: result.delegation,
-      backgroundProcess: result.backgroundProcess,
-      media: result.media,
-      computer: result.computer,
-      verifyRecipe: result.verifyRecipe,
-      lspDiagnostics: result.lspDiagnostics,
-    };
-  }
+  // Resume must apply the same protocol validation as live host evidence.
+  if ("success" in output || "isError" in output || "content" in output) return toToolResult(output);
 
   if ("type" in output && output.type === "json" && "value" in output) {
     return extractToolResultFromOutput((output as { value: unknown }).value);
@@ -51,6 +36,8 @@ export function getOutputKind(output: unknown): string {
 }
 
 export function isOutputSuccess(output: unknown): boolean {
+  const interpreted = extractToolResultFromOutput(output);
+  if (interpreted) return interpreted.success;
   if (!output || typeof output !== "object") return true;
   if ("type" in output) {
     return !String(output.type).startsWith("error");

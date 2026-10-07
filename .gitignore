@@ -12,8 +12,6 @@ yarn.lock
 # Build outputs
 dist/
 lib/
-# frontend/src/lib is website source, not build output
-!frontend/src/lib/
 build/
 *.tsbuildinfo
 
@@ -131,8 +129,9 @@ bench/suites/polyglot-*.json
 __pycache__/
 *.pyc
 
-# The account service (Bun API + Supabase) lives only in the owner's checkout, not in this public repository
-# (owner, 2026-09-25).
+# The website and the account service are their own repositories (Shelra/Shelracode-frontend, Shelra/Shelracode-backend,
+# split out 2026-10-07); a checkout of either placed inside this one is never part of it.
+frontend/
 backend/
 
 # npm tarballs built by scripts/npm-publish.ts
@@ -142,3 +141,6 @@ npm-dist/
 /bench-results/
 /bench-jobs/
 /bench-report/
+
+# Scratch results of scripts/perf
+.shelra-perf/

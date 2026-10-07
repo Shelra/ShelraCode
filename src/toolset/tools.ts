@@ -2,6 +2,7 @@ import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { RestorePoint } from "../agent/attempt-journal";
 import { isVerificationCommand } from "../agent/verification-evidence";
+import { listAgents } from "../extend/agents";
 import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks } from "../hooks/index";
 import type { DecisionProposal } from "../ledger/types";
 import { isLspToolEnabled, queryLsp } from "../lsp/runtime";
@@ -63,12 +64,13 @@ import {
   type DestructiveCommandPolicy,
   loadDestructiveCommandPolicy,
   loadPaymentSettings,
-  loadValidSubAgents,
   type ToolGroupSettings,
 } from "../utils/settings";
 import { looseCriteriaList, looseStepList, looseStringList } from "./plan-input";
 
 interface CreateToolsOptions {
+  /** The skill, extension and extension_write tools for this run (src/extend/tools.ts); they pass the same broker. */
+  extensionTools?: ToolSet;
   runTask?: (request: TaskRequest, abortSignal?: AbortSignal) => Promise<ToolResult>;
   runDelegation?: (request: TaskRequest, abortSignal?: AbortSignal) => Promise<ToolResult>;
   readDelegation?: (id: string) => Promise<ToolResult>;
@@ -422,7 +424,18 @@ export function createTools(
   }
 
   if (options.runTask) {
-    const customNames = (options.subagents ?? loadValidSubAgents()).map((agent) => agent.name);
+    // The agent registry (project and user files, other agents' folders read-only, the older settings list). A caller that
+    // passes `subagents` explicitly (a test, an embedded host) gets exactly those.
+    const registered = options.subagents
+      ? options.subagents.map((agent) => ({
+          name: agent.name,
+          description: agent.instruction.split("\n")[0] ?? "",
+          readOnly: false,
+        }))
+      : listAgents(bash.getRootCwd())
+          .filter((agent) => agent.enabled && !agent.rejected)
+          .map((agent) => ({ name: agent.name, description: agent.description, readOnly: agent.readOnly }));
+    const customNames = registered.map((agent) => agent.name);
     // The verify sub-agents run in the Shuru sandbox; where it does not exist every one of their
     // commands fails, so they are not offered at all (audit of 2026-09-23).
     const verifyAvailable = options.verifyAvailable ?? isShuruSupported();
@@ -436,10 +449,15 @@ export function createTools(
       ...(verifyAvailable ? ["verify-detect", "verify-manifest"] : []),
       "computer",
     ];
-    const taskAgentEnum = [...builtIns, ...customNames] as [string, ...string[]];
     const customHint =
-      customNames.length > 0
-        ? ` You may also use these user-defined sub-agents by exact name: ${customNames.join(", ")}.`
+      registered.length > 0
+        ? ` Defined for this project, by exact name: ${registered
+            .slice(0, 12)
+            .map(
+              (agent) =>
+                `${agent.name}${agent.readOnly ? " (read-only)" : ""} — ${agent.description.replace(/\s+/gu, " ").slice(0, 90)}`,
+            )
+            .join("; ")}${registered.length > 12 ? `; ${registered.length - 12} more via extensions` : ""}.`
         : "";
     const verifyHint = verifyAvailable
       ? ` \`verify\` for sandbox-aware build, test, and smoke validation, \`verify-detect\` for read-only verification recipe detection, \`verify-manifest\` to create or update a verification manifest,`
@@ -448,19 +466,31 @@ export function createTools(
     tools.task = tool({
       description: `Delegate a focused foreground task to a sub-agent. Prefer this proactively for review, research, investigation, planning, code quality work, verification, and computer-use flows instead of waiting for the user to request a sub-agent. Use \`general\` for multi-step execution (investigate context, plan, act, then verify before reporting done), \`explore\` for fast read-only investigation, \`plan\` for read-only architecture and implementation planning before non-trivial or uncertain work, \`vision\` for image validation,${verifyHint} \`ui-verify\` for three-pass visual hierarchy and interaction QA, and \`computer\` for host desktop screenshot/input workflows.${customHint} Provide a short description plus a detailed prompt for the child agent.`,
       inputSchema: z.object({
+        // Plain text, checked when the task runs: an agent created earlier in this same turn (by extension_write) is
+        // not yet in a list fixed when this round's tools were built, and a schema that refuses its name made a real
+        // model fall back to `general` (seen live, 2026-10-07). The runtime answers an unknown name with the valid ones.
         agent: z
-          .enum(taskAgentEnum)
+          .string()
+          .refine(
+            (name) => verifyAvailable || !["verify", "verify-detect", "verify-manifest"].includes(name),
+            "the verify sub-agents need the Shuru sandbox, which this machine does not have",
+          )
           .default("general")
           .describe(
-            customNames.length > 0
-              ? `Built-in ${builtIns.join(", ")}, or a configured custom sub-agent name from user settings`
-              : "Which sub-agent to use",
+            `Built-in ${builtIns.join(", ")}, or the exact name of an agent defined for this project (extensions list kind agent)${customNames.length > 0 ? `: ${customNames.slice(0, 20).join(", ")}` : ""}`,
           ),
         description: z.string().describe("A short label for the delegated task, such as 'Deep code quality analysis'"),
         prompt: z.string().describe("Detailed instructions for the sub-agent to complete"),
+        skills: z
+          .array(z.string())
+          .optional()
+          .describe("Skills to preload for this run, by exact name, on top of the ones the agent's definition lists"),
       }),
-      execute: async ({ agent, description, prompt }, { abortSignal }) => {
-        return options.runTask!({ agent, description, prompt }, abortSignal);
+      execute: async ({ agent, description, prompt, skills }, { abortSignal }) => {
+        return options.runTask!(
+          { agent, description, prompt, ...(skills && skills.length > 0 ? { skills } : {}) },
+          abortSignal,
+        );
       },
     });
   }
@@ -1482,7 +1512,11 @@ export function createTools(
     });
   }
 
-  return hardenToolSet(tools, { cwd, sessionId: options.sessionId });
+  const hooks = { cwd, sessionId: options.sessionId };
+  return {
+    ...hardenToolSet(tools, hooks),
+    ...(options.extensionTools ? hardenToolSet(options.extensionTools, hooks) : {}),
+  };
 }
 
 type ToolExecute = (input: unknown, options: { abortSignal?: AbortSignal }) => unknown;

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { contractChecks } from "../contract/contract";
@@ -55,18 +55,32 @@ export function classifyTurn(prompt: string): TurnClassification {
   return { kind: "conversation", reason: "no repository or mutation signal" };
 }
 
-/** A read-only git command in the workspace: null when git is missing or did not finish in time. */
-function git(root: string, args: readonly string[]): { ok: boolean; stdout: string } | null {
-  const result = spawnSync("git", ["--no-optional-locks", ...args], {
-    cwd: root,
-    encoding: "utf8",
-    timeout: GIT_TIMEOUT_MS,
-    windowsHide: true,
-    maxBuffer: 4 * 1024 * 1024,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+/**
+ * A read-only git command in the workspace: null when git is missing or did not finish in time. It runs beside the
+ * event loop, not on it: the turn used to start with several of these in a row, and the terminal could not redraw,
+ * take a key or cancel for the quarter of a second or more they took (measured 2026-10-06).
+ */
+function git(root: string, args: readonly string[]): Promise<{ ok: boolean; stdout: string } | null> {
+  return new Promise((resolve) => {
+    execFile(
+      "git",
+      ["--no-optional-locks", ...args],
+      {
+        cwd: root,
+        encoding: "utf8",
+        timeout: GIT_TIMEOUT_MS,
+        windowsHide: true,
+        maxBuffer: 4 * 1024 * 1024,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      },
+      (error, stdout) => {
+        // A command that ran and exited non-zero is an answer ("not a repository"); one that never ran is not.
+        const code = (error as { code?: unknown } | null)?.code;
+        if (error && typeof code !== "number") return resolve(null);
+        resolve({ ok: !error, stdout: typeof stdout === "string" ? stdout : "" });
+      },
+    );
   });
-  if (result.error || typeof result.status !== "number") return null;
-  return { ok: result.status === 0, stdout: result.stdout ?? "" };
 }
 
 function clip(text: string, maxChars: number): string {
@@ -74,8 +88,8 @@ function clip(text: string, maxChars: number): string {
 }
 
 /** Branch, uncommitted changes with their size, and the last commits, limited to this workspace. */
-function gitSummary(root: string): { text: string | null; truncated: boolean } {
-  const status = git(root, [
+async function gitSummary(root: string): Promise<{ text: string | null; truncated: boolean }> {
+  const status = await git(root, [
     "-c",
     "color.status=false",
     "-c",
@@ -93,16 +107,29 @@ function gitSummary(root: string): { text: string | null; truncated: boolean } {
   if (changes.length === 0) {
     lines.push("Uncommitted changes: none.");
   } else {
-    const stat = git(root, ["diff", "--shortstat", "--no-ext-diff", "--no-textconv", "HEAD", "--", "."]);
+    // The size of the change and the last commits do not depend on each other.
+    const [stat, log] = await Promise.all([
+      git(root, ["diff", "--shortstat", "--no-ext-diff", "--no-textconv", "HEAD", "--", "."]),
+      git(root, ["log", "--oneline", "--no-decorate", "--no-color", "--no-show-signature", "-3"]),
+    ]);
     const size = stat?.ok && stat.stdout.trim() ? ` (${stat.stdout.trim()})` : "";
     lines.push(`Uncommitted changes${size}:`, ...changes.slice(0, MAX_CHANGED_FILES).map((line) => `  ${line}`));
     if (changes.length > MAX_CHANGED_FILES) lines.push(`  … and ${changes.length - MAX_CHANGED_FILES} more`);
+    return finishGitSummary(lines, log, changes.length);
   }
-  const log = git(root, ["log", "--oneline", "--no-decorate", "--no-color", "--no-show-signature", "-3"]);
+  const log = await git(root, ["log", "--oneline", "--no-decorate", "--no-color", "--no-show-signature", "-3"]);
+  return finishGitSummary(lines, log, changes.length);
+}
+
+function finishGitSummary(
+  lines: string[],
+  log: { ok: boolean; stdout: string } | null,
+  changeCount: number,
+): { text: string | null; truncated: boolean } {
   const commits = log?.ok ? log.stdout.split(/\r?\n/u).filter((line) => line.trim() !== "") : [];
   if (commits.length > 0)
     lines.push("Recent commits:", ...commits.map((line) => `  ${clip(line, MAX_COMMIT_LINE_CHARS)}`));
-  return { text: lines.join("\n"), truncated: changes.length > MAX_CHANGED_FILES };
+  return { text: lines.join("\n"), truncated: changeCount > MAX_CHANGED_FILES };
 }
 
 /** Words of the request that look like paths: a separator or a file extension, and no URL or glob syntax. */
@@ -156,8 +183,8 @@ const TOOL_STATE_DIRS: ReadonlySet<string> = new Set([
 ]);
 
 /** The project's own files: from git (tracked and unignored), or a bounded walk outside a repository. */
-function projectFiles(root: string): { files: string[]; complete: boolean } {
-  const listed = git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
+async function projectFiles(root: string): Promise<{ files: string[]; complete: boolean }> {
+  const listed = await git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
   if (listed?.ok) {
     // Tool state and dependencies are never the project's own files. Folders named like build output (build,
     // dist, target, vendor) are left out only at the root: a tracked `src/commands/build/` is source.
@@ -196,8 +223,8 @@ function testsOf(named: readonly string[], files: readonly string[]): string[] {
 }
 
 /** Workspace files with one of these names, from git (tracked and unignored) or a bounded walk elsewhere. */
-function filesNamed(root: string, names: readonly string[]): Map<string, string[]> {
-  const listed = git(root, [
+async function filesNamed(root: string, names: readonly string[]): Promise<Map<string, string[]>> {
+  const listed = await git(root, [
     "ls-files",
     "--cached",
     "--others",
@@ -218,7 +245,10 @@ function filesNamed(root: string, names: readonly string[]): Map<string, string[
  * The files and folders the request names, resolved inside the workspace: a path as written, a bare
  * name at the workspace root, or else every file with that name. Nothing the request does not name.
  */
-function namedFiles(root: string, prompt: string): { lines: string[]; files: string[]; truncated: boolean } {
+async function namedFiles(
+  root: string,
+  prompt: string,
+): Promise<{ lines: string[]; files: string[]; truncated: boolean }> {
   const lines: string[] = [];
   const files: string[] = [];
   const bareNames: string[] = [];
@@ -234,7 +264,7 @@ function namedFiles(root: string, prompt: string): { lines: string[]; files: str
   }
   let truncated = false;
   if (bareNames.length > 0) {
-    for (const [name, matches] of filesNamed(root, bareNames)) {
+    for (const [name, matches] of await filesNamed(root, bareNames)) {
       if (matches.length === 0) continue;
       const shown = matches.slice(0, MAX_MATCHES_PER_NAME);
       const more = matches.length - shown.length;
@@ -264,15 +294,23 @@ function namedFiles(root: string, prompt: string): { lines: string[]; files: str
  * files on demand beat an injected map. Project instructions (the AGENTS.md chain; CLAUDE.md is read only for
  * its command table, by check discovery) reach the system prompt separately.
  */
-export function compileContextPacket(root: string, prompt: string, maxChars = MAX_CONTEXT_CHARS): ContextPacket {
+export async function compileContextPacket(
+  root: string,
+  prompt: string,
+  maxChars = MAX_CONTEXT_CHARS,
+): Promise<ContextPacket> {
   const classification = classifyTurn(prompt);
   if (classification.kind === "conversation") {
     return { classification, promptAppendix: "", files: [], truncated: false };
   }
 
   const checks = contractChecks(discoverChecks(root));
-  const repository = gitSummary(root);
-  const named = namedFiles(root, prompt);
+  // Three independent readings of the repository, asked together.
+  const [repository, named, project] = await Promise.all([
+    gitSummary(root),
+    namedFiles(root, prompt),
+    projectFiles(root),
+  ]);
   const sections: string[] = [
     "HOST-COMPILED REPOSITORY CONTEXT (read by Shelra at the start of this turn):",
     `Workspace root: ${root}`,
@@ -282,7 +320,6 @@ export function compileContextPacket(root: string, prompt: string, maxChars = MA
   ];
   if (repository.text) sections.push(repository.text);
   if (named.lines.length > 0) sections.push(`Files the request names:\n${named.lines.join("\n")}`);
-  const project = projectFiles(root);
   if (project.complete && project.files.length > 0 && project.files.length <= SMALL_PROJECT_FILES) {
     sections.push(
       `Files in this project (${project.files.length}):\n${project.files.map((file) => `- ${file}`).join("\n")}`,

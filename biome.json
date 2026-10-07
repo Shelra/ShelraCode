@@ -6,14 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "**",
-      "!!**/dist",
-      "!!**/.agents/skills",
-      "!!**/frontend/.next",
-      "!!**/frontend/next-env.d.ts",
-      "!!**/backend/supabase/templates"
-    ]
+    "includes": ["**", "!!**/dist", "!!**/.agents/skills"]
   },
   "formatter": {
     "enabled": true,
@@ -55,17 +48,5 @@
         "organizeImports": "on"
       }
     }
-  },
-  "overrides": [
-    {
-      "includes": ["frontend/**"],
-      "linter": {
-        "rules": {
-          "performance": {
-            "noImgElement": "off"
-          }
-        }
-      }
-    }
-  ]
+  }
 }
