@@ -1,3 +1,4 @@
+import { localModelsEnabled } from "./enabled";
 import { createOpenAICompatibleProvider } from "./local-provider";
 import { ManagedLlamaRuntime } from "./managed-llama";
 import type { LocalModelCandidate, LocalRuntimeAdapter, LocalRuntimeDiscovery, LocalRuntimeHealth } from "./types";
@@ -86,11 +87,14 @@ export function createLocalRuntimeAdapters(
 }
 
 export async function discoverLocalRuntimes(
-  adapters = createLocalRuntimeAdapters(),
+  adapters?: LocalRuntimeAdapter[],
   signal?: AbortSignal,
 ): Promise<LocalRuntimeDiscovery> {
+  // Local models are switched off: the default discovery finds nothing, so every caller (the model list, the setup, a
+  // key-rejected fallback, --local) behaves as on a machine with no local model. Explicit adapters are still honored.
+  if (adapters === undefined && !localModelsEnabled()) return { runtimes: [], health: {}, models: [] };
   const results = await Promise.all(
-    adapters.map(async (adapter) => {
+    (adapters ?? createLocalRuntimeAdapters()).map(async (adapter) => {
       const [detected, health, models] = await Promise.all([
         adapter.detect(signal),
         adapter.health(signal),

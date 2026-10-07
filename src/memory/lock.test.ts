@@ -46,6 +46,13 @@ describe("memory mutation lock", () => {
     expect(() => withMemoryLock(scratch as string, () => "must not run")).toThrow("this write was not saved");
     expect(Date.now() - start).toBeLessThan(2_000);
   });
+  it("gives up within a short bound when the caller can skip the write", () => {
+    scratch = mkdtempSync(join(tmpdir(), "shelra-lock-"));
+    writeFileSync(join(scratch, ".write-lock"), JSON.stringify({ pid: process.pid, token: "another-owner" }), "utf8");
+    const start = performance.now();
+    expect(() => withMemoryLock(scratch as string, () => "must not run", 50)).toThrow("this write was not saved");
+    expect(performance.now() - start).toBeLessThan(400);
+  });
   it("keeps its wait bound when the wall clock stops advancing", () => {
     scratch = mkdtempSync(join(tmpdir(), "shelra-lock-"));
     writeFileSync(join(scratch, ".write-lock"), JSON.stringify({ pid: process.pid, token: "live-owner" }), "utf8");

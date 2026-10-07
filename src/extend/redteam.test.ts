@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tool } from "ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -302,6 +302,65 @@ describe("the person's own control files are off limits to a shell", () => {
       }
     }
     expect((await run(null, "ls -la")).success).toBe(true);
+  });
+});
+
+describe("the control files are found by where they really are, not by how the path is spelled", () => {
+  const files = tool({
+    description: "files",
+    inputSchema: z.object({ path: z.string() }),
+    execute: async () => ({ success: true, output: "ran" }),
+  });
+  const call = async (name: string, path: string) => {
+    const guarded = guardTools({ [name]: files }, null, { cwd: () => project });
+    return await (
+      guarded[name] as unknown as { execute: (i: unknown, o: unknown) => Promise<{ success: boolean }> }
+    ).execute({ path }, {});
+  };
+
+  it("refuses a path that reaches them through ~, a relative climb or a different spelling", async () => {
+    writeFileSync(join(home, ".shelra", "auth.json"), "{}");
+    for (const path of [
+      "~/.shelra/auth.json",
+      join(home, ".shelra", ".", "auth.json"),
+      join(home, ".shelra", "..", ".shelra", "trust.json"),
+      "../home/.shelra/user-settings.json",
+    ]) {
+      expect((await call("read_file", path)).success, path).toBe(false);
+      expect((await call("write_file", path)).success, path).toBe(false);
+    }
+    expect((await call("read_file", "notes.txt")).success).toBe(true);
+  });
+
+  it("refuses a search over the folder that holds them, or over a folder above it", async () => {
+    for (const path of [join(home, ".shelra"), home, dirname(home)]) {
+      expect((await call("grep", path)).success, path).toBe(false);
+    }
+    expect((await call("grep", project)).success).toBe(true);
+    // Reading a file beside the controls is fine.
+    expect((await call("read_file", join(home, ".shelra", "SHELRA.md"))).success).toBe(true);
+  });
+
+  it("refuses a shell path whose first segment is a glob or a variable, since it can name them without spelling them", async () => {
+    const fake = tool({
+      description: "bash",
+      inputSchema: z.object({ command: z.string() }),
+      execute: async () => ({ success: true, output: "ran" }),
+    });
+    const guarded = guardTools({ bash: fake }, null, { cwd: () => project });
+    const run = async (command: string) =>
+      await (guarded.bash as unknown as { execute: (i: unknown, o: unknown) => Promise<{ success: boolean }> }).execute(
+        { command },
+        {},
+      );
+    for (const command of [
+      "cat ~/.shelra/a*.json",
+      "f=trust; echo '{}' > ~/.shelra/$f.json",
+      'Get-Content "$env:USERPROFILE/.shelra/au*.json"',
+    ])
+      expect((await run(command)).success, command).toBe(false);
+    expect((await run("ls .shelra/skills/*")).success).toBe(true);
+    expect((await run("cat .shelra/memory/index.md")).success).toBe(true);
   });
 });
 

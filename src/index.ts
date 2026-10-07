@@ -98,6 +98,7 @@ import { isAutoFreeModel, parseModelRef } from "./routing/model-ref";
 import { createRoutingRuntime, type RoutingRuntime } from "./routing/runtime";
 import { installManagedRuntime, resolveRuntimeInstallPlan } from "./runtimes/bootstrap";
 import { discoverLocalRuntimes, disposeLocalRuntimes } from "./runtimes/discovery";
+import { localModelsEnabled } from "./runtimes/enabled";
 import type { LocalModelCandidate, LocalRuntimeDiscovery } from "./runtimes/types";
 import {
   clearOpenRouterApiKey,
@@ -1733,7 +1734,7 @@ async function runBackgroundDelegation(jobPath: string, options: CliOptions) {
       parseInt(stringOption(options.maxToolRounds) || String(delegation.maxToolRounds), 10) || delegation.maxToolRounds;
     const sandboxMode = resolveCliSandboxMode(options.sandbox) || delegation.sandboxMode || getCurrentSandboxMode();
     const sandboxSettings = mergeSandboxSettings(getCurrentSandboxSettings(), delegation.sandboxSettings);
-    const preferLocal = options.local === true && options.remote !== true;
+    const preferLocal = wantsLocal(options);
     const modelPolicy = resolveModelPolicy(options.modelPolicy);
     const budget = resolveBudget(options);
     agent = new Agent(preferLocal ? undefined : apiKey, preferLocal ? undefined : baseURL, model, maxToolRounds, {
@@ -1811,8 +1812,7 @@ function resolveConfig(options: CliOptions) {
   // A local model is saved now; a cloud model once routing accepts it (`configureRemoteProvider`), so a paid model
   // Free mode refused never becomes the default another agent starts from.
   if (typeof options.model === "string" && !provider) {
-    if (options.local === true && options.remote !== true)
-      saveUserSettings({ defaultModel: normalizeModelId(options.model) });
+    if (wantsLocal(options)) saveUserSettings({ defaultModel: normalizeModelId(options.model) });
     else pendingDefaultModel = normalizeModelId(options.model);
   }
 
@@ -1826,10 +1826,23 @@ function resolveConfig(options: CliOptions) {
     sandboxSettings,
     // Cloud Free is the product default. Local inference is still available
     // as an explicit privacy/offline mode through --local.
-    preferLocal: options.local === true && options.remote !== true,
+    preferLocal: wantsLocal(options),
     modelPolicy,
     budget,
   };
+}
+
+let warnedLocalDisabled = false;
+
+/** `--local`, unless local models are switched off (`SHELRA_LOCAL_MODELS`): then it is said once and cloud routing is used. */
+function wantsLocal(options: CliOptions): boolean {
+  if (options.local !== true || options.remote === true) return false;
+  if (localModelsEnabled()) return true;
+  if (!warnedLocalDisabled) {
+    warnedLocalDisabled = true;
+    console.error("Local models are disabled for now, so --local is ignored and cloud routing is used.");
+  }
+  return false;
 }
 
 function resolveBudget(options: CliOptions): BudgetLimits {
@@ -1869,7 +1882,7 @@ program
   .option("-u, --base-url <url>", "API base URL")
   .option("-m, --model <model>", "Model to use")
   .option("--remote", "Use the configured cloud provider (OpenRouter by default)")
-  .option("--local", "Use the managed local model instead of cloud routing")
+  .option("--local", "Use the managed local model instead of cloud routing (disabled for now; SHELRA_LOCAL_MODELS=on)")
   .option(
     "--provider <id>",
     `Run a headless prompt (-p) on one provider: ${createDefaultRegistry()

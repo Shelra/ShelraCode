@@ -7,6 +7,8 @@ export default defineConfig({
     // Agent tests drive real timers and processes: with one fork per core they starve each other and trip the 5 s
     // limit (seen 2026-10-07: nine timeouts, all green with three workers), so the pool is capped.
     maxWorkers: 4,
+    // A turn test waits out real retry pauses; under load the default 5 s fails a test that is not wrong.
+    testTimeout: 15_000,
     exclude: ["dist/**", "node_modules/**", "tmp/**", ".claude/**", ".cursor/**"],
     // Failures that tests provoke on purpose must not land in the person's own swallowed-error log, nor test turns
     // in their session traces, nor a test's "always …" in their own user-wide memory. A test turn searches the web

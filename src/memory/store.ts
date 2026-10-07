@@ -57,9 +57,18 @@ const INDEX_LINE_PATTERN = /^-\s*\[(.+?)\]\((.+?)\)\s*—\s*(.*)$/;
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 const SOURCES: readonly MemorySource[] = ["human", "observed", "inference", "web"];
 
-function safeMemoryMutation<T>(scope: MemoryScope, label: string, fallback: T, operation: () => T): T {
+/** How long usage bookkeeping (recall, use, credit) may hold the thread waiting for another session's write. */
+const BOOKKEEPING_WAIT_MS = 50;
+
+function safeMemoryMutation<T>(
+  scope: MemoryScope,
+  label: string,
+  fallback: T,
+  operation: () => T,
+  maxWaitMs?: number,
+): T {
   try {
-    return withMemoryLock(memoryDir(scope), operation);
+    return withMemoryLock(memoryDir(scope), operation, maxWaitMs);
   } catch (error) {
     recordSwallowedError(`memory.${label}`, error);
     return fallback;
@@ -761,7 +770,7 @@ function normalizeTags(tags: readonly string[] | undefined): string[] | undefine
  * Never throws.
  */
 export function recordRecall(scope: MemoryScope, slugs: readonly string[]): void {
-  safeMemoryMutation(scope, "recall", undefined, () => recordRecallUnlocked(scope, slugs));
+  safeMemoryMutation(scope, "recall", undefined, () => recordRecallUnlocked(scope, slugs), BOOKKEEPING_WAIT_MS);
 }
 function recordRecallUnlocked(scope: MemoryScope, slugs: readonly string[]): void {
   for (const slug of slugs) {
@@ -786,7 +795,7 @@ export function namedCommands(text: string): string[] {
  * a failure to touch a file never affects the turn.
  */
 export function recordMemoryUse(scope: MemoryScope, slugs: readonly string[]): void {
-  safeMemoryMutation(scope, "use", undefined, () => recordMemoryUseUnlocked(scope, slugs));
+  safeMemoryMutation(scope, "use", undefined, () => recordMemoryUseUnlocked(scope, slugs), BOOKKEEPING_WAIT_MS);
 }
 function recordMemoryUseUnlocked(scope: MemoryScope, slugs: readonly string[]): void {
   const now = new Date().toISOString();
@@ -811,7 +820,13 @@ function recordMemoryUseUnlocked(scope: MemoryScope, slugs: readonly string[]): 
  * this, not how often an entry was retrieved.
  */
 export function creditMemoryUse(scope: MemoryScope, slugs: readonly string[], delta: 1 | -1): void {
-  safeMemoryMutation(scope, "credit", undefined, () => creditMemoryUseUnlocked(scope, slugs, delta));
+  safeMemoryMutation(
+    scope,
+    "credit",
+    undefined,
+    () => creditMemoryUseUnlocked(scope, slugs, delta),
+    BOOKKEEPING_WAIT_MS,
+  );
 }
 function creditMemoryUseUnlocked(scope: MemoryScope, slugs: readonly string[], delta: 1 | -1): void {
   for (const slug of slugs) {

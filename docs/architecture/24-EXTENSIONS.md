@@ -194,9 +194,10 @@ workspace, stored by `/hooks approve` or `shelra hooks approve` (the CLI shows t
 agent that edits an approved hook, empties the file, or sets `enabled:false` changes nothing about what is enforced: the state
 becomes `modified` and the approved version keeps running until the person removes it. A model's `extension_write` can propose a hook
 (pending, inert), edit or delete a pending one, and `test` a hook it wrote itself; it cannot approve, change, disable or remove an approved
-one, and the file tools and any command or path that names `trust.json`, `user-settings.json` or `auth.json` are refused. That last guard is a
-text match on the command and the path: an unsandboxed shell can still build such a path indirectly (`$f=trust; … ~/.shelra/$f.json`), so
-it is advisory for `bash`; `--sandbox` is what puts those files out of the shell's reach. A hook defined in the repository runs without
+one, and the file tools refuse `trust.json`, `user-settings.json` and `auth.json` by where the path really resolves (`~`, `..`, symlinks; a `grep` over
+their folder or above it too). For `bash` the guard reads the command: it refuses one that names those files or builds a `.shelra/` path from a glob
+or a variable (`cat ~/.shelra/a*.json`, `f=trust; … ~/.shelra/$f.json`). It cannot see a path assembled inside a script, so for `bash` it is
+advisory; `--sandbox` is what puts those files out of the shell's reach. A hook defined in the repository runs without
 `SHELRA_TOKEN` and without variables named `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `*_PASSWORD` (`hookEnvironment`); a hook the person
 wrote in their own settings keeps the whole environment.
 

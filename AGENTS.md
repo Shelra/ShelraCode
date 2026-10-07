@@ -61,8 +61,10 @@ directory.
 
 - **Cloud-first default:** `OPENROUTER_API_KEY` or `shelra auth openrouter <key>`
   enables the native OpenRouter provider and dynamic Free model catalog.
-- **Secondary local mode:** `--local` provisions the managed `llama.cpp` engine
-  and SHA-verified GGUF on first local run; no API key is required there.
+- **Secondary local mode (switched off for now, owner 2026-10-07):** `--local` would provision the managed `llama.cpp`
+  engine and a SHA-verified GGUF, but local models are disabled: the default discovery finds none (`src/runtimes/enabled.ts`),
+  so no fallback starts one, `--local` says it is ignored and cloud routing is used, and the model list shows cloud models only.
+  `SHELRA_LOCAL_MODELS=on` turns them back on. Wherever this file mentions a local-model fallback, it is inert while they are off.
 - `shelra models` always discovers OpenRouter first and lists local models as a
   secondary catalog.
 - `SHELRA_API_KEY` + `SHELRA_BASE_URL` remain available for another
@@ -212,7 +214,9 @@ over the unified catalog (`src/routing/`), and refuses, before any provider is c
 a free plan counts only when the user declared the key has no billing. `Agent.setProvider` guards any adapter that
 bypassed routing, and `src/providers/architecture.test.ts` pins every place a provider is built or a model called:
 adding one means reviewing it against Free mode. To add a provider, write its definition; do not add an `if` for it.
-`shelra providers` shows what is configured and what Free mode may run.
+`shelra providers` shows what is configured and what Free mode may run. The user's own endpoint (`SHELRA_BASE_URL`) has no
+price Shelra can read, so in Free mode it is refused unless it is a server on this machine or `SHELRA_ENDPOINT_FREE=1` declares it
+free (`guardUndeclaredEndpoint`); Mixed uses it as before.
 
 ## Resilience (hard rule)
 
@@ -289,8 +293,9 @@ commands on events. The model has three tools (`skill`, `extensions`, `extension
 - A file never grants a permission. `allowed-tools` is informational; an agent's `tools` only narrow; a read-only agent gets no
   file tools and a shell the host proves read-only (`src/extend/readonly-shell.ts`); a custom prompt cannot reach any of this.
 - Project and local hooks are proposals. What runs is the snapshot the person approved (`~/.shelra/trust.json`); no tool offered to
-  a model approves, changes, disables or removes an approved hook, and the file tools and any command or path that names `trust.json`, `user-settings.json` or `auth.json` are refused (a text match: an unsandboxed
-  shell can still build such a path indirectly, so `--sandbox` is what keeps a shell away from them). A hook defined in the repository does not get
+  a model approves, changes, disables or removes an approved hook, and the file tools refuse those files by where the path really resolves (`~`, `..`, symlinks; a `grep` over their folder or above it too), and a
+  command is refused when it names them or builds a `.shelra/` path from a glob or variable (a text check on the command: an unsandboxed
+  shell can still hide a path in a script, so `--sandbox` is what keeps a shell away from them). A hook defined in the repository does not get
   `SHELRA_TOKEN`, `*_API_KEY`, `*_TOKEN` or `*_SECRET` variables in its environment.
   `disableAllHooks` counts only in the user's own settings.
 - A model writes a user-wide skill, agent or instruction file only when the person's request asks for that scope.

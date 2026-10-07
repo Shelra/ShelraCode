@@ -97,8 +97,11 @@ function reclaimAbandoned(file: string): boolean {
   }
 }
 
-/** Serialize read/modify/write mutations across processes; readers continue to see atomic file replacements. */
-export function withMemoryLock<T>(directory: string, operation: () => T): T {
+/**
+ * Serialize read/modify/write mutations across processes; readers continue to see atomic file replacements. Waiting is
+ * synchronous (the caller's thread does nothing else meanwhile), so work that can be skipped passes a short `maxWaitMs`.
+ */
+export function withMemoryLock<T>(directory: string, operation: () => T, maxWaitMs = MAX_WAIT_MS): T {
   const dir = resolve(directory);
   const file = join(dir, ".write-lock");
   if (held.has(file)) return operation();
@@ -109,7 +112,7 @@ export function withMemoryLock<T>(directory: string, operation: () => T): T {
   const ticketPath = join(waiters, ticket);
   writeFileSync(ticketPath, "", { flag: "wx", mode: 0o600 });
   const owner = JSON.stringify({ pid: process.pid, token: randomUUID() });
-  const deadline = performance.now() + MAX_WAIT_MS;
+  const deadline = performance.now() + maxWaitMs;
   try {
     while (true) {
       // A writer must not immediately reacquire ahead of existing waiters. Otherwise a fast writer's

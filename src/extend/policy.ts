@@ -5,8 +5,11 @@
  * already grant, and an edit to a definition never widens a run that is already going (the policy is resolved once,
  * at launch, from a snapshot).
  */
-import { isAbsolute, resolve } from "node:path";
+import { realpathSync } from "node:fs";
+
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { ToolSet } from "ai";
+import { getProductUserDir } from "../product/identity";
 import { classifyReadOnlyShell } from "./readonly-shell";
 
 /** Named groups an agent file can list instead of individual tools. */
@@ -166,9 +169,53 @@ const PATH_TOOLS: ReadonlySet<string> = new Set([
   "grep",
 ]);
 
-function referencesControlFile(tool: string, args: Record<string, unknown>): boolean {
-  if (tool === "bash") return CONTROL_FILES.test(String(args.command ?? ""));
-  if (PATH_TOOLS.has(tool)) return CONTROL_FILES.test(String(args.path ?? ""));
+const CONTROL_NAMES = ["trust.json", "user-settings.json", "auth.json"] as const;
+/** A word of a command that names a `.shelra` folder and then a first segment built from a glob or a variable. */
+const INDIRECT_CONTROL_PATH = /\.shelra[\\/]+[^\s"'\\/]*[*?$%[`]/iu;
+
+const comparable = (path: string): string => (process.platform === "win32" ? path.toLowerCase() : path);
+
+/** The path as the file tools would open it: `~` expanded, relative to the working folder, symlinks followed. */
+function resolveToolPath(raw: string, cwd: string): string {
+  const expanded = raw === "~" || /^~[\\/]/u.test(raw) ? join(dirname(getProductUserDir()), raw.slice(1)) : raw;
+  const absolute = isAbsolute(expanded) ? resolve(expanded) : resolve(cwd, expanded);
+  try {
+    return realpathSync(absolute);
+  } catch {
+    return absolute;
+  }
+}
+
+/** Whether a file tool's path is one of the person's control files (by where it really is), or a folder holding them. */
+function pathReachesControlFile(tool: string, raw: string, cwd: string): boolean {
+  if (!raw.trim()) return false;
+  const target = comparable(resolveToolPath(raw, cwd));
+  const userDir = getProductUserDir();
+  let realUserDir = userDir;
+  try {
+    realUserDir = realpathSync(userDir);
+  } catch {
+    // The folder does not exist yet: compare with where it will be.
+  }
+  for (const dir of new Set([userDir, realUserDir])) {
+    for (const name of CONTROL_NAMES) if (target === comparable(resolve(dir, name))) return true;
+    // A search over the folder (or one above it) reads every file in it, the keys included.
+    const folder = comparable(resolve(dir));
+    if (tool === "grep" && (folder === target || folder.startsWith(target.endsWith(sep) ? target : target + sep)))
+      return true;
+  }
+  return false;
+}
+
+function referencesControlFile(tool: string, args: Record<string, unknown>, cwd: string): boolean {
+  if (tool === "bash") {
+    const command = String(args.command ?? "");
+    return CONTROL_FILES.test(command) || INDIRECT_CONTROL_PATH.test(command);
+  }
+  if (PATH_TOOLS.has(tool)) {
+    const path = String(args.path ?? "");
+    return CONTROL_FILES.test(path) || pathReachesControlFile(tool, path, cwd);
+  }
   return false;
 }
 
@@ -201,7 +248,7 @@ export function guardTools(tools: ToolSet, policy: AgentToolPolicy | null, conte
         // The person's own controls (the hooks they approved, their settings and keys) are changed through /hooks and
         // /config, never by an agent: no tool of any agent reaches them. A guard on the words of a command is a second
         // line, not the only one: the approved hooks also live outside what a file edit in the project can change.
-        if (referencesControlFile(name, args)) {
+        if (referencesControlFile(name, args, context.cwd())) {
           return {
             success: false,
             output:

@@ -150,7 +150,7 @@ import { BASE_URL_ENV, MAX_TOKENS_ENV } from "../product/identity";
 import { generateRecap as genRecap, generateTitle as genTitle, normalizeRecap } from "../providers/auxiliary";
 import type { CredentialFallback, CredentialFallbackSource } from "../providers/credential-fallback";
 import { defaultFreeGuardOptions } from "../providers/default-registry";
-import { guardForFreePolicy } from "../providers/free-guard";
+import { guardForFreePolicy, guardUndeclaredEndpoint } from "../providers/free-guard";
 import { describeLimit, limitFromError } from "../providers/limits";
 import { normalizeModelMessages } from "../providers/messages";
 import { createOpenRouterProvider } from "../providers/openrouter";
@@ -1206,7 +1206,10 @@ export class Agent {
             baseURL: endpoint,
             policy: sessionModelPolicy(),
           })
-        : createOpenAICompatibleProvider(apiKey, endpoint, modelId),
+        : guardUndeclaredEndpoint(createOpenAICompatibleProvider(apiKey, endpoint, modelId), {
+            endpoint,
+            policy: sessionModelPolicy,
+          }),
       defaultFreeGuardOptions(),
     );
   }
