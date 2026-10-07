@@ -35,7 +35,7 @@ jobs:
       run: >-
         bunx vitest run --pool=forks --exclude ".shelra/**" --exclude "ShelraCode/**"
         src/routing/ src/providers/ src/models/ src/startup/ src/agent/free-mode-routing.test.ts
-        src/agent/resilience.test.ts src/cli/ src/ui/model-picker-data.test.ts
+        src/agent/resilience.test.ts src/cli/providers-cli.test.ts src/cli/account-cli.test.ts src/ui/model-picker-data.test.ts
 
     - name: Model picker render tests
       run: bun test src/ui/model-picker.test.tsx
