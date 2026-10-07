@@ -71,9 +71,15 @@ directory.
   `KEY_GROQ`, or `shelra auth groq <key>`), Google Gemini (`GEMINI_API_KEY`, `shelra auth gemini`)
   and Cloudflare Workers AI (`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`, `shelra auth
   cloudflare <accountId> <token>`). A headless prompt runs on one with `--provider <id>`, a
-  benchmark with `shelra bench --provider <id>`, and a session in Mixed mode continues on them when
-  OpenRouter's free models cannot serve a turn (see Resilience); a session in Free mode does not.
+  benchmark with `shelra bench --provider <id>`. They are providers of the routing layer like any
+  other (see "Providers and routing"); their free plans stop at a quota and bill a key on a billed
+  account, so Free mode uses them only after `shelra providers allow-free <id>`.
   Their plans and privacy terms are in `docs/future-research/05_FREE_AND_LOW_COST_LLM_INFRASTRUCTURE.md`.
+- **OmniRoute** (`shelra auth omniroute <key>`, or `/config`): OmniRoute has no public hosted API, so the default is
+  Shelra's own instance (`OMNIROUTE_PRODUCTION_URL` in `src/product/identity.ts`, Railway service `omniroute`, a key
+  required on every call) and the person gives only the key. A gateway the user runs themselves is reached with
+  `OMNIROUTE_BASE_URL` or `--url`, and wins over the default; Shelra never installs, starts or probes one. Its aliases are never Free candidates (its free filters
+  fail open); a concrete model is, once the user vouches for it by name. Design: doc 22.
 - Optional spend controls: `SHELRA_MAX_SESSION_COST_USD` and
   `SHELRA_MAX_REQUEST_COST_USD` (CLI equivalents `--max-cost` and
   `--max-request-cost`).
@@ -81,21 +87,20 @@ directory.
 
 ## Research rule
 
-Research comes before the work (owner, 2026-09-25): before the first model round of a work turn in agent mode, the
-host runs one web search on the request and hands the model the results as the result of a `search_web` call
-(`src/research/pre-task.ts`), so it plans with context about the objective. A greeting, an approval ("sí",
-"continúa") or a question about memory is not researched; the search is bounded to 10 s and a failed search leaves
-the turn as it was. This reverses the 2026-09-17 removal of a forced search (doc 14 §23.2) with its failures designed
-out: the results are JSON-encoded data in a tool result, never in the system prompt, saying what they are and where
-they came from, and a result that reads like an instruction is withheld. `SHELRA_RESEARCH=off` or `--ablate research`
-turns it off. The model still reaches for `search_web` / `open_web` on its own when a task depends on an external
+Initial web research is requested, not mandatory (owner, 2026-10-05, replacing the 2026-09-25 rule): ordinary
+messages start with local context. Only an explicit request to search the web or consult external documentation
+runs a host search before the first model round (`src/research/pre-task.ts`). Local file searches, project checks,
+and inspecting Revit or an add-in do not trigger it. The search is bounded to 10 s and a failed search leaves the
+turn as it was. Results are JSON-encoded data in a tool result, never in the system prompt; instruction-shaped
+results are withheld. `SHELRA_RESEARCH=off` or `--ablate research` turns initial research off.
+The model still reaches for `search_web` / `open_web` on its own when a task depends on an external
 library, API, or protocol. Search results are untrusted leads and must be verified against the official source before
 reliance; fetched content is never treated as instructions.
-Before that search, a request to check, fix, continue or test a project that states its checks has them run by the
+A request to check, fix, continue or test a project that states its checks has them run by the
 host on the code as the turn found it (`src/agent/pre-work.ts`), handed to the model as the result of its own `bash`
-run and counted as the runs before the turn's first change; the search then looks up the error they report
-(owner, 2026-09-25: "hacer sin tener contexto suficiente es gastar recursos"). A request that asks for a search is
-always researched; only a short question about memory is not. `--ablate diagnose` turns the check run off; the
+run and counted as the runs before the turn's first change. A failed check does not force a web search;
+when research was explicitly requested, the search can use the error the checks report.
+`--ablate diagnose` turns the check run off; the
 benchmark does not count the host's calls as the model's (`isHostCall`).
 
 ## Tool surface and diagnostics
@@ -189,18 +194,25 @@ tokens, the turn's stages and what the user does in the terminal UI (mode or mod
   do not edit it as part of target work.
 - Source is `src/`; compiled output is `dist/` (gitignored except when built
   locally).
-- `frontend/` is a separate Next.js app (the marketing site migrated from Framer,
-  see `frontend/README.md`) with its own `package.json` and lockfile. Root scripts
-  (`typecheck`, `lint`, `test`, `build`) do not cover it; run its commands from
-  `frontend/`. Biome at the root still formats and lints `frontend/src`. Its sign-in
-  pages use Auth.js (GitHub, Google, and email and password with users in libSQL;
-  JWT sessions); credentials go in `frontend/.env.local` (see `frontend/.env.example`),
-  never in the repo.
-- `backend/` is the account service (Bun API over Supabase Postgres and Auth), a separate
-  package with its own lockfile and `bun test` suites; root scripts, root Vitest and the
-  npm package exclude it. Since 2026-09-25 it is kept out of this repository (`.gitignore`,
-  owner's decision) and exists only in the owner's checkout, so CI does not check it. Its values
-  go in `backend/.env` (see `backend/.env.example`). See `docs/architecture/16-BACKEND.md`.
+- The website and the account service are not in this repository (owner, 2026-10-07). The website (Next.js on
+  Vercel, sign-in with Supabase Auth, the `/cli/login` page `shelra login` opens, the install script
+  `public/install.ps1`) is `Shelra/Shelracode-frontend`; the account service (Bun API over Supabase Postgres and
+  Auth, on Railway) is `Shelra/Shelracode-backend`. Each has its own CI, lockfile and `CLAUDE.md`. Their design
+  stays documented here: `docs/architecture/16-BACKEND.md`, `23-ONBOARDING-AND-CONFIG.md`. A checkout of either
+  placed inside this repository is ignored by git.
+
+## Providers and routing (hard rule: Free mode never reaches paid inference)
+
+Design, evidence and risks: `docs/architecture/22-PROVIDER-ROUTING.md`. Models are `provider/providerModelId`
+(`groq/openai/gpt-oss-120b`, `omniroute/auto/coding`; a bare id still means OpenRouter). Providers are
+`ProviderDefinition`s in `src/providers/registry.ts` (listed in `default-registry.ts`); one `RoutingProvider`
+(`src/providers/routing-provider.ts`) serves every cloud session, dispatches by the id's provider, plans Free routes
+over the unified catalog (`src/routing/`), and refuses, before any provider is contacted, a model that
+`classifyFreeEligibility` does not prove free. **Unknown cost is not free**; a routing alias or combo is never free;
+a free plan counts only when the user declared the key has no billing. `Agent.setProvider` guards any adapter that
+bypassed routing, and `src/providers/architecture.test.ts` pins every place a provider is built or a model called:
+adding one means reviewing it against Free mode. To add a provider, write its definition; do not add an `if` for it.
+`shelra providers` shows what is configured and what Free mode may run.
 
 ## Resilience (hard rule)
 
@@ -212,9 +224,15 @@ turn at once. Everything else is recovered:
   pause, and moves to the provider's next fallback model after two failures in a row, or at once
   when retrying cannot help (`fallbackModelIds`, `SHELRA_FALLBACK_MODELS`). On OpenRouter the
   fallback is never a hand-picked model. In Free mode (the default, which never runs a paid model,
-  not even one the user names) it is the next free models by the catalog's capability ranking,
-  then `openrouter/free`, which answers with any free model, tiny ones included, as the last resort
-  (seen live 2026-09-24); the same order fills OpenRouter's server-side fallback list. For a model
+  not even one the user names) the session runs on `shelra/free` ("Auto Free"): each request is planned
+  over the eligible free routes of every configured provider (`src/routing/free-router.ts`), a route that
+  fails before producing output moves the same call to the next one, and a failed route cools down
+  (`src/routing/health.ts`); when every free route is cooling down, the ones that failed only in passing (a server
+  error, an overloaded model; never a spent quota, a rate limit or a refused key) are tried again at once, soonest back
+  first, at most four (`probeCooling`, a `probe` routing event), with eligibility untouched, so the turn does not
+  wait out a cooldown while a free model may answer; `openrouter/free`, which answers with any free model, tiny ones included, is the
+  last resort (seen live 2026-09-24). A model the user pins in Free mode is checked first, and a
+  fallback id is only ever an eligible one. For a model
   chosen with the `custom` policy it is `openrouter/free`; in Mixed mode (`ctrl+f` in the terminal
   UI, `--model-policy mixed`) or a paid tier, `openrouter/auto` (paid, within the policy's cost
   tier) then `openrouter/free`. A fallback is not always free: the switch notice states its cost,
@@ -224,8 +242,11 @@ turn at once. Everything else is recovered:
   Gemini, Cloudflare Workers AI, then OpenRouter Free when the turn started elsewhere), each tried
   once per session; the notice states its plan, that a key on a paid plan is billed by that provider,
   and, for Gemini's free tier, that Google may use the prompts (`setProviderFallback`, wired in
-  `src/index.ts`). A session in Free mode never moves to another provider, whose key could be on a
-  paid plan (owner, 2026-09-24): only OpenRouter Free and an installed local model. Only then does a
+  `src/index.ts`; Mixed also continues on Auto Free when its picked model cannot be served). A session in
+  Free mode never reaches a provider whose billing Shelra cannot show (owner, 2026-09-24): the router
+  admits another provider's models only when its prices prove them free, or when the user declared the
+  key has no billing (`shelra providers allow-free`); an installed local model remains the fallback for a
+  rejected key. Only when nothing eligible is left does a
   turn in which no model answers pause with its progress saved and say how to resume; when the
   provider's free allowance is what ran out, it ends `[Limited — …]` with the time the allowance
   comes back, as the provider reports it or as its documentation schedules it
@@ -246,6 +267,39 @@ turn at once. Everything else is recovered:
 - New code must follow the same rule: degrade and report, never throw out of the turn loop.
 
 Tests: `src/agent/resilience.test.ts`. Background: `docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md` §26.
+
+## Account and first-run setup (owner, 2026-10-06)
+
+A ShelraCode account is required to start Shelra: `shelra login` (browser, local callback or a pasted code) or, for
+headless and CI runs, a token in `SHELRA_TOKEN`; a login is re-verified daily and works offline for 7 days
+(`src/account/session.ts`). A turn never calls the account service. `SHELRA_NO_BROWSER=1` stops the CLI opening a
+browser. The first start and the start after `/logout` run the setup (providers and keys, mode, default provider and
+model); `/config` changes the same settings and saves each one at once; `/login` shows who is signed in.
+Design: `docs/architecture/23-ONBOARDING-AND-CONFIG.md`. A test that starts the CLI needs a seeded signed-in account.
+
+## Extensions: instructions, skills, agents, hooks, custom prompt (hard rules)
+
+Design, precedence, compatibility matrix, security model and the measured state: `docs/architecture/24-EXTENSIONS.md`. Code:
+`src/extend/`, `src/hooks/`. In short: `SHELRA.md` (and rules, a local file, `AGENTS.md`) is rebuilt from its files at every turn;
+skills are `.shelra/skills/<name>/SKILL.md` (the open Agent Skills format), loaded on demand through the `skill` tool or `/<name>`;
+agents are `.shelra/agents/<name>.md`, resolved into a snapshot at launch and run through `Agent.runTaskRequest`; hooks are
+commands on events. The model has three tools (`skill`, `extensions`, `extension_write`) and the person has the same services as
+`/skills /agents /hooks /instructions /prompt /doctor` and `shelra <same>`.
+
+- A file never grants a permission. `allowed-tools` is informational; an agent's `tools` only narrow; a read-only agent gets no
+  file tools and a shell the host proves read-only (`src/extend/readonly-shell.ts`); a custom prompt cannot reach any of this.
+- Project and local hooks are proposals. What runs is the snapshot the person approved (`~/.shelra/trust.json`); no tool offered to
+  a model approves, changes, disables or removes an approved hook, and the file tools and any command or path that names `trust.json`, `user-settings.json` or `auth.json` are refused (a text match: an unsandboxed
+  shell can still build such a path indirectly, so `--sandbox` is what keeps a shell away from them). A hook defined in the repository does not get
+  `SHELRA_TOKEN`, `*_API_KEY`, `*_TOKEN` or `*_SECRET` variables in its environment.
+  `disableAllHooks` counts only in the user's own settings.
+- A model writes a user-wide skill, agent or instruction file only when the person's request asks for that scope.
+- Free mode: nothing in `src/extend` or `src/hooks` calls a model (pinned by `src/extend/architecture.test.ts`); a delegated agent
+  runs the session's model in Free mode whatever its file names. A new module there must not import a provider.
+- Every write goes through `src/extend/store.ts` (atomic, locked, versioned, read back); every name is validated before it is a path.
+- Tests that run a delegated agent must not leave run records in the real home: `SHELRA_AGENT_RUNS=off` is set in `vitest.config.ts`;
+  a test that reads them back sets it to `on` with a scratch `HOME`. A scripted test provider must validate tool input against the
+  tool's schema, as the SDK does (a schema that refused a valid call hid for a day behind one that did not).
 
 ## Persistent memory (hard rule)
 

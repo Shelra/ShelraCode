@@ -2,6 +2,11 @@
 
 Status: implemented in the CLI and provider execution path.
 
+> Since 2026-10-06 OpenRouter is one provider of a provider-neutral routing layer
+> (`22-PROVIDER-ROUTING.md`): this document still describes the OpenRouter adapter and its catalog accurately, but
+> session startup, Free-mode routing, fallbacks across providers and model ids (`openrouter/…` is now one namespace
+> among several) are described there.
+
 ## Runtime flow
 
 ```text

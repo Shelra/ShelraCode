@@ -30,7 +30,7 @@ binary is self-contained: the Bun runtime, every package and OpenTUI's native li
 release is published it builds that same executable from the `main` branch with Bun instead
 (installing Bun first when it is missing). Options as environment variables: `SHELRA_VERSION` (a specific release),
 `SHELRA_INSTALL_BIN` (another folder), `SHELRA_NO_MODIFY_PATH=1`, `SHELRA_NO_SOURCE_BUILD=1`. The
-script lives in `frontend/public/install.ps1`; the macOS and Linux equivalent is `install.sh`.
+script lives in the website repository (`Shelra/Shelracode-frontend`, `public/install.ps1`); the macOS and Linux equivalent is `install.sh`.
 
 **From a checkout:**
 
@@ -370,7 +370,7 @@ capability-gated, while the built-in web research tools are provider-neutral.
 | --- | --- |
 | **OpenRouter first** | Discovers the live cloud catalog, routes to capable Free models by default, and keeps local inference available through `--local`. |
 | **Persistent project memory** | Every turn retrieves the project memory under `.shelra/memory/` ranked against the request (lexical, no embeddings) and injects the relevant entries; after a turn that changed and verified files, worked through a failure, or ended with its checks still failing (kept as low-confidence and marked unverified), one bounded reflection call proposes durable facts and a deterministic write gate admits, merges, or rejects them (no secrets, no instruction-shaped text, human statements never overwritten by inferences). Standing rules the user states are captured directly; an entry gains credit when the project's checks pass with it in context and loses it when they fail, and a procedure that was part of two passing turns becomes a `.agents/skills` skill. See `docs/design/shelra-memory-engine.md`. |
-| **Web research** | The agent uses `search_web` plus `open_web` when a task depends on an external library, API, or protocol; nothing is fetched for turns that do not need it. Results are treated as untrusted leads and the agent is instructed to verify them. |
+| **Web research** | Initial web search runs only when you explicitly request external research. Ordinary messages, local file searches and Revit/add-in inspections start with local context. The agent can use `search_web` plus `open_web` during work when it needs external library, API or protocol facts. Results are untrusted leads to verify. |
 | **Web research** | `search_web` and `open_web` are provider-neutral and available to the real agent loop. |
 | **Sub-agents (default behavior)** | Foreground `task` delegation (explore, plan, general, vision, verify, or computer) plus background `delegate` for read-only deep dives. Sub-agents are briefed to gather context before acting, plan non-trivial changes (directly or via `plan`) and verify before reporting; the host's own checks run on the parent's final code, which includes what sub-agents changed. |
 | **Verify** | `/verify` or `--verify` — inspects your app, builds, tests, boots it, and runs browser smoke checks in a Shuru sandbox (macOS 14+ on Apple Silicon; elsewhere it says it cannot run). Screenshots and video included. |
@@ -378,7 +378,7 @@ capability-gated, while the built-in web research tools are provider-neutral.
 | **Custom sub-agents** | Define named agents with `subAgents` in `~/.shelra/user-settings.json` and manage them from the TUI with `/agents`. |
 | **Remote control** | Pair **Telegram** from the TUI (`/remote-control` → Telegram): DM your bot, `/pair`, approve the code in-terminal. Keep the CLI running while you ping it from your phone. |
 | **OpenTUI React terminal UI** | Fast, keyboard-driven terminal rendering. |
-| **Skills** | Agent Skills under `.agents/skills/<name>/SKILL.md` (project) or `~/.agents/skills/` (user). Use `/skills` in the TUI to list what's installed. |
+| **Skills, agents, hooks, instructions** | Skills (`.shelra/skills/<name>/SKILL.md`, the open Agent Skills format; `.agents/skills` and `.claude/skills` are read too), agents (`.shelra/agents/<name>.md`, read-only or editing, with their own tools, skills and limits), hooks, and `SHELRA.md` instructions. Ask Shelra in plain words to create or change them, or use `/skills /agents /hooks /instructions /prompt /doctor` and `/<skill> args`. See [Extensions](#extensions-skills-agents-hooks-and-shelramd). |
 | **MCPs** | ORIONMCP (Revit / Dynamo) is included by default. Manage connections through `/mcp` / `/mcps` in the TUI or `shelra mcp` in the CLI. MCP settings use `~/.shelra/user-settings.json` (`mcp.servers`). See [ORIONMCP connection](docs/integrations/orionmcp.md). |
 | **Sessions** | Conversations persist; `shelra sessions` lists them and `--session latest` picks up where you left off. |
 | **Headless** | `--prompt` / `-p` for non-interactive runs — pipe it, script it, bench it. |
@@ -448,15 +448,32 @@ Free models. It does not ask a workspace-trust/sandbox question and it does
 not download a local model. `--sandbox` is an explicit execution option; the
 default is host execution.
 
-**More free providers.** Groq, Google Gemini and Cloudflare Workers AI can take
-over when OpenRouter's free models cannot serve a turn (the day's free quota
-spent, or no model answering), and a headless prompt or a benchmark can run on
-one directly:
+**Providers, Free and Mixed.** Shelra routes across every provider you set up
+(OpenRouter, Groq, Gemini, Cloudflare Workers AI, a local OmniRoute). Models are
+`provider/model`. **Free** mode is automatic ("Auto Free"): each request goes to the
+best free model of any provider, failing over to the next one, and it never runs
+a paid model: a route counts as free only when Shelra can show it (OpenRouter's own
+prices) or you declared it (`shelra providers allow-free groq` says your Groq key
+has no billing; `shelra providers allow-free omniroute 'opencode-free/*'` names
+gateway models you know are free). **Mixed** lets you pick any model of any
+provider in `/models`. `shelra providers` shows what is connected and what Free
+mode may run. Design: `docs/architecture/22-PROVIDER-ROUTING.md`.
+
+```bash
+shelra auth omniroute <key>                              # Shelra's own OmniRoute gateway: the key is all it needs
+shelra auth omniroute --url http://localhost:20128/v1   # or one you run yourself; Shelra never installs or starts it
+shelra providers                                          # status, models, what Free mode may run
+shelra -m groq/openai/gpt-oss-120b --model-policy mixed   # any provider/model in Mixed
+```
+
+**More free providers.** Groq, Google Gemini and Cloudflare Workers AI join the
+free routing (after you declare their key has no billing), and a headless prompt
+or a benchmark can run on one directly:
 
 ```bash
 shelra auth groq <key>                       # or GROQ_API_KEY
 shelra auth gemini <key>                     # or GEMINI_API_KEY
-shelra auth cloudflare <accountId> <token>   # or CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN
+shelra auth cloudflare <token>              # the account id is found from the token (or CLOUDFLARE_API_TOKEN; pass the id as a second argument when it cannot be found)
 shelra -p "fix the failing test" --provider groq
 shelra bench --manifest bench/suites/shelra-agent-core-v0.2.json --provider groq --model openai/gpt-oss-120b
 shelra auth remove gemini                    # stop using a stored key as a fallback
@@ -642,7 +659,30 @@ Hook commands receive JSON on **stdin** (event details) and can return JSON on *
 
 `PreToolUse`, `PostToolUse` and `PostToolUseFailure` run for every tool, matched on its name: `bash`, `read_file`, `write_file`, `edit_file`, `delete_file`, `restore_file`, `grep`, and MCP tools as `mcp_<server>__<tool>`. For example, `"matcher": "write_file|edit_file"` runs a formatter after every file change. A hook that succeeds is silent; one that fails or blocks shows one line in the session.
 
+Hooks in the project's own files (`.shelra/settings.json`, `.shelra/settings.local.json`) are proposals: they run only after you approve them with `/hooks approve` or `shelra hooks approve`, and what runs is the version you approved. A hook can set `"failurePolicy": "closed"` to block the action when the hook itself fails or times out, `"async": true` to never wait for it, and `"args": [...]` to run without a shell. Only `PreToolUse`, `UserPromptSubmit` and `Stop` can prevent anything; the other events observe, and `/hooks runs` says so for each run.
+
 **Supported events:** `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `SessionEnd`, `Stop`, `StopFailure`, `SubagentStart`, `SubagentStop`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`, `Notification`, `InstructionsLoaded`, `CwdChanged`.
+
+---
+
+## Extensions: skills, agents, hooks and SHELRA.md
+
+Everything below is a real file that Shelra reads on the live path, rebuilt every turn, so a change applies from the next
+turn without restarting. Full design, precedence rules, compatibility matrix and security model:
+[docs/architecture/24-EXTENSIONS.md](docs/architecture/24-EXTENSIONS.md); working examples:
+[docs/examples/extensions/](docs/examples/extensions/).
+
+| What | Where | Ask for it |
+| --- | --- | --- |
+| **Instructions** | `SHELRA.md` (shared), `.shelra/SHELRA.local.md` (yours, not in git), `~/.shelra/SHELRA.md`, `.shelra/rules/*.md` (optionally scoped to file globs), `AGENTS.md` | "Add this convention to SHELRA.md so it applies in future sessions" · `/instructions` shows what is in force and where each part comes from |
+| **Skills** | `.shelra/skills/<name>/SKILL.md` + `scripts/`, `references/`, `assets/` | "Turn the procedure we just validated into a reusable skill" · `/skills new`, `/skills export`, `/skills import <folder>`, `/<skill> args` |
+| **Agents** | `.shelra/agents/<name>.md` (`access: read-only` gives no file tools and a shell that only reads) | "Create an agent for frontend performance that only reads, give it the right skills, and use it on this freeze" · `/agents new`, `/agents runs` |
+| **Hooks** | `~/.shelra/user-settings.json` (yours), or proposed in `.shelra/settings.json` | "Create a hook that runs a check after edits" (it is a proposal until you approve it) · `/hooks`, `shelra hooks approve` |
+| **Custom system prompt** | `--append-system-prompt[-file]`, `--system-prompt-file`, `--profile`, or `systemPrompt` in settings | `/prompt` shows what is in force; a replacement swaps only the role paragraph, never the checks the host enforces |
+
+`shelra doctor` (or `/doctor`) checks all of it for problems and missing dependencies. `shelra extensions compat` shows what
+other agents' files in the project (`.claude/agents`, `.claude/skills`, `CLAUDE.md`, …) Shelra can use, translate, partly use or
+rejects, and `shelra extensions import --apply` copies the usable ones into `.shelra/` without touching the originals.
 
 ---
 

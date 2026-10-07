@@ -1,7 +1,7 @@
 # Shelra terminal design system
 
-The approved reference is the landing page in `frontend/` (tokens in `frontend/src/app/globals.css`,
-motifs in `frontend/src/components/**`). The tokens live in `src/ui/theme.ts`; this page is the
+The approved reference is the landing page in `Shelra/Shelracode-frontend` (tokens in `src/app/globals.css`,
+motifs in `src/components/**`; it was `frontend/` in this repository until 2026-10-07). The tokens live in `src/ui/theme.ts`; this page is the
 translation to terminal cells. The audit that led to it is `docs/ui/audit/2026-09-22-achilles`.
 `src/ui/acceptance.test.ts` reads the source of `src/ui` and fails a change that breaks the colour, blend,
 glyph, border or bordered-fill rules; a colour chosen at run time needs a render test (`app.test.tsx`).

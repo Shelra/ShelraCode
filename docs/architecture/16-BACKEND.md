@@ -1,5 +1,8 @@
 # 16. Backend, Phase 1 (2026-09-23)
 
+> Since 2026-10-07 the code described here lives in `Shelra/Shelracode-backend` (and the website it mentions in
+> `Shelra/Shelracode-frontend`); paths like `backend/...` and `frontend/...` below are relative to those repositories.
+
 Phase 1 is the smallest server that gives Shelra a correct, secure and evolvable foundation, proven by one
 real workflow end to end: **connecting a machine's `shelra` CLI to a ShelraCode account**. It is not "the
 backend, done". Code: `backend/` (commands in `backend/README.md`) and `src/account/` in the CLI.
@@ -179,6 +182,15 @@ Review after the build (section 30 of the brief):
 | NEXT (visible need) | 1. Create the Supabase project and run `db:push` and `check:supabase` (owner's project). 2. Website sign-in moves to Supabase Auth and Auth.js/libSQL go (section 10). 3. `GET /v1/tokens` for the dashboard's API keys page. 4. Custom SMTP before anyone outside the team signs in. 5. Deploy (section 8), then the CLI's default URL. |
 | LATER (likely, premature) | Opt-in usage sync (the CLI has `usage_events`; the dashboard shows usage), only after a privacy decision. Local JWT verification (JWKS) once the website calls the API per page. A dedicated least-privilege database role. CORS allow-list if the browser calls the API directly. Rate limiting when an unauthenticated endpoint that costs something appears. A CI secret-scanning pattern for `shr_` tokens. |
 | NOT YET (avoid) | Remote agent execution ("missions", agents, repos), teams and organizations, billing, integrations, storing transcripts, memory or code, queues, workers, Redis, WebSockets, GraphQL, Edge Functions, microservices, an ORM, a second database. |
+
+## 11. Phase 2 (2026-10-06): required account, browser login, audit
+
+Owner decisions and the design of the sign-in loop, the policy on the machine, the new tables and the website's pages
+are in `23-ONBOARDING-AND-CONFIG.md` (§3, §5). In short: the account is required to use Shelra (headless and CI use
+`SHELRA_TOKEN`), device tokens expire after 90 days, `POST /v1/cli/authorize` and `POST /v1/cli/token` carry the PKCE
+login, `GET /v1/me`, `PATCH /v1/profile` and `GET /v1/audit` serve the account page, and every sensitive change writes
+an `audit_events` row. Migration: `20261006120000_accounts_login_audit.sql`. Teams, usage and plans are deferred.
+Section 10 below was the handoff; the website now does what it asked for (Supabase Auth, server-side API calls).
 
 ## 10. Handoff to the website
 

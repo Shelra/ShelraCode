@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "id": "protect-lockfiles",
+            "type": "command",
+            "command": "node",
+            "args": [
+              "-e",
+              "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const p=String(JSON.parse(s).tool_input.path||'');if(/(^|[\\\\/])(bun\\.lock|package-lock\\.json)$/.test(p)){console.error('lockfiles are changed by the package manager, not by hand');process.exit(2)}})"
+            ],
+            "failurePolicy": "closed",
+            "description": "Blocks edits to lockfiles before they happen; if the hook itself fails, the edit is blocked too."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "id": "log-edits",
+            "type": "command",
+            "command": "node",
+            "args": [
+              "-e",
+              "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stderr.write('edited '+JSON.parse(s).tool_input.path+'\\n'))"
+            ],
+            "async": true,
+            "description": "Observes edits after they happened; it can never prevent one, and it never delays the turn."
+          }
+        ]
+      }
+    ]
+  }
+}

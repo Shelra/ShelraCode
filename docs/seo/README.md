@@ -1,7 +1,8 @@
 # Search (SEO) for www.shelra.dev
 
 How the website makes itself findable, how that is checked, and what only the owner can do. The website is the
-Next.js app in `frontend/` (see `frontend/CLAUDE.md`); production is `https://www.shelra.dev`, on Vercel behind
+Next.js app in `Shelra/Shelracode-frontend` (moved out of this repository on 2026-10-07; every `frontend/` path below is
+relative to that repository's root, see its `CLAUDE.md`); production is `https://www.shelra.dev`, on Vercel behind
 Cloudflare.
 
 | File | What it holds |
