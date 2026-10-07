@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-04T22:03:59.721Z",
+  "runtime": "1.4.1",
+  "method": "Production runCommand/RunLog and trace redactor; isolated child receives seeded fake key/password and OS variables only. No real credential, network or exfiltration.",
+  "result": {
+    "durationMs": 803,
+    "commandSucceeded": true,
+    "processHasSeededToken": true,
+    "stdoutChars": 90,
+    "stderrChars": 0,
+    "seededEnvironmentReachedChild": true,
+    "captureContainsKnownKey": true,
+    "diskLogContainsKnownKey": true,
+    "diskLogContainsArbitraryPassword": true,
+    "traceRedactsKnownKey": true,
+    "traceRedactsArbitraryPassword": false,
+    "diskBytes": 347
+  }
+}

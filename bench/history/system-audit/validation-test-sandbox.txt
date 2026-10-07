@@ -1,0 +1,545 @@
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+ ❯ src/lsp/npm-cache.test.ts (3 tests | 2 failed) 1298ms
+     × resolves a single binary from a pre-populated cache 14ms
+     × resolves the correct binary from a multi-binary package 2ms
+ ❯ src/exec/orphans.test.ts (1 test | 1 failed) 3072ms
+     × stops the child a shell started when only the shell was stopped 3070ms
+ ❯ src/tools/bash.test.ts (45 tests | 2 failed) 29882ms
+     × process_stop ends the processes the command started, not only its shell (seen live 2026-09-25) 12755ms
+     × cleanup at the end of a run ends them too 10853ms
+ ❯ src/memory/concurrency.test.ts (1 test | 1 failed) 3097ms
+     × preserves every topic and index entry from five independent processes 3093ms
+ ❯ src/tools/schedule.test.ts (3 tests | 1 failed) 241ms
+     × creates, lists, and removes recurring schedules under ~/.shelra/schedules 148ms
+ ❯ src/ledger/cli.test.ts (12 tests | 2 failed) 58584ms
+     × runs every active decision's check and fails when one is broken 5042ms
+     × judges by how the check ended, not by words in its output 18368ms
+ ❯ src/exec/memory.test.ts (3 tests | 2 failed) 52707ms
+     × reads a real process table that contains this process 2686ms
+     × kills a command whose process tree exceeds the memory ceiling 50013ms
+
+ Test Files  7 failed | 163 passed (170)
+      Tests  11 failed | 1441 passed (1452)
+     Errors  9 errors
+   Start at  14:48:34
+   Duration  129.97s (transform 42.74s, setup 0ms, import 118.33s, tests 651.25s, environment 57ms)
+
+
+$ bunx vitest run --pool=forks --exclude="ShelraCode/**" --exclude="ShelraCode/node_modules/**" --exclude="bench/**" --exclude=".shelra/**" --exclude="src/storage/sessions.test.ts" --exclude="src/import/import.test.ts" --exclude="src/storage/objectives.test.ts" --exclude="src/storage/benchmarks.test.ts" --exclude="src/storage/plan-state.test.ts" --exclude="src/bench/runner.test.ts" --exclude="src/bench/history.test.ts" --exclude="src/ui/bench-modal.test.tsx" --exclude="src/tools/checkpoint.test.ts" --exclude="src/ui/workspace-layout.test.tsx" --exclude="src/ui/transcript.test.tsx" --exclude="src/ui/markdown.test.tsx" --exclude="src/ui/components/text-area.test.tsx" --exclude="src/ui/app.test.tsx" --exclude="src/ui/reveal-hooks.test.tsx" --exclude="src/ui/plan.test.tsx" --exclude="src/ui/resume-picker.test.tsx" --exclude="src/ui/hooks/use-hidden-scrollbar.test.tsx" --exclude="src/agent/sandbox.test.ts" --exclude="src/agent/delegations.test.ts" --exclude="src/agent/recap.test.ts" --exclude="src/verify/runtime-prep.test.ts" && bunx vitest run --pool=forks --no-file-parallelism src/agent/sandbox.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/delegations.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/recap.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/verify/runtime-prep.test.ts && bun test src/storage/benchmarks.test.ts && bun test src/storage/plan-state.test.ts && bun test src/bench/runner.test.ts && bun test src/bench/history.test.ts && bun test src/ui/bench-modal.test.tsx && bun test src/ui/transcript.test.tsx && bun test src/ui/markdown.test.tsx && bun test src/ui/workspace-layout.test.tsx && bun test src/ui/components/text-area.test.tsx && bun test src/ui/app.test.tsx && bun test src/ui/reveal-hooks.test.tsx && bun test src/ui/plan.test.tsx && bun test src/storage/sessions.test.ts && bun test src/import/import.test.ts && bun test src/storage/objectives.test.ts && bun test src/tools/checkpoint.test.ts && bun test src/ui/resume-picker.test.tsx && bun test src/ui/hooks/use-hidden-scrollbar.test.tsx
+Get-CimInstance : Acceso denegado 
+En l�nea: 1 Car�cter: 1
++ Get-CimInstance Win32_Process -Filter "ParentProcessId=19980" | ForEa ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : PermissionDenied: (:) [Get-CimInstance], CimException
+    + FullyQualifiedErrorId : HRESULT 0x80041003,Microsoft.Management.Infrastructure.CimCmdlets.GetCimInstanceCommand
+ 
+[low_level_alloc.cc : 554] RAW: Check new_pages != nullptr failed: VirtualAlloc failed
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/autonomy/prompts.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/agent/compaction.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/ui/resume.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/bench/repeat.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/providers/architecture.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/agent/attempt-journal.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/autonomy/prompts.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/agent/compaction.test.ts.
+[vitest-pool]: Failed to terminate forks worker for test files D:/PROYECTS/shelra/src/agent/reasoning.test.ts. Error: The child process was torn down or never initialized. This is a bug in Vitest.
+    at ForksPoolWorker.get fork [as fork] (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3123:26)
+    at ForksPoolWorker.off (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3072:8)
+    at PoolRunner.stop (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2953:16)
+    at Pool.schedule (file:///D:/PROYECTS/shelra/node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3474:35)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/ui/resume.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/bench/repeat.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/providers/architecture.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/agent/attempt-journal.test.ts.
+[vitest-pool]: Timeout terminating forks worker for test files D:/PROYECTS/shelra/src/agent/reasoning.test.ts.
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/exec/memory.test.ts > process tree memory accounting > reads a real process table that contains this process
+Error: Command failed: powershell.exe -NoProfile -NonInteractive -Command Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,WorkingSetSize | ConvertTo-Json -Compress
+Get-CimInstance : Acceso denegado 
+En l�nea: 1 Car�cter: 1
++ Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcess ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : PermissionDenied: (root\cimv2:Win32_Process:String) [Get-CimInstance], CimException
+    + FullyQualifiedErrorId : HRESULT 0x80041003,Microsoft.Management.Infrastructure.CimCmdlets.GetCimInstanceCommand
+ 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  src/exec/memory.test.ts > process tree memory accounting > kills a command whose process tree exceeds the memory ceiling
+Error: Test timed out in 50000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/exec/memory.test.ts:28:3
+     26|   });
+     27|
+     28|   it("kills a command whose process tree exceeds the memory ceiling", …
+       |   ^
+     29|     // Allocates ~50 MB every 100 ms and would run forever; the ceilin…
+     30|     const script =
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  src/exec/orphans.test.ts > stopping what a stopped shell left running (seen 2026-09-25) > stops the child a shell started when only the shell was stopped
+Error: Command failed: powershell.exe -NoProfile -Command Get-CimInstance Win32_Process -Filter "ParentProcessId=19980" | ForEach-Object { $_.ProcessId }
+Get-CimInstance : Acceso denegado 
+En l�nea: 1 Car�cter: 1
++ Get-CimInstance Win32_Process -Filter "ParentProcessId=19980" | ForEa ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : PermissionDenied: (:) [Get-CimInstance], CimException
+    + FullyQualifiedErrorId : HRESULT 0x80041003,Microsoft.Management.Infrastructure.CimCmdlets.GetCimInstanceCommand
+ 
+
+ ❯ childrenOf src/exec/orphans.test.ts:7:15
+      5| /** The node processes whose parent is `pid`, by the ids Windows repor…
+      6| function childrenOf(pid: number): number[] {
+      7|   const out = execFileSync(
+       |               ^
+      8|     "powershell.exe",
+      9|     [
+ ❯ src/exec/orphans.test.ts:33:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  src/ledger/cli.test.ts > shelra decisions check > runs every active decision's check and fails when one is broken
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/ledger/cli.test.ts:93:3
+     91|   const git = (...args: string[]) => execFileSync("git", args, { cwd: …
+     92|
+     93|   it("runs every active decision's check and fails when one is broken"…
+       |   ^
+     94|     expect(await checkDecisions(workspace)).toMatchObject({
+     95|       exitCode: 0,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  src/ledger/cli.test.ts > shelra decisions check > runs every active decision's check and fails when one is broken
+Error: EPERM, Permission denied: \\?\<root> '\\?\<root>'
+ ❯ src/ledger/cli.test.ts:17:3
+     15| afterEach(() => {
+     16|   // A check killed for its timeout may still hold the folder for a mo…
+     17|   rmSync(workspace, { recursive: true, force: true, maxRetries: 10, re…
+       |   ^
+     18| });
+     19|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  src/ledger/cli.test.ts > shelra decisions check > judges by how the check ended, not by words in its output
+AssertionError: expected 'D-0001 Exports keep their names: BROK…' to contain 'D-0002 Tools exist: COULD NOT RUN (`s…'
+
+- Expected
++ Received
+
+- D-0002 Tools exist: COULD NOT RUN (`shelra-no-such-tool-xyz --version`)
++ D-0001 Exports keep their names: BROKEN (`bun scripts/not-found.ts`)
++   export fetchUser not found in src/index.ts; Cannot find name phone
++ D-0002 Tools exist: BROKEN (`shelra-no-such-tool-xyz --version`)
++   shelra-no-such-tool-xyz : El t�rmino 'shelra-no-such-tool-xyz' no se reconoce como nombre de un cmdlet, funci�n, 
++   archivo de script o programa ejecutable. Compruebe si escribi� correctamente el nombre o, si incluy� una ruta de 
++   acceso, compruebe que dicha ruta es correcta e int�ntelo de nuevo.
++   En l�nea: 3 Car�cter: 1
++   + shelra-no-such-tool-xyz --version
++   + ~~~~~~~~~~~~~~~~~~~~~~~
++       + CategoryInfo          : ObjectNotFound: (shelra-no-such-tool-xyz:String) [], CommandNotFoundException
++       + FullyQualifiedErrorId : CommandNotFoundException
++ D-0003 Checks end: COULD NOT RUN (`bun scripts/hangs.ts`)
++   timed out after 13.9 s
++   checking...
++   
++   
++   Process tree kill timed out after 8000ms.
++
++ Checked 3 decisions: 0 hold, 2 broken, 1 could not run.
+
+ ❯ src/ledger/cli.test.ts:147:27
+    145|     expect(result).toMatchObject({ exitCode: 1, stream: "stderr" });
+    146|     expect(result.output).toContain("D-0001 Exports keep their names: …
+    147|     expect(result.output).toContain("D-0002 Tools exist: COULD NOT RUN…
+       |                           ^
+    148|     expect(result.output).toContain("D-0003 Checks end: COULD NOT RUN …
+    149|     expect(result.output).toMatch(/timed out after [\d.]+ s\n\s+checki…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  src/ledger/cli.test.ts > shelra decisions check > judges by how the check ended, not by words in its output
+Error: EPERM, Permission denied: \\?\<root> '\\?\<root>'
+ ❯ src/ledger/cli.test.ts:17:3
+     15| afterEach(() => {
+     16|   // A check killed for its timeout may still hold the folder for a mo…
+     17|   rmSync(workspace, { recursive: true, force: true, maxRetries: 10, re…
+       |   ^
+     18| });
+     19|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  src/lsp/npm-cache.test.ts > lspNpmWhich > resolves a single binary from a pre-populated cache
+Error: EPERM: operation not permitted, mkdir '~\.shelra\cache\lsp\fake-server'
+ ❯ createFakePackageCache src/lsp/npm-cache.test.ts:47:3
+     45|   const binDir = path.join(cacheRoot, "node_modules", ".bin");
+     46|   const pkgDir = path.join(cacheRoot, "node_modules", pkg);
+     47|   await mkdir(binDir, { recursive: true });
+       |   ^
+     48|   await mkdir(pkgDir, { recursive: true });
+     49|
+ ❯ src/lsp/npm-cache.test.ts:15:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  src/lsp/npm-cache.test.ts > lspNpmWhich > resolves the correct binary from a multi-binary package
+Error: EPERM: operation not permitted, mkdir '~\.shelra\cache\lsp\multi-bin'
+ ❯ createFakePackageCache src/lsp/npm-cache.test.ts:47:3
+     45|   const binDir = path.join(cacheRoot, "node_modules", ".bin");
+     46|   const pkgDir = path.join(cacheRoot, "node_modules", pkg);
+     47|   await mkdir(binDir, { recursive: true });
+       |   ^
+     48|   await mkdir(pkgDir, { recursive: true });
+     49|
+ ❯ src/lsp/npm-cache.test.ts:22:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  src/memory/concurrency.test.ts > concurrent project memory > preserves every topic and index entry from five independent processes
+AssertionError: 70 |       const code = (error as NodeJS.ErrnoException).code;
+71 |       // Windows may report a lock file awaiting deletion as EPERM rather than EEXIST.
+72 |       if (code !== "EEXIST" && !(process.platform === "win32" && code === "EPERM")) throw error;
+73 |       if (reclaimAbandoned(file)) continue;
+74 |       if (Date.now() >= deadline)
+75 |         throw new Error("Project memory is busy in another session; this write was not saved.");
+                       ^
+error: Project memory is busy in another session; this write was not saved.
+      at withMemoryLock (D:\PROYECTS\shelra\src\memory\lock.ts:75:19)
+      at <root>\worker.ts:4:26
+
+Bun v1.4.1 (Windows x64)
+70 |       const code = (error as NodeJS.ErrnoException).code;
+71 |       // Windows may report a lock file awaiting deletion as EPERM rather than EEXIST.
+72 |       if (code !== "EEXIST" && !(process.platform === "win32" && code === "EPERM")) throw error;
+73 |       if (reclaimAbandoned(file)) continue;
+74 |       if (Date.now() >= deadline)
+75 |         throw new Error("Project memory is busy in another session; this write was not saved.");
+                       ^
+error: Project memory is busy in another session; this write was not saved.
+      at withMemoryLock (D:\PROYECTS\shelra\src\memory\lock.ts:75:19)
+      at <root>\worker.ts:4:26
+
+Bun v1.4.1 (Windows x64)
+70 |       const code = (error as NodeJS.ErrnoException).code;
+71 |       // Windows may report a lock file awaiting deletion as EPERM rather than EEXIST.
+72 |       if (code !== "EEXIST" && !(process.platform === "win32" && code === "EPERM")) throw error;
+73 |       if (reclaimAbandoned(file)) continue;
+74 |       if (Date.now() >= deadline)
+75 |         throw new Error("Project memory is busy in another session; this write was not saved.");
+                       ^
+error: Project memory is busy in another session; this write was not saved.
+      at withMemoryLock (D:\PROYECTS\shelra\src\memory\lock.ts:75:19)
+      at <root>\worker.ts:4:26
+
+Bun v1.4.1 (Windows x64)
+70 |       const code = (error as NodeJS.ErrnoException).code;
+71 |       // Windows may report a lock file awaiting deletion as EPERM rather than EEXIST.
+72 |       if (code !== "EEXIST" && !(process.platform === "win32" && code === "EPERM")) throw error;
+73 |       if (reclaimAbandoned(file)) continue;
+74 |       if (Date.now() >= deadline)
+75 |         throw new Error("Project memory is busy in another session; this write was not saved.");
+                       ^
+error: Project memory is busy in another session; this write was not saved.
+      at withMemoryLock (D:\PROYECTS\shelra\src\memory\lock.ts:75:19)
+      at <root>\worker.ts:4:26
+
+Bun v1.4.1 (Windows x64)
+: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ withMemoryLock src/memory/lock.ts:75:19
+     73|       if (reclaimAbandoned(file)) continue;
+     74|       if (Date.now() >= deadline)
+     75|         throw new Error("Project memory is busy in another session; th…
+       |                   ^
+     76|       Atomics.wait(sleepWord, 0, 0, 5);
+     77|       continue;
+ ❯ <root>/worker.ts:4:26
+ ❯ withMemoryLock src/memory/lock.ts:75:19
+ ❯ <root>/worker.ts:4:26
+ ❯ withMemoryLock src/memory/lock.ts:75:19
+ ❯ <root>/worker.ts:4:26
+ ❯ withMemoryLock src/memory/lock.ts:75:19
+ ❯ <root>/worker.ts:4:26
+ ❯ src/memory/concurrency.test.ts:48:42
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+
+ FAIL  src/tools/bash.test.ts > background processes are stopped with everything they started > process_stop ends the processes the command started, not only its shell (seen live 2026-09-25)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/tools/bash.test.ts:489:36
+    487|
+    488|     expect(stopped.success).toBe(true);
+    489|     expect(await gone(grandchild)).toBe(true);
+       |                                    ^
+    490|     await bash.cleanup();
+    491|   }, 30_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/13]⎯
+
+ FAIL  src/tools/bash.test.ts > background processes are stopped with everything they started > cleanup at the end of a run ends them too
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/tools/bash.test.ts:501:36
+    499|     await bash.cleanup();
+    500|
+    501|     expect(await gone(grandchild)).toBe(true);
+       |                                    ^
+    502|   }, 30_000);
+    503| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/13]⎯
+
+ FAIL  src/tools/schedule.test.ts > schedule helpers > creates, lists, and removes recurring schedules under ~/.shelra/schedules
+Error: EPERM: operation not permitted, mkdir '~\.shelra\schedules\daily-security-scan-shelra-schedule-home-wizezm'
+ ❯ writeScheduleRecord src/tools/schedule.ts:615:3
+    613| async function writeScheduleRecord(schedule: StoredSchedule): Promise<…
+    614|   await ensureSchedulesDir();
+    615|   await fs.mkdir(getScheduleLogDir(schedule.id), { recursive: true });
+       |   ^
+    616|   await fs.writeFile(getScheduleRecordPath(schedule.id), JSON.stringif…
+    617| }
+ ❯ ScheduleManager.create src/tools/schedule.ts:131:5
+ ❯ src/tools/schedule.test.ts:95:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/13]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 9 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Worker forks emitted error.
+ ❯ EventEmitter.<anonymous> node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3452:22
+ ❯ EventEmitter.emit node:events:514:28
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3019:22
+ ❯ ChildProcess.emit node:events:514:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:295:12
+
+Caused by: Error: Worker exited unexpectedly
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3018:33
+ ❯ ChildProcess.emit node:events:514:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:295:12
+
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/autonomy/prompts.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/agent/compaction.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/ui/resume.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/bench/repeat.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/providers/architecture.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/agent/attempt-journal.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Worker forks emitted error.
+ ❯ EventEmitter.<anonymous> node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3452:22
+ ❯ EventEmitter.emit node:events:514:28
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3019:22
+ ❯ ChildProcess.emit node:events:514:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:295:12
+
+Caused by: Error: Worker exited unexpectedly
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3018:33
+ ❯ ChildProcess.emit node:events:514:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:295:12
+
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Failed to start forks worker for test files D:/PROYECTS/shelra/src/agent/reasoning.test.ts.
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:94
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:5
+
+Caused by: Error: spawn UNKNOWN
+ ❯ ChildProcess.spawn node:internal/child_process:458:11
+ ❯ spawn node:child_process:813:9
+ ❯ fork node:child_process:174:10
+ ❯ ForksPoolWorker.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3078:18
+ ❯ node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:119
+ ❯ Traces.$ node_modules/vitest/dist/chunks/traces.CCmnQaNT.js:142:27
+ ❯ PoolRunner.start node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:2894:23
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3455:18
+ ❯ Pool.schedule node_modules/vitest/dist/chunks/cli-api.DuT9iuvY.js:3482:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { errno: -4094, code: 'UNKNOWN', syscall: 'spawn' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+error: script "test" exited with code 1

@@ -1,0 +1,3 @@
+Checked 462 files in 1042ms. No fixes applied.
+
+$ biome check src/

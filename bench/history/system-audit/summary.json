@@ -1,0 +1,614 @@
+{
+  "at": "2026-10-04T23:37:00.062Z",
+  "runtime": "1.4.1",
+  "comparisons": [
+    {
+      "probe": "cancel-hung-stream",
+      "before": {
+        "trials": 6,
+        "passes": 0,
+        "medianMs": 181.48839999999927,
+        "indexed": [null, null, null, null, null, null]
+      },
+      "after": {
+        "trials": 6,
+        "passes": 6,
+        "medianMs": 21.096499999999878,
+        "indexed": [null, null, null, null, null, null]
+      }
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "before": {
+        "trials": 3,
+        "passes": 0,
+        "medianMs": 469,
+        "indexed": [null, null, null]
+      },
+      "after": {
+        "trials": 3,
+        "passes": 3,
+        "medianMs": 430,
+        "indexed": [null, null, null]
+      }
+    },
+    {
+      "probe": "newline-free-stderr",
+      "bytes": 8388608,
+      "before": {
+        "trials": 3,
+        "passes": null,
+        "medianMs": 2347.254099999999,
+        "indexed": [null, null, null]
+      },
+      "after": {
+        "trials": 3,
+        "passes": null,
+        "medianMs": 0.852900000000318,
+        "indexed": [null, null, null]
+      }
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "before": {
+        "trials": 3,
+        "passes": 0,
+        "medianMs": 667,
+        "indexed": [20, 20, 20]
+      },
+      "after": {
+        "trials": 3,
+        "passes": 3,
+        "medianMs": 1391,
+        "indexed": [60, 60, 60]
+      }
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "before": {
+        "trials": 3,
+        "passes": 0,
+        "medianMs": 824,
+        "indexed": [20, 20, 20]
+      },
+      "after": {
+        "trials": 3,
+        "passes": 3,
+        "medianMs": 2041,
+        "indexed": [100, 100, 100]
+      }
+    }
+  ],
+  "live": {
+    "before": {
+      "tasks": 30,
+      "behaviorCorrect": 27,
+      "correctWithoutNegativeHostVerdict": 6,
+      "timeouts": 17,
+      "medianDurationMs": 75070,
+      "tools": 537,
+      "repeatedTools": 60,
+      "inputTokens": 3353213,
+      "outputTokens": 83595,
+      "errors": 39,
+      "intentViolations": null,
+      "failureProbeTrials": 0,
+      "requiredFailureProbesObserved": null
+    },
+    "intermediate": {
+      "tasks": 30,
+      "behaviorCorrect": 27,
+      "correctWithoutNegativeHostVerdict": 8,
+      "timeouts": 21,
+      "medianDurationMs": 75514,
+      "tools": 479,
+      "repeatedTools": 29,
+      "inputTokens": 3016995,
+      "outputTokens": 53866,
+      "errors": 31,
+      "intentViolations": 0,
+      "failureProbeTrials": 0,
+      "requiredFailureProbesObserved": null
+    },
+    "afterArtifact": "live-complexity-final.json",
+    "after": {
+      "tasks": 26,
+      "behaviorCorrect": 24,
+      "correctWithoutNegativeHostVerdict": 14,
+      "timeouts": 16,
+      "medianDurationMs": 75486,
+      "tools": 320,
+      "repeatedTools": 21,
+      "inputTokens": 2370550,
+      "outputTokens": 40873,
+      "errors": 27,
+      "intentViolations": 0,
+      "failureProbeTrials": 5,
+      "requiredFailureProbesObserved": 1
+    },
+    "pairedBefore": {
+      "tasks": 26,
+      "behaviorCorrect": 23,
+      "correctWithoutNegativeHostVerdict": 6,
+      "timeouts": 13,
+      "medianDurationMs": 75056,
+      "tools": 401,
+      "repeatedTools": 58,
+      "inputTokens": 2528672,
+      "outputTokens": 68732,
+      "errors": 21,
+      "intentViolations": null,
+      "failureProbeTrials": 0,
+      "requiredFailureProbesObserved": null
+    },
+    "unexecutedFinalTasks": 4,
+    "levels": [
+      {
+        "level": 1,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 3,
+          "timeouts": 0,
+          "medianDurationMs": 1898,
+          "tools": 0,
+          "repeatedTools": 0,
+          "inputTokens": 26242,
+          "outputTokens": 178,
+          "errors": 0,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 3,
+          "timeouts": 0,
+          "medianDurationMs": 1337,
+          "tools": 0,
+          "repeatedTools": 0,
+          "inputTokens": 25376,
+          "outputTokens": 167,
+          "errors": 0,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 2,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 3,
+          "timeouts": 0,
+          "medianDurationMs": 7874,
+          "tools": 10,
+          "repeatedTools": 0,
+          "inputTokens": 74972,
+          "outputTokens": 1407,
+          "errors": 3,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 3,
+          "timeouts": 0,
+          "medianDurationMs": 9807,
+          "tools": 8,
+          "repeatedTools": 0,
+          "inputTokens": 65111,
+          "outputTokens": 1002,
+          "errors": 1,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 3,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 0,
+          "medianDurationMs": 27848,
+          "tools": 23,
+          "repeatedTools": 6,
+          "inputTokens": 272858,
+          "outputTokens": 6266,
+          "errors": 3,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 3,
+          "timeouts": 0,
+          "medianDurationMs": 54031,
+          "tools": 13,
+          "repeatedTools": 1,
+          "inputTokens": 134061,
+          "outputTokens": 1434,
+          "errors": 0,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 4,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 2,
+          "medianDurationMs": 75070,
+          "tools": 24,
+          "repeatedTools": 1,
+          "inputTokens": 248546,
+          "outputTokens": 6971,
+          "errors": 0,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 2,
+          "timeouts": 3,
+          "medianDurationMs": 75716,
+          "tools": 24,
+          "repeatedTools": 1,
+          "inputTokens": 251651,
+          "outputTokens": 3503,
+          "errors": 1,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 5,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 2,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 1,
+          "medianDurationMs": 57686,
+          "tools": 37,
+          "repeatedTools": 3,
+          "inputTokens": 344152,
+          "outputTokens": 10319,
+          "errors": 6,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 2,
+          "timeouts": 3,
+          "medianDurationMs": 75706,
+          "tools": 28,
+          "repeatedTools": 1,
+          "inputTokens": 225348,
+          "outputTokens": 4344,
+          "errors": 1,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 6,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 1,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75419,
+          "tools": 53,
+          "repeatedTools": 16,
+          "inputTokens": 357956,
+          "outputTokens": 11128,
+          "errors": 1,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75759,
+          "tools": 33,
+          "repeatedTools": 1,
+          "inputTokens": 305750,
+          "outputTokens": 4914,
+          "errors": 0,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 7,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 2,
+          "medianDurationMs": 75291,
+          "tools": 86,
+          "repeatedTools": 6,
+          "inputTokens": 398671,
+          "outputTokens": 15328,
+          "errors": 0,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 2,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75477,
+          "tools": 95,
+          "repeatedTools": 14,
+          "inputTokens": 632833,
+          "outputTokens": 11303,
+          "errors": 17,
+          "intentViolations": 0,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      },
+      {
+        "level": 8,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75430,
+          "tools": 111,
+          "repeatedTools": 25,
+          "inputTokens": 558944,
+          "outputTokens": 10970,
+          "errors": 6,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75641,
+          "tools": 86,
+          "repeatedTools": 2,
+          "inputTokens": 553574,
+          "outputTokens": 9606,
+          "errors": 5,
+          "intentViolations": 0,
+          "failureProbeTrials": 3,
+          "requiredFailureProbesObserved": 1
+        }
+      },
+      {
+        "level": 9,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75436,
+          "tools": 90,
+          "repeatedTools": 2,
+          "inputTokens": 472785,
+          "outputTokens": 10949,
+          "errors": 5,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 2,
+          "behaviorCorrect": 1,
+          "correctWithoutNegativeHostVerdict": 1,
+          "timeouts": 1,
+          "medianDurationMs": 75692,
+          "tools": 33,
+          "repeatedTools": 1,
+          "inputTokens": 176846,
+          "outputTokens": 4600,
+          "errors": 2,
+          "intentViolations": 0,
+          "failureProbeTrials": 2,
+          "requiredFailureProbesObserved": 0
+        }
+      },
+      {
+        "level": 10,
+        "before": {
+          "tasks": 3,
+          "behaviorCorrect": 3,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 3,
+          "medianDurationMs": 75436,
+          "tools": 103,
+          "repeatedTools": 1,
+          "inputTokens": 598087,
+          "outputTokens": 10079,
+          "errors": 15,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        },
+        "after": {
+          "tasks": 0,
+          "behaviorCorrect": 0,
+          "correctWithoutNegativeHostVerdict": 0,
+          "timeouts": 0,
+          "medianDurationMs": 0,
+          "tools": 0,
+          "repeatedTools": 0,
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "errors": 0,
+          "intentViolations": null,
+          "failureProbeTrials": 0,
+          "requiredFailureProbesObserved": null
+        }
+      }
+    ]
+  },
+  "concurrency": [
+    {
+      "concurrency": 1,
+      "trials": 3,
+      "completed": 3,
+      "ownMemory": 3,
+      "foreignMemory": 0,
+      "correctUnrelatedAnswers": 0,
+      "unrelatedFinishedBeforeAbort": 0,
+      "abortTimerRangeMs": [414, 431]
+    },
+    {
+      "concurrency": 3,
+      "trials": 3,
+      "completed": 9,
+      "ownMemory": 9,
+      "foreignMemory": 0,
+      "correctUnrelatedAnswers": 6,
+      "unrelatedFinishedBeforeAbort": 5,
+      "abortTimerRangeMs": [746, 769]
+    },
+    {
+      "concurrency": 5,
+      "trials": 3,
+      "completed": 15,
+      "ownMemory": 15,
+      "foreignMemory": 0,
+      "correctUnrelatedAnswers": 12,
+      "unrelatedFinishedBeforeAbort": 12,
+      "abortTimerRangeMs": [1178, 1220]
+    }
+  ],
+  "memoryFairnessStress": {
+    "trials": 30,
+    "passed": 30
+  },
+  "databaseContention": {
+    "trials": 3,
+    "cancellationRangeMs": [5337.2647, 5393.8086],
+    "allBusy": true,
+    "integrityOk": true
+  },
+  "privacy": {
+    "durationMs": 803,
+    "commandSucceeded": true,
+    "processHasSeededToken": true,
+    "stdoutChars": 90,
+    "stderrChars": 0,
+    "seededEnvironmentReachedChild": true,
+    "captureContainsKnownKey": true,
+    "diskLogContainsKnownKey": true,
+    "diskLogContainsArbitraryPassword": true,
+    "traceRedactsKnownKey": true,
+    "traceRedactsArbitraryPassword": false,
+    "diskBytes": 347
+  },
+  "visionRoundTrip": {
+    "method": "Two regression cases use the installed AI SDK modelMessageSchema and the JSON round trip used by transcript persistence. No provider request or image-understanding score.",
+    "cases": ["local image bytes", "downloaded image bytes"],
+    "before": {
+      "freshMessagesValid": 2,
+      "replayedMessagesValid": 0,
+      "regressionsFailed": 2
+    },
+    "after": {
+      "freshMessagesValid": 2,
+      "replayedMessagesValid": 2,
+      "decodedBytesPreserved": 2,
+      "visionTestsPassed": 10
+    },
+    "fix": "Store new image file-part data as SDK-supported base64 strings; retain deadline and byte limits.",
+    "limits": "Existing persisted binary-object rows are not migrated. This verifies protocol validity and byte preservation, not live visual reasoning."
+  },
+  "validation": {
+    "results": [
+      {
+        "command": "bun run format",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 597,
+        "stdoutBytes": 46,
+        "stderrBytes": 20
+      },
+      {
+        "command": "bun run lint",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 1236,
+        "stdoutBytes": 47,
+        "stderrBytes": 19
+      },
+      {
+        "command": "bun run typecheck",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 19635,
+        "stdoutBytes": 0,
+        "stderrBytes": 15
+      },
+      {
+        "command": "bun run test",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 109324,
+        "stdoutBytes": 1524,
+        "stderrBytes": 57404
+      },
+      {
+        "command": "bun run build",
+        "exitCode": 0,
+        "timedOut": false,
+        "durationMs": 23253,
+        "stdoutBytes": 134,
+        "stderrBytes": 27,
+        "installSkipped": true
+      }
+    ],
+    "mainVitestTests": 1511,
+    "separateVitestTests": 9,
+    "bunTests": 116
+  },
+  "limits": [
+    "Live before/after uses the free router, not a fixed upstream model. It is descriptive, not a randomized causal model-quality study.",
+    "Before ladder ran while independent runtime fixes were being made, but the faulty check guard stayed unchanged for all 30 tasks. Final ladder uses stable guard repair.",
+    "Before oracle ran verify.ts in the fixture; final oracle is regenerated from the out-of-project immutable spec and reports check-file violations. Final grading is stronger.",
+    "Earlier live peak context counts only round input; final counts prepared per-step history too. Earlier token counts omit auxiliary calls; final includes returned auxiliary usage. Those aggregates are not directly comparable.",
+    "75 seconds is an experimental task budget, not a production timeout. A deadline proves failure to finish within the budget, not an infinite freeze.",
+    "The ladder also uses tighter model budgets (60s round / 45s step / 20s chunk) and 100/250ms interruption pauses. Product defaults are 15min / 5min / 90s. This stress test is not the default CLI failure rate.",
+    "Repeated call counts include legitimate re-verification. They are not synonymous with detected model loops.",
+    "Host flags classify bracketed notices in accumulated text, not independent typed completion receipts. Earlier negative notices may be included. Code correctness is measured independently.",
+    "Rounds count primary stream invocations rather than every HTTP request; step usage is provider reported and auxiliary/child coverage is incomplete. Tool events can include host checks. No missing metric is a measured zero.",
+    "Levels 8–10 additionally report observed missing-read and explicit exit-7 failure text in the final harness only. The narrow matcher can miss alternate paths or errors lacking an exit-code string; absence is not proof of violation. Earlier observation is unknown, and probe-before-edit ordering is not enforced by the grade.",
+    "No months-long live endurance or full multi-tenant isolation conclusion follows from these fixtures."
+  ]
+}

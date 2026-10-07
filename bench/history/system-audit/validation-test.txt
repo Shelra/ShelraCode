@@ -1,0 +1,1428 @@
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+
+ Test Files  179 passed (179)
+      Tests  1511 passed (1511)
+   Start at  19:26:29
+   Duration  86.21s (transform 33.53s, setup 0ms, import 82.04s, tests 450.35s, environment 51ms)
+
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  19:27:56
+   Duration  2.58s (transform 1.50s, setup 0ms, import 2.31s, tests 19ms, environment 0ms)
+
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  19:28:00
+   Duration  373ms (transform 78ms, setup 0ms, import 69ms, tests 85ms, environment 0ms)
+
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  19:28:02
+   Duration  2.48s (transform 1.43s, setup 0ms, import 2.22s, tests 12ms, environment 0ms)
+
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  19:28:05
+   Duration  585ms (transform 262ms, setup 0ms, import 353ms, tests 13ms, environment 0ms)
+
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+bun test v1.4.1 (4661e494f)
+
+$ bunx vitest run --pool=forks --exclude="ShelraCode/**" --exclude="ShelraCode/node_modules/**" --exclude="bench/**" --exclude=".shelra/**" --exclude="src/storage/sessions.test.ts" --exclude="src/import/import.test.ts" --exclude="src/storage/objectives.test.ts" --exclude="src/storage/benchmarks.test.ts" --exclude="src/storage/plan-state.test.ts" --exclude="src/bench/runner.test.ts" --exclude="src/bench/history.test.ts" --exclude="src/ui/bench-modal.test.tsx" --exclude="src/tools/checkpoint.test.ts" --exclude="src/ui/workspace-layout.test.tsx" --exclude="src/ui/transcript.test.tsx" --exclude="src/ui/markdown.test.tsx" --exclude="src/ui/components/text-area.test.tsx" --exclude="src/ui/app.test.tsx" --exclude="src/ui/reveal-hooks.test.tsx" --exclude="src/ui/plan.test.tsx" --exclude="src/ui/resume-picker.test.tsx" --exclude="src/ui/hooks/use-hidden-scrollbar.test.tsx" --exclude="src/agent/sandbox.test.ts" --exclude="src/agent/delegations.test.ts" --exclude="src/agent/recap.test.ts" --exclude="src/verify/runtime-prep.test.ts" && bunx vitest run --pool=forks --no-file-parallelism src/agent/sandbox.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/delegations.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/recap.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/verify/runtime-prep.test.ts && bun test src/storage/benchmarks.test.ts && bun test src/storage/plan-state.test.ts && bun test src/bench/runner.test.ts && bun test src/bench/history.test.ts && bun test src/ui/bench-modal.test.tsx && bun test src/ui/transcript.test.tsx && bun test src/ui/markdown.test.tsx && bun test src/ui/workspace-layout.test.tsx && bun test src/ui/components/text-area.test.tsx && bun test src/ui/app.test.tsx && bun test src/ui/reveal-hooks.test.tsx && bun test src/ui/plan.test.tsx && bun test src/storage/sessions.test.ts && bun test src/import/import.test.ts && bun test src/storage/objectives.test.ts && bun test src/tools/checkpoint.test.ts && bun test src/ui/resume-picker.test.tsx && bun test src/ui/hooks/use-hidden-scrollbar.test.tsx
+
+src\storage\benchmarks.test.ts:
+(pass) benchmark run persistence > keeps three immutable executions after a database restart [44.61ms]
+(pass) benchmark run persistence > retains partial task evidence when an active run is interrupted [31.99ms]
+(pass) benchmark run persistence > reconstructs criteria, usage, cost, commit and benchmark version [23.13ms]
+(pass) benchmark run persistence > computes comparison deltas and keeps methodology boundaries explicit [31.36ms]
+(pass) benchmark run persistence > pins a completed run as baseline without mutating its measured result [18.14ms]
+(pass) benchmark run persistence > keeps diagnostic completed runs out of the primary leaderboard [25.12ms]
+(pass) benchmark run persistence > does not allow a diagnostic run to become the baseline [19.01ms]
+(pass) benchmark run persistence > redacts credentials from persisted operational text [20.27ms]
+
+ 8 pass
+ 0 fail
+ 43 expect() calls
+Ran 8 tests across 1 file. [273.00ms]
+
+src\storage\plan-state.test.ts:
+(pass) durable executable plan state > survives transcript compaction and a SQLite close/reopen cycle [51.80ms]
+(pass) durable executable plan state > keeps the host's verdict on a turn when its last reply is rewritten, across a reopen [33.20ms]
+
+ 2 pass
+ 0 fail
+ 8 expect() calls
+Ran 2 tests across 1 file. [147.00ms]
+
+src\bench\runner.test.ts:
+(pass) benchmark runner > creates the run before execution and persists each task incrementally [44.09ms]
+(pass) benchmark runner > retains a failed run when executor setup fails after run creation [24.21ms]
+(pass) benchmark runner > copies strict-suite templates into a fresh workspace for the executor [36.03ms]
+(pass) clean-room workspaces > runs a task as its own repository, where the benchmark root's instructions and skills never reach it [605.69ms]
+(pass) cross-session workspaces > copies an earlier task's finished workspace, keeping or wiping its memory as declared [67.15ms]
+(pass) cross-session workspaces > continues a chain in one directory, each session starting from a commit of what the last one left [1425.61ms]
+warning: in the working copy of 'app.ts', LF will be replaced by CRLF the next time Git touches it
+(pass) cross-session workspaces > never commits in, or re-creates, a repository the manifest named outside the clean room [331.45ms]
+
+ 7 pass
+ 0 fail
+ 33 expect() calls
+Ran 7 tests across 1 file. [2.60s]
+
+src\bench\history.test.ts:
+(pass) cleanText > removes the home folder, user and machine, and reduces both workspace layouts to their task [4.11ms]
+(pass) cleanText > reduces the repository and its worktrees to <repo>, even under the home folder [2.54ms]
+(pass) appendRunsToHistory > adds only the named runs, cleaned, and merging them again changes nothing [100.68ms]
+(pass) saveHistory > replaces a longer file entirely and reads back exactly what it wrote [13.49ms]
+(pass) decisionsKept > counts the kept decisions only at steps whose request was done [2.68ms]
+
+ 5 pass
+ 0 fail
+ 17 expect() calls
+Ran 5 tests across 1 file. [186.00ms]
+
+src\ui\bench-modal.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Shelra Bench visual contract > renders the Shelra-first evolution, real statuses and dense leaderboard [79.98ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Shelra Bench visual contract > shows failed/interrupted history and per-criterion evidence in the 256-colour palette [42.05ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Shelra Bench visual contract > renders comparison deltas, regressions and actual task criteria [74.71ms]
+
+ 3 pass
+ 0 fail
+ 23 expect() calls
+Ran 3 tests across 1 file. [336.00ms]
+
+src\ui\transcript.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) LiveTurn > names the exact operation, its target and a running clock [44.38ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) LiveTurn > shows the latest thought while thinking and a factual waiting note [17.40ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) LiveTurn > turns red with the ✗ marker when the live step failed [7.45ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TranscriptActivityView > folds reads and searches into one counted line by default [7.22ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TranscriptActivityView > lists every operation when details are on [10.30ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TranscriptActivityView > always shows the evidence of a failing check, with its numbers [6.63ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TranscriptActivityView > keeps each edit on its own row with the diffstat right-aligned [9.37ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) a file change in the log > reads as the call it was, with what it did in words and its diff [17.11ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) a file change in the log > puts a removed line on a red band and an added line on a green band, across the width [14.17ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) a file change in the log > wraps a long line inside its band and repeats the marker on the next row [12.40ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) a file change in the log > shows a new file as written lines and says how many more there are [20.04ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) a file change in the log > says what failed instead of a diff [5.67ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ThoughtView > is one collapsed line by default and reveals the reasoning on request [10.48ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanBlock > never ticks a step the model only claimed, and says so on the row and in the count (audit gap #8) [13.11ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanBlock > shows the steps around the active one while the plan is unfinished [6.89ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanBlock > folds to one line when every step is done [5.21ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanBlock > keeps a long plan to five rows around the active step [6.15ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanBlock > shows every step and the active one's description in detail mode, even when finished [4.92ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanBlock > marks a failed step so it cannot pass for progress [4.76ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TurnSummaryLine > says what the turn did in one line [3.80ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TurnSummaryLine > shows a failing check as a failure [3.58ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) loads and the live plan in the history > folds what was loaded into one quiet line [4.07ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) loads and the live plan in the history > draws the newest plan as a checklist and older ones as a line [10.81ms]
+
+ 23 pass
+ 0 fail
+ 69 expect() calls
+Ran 23 tests across 1 file. [393.00ms]
+
+src\ui\markdown.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > separates blocks with a blank line and keeps a heading attached to what it introduces [355.30ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > hangs wrapped list lines under the text, not under the bullet [308.59ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > draws quotes with a bar and rules as a line, without leaking raw markup [308.62ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > conceals inline markers and shows a link's target after its label [308.15ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > keeps table rows one line tall [318.82ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > draws fenced code from theme tokens in the dark theme [317.74ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > draws fenced code from theme tokens in the 256-colour theme [313.35ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > does not leak the fence markers of a half-streamed code block [307.72ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) Markdown > does not leak the markers of half-typed emphasis as a message streams [306.05ms]
+
+ 9 pass
+ 0 fail
+ 26 expect() calls
+Ran 9 tests across 1 file. [2.98s]
+
+src\ui\workspace-layout.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > plan view draws the whole plan and the agents (working) [81.81ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > plan view draws the whole plan and the agents (failed) [26.37ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > changes view lists every file with its diffstat [23.76ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > checks view shows results and honest criteria (working) [15.87ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > checks view shows results and honest criteria (failed) [10.71ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > context view shows the window, the memory and the model actually in effect [13.57ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > keeps every view legible in the 256-colour palette [21.61ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) mission views > says so when a view has nothing to show [13.18ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) VERIFICATION section with many long criteria > wraps long criterion descriptions instead of garbling them with mid-word truncation [10.18ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) VERIFICATION section with many long criteria > shows an explicitly linked criterion distinctly from the honest aggregate mark (§18) [11.07ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) three-tier sub-agent disclosure in the AGENTS strip > renders tier 1 detail, tier 2 collapsed pointer, and tier 3 summary in one frame [11.76ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) three-tier sub-agent disclosure in the AGENTS strip > keeps a long-running but still-reporting foreground sub-agent fully expanded [4.72ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) three-tier sub-agent disclosure in the AGENTS strip > collapses a foreground sub-agent that has gone quiet, reporting its real idle duration [5.61ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) AGENTS sidebar section under collapse > still counts a collapsed agent as active while replacing its stale detail with the pointer [7.72ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) /tasks agents view > holds the full record a collapsed strip row stops restating [20.53ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) /tasks agents view > shows an honest empty state instead of inventing agents that never ran [11.84ms]
+
+ 16 pass
+ 0 fail
+ 87 expect() calls
+Ran 16 tests across 1 file. [435.00ms]
+
+src\ui\components\text-area.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TextArea > calls the handler of the latest render [34.41ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) TextArea > works around OpenTUI's textarea keeping its first handler [15.15ms]
+
+ 2 pass
+ 0 fail
+ 2 expect() calls
+Ran 2 tests across 1 file. [181.00ms]
+
+src\ui\app.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) MessageView > draws the prompt of a sent message in the accent, whatever mode sent it [36.82ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) MessageView > draws the marker of a tool call in the accent [8.70ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) MotionPickerModal > shows its only row as the cursor row and offers only the keys that work [12.84ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) CommandApprovalPanel > shows the command and why it is destructive, with Don't run chosen [8.17ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) DecisionApprovalPanel > shows the proposed rule, what it covers and how it is checked, with Not now chosen [9.36ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ComposerFooter > offers the keys that answer a command waiting for approval, not stop and queue [7.16ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ComposerFooter > offers esc as not now while a proposed decision waits [5.16ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ComposerFooter > shows the model mode before the model: Free in accent, Mixed in the warning colour, and how to switch [11.87ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ComposerFooter > fits the model a router picked next to the mode, at 80 and 120 columns [12.54ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ComposerFooter > says Limited, and until when, in the warning colour when the free allowance is used up [11.94ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ComposerFooter > shows no mode where modes do not apply [4.93ms]
+
+ 11 pass
+ 0 fail
+ 44 expect() calls
+Ran 11 tests across 1 file. [566.00ms]
+
+src\ui\reveal-hooks.test.tsx:
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Live inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) usePacedText > keeps revealing while a model streams faster than a tick [693.38ms]
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to LiveView inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) usePacedText > carries the streamed progress into the log instead of jumping to the end [313.42ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) usePacedText > does not give one answer the progress of a stream that was cut short [10.21ms]
+
+ 3 pass
+ 0 fail
+ 7 expect() calls
+Ran 3 tests across 1 file. [1152.00ms]
+
+src\ui\plan.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) PlanQuestionsPanel > names each key and what it does [82.24ms]
+
+ 1 pass
+ 0 fail
+ 3 expect() calls
+Ran 1 test across 1 file. [260.00ms]
+
+src\storage\sessions.test.ts:
+(pass) SessionStore recap persistence > stores and reloads the latest recap metadata with the session [38.08ms]
+(pass) SessionStore recap persistence > clears recap metadata when the recap is removed [28.98ms]
+(pass) SessionStore recap persistence > lists the conversations that hold a message, newest first, with the first request (owner, 2026-09-25) [30.42ms]
+
+ 3 pass
+ 0 fail
+ 5 expect() calls
+Ran 3 tests across 1 file. [168.00ms]
+
+src\import\import.test.ts:
+(pass) continuing a Claude Code chat in Shelra (the owner, 2026-10-03) > imports the chat once, with its own date, where /resume lists it [57.97ms]
+(pass) continuing a Claude Code chat in Shelra (the owner, 2026-10-03) > hands the model the imported conversation when the chat continues [344.65ms]
+
+ 2 pass
+ 0 fail
+ 16 expect() calls
+Ran 2 tests across 1 file. [694.00ms]
+
+src\storage\objectives.test.ts:
+(pass) objective index > round-trips an objective and updates phase/blocker on conflict [26.00ms]
+(pass) objective index > supports a null runDir for lightweight chat-turn objectives [23.28ms]
+(pass) objective index > answers 'what is this session doing' with the most recently updated objective [29.13ms]
+(pass) objective index > returns null for a session with no objectives [16.36ms]
+(pass) objective tasks > round-trips a task and updates status/attempts on conflict [19.05ms]
+(pass) checkpoints > records and retrieves the latest checkpoint for a file [20.16ms]
+(pass) checkpoints > records previousExisted=false for a checkpoint before a file was created [17.83ms]
+(pass) checkpoints > returns null when no checkpoint exists for a path [18.53ms]
+(pass) checkpoints > lists checkpoints for a session in most-recent-first order [25.55ms]
+
+ 9 pass
+ 0 fail
+ 22 expect() calls
+Ran 9 tests across 1 file. [251.00ms]
+
+src\tools\checkpoint.test.ts:
+(pass) revertLatestCheckpoint > reports no checkpoint for a file that was never snapshotted [36.87ms]
+(pass) revertLatestCheckpoint > restores a file's prior content from an edit checkpoint [34.56ms]
+(pass) revertLatestCheckpoint > deletes a file that was created after its checkpoint (previousExisted=false) [36.92ms]
+(pass) revertLatestCheckpoint > reverts using the most recent checkpoint when a file was mutated more than once [27.16ms]
+
+ 4 pass
+ 0 fail
+ 8 expect() calls
+Ran 4 tests across 1 file. [206.00ms]
+
+src\ui\resume-picker.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > lists each saved chat with what it was about, its size, its age and its model [73.63ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > shows a Claude Code chat with the agent in place of its size [30.82ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > marks the chosen chat with the cursor row [17.81ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > titles /import's list and says so when no Claude Code or Codex chat is left to import [14.65ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > shows each chat's folder across every folder, and says so when there is nothing to continue [36.66ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > keeps the list open with the reason when a chat cannot be opened [15.09ms]
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) ResumePickerModal > shows a long reason whole, so the command it gives can be copied [14.37ms]
+
+ 7 pass
+ 0 fail
+ 22 expect() calls
+Ran 7 tests across 1 file. [421.00ms]
+
+src\ui\hooks\use-hidden-scrollbar.test.tsx:
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+(pass) useHiddenScrollbar > draws no bar beside a log that overflows, which still scrolls [103.72ms]
+
+ 1 pass
+ 0 fail
+ 2 expect() calls
+Ran 1 test across 1 file. [253.00ms]

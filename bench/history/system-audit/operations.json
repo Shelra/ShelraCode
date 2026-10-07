@@ -1,0 +1,77 @@
+{
+  "method": "k=3; real local MCP child writes 2MiB stderr before initialize response; original undrained transport policy recreated alongside fixed product. Synchronous one-line file read measured separately. No provider calls.",
+  "trials": [
+    {
+      "probe": "mcp-undrained-stderr",
+      "repeat": 0,
+      "connected": false,
+      "durationMs": 515.7612,
+      "stderrBytes": 2097152
+    },
+    {
+      "probe": "mcp-drained-stderr",
+      "repeat": 0,
+      "connected": true,
+      "durationMs": 51.13290000000052,
+      "errors": []
+    },
+    {
+      "probe": "mcp-undrained-stderr",
+      "repeat": 1,
+      "connected": false,
+      "durationMs": 505.60440000000017,
+      "stderrBytes": 2097152
+    },
+    {
+      "probe": "mcp-drained-stderr",
+      "repeat": 1,
+      "connected": true,
+      "durationMs": 51.20969999999943,
+      "errors": []
+    },
+    {
+      "probe": "mcp-undrained-stderr",
+      "repeat": 2,
+      "connected": false,
+      "durationMs": 505.5217999999986,
+      "stderrBytes": 2097152
+    },
+    {
+      "probe": "mcp-drained-stderr",
+      "repeat": 2,
+      "connected": true,
+      "durationMs": 45.64979999999923,
+      "errors": []
+    },
+    {
+      "probe": "single-line-read-of-32MiB-file",
+      "repeat": 0,
+      "durationMs": 360.32890000000043,
+      "eventLoopDelayMs": 360.58410000000003,
+      "outputChars": 40,
+      "success": true,
+      "rssDeltaBytes": 236793856,
+      "heapDeltaBytes": 2178748
+    },
+    {
+      "probe": "single-line-read-of-32MiB-file",
+      "repeat": 1,
+      "durationMs": 303.8713000000007,
+      "eventLoopDelayMs": 305.21099999999933,
+      "outputChars": 40,
+      "success": true,
+      "rssDeltaBytes": -35930112,
+      "heapDeltaBytes": 1248
+    },
+    {
+      "probe": "single-line-read-of-32MiB-file",
+      "repeat": 2,
+      "durationMs": 312.61049999999886,
+      "eventLoopDelayMs": 313.52289999999994,
+      "outputChars": 40,
+      "success": true,
+      "rssDeltaBytes": -458752,
+      "heapDeltaBytes": 688
+    }
+  ]
+}

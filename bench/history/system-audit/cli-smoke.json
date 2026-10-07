@@ -1,0 +1,18 @@
+{
+  "at": "2026-10-04T23:40:25.720Z",
+  "purpose": "Built bundle and standalone --help startup only; no agent run or provider request.",
+  "results": [
+    {
+      "command": "bun run dist/index.js --help",
+      "exitCode": 0,
+      "durationMs": 600,
+      "helpRecognized": true
+    },
+    {
+      "command": "dist/shelra.exe --help",
+      "exitCode": 0,
+      "durationMs": 1295,
+      "helpRecognized": true
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "command": "bun run test",
+  "exitCode": 1,
+  "testFiles": { "passed": 178, "failed": 1, "total": 179 },
+  "tests": { "passed": 1499, "failed": 1, "total": 1500 },
+  "durationSeconds": 69.68,
+  "failure": "src/memory/concurrency.test.ts: expected 100 indexed entries, observed 99; all worker processes exited successfully",
+  "conclusion": "The first memory serialization repair retained an intermittent reaper/writer ownership race. The follow-up deterministic liveness-check regression fails before the owner-identity repair and passes after. This was not a sandbox-only failure."
+}

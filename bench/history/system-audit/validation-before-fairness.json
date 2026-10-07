@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-04T21:08:47.985Z",
+  "runtime": "1.4.1",
+  "results": [
+    {
+      "command": "bun run format",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 964,
+      "stdoutBytes": 46,
+      "stderrBytes": 20
+    },
+    {
+      "command": "bun run lint",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 1245,
+      "stdoutBytes": 47,
+      "stderrBytes": 19
+    },
+    {
+      "command": "bun run typecheck",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 21894,
+      "stdoutBytes": 0,
+      "stderrBytes": 15
+    },
+    {
+      "command": "bun run test",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 73957,
+      "stdoutBytes": 388,
+      "stderrBytes": 4559
+    }
+  ]
+}

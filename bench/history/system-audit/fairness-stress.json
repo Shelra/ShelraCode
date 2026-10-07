@@ -1,0 +1,850 @@
+{
+  "schemaVersion": 1,
+  "label": "fairness-stress",
+  "at": "2026-10-04T21:18:02.201Z",
+  "platform": "win32",
+  "runtime": "Bun 1.4.1",
+  "method": "k=10; deterministic bounded fault injection and real local process execution; no LLM quality claim",
+  "trials": [
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 0,
+      "idleMs": 0,
+      "durationMs": 20.557400000000005,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 0,
+      "idleMs": 180000,
+      "durationMs": 21.391900000000007,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 0,
+      "durationMs": 757,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 0,
+      "bytes": 1048576,
+      "durationMs": 0.41840000000001965,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 0,
+      "bytes": 8388608,
+      "durationMs": 1.108000000000061,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 1,
+      "idleMs": 0,
+      "durationMs": 21.311699999999973,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 1,
+      "idleMs": 180000,
+      "durationMs": 21.479000000000042,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 1,
+      "durationMs": 359,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 1,
+      "bytes": 1048576,
+      "durationMs": 0.3654999999998836,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 1,
+      "bytes": 8388608,
+      "durationMs": 0.7860000000000582,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 2,
+      "idleMs": 0,
+      "durationMs": 21.1570999999999,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 2,
+      "idleMs": 180000,
+      "durationMs": 21.381399999999985,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 2,
+      "durationMs": 345,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 2,
+      "bytes": 1048576,
+      "durationMs": 0.30520000000001346,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 2,
+      "bytes": 8388608,
+      "durationMs": 1.0176000000001295,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 3,
+      "idleMs": 0,
+      "durationMs": 20.118600000000015,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 3,
+      "idleMs": 180000,
+      "durationMs": 20.864900000000034,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 3,
+      "durationMs": 351,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 3,
+      "bytes": 1048576,
+      "durationMs": 0.17039999999997235,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 3,
+      "bytes": 8388608,
+      "durationMs": 0.6801000000000386,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 4,
+      "idleMs": 0,
+      "durationMs": 21.355999999999995,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 4,
+      "idleMs": 180000,
+      "durationMs": 21.08900000000017,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 4,
+      "durationMs": 345,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 4,
+      "bytes": 1048576,
+      "durationMs": 0.33789999999999054,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 4,
+      "bytes": 8388608,
+      "durationMs": 0.7877000000003136,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 5,
+      "idleMs": 0,
+      "durationMs": 21.428100000000086,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 5,
+      "idleMs": 180000,
+      "durationMs": 21.509300000000167,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 5,
+      "durationMs": 343,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 5,
+      "bytes": 1048576,
+      "durationMs": 0.3611000000000786,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 5,
+      "bytes": 8388608,
+      "durationMs": 0.7813000000001011,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 6,
+      "idleMs": 0,
+      "durationMs": 22.04340000000002,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 6,
+      "idleMs": 180000,
+      "durationMs": 21.315999999999804,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 6,
+      "durationMs": 345,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 6,
+      "bytes": 1048576,
+      "durationMs": 0.19010000000025684,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 6,
+      "bytes": 8388608,
+      "durationMs": 0.6380999999996675,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 7,
+      "idleMs": 0,
+      "durationMs": 21.68060000000014,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 7,
+      "idleMs": 180000,
+      "durationMs": 20.739399999999932,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 7,
+      "durationMs": 350,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 7,
+      "bytes": 1048576,
+      "durationMs": 0.4080999999996493,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 7,
+      "bytes": 8388608,
+      "durationMs": 0.8845000000001164,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 8,
+      "idleMs": 0,
+      "durationMs": 21.216399999999794,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 8,
+      "idleMs": 180000,
+      "durationMs": 20.660899999999856,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 8,
+      "durationMs": 361,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 8,
+      "bytes": 1048576,
+      "durationMs": 0.3146999999999025,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 8,
+      "bytes": 8388608,
+      "durationMs": 1.409099999999853,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 9,
+      "idleMs": 0,
+      "durationMs": 21.554799999999886,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "cancel-hung-stream",
+      "repeat": 9,
+      "idleMs": 180000,
+      "durationMs": 21.44300000000021,
+      "passed": true,
+      "parts": [
+        {
+          "type": "abort"
+        }
+      ]
+    },
+    {
+      "probe": "native-success-followed-by-cmdlet-failure",
+      "repeat": 9,
+      "durationMs": 340,
+      "state": "completed",
+      "exitCode": 1,
+      "passed": true,
+      "stderrHasError": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 9,
+      "bytes": 1048576,
+      "durationMs": 0.3496000000004642,
+      "emittedBeforeFlush": 1048576,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "newline-free-stderr",
+      "repeat": 9,
+      "bytes": 8388608,
+      "durationMs": 0.7714999999998327,
+      "emittedBeforeFlush": 8388608,
+      "heldUntilFlush": 0,
+      "lossless": true
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 0,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 535
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 1,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 525
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 2,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 526
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 3,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 519
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 4,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 522
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 5,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 523
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 6,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 520
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 7,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 515
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 8,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 524
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 1,
+      "repeat": 9,
+      "expected": 20,
+      "actual": 20,
+      "readable": 20,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 521
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 0,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1263
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 1,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1269
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 2,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1269
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 3,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1264
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 4,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1266
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 5,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1264
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 6,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1265
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 7,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1267
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 8,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1269
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 3,
+      "repeat": 9,
+      "expected": 60,
+      "actual": 60,
+      "readable": 60,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1267
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 0,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1929
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 1,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1913
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 2,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1899
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 3,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1899
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 4,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1923
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 5,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1910
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 6,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1893
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 7,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1900
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 8,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1897
+    },
+    {
+      "probe": "same-project-memory-writers",
+      "concurrency": 5,
+      "repeat": 9,
+      "expected": 100,
+      "actual": 100,
+      "readable": 100,
+      "errors": 0,
+      "passed": true,
+      "durationMs": 1903
+    }
+  ]
+}

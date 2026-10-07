@@ -1,0 +1,107 @@
+{
+  "at": "2026-10-04T17:06:28.634Z",
+  "method": "Historical local traces: metadata only; not a randomized current-build benchmark. Gaps include tool work and nonverbose buffering; they do not prove freezes.",
+  "keyConfigured": true,
+  "count": 34,
+  "outcomeCounts": {
+    "not recorded": 15,
+    "Limited": 1,
+    "Cancelled": 11,
+    "Stopped": 1,
+    "Checked by Shelra": 1,
+    "no end event": 4,
+    "Not verified": 1
+  },
+  "longest": [
+    {
+      "durationMs": 4406921,
+      "toolCalls": 350,
+      "failedTools": 45,
+      "pendingToolCalls": 1,
+      "largestEventGapMs": 65612,
+      "verdict": "not recorded",
+      "ended": true
+    },
+    {
+      "durationMs": 3213769,
+      "toolCalls": 169,
+      "failedTools": 18,
+      "pendingToolCalls": 1,
+      "largestEventGapMs": 39318,
+      "verdict": "not recorded",
+      "ended": true
+    },
+    {
+      "durationMs": 2909511,
+      "toolCalls": 294,
+      "failedTools": 19,
+      "pendingToolCalls": 2,
+      "largestEventGapMs": 180001,
+      "verdict": "Cancelled",
+      "ended": true
+    },
+    {
+      "durationMs": 2298186,
+      "toolCalls": 164,
+      "failedTools": 10,
+      "pendingToolCalls": 0,
+      "largestEventGapMs": 160153,
+      "verdict": "not recorded",
+      "ended": true
+    },
+    {
+      "durationMs": 2147128,
+      "toolCalls": 113,
+      "failedTools": 13,
+      "pendingToolCalls": 2,
+      "largestEventGapMs": 180656,
+      "verdict": "no end event",
+      "ended": false
+    },
+    {
+      "durationMs": 2032549,
+      "toolCalls": 59,
+      "failedTools": 5,
+      "pendingToolCalls": 6,
+      "largestEventGapMs": 300160,
+      "verdict": "Cancelled",
+      "ended": true
+    },
+    {
+      "durationMs": 1633339,
+      "toolCalls": 116,
+      "failedTools": 11,
+      "pendingToolCalls": 1,
+      "largestEventGapMs": 100420,
+      "verdict": "Not verified",
+      "ended": true
+    },
+    {
+      "durationMs": 1532357,
+      "toolCalls": 53,
+      "failedTools": 5,
+      "pendingToolCalls": 0,
+      "largestEventGapMs": 127267,
+      "verdict": "Limited",
+      "ended": true
+    },
+    {
+      "durationMs": 782177,
+      "toolCalls": 46,
+      "failedTools": 7,
+      "pendingToolCalls": 0,
+      "largestEventGapMs": 428584,
+      "verdict": "Stopped",
+      "ended": true
+    },
+    {
+      "durationMs": 624352,
+      "toolCalls": 69,
+      "failedTools": 5,
+      "pendingToolCalls": 0,
+      "largestEventGapMs": 72496,
+      "verdict": "no end event",
+      "ended": false
+    }
+  ]
+}

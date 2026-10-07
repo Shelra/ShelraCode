@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-04T21:53:02.552Z",
+  "runtime": "1.4.1",
+  "method": "Actual product getDatabase/SessionStore, isolated HOME and seeded session, external SQLite writer holds BEGIN IMMEDIATE six seconds. Timer attempts cancellation at 20ms. No provider/network/private database.",
+  "trials": [
+    {
+      "repeat": 0,
+      "configuredBusyTimeoutMs": 5000,
+      "intendedCancellationMs": 20,
+      "databaseReturnedMs": 5393.5698,
+      "cancellationFiredMs": 5393.8086,
+      "abortedAfterReturn": true,
+      "failure": "SQLITE_BUSY",
+      "ownerExitCode": 0,
+      "ownerStderrBytes": 0,
+      "titleUnchanged": true,
+      "integrity": "ok"
+    },
+    {
+      "repeat": 1,
+      "configuredBusyTimeoutMs": 5000,
+      "intendedCancellationMs": 20,
+      "databaseReturnedMs": 5390.817300000001,
+      "cancellationFiredMs": 5390.8647,
+      "abortedAfterReturn": true,
+      "failure": "SQLITE_BUSY",
+      "ownerExitCode": 0,
+      "ownerStderrBytes": 0,
+      "titleUnchanged": true,
+      "integrity": "ok"
+    },
+    {
+      "repeat": 2,
+      "configuredBusyTimeoutMs": 5000,
+      "intendedCancellationMs": 20,
+      "databaseReturnedMs": 5337.203000000001,
+      "cancellationFiredMs": 5337.2647,
+      "abortedAfterReturn": true,
+      "failure": "SQLITE_BUSY",
+      "ownerExitCode": 0,
+      "ownerStderrBytes": 0,
+      "titleUnchanged": true,
+      "integrity": "ok"
+    }
+  ]
+}

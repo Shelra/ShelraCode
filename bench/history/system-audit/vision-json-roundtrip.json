@@ -1,0 +1,8 @@
+{
+  "method": "Two regression cases use the installed AI SDK modelMessageSchema and the JSON round trip used by transcript persistence. No provider request or image-understanding score.",
+  "cases": ["local image bytes", "downloaded image bytes"],
+  "before": { "freshMessagesValid": 2, "replayedMessagesValid": 0, "regressionsFailed": 2 },
+  "after": { "freshMessagesValid": 2, "replayedMessagesValid": 2, "decodedBytesPreserved": 2, "visionTestsPassed": 10 },
+  "fix": "Store new image file-part data as SDK-supported base64 strings; retain deadline and byte limits.",
+  "limits": "Existing persisted binary-object rows are not migrated. This verifies protocol validity and byte preservation, not live visual reasoning."
+}

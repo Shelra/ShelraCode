@@ -1,0 +1,5 @@
+Built bundle: dist\index.js
+Built standalone executable: dist\shelra.exe
+Skipped per-user installation (SHELRA_BUILD_SKIP_INSTALL=1).
+
+$ bun run scripts/build.ts

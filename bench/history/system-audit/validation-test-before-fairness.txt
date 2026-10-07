@@ -1,0 +1,64 @@
+
+ RUN  v4.1.0 D:/PROYECTS/shelra
+
+ ❯ src/memory/concurrency.test.ts (1 test | 1 failed) 2408ms
+     × preserves every topic and index entry from five independent processes 2405ms
+
+ Test Files  1 failed | 178 passed (179)
+      Tests  1 failed | 1501 passed (1502)
+   Start at  17:07:34
+   Duration  73.31s (transform 21.05s, setup 0ms, import 65.20s, tests 403.82s, environment 53ms)
+
+
+$ bunx vitest run --pool=forks --exclude="ShelraCode/**" --exclude="ShelraCode/node_modules/**" --exclude="bench/**" --exclude=".shelra/**" --exclude="src/storage/sessions.test.ts" --exclude="src/import/import.test.ts" --exclude="src/storage/objectives.test.ts" --exclude="src/storage/benchmarks.test.ts" --exclude="src/storage/plan-state.test.ts" --exclude="src/bench/runner.test.ts" --exclude="src/bench/history.test.ts" --exclude="src/ui/bench-modal.test.tsx" --exclude="src/tools/checkpoint.test.ts" --exclude="src/ui/workspace-layout.test.tsx" --exclude="src/ui/transcript.test.tsx" --exclude="src/ui/markdown.test.tsx" --exclude="src/ui/components/text-area.test.tsx" --exclude="src/ui/app.test.tsx" --exclude="src/ui/reveal-hooks.test.tsx" --exclude="src/ui/plan.test.tsx" --exclude="src/ui/resume-picker.test.tsx" --exclude="src/ui/hooks/use-hidden-scrollbar.test.tsx" --exclude="src/agent/sandbox.test.ts" --exclude="src/agent/delegations.test.ts" --exclude="src/agent/recap.test.ts" --exclude="src/verify/runtime-prep.test.ts" && bunx vitest run --pool=forks --no-file-parallelism src/agent/sandbox.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/delegations.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/agent/recap.test.ts && bunx vitest run --pool=forks --no-file-parallelism src/verify/runtime-prep.test.ts && bun test src/storage/benchmarks.test.ts && bun test src/storage/plan-state.test.ts && bun test src/bench/runner.test.ts && bun test src/bench/history.test.ts && bun test src/ui/bench-modal.test.tsx && bun test src/ui/transcript.test.tsx && bun test src/ui/markdown.test.tsx && bun test src/ui/workspace-layout.test.tsx && bun test src/ui/components/text-area.test.tsx && bun test src/ui/app.test.tsx && bun test src/ui/reveal-hooks.test.tsx && bun test src/ui/plan.test.tsx && bun test src/storage/sessions.test.ts && bun test src/import/import.test.ts && bun test src/storage/objectives.test.ts && bun test src/tools/checkpoint.test.ts && bun test src/ui/resume-picker.test.tsx && bun test src/ui/hooks/use-hidden-scrollbar.test.tsx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/memory/concurrency.test.ts > concurrent project memory > preserves every topic and index entry from five independent processes
+AssertionError: 81 |       const code = (error as NodeJS.ErrnoException).code;
+82 |       // Windows may report a lock file awaiting deletion as EPERM rather than EEXIST.
+83 |       if (code !== "EEXIST" && !(process.platform === "win32" && code === "EPERM")) throw error;
+84 |       if (reclaimAbandoned(file)) continue;
+85 |       if (Date.now() >= deadline)
+86 |         throw new Error("Project memory is busy in another session; this write was not saved.");
+                       ^
+error: Project memory is busy in another session; this write was not saved.
+      at withMemoryLock (D:\PROYECTS\shelra\src\memory\lock.ts:86:19)
+      at <root>\worker.ts:4:26
+
+Bun v1.4.1 (Windows x64)
+81 |       const code = (error as NodeJS.ErrnoException).code;
+82 |       // Windows may report a lock file awaiting deletion as EPERM rather than EEXIST.
+83 |       if (code !== "EEXIST" && !(process.platform === "win32" && code === "EPERM")) throw error;
+84 |       if (reclaimAbandoned(file)) continue;
+85 |       if (Date.now() >= deadline)
+86 |         throw new Error("Project memory is busy in another session; this write was not saved.");
+                       ^
+error: Project memory is busy in another session; this write was not saved.
+      at withMemoryLock (D:\PROYECTS\shelra\src\memory\lock.ts:86:19)
+      at <root>\worker.ts:4:26
+
+Bun v1.4.1 (Windows x64)
+: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ withMemoryLock src/memory/lock.ts:86:19
+     84|       if (reclaimAbandoned(file)) continue;
+     85|       if (Date.now() >= deadline)
+     86|         throw new Error("Project memory is busy in another session; th…
+       |                   ^
+     87|       Atomics.wait(sleepWord, 0, 0, 5);
+     88|       continue;
+ ❯ <root>/worker.ts:4:26
+ ❯ withMemoryLock src/memory/lock.ts:86:19
+ ❯ <root>/worker.ts:4:26
+ ❯ src/memory/concurrency.test.ts:48:42
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+error: script "test" exited with code 1

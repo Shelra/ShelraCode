@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-04T21:16:24.305Z",
+  "runtime": "1.4.1",
+  "results": [
+    {
+      "command": "bun run format",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 509,
+      "stdoutBytes": 46,
+      "stderrBytes": 20
+    },
+    {
+      "command": "bun run lint",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 1164,
+      "stdoutBytes": 47,
+      "stderrBytes": 19
+    },
+    {
+      "command": "bun run typecheck",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 14665,
+      "stdoutBytes": 0,
+      "stderrBytes": 15
+    },
+    {
+      "command": "bun run test",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 90935,
+      "stdoutBytes": 1524,
+      "stderrBytes": 57396
+    },
+    {
+      "command": "bun run build",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 25648,
+      "stdoutBytes": 134,
+      "stderrBytes": 27,
+      "installSkipped": true
+    }
+  ]
+}
