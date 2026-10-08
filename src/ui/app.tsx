@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Agent, type ProcessMessageObserver } from "../agent/agent";
 import type { KernelState } from "../agent/kernel";
 import type { ConfigServices } from "../config/services";
+import { openWithSystem } from "../exec/open-url";
 import { asFencedText, runExtensionCommand, splitCommand } from "../extend/commands";
 import { projectRootFor } from "../extend/settings";
 import { listSkills } from "../extend/skills";
@@ -21,7 +22,7 @@ import {
   confirmMemoryEntry,
   deleteMemoryEntry,
   projectMemoryScope,
-  readMemoryIndex,
+  readActiveMemoryIndex,
   userMemoryScope,
 } from "../memory/store";
 import {
@@ -155,6 +156,7 @@ import {
   type InspectorTab,
   MissionPanel,
   SessionInspector,
+  type SubagentFeedEntry,
 } from "./session-inspector";
 import {
   APPROVAL_HINTS,
@@ -665,6 +667,9 @@ interface ActiveTurnState {
   flushedAssistantChars: number;
 }
 
+/** How many of a sub-agent's reports the Agents view keeps; older ones fall off. */
+const SUBAGENT_FEED_LIMIT = 60;
+
 /** How often streamed reasoning reaches the screen: the thinking line holds a sentence far longer than this. */
 const REASONING_REFRESH_MS = 250;
 
@@ -826,6 +831,9 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(() => new Set());
   const [activeSubagent, setActiveSubagent] = useState<SubagentStatus | null>(null);
   const [activeSubagentStartedAt, setActiveSubagentStartedAt] = useState<number | null>(null);
+  /** Everything the foreground sub-agent reported this turn, newest last, bounded: what the Agents view lists. */
+  const [subagentFeed, setSubagentFeed] = useState<SubagentFeedEntry[]>([]);
+  const lastSubagentRef = useRef<string>("");
   /**
    * When the foreground sub-agent last reported a new action. Set from real `onSubagentStatus`
    * emissions (one per child tool call) — never a synthetic heartbeat — and consumed by the
@@ -1001,7 +1009,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
   const memoryVersion = activityEvents.reduce((count, event) => (event.kind === "memory" ? count + 1 : count), 0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-read only when the memory engine reports a write
   const memoryStatus = useMemo(
-    () => summarizeMemoryStatus(readMemoryIndex(projectMemoryScope(agent.getCwd()))),
+    () => summarizeMemoryStatus(readActiveMemoryIndex(projectMemoryScope(agent.getCwd()))),
     [agent, memoryVersion],
   );
   const skillCount = useMemo(() => listSkills(agent.getCwd()).filter((skill) => skill.enabled).length, [agent]);
@@ -2773,7 +2781,10 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
     [agent, clearLiveTurnUi, replacePasteBlocks],
   );
 
-  const resetToNewSession = useCallback(() => showSession(agent.startNewSession()), [agent, showSession]);
+  const resetToNewSession = useCallback(() => {
+    setSubagentFeed([]);
+    showSession(agent.startNewSession());
+  }, [agent, showSession]);
 
   /**
    * /resume: the chats saved in this folder, or every folder, newest first; the one open now is left out. Claude
@@ -3107,6 +3118,13 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           const observedAt = Date.now();
           setActiveSubagentStartedAt((current) => current ?? observedAt);
           setActiveSubagentActivityAt(observedAt);
+          lastSubagentRef.current = status.agent;
+          // The same report twice in a row is one thing seen twice, not two things done.
+          setSubagentFeed((feed) =>
+            feed[feed.length - 1]?.detail === status.detail
+              ? feed
+              : [...feed, { at: observedAt, agent: status.agent, detail: status.detail }].slice(-SUBAGENT_FEED_LIMIT),
+          );
           recordActivity({
             id: `agent:${status.agent}`,
             kind: "agent",
@@ -3126,6 +3144,12 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           );
           setActiveSubagentStartedAt(null);
           setActiveSubagentActivityAt(null);
+          const finishedAgent = lastSubagentRef.current;
+          if (finishedAgent) {
+            setSubagentFeed((feed) =>
+              [...feed, { at: Date.now(), agent: finishedAgent, detail: "finished" }].slice(-SUBAGENT_FEED_LIMIT),
+            );
+          }
         }
         syncKernelState();
       }),
@@ -5527,6 +5551,7 @@ export function App({ agent, startupConfig, initialMessage, onExit }: AppProps) 
           activeSubagent={activeSubagent}
           activeSubagentStartedAt={activeSubagentStartedAt}
           lastActivityAt={activeSubagentActivityAt}
+          subagentFeed={subagentFeed}
           delegations={delegations}
           activeToolCalls={activeToolCalls}
           contextSummary={inspectorContextSummary}
@@ -6574,10 +6599,8 @@ function ToolTextOutputView({ t, label, content }: { t: Theme; label: string; co
 }
 
 function openMediaFile(filePath: string): void {
-  try {
-    const cmd = process.platform === "darwin" ? "open" : "xdg-open";
-    require("child_process").execFile(cmd, [filePath]);
-  } catch {}
+  // The same opener the login uses: the old one ran `xdg-open` on Windows too, where there is none.
+  void openWithSystem(filePath);
 }
 
 function MediaAutoOpenView({ t, label, toolResult }: { t: Theme; label: string; toolResult: ToolResult }) {

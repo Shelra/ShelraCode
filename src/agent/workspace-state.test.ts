@@ -1,13 +1,28 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import * as fs from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { captureWorkspaceState, changedPaths, existedAt, mergeChangedFiles } from "./workspace-state";
 
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, readSync: vi.fn(actual.readSync) };
+});
+
+const roots: string[] = [];
+
 function workspace(): string {
-  return mkdtempSync(join(tmpdir(), "shelra-workspace-state-"));
+  const root = mkdtempSync(join(tmpdir(), "shelra-workspace-state-"));
+  roots.push(root);
+  return root;
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 /** Waits past the file system's timestamp resolution so a rewrite changes the signature. */
 function later(): Promise<void> {
@@ -43,6 +58,59 @@ describe("workspace state outside a git repository", () => {
 
   it("reports nothing it cannot compare", () => {
     expect(changedPaths({ kind: "unknown", files: new Map() }, { kind: "walk", files: new Map() })).toBeNull();
+  });
+
+  it("detects a same-size rewrite even when its modification time is restored", () => {
+    const root = workspace();
+    const path = join(root, "a.ts");
+    writeFileSync(path, "export const a = 1;\n");
+    const stat = statSync(path);
+    const before = captureWorkspaceState(root);
+    writeFileSync(path, "export const a = 2;\n");
+    utimesSync(path, stat.atime, stat.mtime);
+
+    expect(changedPaths(before, captureWorkspaceState(root))).toEqual(["a.ts"]);
+  });
+
+  it("does not treat timestamp changes as content changes", () => {
+    const root = workspace();
+    const path = join(root, "a.ts");
+    writeFileSync(path, "export const a = 1;\n");
+    const before = captureWorkspaceState(root);
+    utimesSync(path, new Date(), new Date(Date.now() + 5_000));
+
+    expect(changedPaths(before, captureWorkspaceState(root))).toEqual([]);
+  });
+
+  it("does not present an unreadable workspace as an empty complete reading", () => {
+    const root = workspace();
+    const missing = join(root, "missing");
+
+    expect(captureWorkspaceState(missing).kind).toBe("unknown");
+  });
+
+  it("does not report a read error as a deleted file", () => {
+    const root = workspace();
+    writeFileSync(join(root, "a.ts"), "export const a = 1;\n");
+    vi.mocked(fs.readSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("Access denied"), { code: "EACCES" });
+    });
+
+    expect(captureWorkspaceState(root).kind).toBe("unknown");
+  });
+
+  it("does not trust a file that disappears while its content is being read", async () => {
+    const root = workspace();
+    const path = join(root, "a.ts");
+    writeFileSync(path, "export const a = 1;\n");
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.mocked(fs.readSync).mockImplementationOnce((file, buffer) => {
+      const bytes = actual.readSync(file, buffer);
+      rmSync(path);
+      return bytes;
+    });
+
+    expect(captureWorkspaceState(root).kind).toBe("unknown");
   });
 });
 
@@ -95,6 +163,78 @@ describe.skipIf(!hasGit)("workspace state in a git repository", () => {
     await later();
     writeFileSync(join(root, "a.ts"), "export const a = 333;\n");
     expect(changedPaths(dirty, captureWorkspaceState(root))).toEqual(["a.ts"]);
+  });
+
+  it("hashes dirty and untracked content rather than trusting size and mtime", () => {
+    const root = repo();
+    const tracked = join(root, "a.ts");
+    const untracked = join(root, "draft.ts");
+    writeFileSync(tracked, "export const a = 2;\n");
+    writeFileSync(untracked, "export const draft = 1;\n");
+    const trackedTime = statSync(tracked);
+    const untrackedTime = statSync(untracked);
+    const before = captureWorkspaceState(root);
+
+    writeFileSync(tracked, "export const a = 3;\n");
+    writeFileSync(untracked, "export const draft = 2;\n");
+    utimesSync(tracked, trackedTime.atime, trackedTime.mtime);
+    utimesSync(untracked, untrackedTime.atime, untrackedTime.mtime);
+
+    expect(changedPaths(before, captureWorkspaceState(root))).toEqual(["a.ts", "draft.ts"]);
+  });
+
+  it("returns unknown when a git entry cannot have a complete file signature", () => {
+    const root = repo();
+    const path = join(root, "a.ts");
+    rmSync(path);
+    mkdirSync(path);
+    writeFileSync(join(path, "replacement.ts"), "export {};\n");
+
+    expect(captureWorkspaceState(root).kind).toBe("unknown");
+  });
+
+  it("does not fall back to a walk when Git cannot report the repository", () => {
+    const root = repo();
+    writeFileSync(join(root, ".git", "HEAD"), "invalid head\n");
+
+    expect(captureWorkspaceState(root).kind).toBe("unknown");
+  });
+
+  it("returns unknown comparison when Git cannot compare the recorded commits", () => {
+    const root = repo();
+    const before = captureWorkspaceState(root);
+    const after = captureWorkspaceState(root);
+    if (!after.head) throw new Error("Expected a recorded HEAD");
+    after.head.commit = "0".repeat(40);
+
+    expect(changedPaths(before, after)).toBeNull();
+  });
+
+  it("does not compare git readings taken in different scopes", () => {
+    const root = repo();
+    const before = captureWorkspaceState(root);
+    const after = captureWorkspaceState(root);
+    if (!after.head) throw new Error("Expected a recorded HEAD");
+    after.head.cwd = join(root, "other-scope");
+
+    expect(changedPaths(before, after)).toBeNull();
+  });
+
+  it("sees files created and committed after an unborn HEAD", () => {
+    const root = workspace();
+    const git = (...args: string[]) => spawnSync("git", ["-C", root, ...args], { windowsHide: true, encoding: "utf8" });
+    git("init", "-q");
+    git("config", "user.email", "test@example.test");
+    git("config", "user.name", "test");
+    const before = captureWorkspaceState(root);
+    expect(before.head?.commit).toBe("");
+    writeFileSync(join(root, "first.ts"), "export {};\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "first");
+    const after = captureWorkspaceState(root);
+
+    expect(after.files.size).toBe(0);
+    expect(changedPaths(before, after)).toEqual(["first.ts"]);
   });
 
   it("counts only the session's folder when it works inside a larger repository", async () => {

@@ -1,6 +1,7 @@
 import { stat } from "fs/promises";
 import path from "path";
 import { ripgrep } from "ripgrep";
+import { resolveWorkspacePath, viewBase, type WorkspaceView } from "../security/workspace-guard";
 import type { ToolResult } from "../types/index";
 import { perfCount } from "../utils/perf-probe";
 import { type RipgrepRun, ripgrepOffThread } from "./ripgrep-client";
@@ -42,6 +43,16 @@ function buildArgs(params: GrepParams): string[] {
 
   args.push("--", params.pattern, params.path ?? ".");
   return args;
+}
+
+function firstLine(text: string): string {
+  return (
+    text
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0 && !/^error:?$/iu.test(line))
+      ?.slice(0, 300) ?? ""
+  );
 }
 
 function cleanEnv(): Record<string, string> {
@@ -113,12 +124,21 @@ async function getFileMtimes(files: string[], cwd: string): Promise<Map<string, 
   return times;
 }
 
-export async function executeGrep(params: GrepParams, cwd: string): Promise<ToolResult> {
+export async function executeGrep(params: GrepParams, view: WorkspaceView): Promise<ToolResult> {
   if (!params.pattern) {
     return { success: false, error: "pattern is required" };
   }
 
-  const searchPath = params.path ? (path.isAbsolute(params.path) ? params.path : path.join(cwd, params.path)) : cwd;
+  const cwd = viewBase(view);
+  // The search stays inside the project like every other file tool: it could read ~/.shelra/auth.json otherwise.
+  let searchPath = cwd;
+  if (params.path) {
+    try {
+      searchPath = resolveWorkspacePath(params.path, view).path;
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
 
   let searchCwd: string;
   let searchTarget: string | undefined;
@@ -131,8 +151,7 @@ export async function executeGrep(params: GrepParams, cwd: string): Promise<Tool
       searchTarget = path.relative(searchCwd, searchPath);
     }
   } catch {
-    searchCwd = cwd;
-    searchTarget = params.path;
+    return { success: false, error: `Path not found: ${params.path ?? searchPath}` };
   }
 
   const args = buildArgs({ ...params, path: searchTarget });
@@ -155,6 +174,15 @@ export async function executeGrep(params: GrepParams, cwd: string): Promise<Tool
     const matches = parseMatches(stdout);
     const matchCount = result.total;
     if (matches.length === 0) {
+      // Exit 2 with nothing found and a message is a pattern ripgrep could not read ("foo(", a lookahead), not an
+      // empty result: saying "No matches" sent the model to conclude the code does not exist.
+      const reason = code === 2 ? firstLine(result.stderr) : "";
+      if (reason) {
+        return {
+          success: false,
+          error: `grep could not run this pattern: ${reason}. ripgrep uses Rust regex syntax (no lookahead or backreferences; escape ( ) [ ] { } . * + ? with a backslash), or use bash with rg -F for a literal.`,
+        };
+      }
       const msg = code === 2 ? "No matches found.\n(Some paths were inaccessible and skipped)" : "No matches found.";
       return { success: true, output: msg };
     }

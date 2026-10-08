@@ -9,15 +9,7 @@ import { type AccountStatus, checkAccount, describeBlocked } from "./account/ses
 import { ABLATIONS, parseAblations } from "./agent/ablation";
 import { Agent } from "./agent/agent";
 import { completeDelegation, failDelegation, loadDelegation } from "./agent/delegations";
-import {
-  findObjective,
-  formatObjective,
-  formatObjectiveEvent,
-  formatObjectiveList,
-  loadObjectives,
-  objectiveEventPayload,
-} from "./autonomy/presentation";
-import { type RuntimeEvent as ObjectiveRuntimeEvent, runObjective } from "./autonomy/runtime";
+import { findObjective, formatObjective, formatObjectiveList, loadObjectives } from "./autonomy/presentation";
 import { createAgentBenchmarkExecutor } from "./bench/agent-executor";
 import { createClaudeCodeExecutor } from "./bench/claude-code-executor";
 import { enterBenchCleanRoom } from "./bench/clean-room";
@@ -27,8 +19,8 @@ import { appendRunsToHistory } from "./bench/history";
 import { loadBenchmarkManifest } from "./bench/manifest";
 import { formatRepeatSummary, type RepeatTaskOutcome, summarizeRepeats } from "./bench/repeat";
 import { runBenchmark } from "./bench/runner";
-import { createShelraBenchmarkExecutor } from "./bench/shelra-executor";
 import type { BenchmarkManifest } from "./bench/types";
+import { autonomousTurnExitCode, renderAutonomousTurnResult } from "./cli/autonomous-result";
 import {
   allowFree,
   buildProviderRows,
@@ -53,14 +45,13 @@ import {
   renderHeadlessPrelude,
 } from "./headless/output";
 import { awaitBackgroundHooks } from "./hooks/index";
-import { createOpenRouterIntelligenceProvider } from "./intelligence";
 import { registerMcpCommands } from "./mcp/orionmcp-commands";
 import { type BudgetLimits, parseBudgetUsd } from "./models/budget";
 import { normalizeModelId, primeCatalog } from "./models/catalog";
 import { installLocalModel } from "./models/manager";
 import { fetchOpenRouterCatalog, isOpenRouterBaseURL } from "./models/openrouter";
 import type { ModelRecommendation } from "./models/recommendation";
-import { type ModelPolicy, parseModelPolicy, rankedFreeModels, routeCatalogModel } from "./models/routing";
+import { type ModelPolicy, parseModelPolicy, routeCatalogModel } from "./models/routing";
 import type { CatalogEntry } from "./models/types";
 import {
   API_KEY_ENV,
@@ -94,7 +85,7 @@ import {
 import { createOpenRouterProvider } from "./providers/openrouter";
 import { selectLocalRoute } from "./router/local-first";
 import { declareFreePlanForSession, loadFreeAttestations } from "./routing/attestations";
-import { isAutoFreeModel, parseModelRef } from "./routing/model-ref";
+import { parseModelRef } from "./routing/model-ref";
 import { createRoutingRuntime, type RoutingRuntime } from "./routing/runtime";
 import { installManagedRuntime, resolveRuntimeInstallPlan } from "./runtimes/bootstrap";
 import { discoverLocalRuntimes, disposeLocalRuntimes } from "./runtimes/discovery";
@@ -1122,6 +1113,7 @@ async function runHeadless(
   modelPolicy: ModelPolicy = "free",
   budget: BudgetLimits = {},
   providerFlag?: string,
+  requireVerified = false,
 ) {
   if (providerFlag) {
     const agent = new Agent(undefined, undefined, model, maxToolRounds, {
@@ -1140,7 +1132,7 @@ async function runHeadless(
       await agent.cleanup();
       return;
     }
-    await runHeadlessTurn(agent, prompt, format);
+    await runHeadlessTurn(agent, prompt, format, undefined, requireVerified);
     return;
   }
   const agent = new Agent(preferLocal ? undefined : apiKey, preferLocal ? undefined : baseURL, model, maxToolRounds, {
@@ -1173,7 +1165,7 @@ async function runHeadless(
     await Promise.all([agent.cleanup(), localSetup?.dispose()]);
     return;
   }
-  await runHeadlessTurn(agent, prompt, format, () => localSetup?.dispose() ?? Promise.resolve());
+  await runHeadlessTurn(agent, prompt, format, () => localSetup?.dispose() ?? Promise.resolve(), requireVerified);
 }
 
 /** The prelude and one headless turn, then the agent's cleanup and whatever the setup started. */
@@ -1182,6 +1174,7 @@ async function runHeadlessTurn(
   prompt: string,
   format: HeadlessOutputFormat,
   dispose: () => Promise<void> = async () => undefined,
+  requireVerified = false,
 ): Promise<void> {
   const prelude = renderHeadlessPrelude(format, agent.getSessionId() || undefined, agent.getModelInfo());
   if (prelude.stdout) process.stdout.write(prelude.stdout);
@@ -1209,134 +1202,19 @@ async function runHeadlessTurn(
       if (writes.stderr) process.stderr.write(writes.stderr);
     }
   } finally {
+    if (requireVerified) {
+      const result = agent.getLastTurnResult();
+      const writes = renderAutonomousTurnResult(result, format, agent.getSessionId() || undefined);
+      if (writes.stdout) process.stdout.write(writes.stdout);
+      if (writes.stderr) process.stderr.write(writes.stderr);
+      process.exitCode = autonomousTurnExitCode(result);
+    }
     await Promise.all([agent.cleanup(), dispose()]);
   }
 }
 
-function renderObjectiveEvent(event: ObjectiveRuntimeEvent, format: HeadlessOutputFormat): void {
-  if (format === "json") {
-    process.stdout.write(`${JSON.stringify(objectiveEventPayload(event))}\n`);
-    return;
-  }
-  process.stdout.write(formatObjectiveEvent(event));
-}
-
-function renderObjectiveError(format: HeadlessOutputFormat, code: string, message: string): void {
-  if (format === "json") {
-    process.stdout.write(`${JSON.stringify({ type: "error", code, message })}\n`);
-    return;
-  }
-  process.stderr.write(`${message}\n`);
-}
-
 /**
- * Runs an objective through `AutonomyKernel` (`src/autonomy/*`) — a deliberately separate
- * engine from `Agent.processMessage()`. The `Agent` constructed below is only used to resolve
- * a provider/model; the actual work happens in `runObjective()`. See the architecture note at
- * the top of `src/autonomy/kernel.ts` for what this path does and does not share with
- * interactive chat (docs/architecture/14-AGENT-HARNESS-RECONSTRUCTION.md §14 Phase 0).
- */
-async function runAutonomousHeadless(
-  prompt: string,
-  apiKey: string | undefined,
-  baseURL: string,
-  model: string | undefined,
-  maxToolRounds: number,
-  sandboxMode: SandboxMode,
-  sandboxSettings: SandboxSettings,
-  format: HeadlessOutputFormat,
-  modelPolicy: ModelPolicy,
-  budget: BudgetLimits,
-) {
-  if (sandboxMode !== "off") {
-    renderObjectiveError(
-      format,
-      "autonomous_sandbox_unavailable",
-      "--sandbox is not yet connected to the autonomous execution broker. Refusing to run with a false sandbox guarantee; omit --sandbox to use explicit host execution.",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  if (!apiKey) {
-    renderObjectiveError(
-      format,
-      "openrouter_key_missing",
-      "OpenRouter is required for --autonomous. Set OPENROUTER_API_KEY or use `shelra auth openrouter <key>`.",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  if (!isOpenRouterBaseURL(baseURL)) {
-    renderObjectiveError(
-      format,
-      "autonomous_provider_unsupported",
-      "--autonomous currently requires the OpenRouter model runtime.",
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  const agent = new Agent(apiKey, baseURL, model, maxToolRounds, {
-    persistSession: false,
-    sandboxMode,
-    sandboxSettings,
-    budget,
-  });
-  const savedCloudModel = !model ? savedProviderModel(agent.getModel()) : undefined;
-  const requestedCloudModel = model || savedCloudModel;
-  try {
-    const remote = await configureRemoteProvider(
-      agent,
-      apiKey,
-      baseURL,
-      requestedCloudModel,
-      modelPolicy,
-      Boolean(model),
-    );
-    // The kernel talks to OpenRouter directly: Auto Free means its best free model, or its router.
-    const openRouterEntries = remote.catalog.filter((entry) => entry.provider === "openrouter");
-    const intelligenceModel = isAutoFreeModel(remote.modelId)
-      ? modelPolicy === "free"
-        ? (rankedFreeModels(openRouterEntries)[0] ?? "openrouter/free")
-        : "openrouter/auto"
-      : remote.modelId;
-    const intelligence = createOpenRouterIntelligenceProvider({
-      apiKey,
-      baseURL,
-      entries: openRouterEntries,
-      policy: modelPolicy,
-      modelId: intelligenceModel,
-      maxCostUsd: budget.maxTaskUsd ?? budget.maxSessionUsd ?? budget.maxDayUsd,
-    });
-    const objectiveBudget = budget.maxTaskUsd ?? budget.maxSessionUsd ?? budget.maxDayUsd;
-    let verified = false;
-    for await (const event of runObjective({
-      workspace: process.cwd(),
-      request: prompt,
-      intelligence,
-      maxCostUsd: objectiveBudget,
-      maxRequestCostUsd: budget.maxRequestUsd,
-    })) {
-      renderObjectiveEvent(event, format);
-      if (event.outcome) verified = event.outcome.verified;
-    }
-    if (!verified) process.exitCode = 1;
-  } catch (error) {
-    renderObjectiveError(
-      format,
-      "autonomous_runtime_failed",
-      `Autonomous objective failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    process.exitCode = 1;
-  } finally {
-    await agent.cleanup();
-  }
-}
-
-/**
- * Execute the configured benchmark suite through Shelra's autonomous runtime. The durable
+ * Execute the configured benchmark suite through Shelra's product runtime. The durable
  * run is created before manifest/provider validation so a bad configuration is historical
  * evidence (`invalid`/`failed`) instead of a missing run.
  */
@@ -1380,7 +1258,7 @@ async function runBenchCommand(options: {
     return;
   }
   const { ablations, unknown: unknownAblations } = parseAblations(options.ablate ?? "");
-  if (unknownAblations.length > 0 || (ablations.length > 0 && agentName !== "shelra")) {
+  if (unknownAblations.length > 0 || (ablations.length > 0 && !["shelra", "shelra-autonomy"].includes(agentName))) {
     console.error(
       unknownAblations.length > 0
         ? `Unknown ablation: ${unknownAblations.join(", ")}. Known: ${ABLATIONS.join(", ")}.`
@@ -1412,7 +1290,7 @@ async function runBenchCommand(options: {
     environment,
     seed: null,
     agentConfig: {
-      harness: agentName === "shelra-autonomy" ? "autonomy-runtime" : "agent-chat",
+      harness: "agent-chat",
       modelPolicy,
       effectiveModelPolicy,
       strictModel: Boolean(requestedModel),
@@ -1421,7 +1299,7 @@ async function runBenchCommand(options: {
       maxRequestCostUsd: budget.maxRequestUsd ?? null,
       ablation: ablations.length > 0 ? ablations.join(",") : "none",
       // A reference agent's own CLI decides its turn limit.
-      ...(agentName === "shelra" ? { maxToolRounds } : {}),
+      ...(["shelra", "shelra-autonomy"].includes(agentName) ? { maxToolRounds } : {}),
     },
   } as const;
 
@@ -1547,7 +1425,6 @@ async function runBenchCommand(options: {
             if (!isFreeProviderId(providerOption)) {
               throw new Error(`Unknown provider "${providerOption}". Use one of: ${FREE_PROVIDER_IDS.join(", ")}.`);
             }
-            if (agentName !== "shelra") throw new Error("--provider runs the product path, `--agent shelra`.");
             // Naming the provider for the run is the explicit choice of its key.
             declareFreePlanForSession(providerOption);
             const preset = FREE_PROVIDERS[providerOption];
@@ -1596,24 +1473,6 @@ async function runBenchCommand(options: {
             message: `Shelra runtime ready with ${route.modelId}`,
             payload: { agent: agentName, modelPolicy: effectiveModelPolicy },
           });
-          if (agentName === "shelra-autonomy") {
-            const intelligence = createOpenRouterIntelligenceProvider({
-              apiKey,
-              baseURL,
-              entries: catalog.entries,
-              policy: effectiveModelPolicy,
-              modelId: route.modelId,
-              strictModel: Boolean(requestedModel),
-              maxCostUsd: budget.maxSessionUsd,
-            });
-            return createShelraBenchmarkExecutor({
-              intelligence,
-              benchmarkRoot: process.cwd(),
-              maxCostUsd: budget.maxSessionUsd,
-              maxRequestCostUsd: budget.maxRequestUsd,
-              signal,
-            });
-          }
           // The product path: the same `Agent.processMessage()` loop interactive and `--prompt`
           // sessions run. An explicit `--model` is strict — no server-side fallback may silently
           // substitute another model into a measurement.
@@ -1910,7 +1769,7 @@ program
   .option("--max-request-cost <usd>", "Maximum conservative spend for one model request in USD")
   .option("-d, --directory <dir>", "Working directory", process.cwd())
   .option("-p, --prompt <prompt>", "Run a single prompt headlessly")
-  .option("--autonomous", "Run a coding objective through implementation, execution, verification and repair")
+  .option("--autonomous", "Run the protected headless cycle; exit successfully only when the host verifies it")
   .option("--verify", "Run the built-in verify flow headlessly")
   .option("--format <format>", "Headless output format: text or json", parseHeadlessOutputFormat, "text")
   .option("--sandbox", "Run agent shell commands inside a Shuru sandbox")
@@ -1990,7 +1849,7 @@ program
         console.error('--autonomous requires --prompt "..." or an initial message.');
         process.exit(1);
       }
-      await runAutonomousHeadless(
+      await runHeadless(
         objectivePrompt,
         config.apiKey,
         config.baseURL,
@@ -1999,8 +1858,12 @@ program
         config.sandboxMode,
         config.sandboxSettings,
         options.format,
+        options.session,
+        config.preferLocal,
         config.modelPolicy,
         config.budget,
+        config.provider,
+        true,
       );
       return;
     }
@@ -2091,7 +1954,7 @@ program
   .option("--suite <suite>", "Override the suite label for this run")
   .option(
     "--agent <name>",
-    "Agent to evaluate: shelra (product chat path), shelra-autonomy, or a reference agent on the same tasks and oracle: claude-code, codex",
+    "Agent to evaluate: shelra (product path), shelra-autonomy (alias), or a reference agent on the same tasks and oracle: claude-code, codex",
     "shelra",
   )
   .option("-m, --model <model>", "Model under test; keep this fixed when measuring harness changes")

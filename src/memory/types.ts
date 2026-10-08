@@ -59,6 +59,12 @@ export const MEMORY_SOURCE_WEIGHT: Record<MemorySource, number> = {
   web: 0.5,
 };
 
+/** A declared component/environment boundary, not proof of ownership or a resolved entity alias. */
+export interface MemorySubject {
+  entity: string;
+  environment?: string;
+}
+
 export interface MemoryFrontmatter {
   /** Kebab-case slug; also the topic file's basename without extension. */
   name: string;
@@ -66,15 +72,26 @@ export interface MemoryFrontmatter {
   description: string;
   metadata: {
     type: MemoryType;
+    /** Self-indexing human topics survive a missing or full MEMORY.md projection. */
+    indexTitle?: string;
+    indexHook?: string;
     /** ISO timestamp, always written by the store — never trust a caller-supplied value. */
     modified: string;
     /** ISO timestamp of the first write of this slug. */
     created?: string;
     source?: MemorySource;
+    subject?: MemorySubject;
+    /** Unresolved corrections keep both sides current and expose this pending relation. */
+    conflictsWith?: string[];
+    conflictCount?: number;
     /** 0..1; the producer's own confidence, weighted by source at retrieval time. */
     confidence?: number;
     /** ISO timestamp of the last time the content was checked against the codebase or a run. */
     lastConfirmed?: string;
+    /** A named command passed; this says nothing about the truth of the rest of the entry. */
+    lastPassedCommand?: string;
+    /** When the host recorded that command result, not a content-confirmation or execution timestamp. */
+    commandObservedAt?: string;
     /** Workspace-relative paths the fact depends on; a change to one marks the entry "may be stale". */
     relatedFiles?: string[];
     tags?: string[];
@@ -128,12 +145,18 @@ export interface MemoryIndexEntry {
   file: string;
   /** One-line hook shown in the index — not the full description. */
   hook: string;
+  /** Active pointers carry topic metadata; MEMORY.md remains only title/file/hook. */
+  subject?: MemorySubject;
+  conflictsWith?: string[];
+  conflictCount?: number;
 }
 
 export interface MemoryReadIndexResult {
   entries: MemoryIndexEntry[];
   raw: string;
   exists: boolean;
+  complete?: boolean;
+  warnings?: string[];
 }
 
 export interface MemoryReadEntryResult {
@@ -153,17 +176,28 @@ export interface MemoryWriteInput {
   description: string;
   body: string;
   source?: MemorySource;
+  subject?: MemorySubject;
+  /** Host-generated correction bookkeeping; never accepted from a model reflection. */
+  conflictsWith?: string[];
+  conflictCount?: number;
   confidence?: number;
   relatedFiles?: string[];
   tags?: string[];
   supersedes?: string;
   importance?: number;
-  /** Marks the content as checked against reality now (sets `lastConfirmed`). Defaults to true on write. */
+  /** Explicit host confirmation; persistence alone never sets `lastConfirmed`. */
   confirmed?: boolean;
 }
 
 export type MemoryWriteResult =
-  | { ok: true; indexBytes: number; indexLines: number; revision: number }
+  | {
+      ok: true;
+      indexBytes: number;
+      indexLines: number;
+      revision: number;
+      projected?: boolean;
+      projectionWarning?: string;
+    }
   | {
       ok: false;
       reason: "index_cap_exceeded";
@@ -182,6 +216,7 @@ export interface MemoryHistoryEvent {
     | "created"
     | "updated"
     | "confirmed"
+    | "command-observed"
     | "deleted"
     | "promoted"
     | "superseded"

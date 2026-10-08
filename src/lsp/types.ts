@@ -113,4 +113,10 @@ export interface LspToolResponse {
   success: boolean;
   output: string;
   lspDiagnostics?: LspDiagnosticFile[];
+  /** Completeness of the servers actually queried, never a repository-wide dependency guarantee. */
+  availability?: {
+    status: "complete" | "partial" | "unavailable";
+    responded: string[];
+    failed: { serverId: string; reason: string }[];
+  };
 }

@@ -1,8 +1,10 @@
-import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { NO_BROWSER_ENV, openWithSystem } from "../exec/open-url";
 import { AccountError, type ExchangedLogin, exchangeLoginCode } from "./client";
+
+export { NO_BROWSER_ENV };
 
 /*
  * The browser login, the way Claude Code does it. The CLI opens the website's sign-in page; the person signs in
@@ -135,31 +137,8 @@ function listen(state: string): Promise<{ server: Server; port: number; callback
   });
 }
 
-/** Set to anything non-empty to never open a browser: a server, a container, a test. The address is still printed. */
-export const NO_BROWSER_ENV = "SHELRA_NO_BROWSER";
-
 /** Opens `url` in the person's browser. False when this machine has no way to (a server, a container). */
-export function openInBrowser(url: string): Promise<boolean> {
-  if (process.env[NO_BROWSER_ENV]) return Promise.resolve(false);
-  const [command, args] =
-    process.platform === "win32"
-      ? ["rundll32", ["url.dll,FileProtocolHandler", url]]
-      : process.platform === "darwin"
-        ? ["open", [url]]
-        : ["xdg-open", [url]];
-  return new Promise((resolve) => {
-    try {
-      const child = spawn(command as string, args as string[], { stdio: "ignore", detached: true, windowsHide: true });
-      child.once("error", () => resolve(false));
-      child.once("spawn", () => {
-        child.unref();
-        resolve(true);
-      });
-    } catch {
-      resolve(false);
-    }
-  });
-}
+export const openInBrowser = openWithSystem;
 
 /** Signs in through the browser and returns the device token. Throws an AccountError the person can act on. */
 export async function browserLogin(options: BrowserLoginOptions): Promise<ExchangedLogin> {

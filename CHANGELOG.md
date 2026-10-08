@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-08
+### Added
+- Shared execution core: chat, headless, `--autonomous`, and benchmark now use the same protected execution loop with host-enforced checks and evidence-based success.
+- Durable memory with subject scoping: memories now include component and environment, enabling precise recall and conflict detection across domains (e.g., Auth vs Billing).
+- Evidence-based verification: checks are tied to the exact code state; subsequent changes invalidate prior evidence, preventing false positives.
+- Isolated verification: the independent checker runs in a sandbox with restricted permissions, preserving the original test and rejecting any side effects.
+- Operation recovery: external operations are logged and can be resumed without re-execution if the result was lost, preventing duplicate side effects.
+- Enhanced secret detection: memory gate now blocks environment strings that resemble API keys or tokens, preventing accidental storage of credentials.
+- Updated AGENTS.md with a rule to continue across all ten phases without pausing between deliveries.
+- Numerous bug fixes and test improvements across memory, provider routing, LSP, and tool execution.
+### Changed
+- Refined memory admission gate to prevent silent dropping of human rules when type limits are reached.
+- Improved error handling in tool operations to avoid repeating external actions on transient failures.
+- Updated dependencies and internal tooling to latest compatible versions.
+
+
 ### Added
 - Transcript that shows what the agent read, changed and verified: one evidence row per action with real verbs and targets, folded reads and searches, test/type/lint results with failing names, and diffstats.
 - "What Shelra knows" panel (`/memory`, `/skills`): project memory, skills and cross-project knowledge, with provenance and staleness.
@@ -22,3 +38,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Legacy configuration fallbacks and the unused media-generation tools.
+
+
+## [1.2.1] - 2026-10-08
+### Added
+- Shared execution core: chat, headless, `--autonomous`, and benchmark now use the same protected execution loop with host-enforced checks and evidence-based success.
+- Durable memory with subject scoping: memories now include component and environment, enabling precise recall and conflict detection across domains (e.g., Auth vs Billing).
+- Evidence-based verification: checks are tied to the exact code state; subsequent changes invalidate prior evidence, preventing false positives.
+- Isolated verification: the independent checker runs in a sandbox with restricted permissions, preserving the original test and rejecting any side effects.
+- Operation recovery: external operations are logged and can be resumed without re-execution if the result was lost, preventing duplicate side effects.
+- Enhanced secret detection: memory gate now blocks environment strings that resemble API keys or tokens, preventing accidental storage of credentials.
+- Updated AGENTS.md with a rule to continue across all ten phases without pausing between deliveries.
+- Numerous bug fixes and test improvements across memory, provider routing, LSP, and tool execution.
+### Changed
+- Refined memory admission gate to prevent silent dropping of human rules when type limits are reached.
+- Improved error handling in tool operations to avoid repeating external actions on transient failures.
+- Updated dependencies and internal tooling to latest compatible versions.
+
+
+

@@ -46,13 +46,17 @@ export function listWorkspaceFiles(
       truncated = true;
       return;
     }
-    if (files.length >= maxFiles) return;
+    if (files.length >= maxFiles) {
+      truncated = true;
+      return;
+    }
     let entries: Dirent<string>[];
     try {
       // Bun's Node declarations choose the Buffer overload for ReturnType<typeof readdirSync>
       // even though an explicitly UTF-8 directory read returns string-named Dirents.
       entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" }) as Dirent<string>[];
     } catch {
+      truncated = true;
       return;
     }
     for (const entry of entries) {
@@ -72,7 +76,8 @@ export function listWorkspaceFiles(
           const st = statSync(full);
           files.push({ path: relative(root, full).split(sep).join("/"), size: st.size });
         } catch {
-          // Unreadable entry; skip.
+          // Preserve the omission: a failed stat is not evidence that the file does not exist.
+          truncated = true;
         }
       }
     }

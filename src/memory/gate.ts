@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { redact } from "../utils/session-trace";
 import { claimsLiveState, unsafeProcedure } from "./evidence";
+import { recordSubject, sameSubject, subjectFor } from "./subjects";
 import { searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord, type MemorySource, type MemoryWriteInput } from "./types";
 
@@ -27,6 +28,8 @@ export interface GateDecision {
   existing?: MemoryRecord;
   /** Set when the candidate was skipped only because its type is full: making room would admit it. */
   full?: boolean;
+  /** A skip is not necessarily a duplicate or a successful save. */
+  skipKind?: "capacity" | "duplicate" | "authority";
   /** An entry this write makes no longer true: the user stated a new value for the same rule. */
   supersedes?: string;
 }
@@ -151,6 +154,7 @@ function relationToUserStatements(candidate: MemoryWriteInput, records: readonly
   let best: { record: MemoryRecord; score: number; theirs: Set<string> } | null = null;
   for (const record of records) {
     if (record.entry.frontmatter.metadata.source !== "human") continue;
+    if (!sameSubject(subjectFor(candidate), recordSubject(record))) continue;
     const theirs = statementTerms({ title: record.index.title, hook: record.index.hook });
     const score = overlap(mine, theirs);
     if (!best || score > best.score) best = { record, score, theirs };
@@ -315,7 +319,7 @@ export function decideMemoryWrite(
   const perTypeCap = options.perTypeCap ?? DEFAULT_PER_TYPE_CAP;
   const duplicateThreshold = options.duplicateThreshold ?? DEFAULT_DUPLICATE_THRESHOLD;
   const body = candidate.body.trim();
-  const full = `${candidate.title}\n${candidate.hook}\n${candidate.description}\n${body}`;
+  const full = `${candidate.title}\n${candidate.hook}\n${candidate.description}\n${body}\n${candidate.subject?.entity ?? ""}\n${candidate.subject?.environment ?? ""}`;
 
   if (body.length < MIN_BODY_CHARS)
     return { action: "reject", slug: candidate.slug, reason: "body too short to be a reusable fact" };
@@ -338,6 +342,14 @@ export function decideMemoryWrite(
   }
 
   const candidateSource = candidate.source ?? "inference";
+  try {
+    subjectFor(candidate);
+  } catch (error) {
+    return { action: "reject", slug: candidate.slug, reason: String(error) };
+  }
+  const replaced = candidate.supersedes ? records.find((record) => record.slug === candidate.supersedes) : undefined;
+  if (replaced && !sameSubject(subjectFor(candidate), recordSubject(replaced)))
+    return { action: "reject", slug: candidate.slug, reason: "supersession requires the same explicit subject" };
   // What only a model or a tool proposed must not turn a moment into a fact or a dangerous act into a habit (doc 21
   // §5.5; seen live 2026-09-25: "the development server is running" kept at confidence 0.9, and a procedure whose body
   // was `Stop-Process -Id 7972 -Force`). The user's own words are theirs to keep.
@@ -358,12 +370,20 @@ export function decideMemoryWrite(
   }
   const exact = records.find((record) => record.slug === candidate.slug);
   if (exact) {
+    if (!sameSubject(subjectFor(candidate), recordSubject(exact))) {
+      return {
+        action: "reject",
+        slug: exact.slug,
+        reason: "a named slug cannot move knowledge to a different or unknown subject",
+      };
+    }
     const existingSource = exact.entry.frontmatter.metadata.source;
     if (existingSource === "human" && candidateSource !== "human") {
       return {
         action: "skip",
         slug: exact.slug,
         reason: "a human-stated memory is only revised by the human",
+        skipKind: "authority",
         existing: exact,
       };
     }
@@ -372,6 +392,7 @@ export function decideMemoryWrite(
         action: "skip",
         slug: exact.slug,
         reason: `existing ${existingSource} entry outranks a ${candidateSource} rewrite`,
+        skipKind: "authority",
         existing: exact,
       };
     }
@@ -380,7 +401,14 @@ export function decideMemoryWrite(
         fingerprint(candidate),
         fingerprint({ title: exact.index.title, hook: exact.index.hook, body: exact.entry.body }),
       ) > 0.92;
-    if (same) return { action: "skip", slug: exact.slug, reason: "identical to the stored entry", existing: exact };
+    if (same)
+      return {
+        action: "skip",
+        slug: exact.slug,
+        reason: "identical to the stored entry",
+        existing: exact,
+        skipKind: "duplicate",
+      };
     return {
       action: "update",
       slug: exact.slug,
@@ -392,6 +420,7 @@ export function decideMemoryWrite(
   const candidateTokens = fingerprint(candidate);
   let best: { record: MemoryRecord; score: number } | null = null;
   for (const record of records) {
+    if (!sameSubject(subjectFor(candidate), recordSubject(record))) continue;
     const score = jaccard(
       candidateTokens,
       fingerprint({ title: record.index.title, hook: record.index.hook, body: record.entry.body }),
@@ -411,6 +440,7 @@ export function decideMemoryWrite(
         action: "skip",
         slug: best.record.slug,
         reason: "near-duplicate of a human-stated memory",
+        skipKind: "authority",
         existing: best.record,
       };
     }
@@ -427,6 +457,7 @@ export function decideMemoryWrite(
         action: "skip",
         slug: best.record.slug,
         reason: `near-duplicate of "${best.record.slug}" (${best.score.toFixed(2)})`,
+        skipKind: "duplicate",
         existing: best.record,
       };
     }
@@ -438,13 +469,17 @@ export function decideMemoryWrite(
     };
   }
 
-  const sameType = records.filter((record) => record.entry.frontmatter.metadata.type === candidate.type).length;
-  if (sameType >= perTypeCap) {
+  const sameType = records.filter(
+    (record) =>
+      record.entry.frontmatter.metadata.type === candidate.type && record.entry.frontmatter.metadata.source !== "human",
+  ).length;
+  if (candidateSource !== "human" && sameType >= perTypeCap) {
     return {
       action: "skip",
       slug: candidate.slug,
       reason: `type "${candidate.type}" already holds ${sameType} entries; consolidate before adding`,
       full: true,
+      skipKind: "capacity",
     };
   }
   return { action: "create", slug: candidate.slug, reason: "novel" };

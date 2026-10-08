@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { memoryContextFor } from "../agent/prompts";
 import { consolidateMemory } from "./consolidate";
 import { pendingReflectionCount, readEpisodes } from "./episodes";
+import { listHumanTopics } from "./human-files";
 import { isStandingRule } from "./retrieval";
 import { approveSkillProposal, declineSkillProposal, listSkillProposals } from "./skills";
 import {
@@ -16,6 +17,7 @@ import {
   readReflectionAudit,
   userMemoryScope,
 } from "./store";
+import { memorySubjectNote } from "./subjects";
 import type { MemoryRecord, MemoryScope } from "./types";
 
 /**
@@ -44,6 +46,7 @@ function describe(record: MemoryRecord): string {
   const facts = [
     meta.type,
     `${meta.source ?? "inference"}${percent(meta.confidence)}`,
+    ...(memorySubjectNote(meta) ? [memorySubjectNote(meta)] : []),
     ...(meta.uses ? [`used ${meta.uses}×`] : []),
     ...(meta.credit ? [`credit ${meta.credit > 0 ? "+" : ""}${meta.credit}`] : []),
     `since ${(meta.created ?? meta.modified).slice(0, 10)}`,
@@ -56,16 +59,21 @@ function retiredRecords(scope: MemoryScope): MemoryRecord[] {
   const dir = memoryDir(scope);
   if (!existsSync(dir)) return [];
   const indexed = new Set(listMemoryRecords(scope).map((record) => record.slug));
-  return readdirSync(dir)
-    .filter((name) => name.endsWith(".md") && name !== "MEMORY.md")
+  const names = new Set([
+    ...readdirSync(dir).filter((name) => name.endsWith(".md") && name !== "MEMORY.md"),
+    ...listHumanTopics(dir).topics.map((topic) => topic.file),
+  ]);
+  return [...names]
     .map((name) => name.slice(0, -3))
     .filter((slug) => !indexed.has(slug))
     .flatMap((slug) => {
       try {
         const entry = readMemoryEntry(scope, slug).entry;
         if (!entry) return [];
-        const hook = entry.frontmatter.description;
-        return [{ slug, index: { title: slug, file: `${slug}.md`, hook }, entry }];
+        const hook = entry.frontmatter.metadata.indexHook ?? entry.frontmatter.description;
+        return [
+          { slug, index: { title: entry.frontmatter.metadata.indexTitle ?? slug, file: `${slug}.md`, hook }, entry },
+        ];
       } catch {
         return [];
       }
@@ -129,6 +137,7 @@ function show(workspace: string, slug: string | undefined): { exitCode: number; 
       `${slug}${scope.kind === "user" ? " (yours in every project)" : ""}`,
       `  ${entry.frontmatter.description}`,
       `  ${meta.type} · ${meta.source ?? "inference"}${percent(meta.confidence)} · ${meta.status ?? "active"}`,
+      ...(memorySubjectNote(meta) ? [`  ${memorySubjectNote(meta)}`] : []),
       `  created ${(meta.created ?? meta.modified).slice(0, 10)} · changed ${meta.modified.slice(0, 10)}${meta.lastConfirmed ? ` · confirmed ${meta.lastConfirmed.slice(0, 10)}` : ""}`,
       ...(meta.uses ? [`  used in ${meta.uses} turns${meta.credit ? `, credit ${meta.credit}` : ""}`] : []),
       ...(meta.relatedFiles?.length ? [`  files: ${meta.relatedFiles.join(", ")}`] : []),

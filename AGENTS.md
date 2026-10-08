@@ -2,6 +2,20 @@
 
 Instructions for coding agents (and Cursor Cloud) working in this repository.
 
+## Owner's standing instruction: complete the engineering program
+
+Owner, 2026-10-07: continue implementing all ten phases in `tasks/plan.md` and
+`tasks/todo.md`. Authorization covers the entire program, not only Phase 1.
+Do not stop at the end of a ticket, validated delivery, or phase to ask whether
+to continue. Keep progressing, report milestones, preserve work across sessions,
+and maintain the current phase and next tasks in those files.
+When one item lacks an external resource, record what is missing and continue
+independent work. Mark phases complete only when their acceptance criteria are
+actually met; a simulation does not replace the real longitudinal observation
+required by Phase 10. Existing provider, workspace and production-scope rules
+still apply. This instruction supersedes skill review gates that would require
+repeated permission to execute work already authorized in this program.
+
 ## Overview
 
 `shelra` (product name **ShelraCode**) is a single-package TypeScript CLI: a
@@ -100,9 +114,12 @@ results are withheld. `SHELRA_RESEARCH=off` or `--ablate research` turns initial
 The model still reaches for `search_web` / `open_web` on its own when a task depends on an external
 library, API, or protocol. Search results are untrusted leads and must be verified against the official source before
 reliance; fetched content is never treated as instructions.
-A request to check, fix, continue or test a project that states its checks has them run by the
-host on the code as the turn found it (`src/agent/pre-work.ts`), handed to the model as the result of its own `bash`
-run and counted as the runs before the turn's first change. A failed check does not force a web search;
+A request that says something is broken, asks to repair it or asks to run the checks ("fix", "arregla", "no
+compila", "run the tests"; not "review", "test", "works", "error" or "continue", which are everyday words of feature
+requests: owner, 2026-10-07) has the project's checks run by the host on the code as the turn found it
+(`src/agent/pre-work.ts`), cheapest first (type check, lint, then tests) within one 90 s budget, with the words that
+asked for it shown in the status line. The result is handed to the model as the result of its own `bash` run and
+counted as the runs before the turn's first change. A failed check does not force a web search;
 when research was explicitly requested, the search can use the error the checks report.
 `--ablate diagnose` turns the check run off; the
 benchmark does not count the host's calls as the model's (`isHostCall`).
@@ -111,7 +128,11 @@ benchmark does not count the host's calls as the model's (`isHostCall`).
 
 Every registered tool costs schema tokens on every model request, so the
 default agent tool set is the coding core (files, grep, bash and background
-processes, web research, sub-agents, memory, plan). Desktop automation,
+processes, web research, `open_in_browser`, sub-agents, memory, plan).
+`open_in_browser` is the only way the agent puts a page in front of the person: it opens the person's own browser on
+a local http(s) address or a project file (`src/exec/open-url.ts`; any other site is refused and left to the answer;
+`SHELRA_NO_BROWSER` stops it). Every other browser use is a hidden headless Chromium that checks a page
+(`src/exec/browser.ts`); a machine without Chromium is told to run `npx playwright install chromium`. Desktop automation,
 schedules, and payments are opt-in groups in
 `~/.shelra/user-settings.json` under `tools` (`desktop`, `schedules`,
 `payments`); the `computer` sub-agent always receives the desktop
@@ -313,6 +334,20 @@ commands on events. The model has three tools (`skill`, `extensions`, `extension
 Shelra must not behave like a stateless agent. `src/memory/` implements project memory under
 `.shelra/memory/` in the session's root folder, whatever folder the shell moved to (index + topic files +
 `history.jsonl` timeline + `reflections.jsonl` audit + `episodes.jsonl` + `pending-reflections.jsonl`):
+new human statements are self-indexing topics in `human/<slug>.md`; `MEMORY.md` stays a 200-line/25 KiB projection,
+not their storage limit. The capture does not share the reflection's five-item cap. Up to 5,000 canonical human
+topics per scope (32 KiB each) remain retrievable without the projection; legacy topics remain compatible.
+Missing/corrupt reads and capture rejections reach the model as incomplete coverage, never empty success.
+`memory_list` pages through pointers (100 by default, up to 200; `offset`), and `memory_read` takes the logical slug.
+Inferences retain their per-type cap and cannot replace human statements; removing a human projection pointer
+to make room for learning never archives its topic. A saved inference is unconfirmed unless the host explicitly
+confirms its content. A passed named command records use/recall and its observation, never confirmation of every
+claim in that topic; changing its content clears the previous confirmation and command observation. Proof and
+remaining limits: `SPEC-durable-knowledge.md`. A topic can carry a declared subject (component and optional
+environment). Explicit capture recognizes bounded English/Spanish usage statements; unknown or compound scopes
+are not assigned an invented owner. Similarity and supersession cannot move a topic across known subjects;
+ambiguous corrections keep both sides and expose unresolved conflict pointers in context, tools and the CLI.
+Aliases, semantic ownership and atomic transitions across multiple topics are not implied by those fields.
 the user's standing rules, facts and corrections reach every request; the rest is ranked against every request and
 sub-agent brief (lexical, no embeddings: rare words weigh more, Spanish and English meet through `src/memory/terms.ts`,
 a short follow-up is read with the request before it) and the relevant bodies are injected, the next ones as

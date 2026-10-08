@@ -41,9 +41,15 @@ const isWindows = process.platform === "win32";
  *   `Get-ChildItem` and spent most of the session looking for other ways to ask. Letting the
  *   script end normally flushes the table; the host still exits with the code.
  */
-const POWERSHELL_PRELUDE = ["$ProgressPreference = 'SilentlyContinue'", "$ErrorActionPreference = 'Continue'", ""].join(
-  "\n",
-);
+const POWERSHELL_PRELUDE = [
+  "$ProgressPreference = 'SilentlyContinue'",
+  "$ErrorActionPreference = 'Continue'",
+  // Output is read as UTF-8 here, but Windows PowerShell 5.1 writes it in the console's code page: "é ñ ü" came back as
+  // "? ? ?" (found in the 2026-10-07 review). Both ends agree on UTF-8 without a byte-order mark.
+  "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+  "$OutputEncoding = [Console]::OutputEncoding",
+  "",
+].join("\n");
 
 const POWERSHELL_EPILOGUE = [
   "",

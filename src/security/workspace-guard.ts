@@ -39,10 +39,29 @@ function resolveThroughExistingAncestor(candidate: string): string {
   return missing.length > 0 ? join(real, ...missing) : real;
 }
 
-/** Resolves a model-facing path without allowing traversal or symlink escape. */
-export function resolveWorkspacePath(filePath: string, workspaceRoot: string): WorkspacePathResult {
-  const root = resolve(workspaceRoot);
-  const candidate = isAbsolute(filePath) ? resolve(filePath) : resolve(root, filePath);
+/**
+ * Where a tool works: the session's root folder, which every path must stay inside, and the folder the shell is in
+ * now, which relative paths are read against. They differ after a `cd` into a subfolder; a plain string means both.
+ */
+export type WorkspaceView = string | { root: string; base: string };
+
+export function viewRoot(view: WorkspaceView): string {
+  return typeof view === "string" ? view : view.root;
+}
+
+export function viewBase(view: WorkspaceView): string {
+  return typeof view === "string" ? view : view.base;
+}
+
+/**
+ * Resolves a model-facing path without allowing traversal or symlink escape. A relative path is read against the
+ * view's base (the shell's folder), and containment is checked against its root: after `cd sub`, `../a.txt` is still
+ * inside the project, and the paths the model reads from tool output keep working.
+ */
+export function resolveWorkspacePath(filePath: string, view: WorkspaceView): WorkspacePathResult {
+  const root = resolve(viewRoot(view));
+  const base = resolve(viewBase(view));
+  const candidate = isAbsolute(filePath) ? resolve(filePath) : resolve(base, filePath);
   const inWorkspace = isInside(root, candidate);
   if (!inWorkspace && !isInside(SCRATCH_ROOT, candidate)) {
     throw new Error(`Path is outside the workspace: ${filePath}`);

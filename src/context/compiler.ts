@@ -5,6 +5,8 @@ import { contractChecks } from "../contract/contract";
 import { discoverChecks } from "../contract/discover";
 import { IGNORED_DIRS, listWorkspaceFiles } from "../contract/workspace-files";
 import { isContinuationRequest } from "../memory/terms";
+import { recordSwallowedError } from "../utils/diagnostics";
+import { compileProjectStructure, type ProjectStructure, projectStructureContext } from "./project-model";
 import type { ContextPacket, TurnClassification } from "./types";
 
 const MAX_CONTEXT_CHARS = 8_000;
@@ -311,15 +313,39 @@ export async function compileContextPacket(
     namedFiles(root, prompt),
     projectFiles(root),
   ]);
+  let structure: ProjectStructure;
+  try {
+    structure = await compileProjectStructure(root, project, named.files);
+  } catch (error) {
+    recordSwallowedError("context.project-structure", error);
+    structure = {
+      status: "partial",
+      coverage: { inventoryComplete: project.complete, manifestsDiscovered: 0, manifestsRead: 0, limit: 256 },
+      packages: [],
+      dependencies: [],
+      owners: named.files.map((file) => ({ file, reason: "Project package structure could not be observed." })),
+      warnings: [`Project package structure unavailable: ${String(error)}`],
+    };
+  }
+  const packageContext = projectStructureContext(structure);
+  // Root-only projects already receive their description and check table. Add package detail for nested scope.
+  const includePackageContext =
+    structure.packages.some((pkg) => pkg.manifest !== "package.json") || structure.status === "partial";
   const sections: string[] = [
     "HOST-COMPILED REPOSITORY CONTEXT (read by Shelra at the start of this turn):",
     `Workspace root: ${root}`,
+    ...(!project.complete
+      ? [
+          "Project file inventory is incomplete (bounded exploration or a filesystem/Git read failed). A missing file or test in this packet is not evidence of absence. Continue with targeted grep, directory searches and read_file before drawing conclusions.",
+        ]
+      : []),
     checks.length > 0
       ? `Checks this project states:\n${checks.map((check) => `- ${check.kind}: \`${check.command}\` (${check.source})`).join("\n")}`
       : "The project states no test, type-check or lint command.",
   ];
   if (repository.text) sections.push(repository.text);
   if (named.lines.length > 0) sections.push(`Files the request names:\n${named.lines.join("\n")}`);
+  if (includePackageContext) sections.push(packageContext.text);
   if (project.complete && project.files.length > 0 && project.files.length <= SMALL_PROJECT_FILES) {
     sections.push(
       `Files in this project (${project.files.length}):\n${project.files.map((file) => `- ${file}`).join("\n")}`,
@@ -335,6 +361,13 @@ export async function compileContextPacket(
     promptAppendix:
       appendix.length > maxChars ? `${appendix.slice(0, maxChars)}\n[context truncated by host]` : appendix,
     files: named.files,
-    truncated: appendix.length > maxChars || repository.truncated || named.truncated,
+    truncated:
+      appendix.length > maxChars ||
+      repository.truncated ||
+      named.truncated ||
+      !project.complete ||
+      structure.status === "partial" ||
+      (includePackageContext && packageContext.truncated),
+    project: structure,
   };
 }

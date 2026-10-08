@@ -107,6 +107,15 @@ export const POPULAR_MCP_CATALOG: McpCatalogEntry[] = [
     starterTransport: "stdio",
   },
   {
+    id: "playwright",
+    name: "Playwright",
+    description:
+      "Drive a real browser: open pages, click, type, take screenshots. Started with `npx -y @playwright/mcp@latest`; add `--headless` to hide the window. The first start downloads the server and may need `npx playwright install chromium`.",
+    directoryUrl: "https://github.com/microsoft/playwright-mcp#readme",
+    sourceUrl: "https://github.com/microsoft/playwright-mcp",
+    starterTransport: "stdio",
+  },
+  {
     id: "browserbase",
     name: "Browserbase",
     description: "Cloud browser automation workflows.",

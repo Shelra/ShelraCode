@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -11,6 +10,7 @@ import {
   type OAuthClientProvider,
   type OAuthTokens,
 } from "@ai-sdk/mcp";
+import { openWithSystem } from "../exec/open-url";
 import { orionMcpHttpServer } from "./orionmcp";
 import { dpapiProtect, dpapiUnprotect } from "./orionmcp-dpapi";
 
@@ -192,20 +192,12 @@ export async function loginOrionMcp(
 ) {
   const provider = new OrionOAuthProvider(endpoint, async (url) => {
     if (url.origin !== new URL(endpoint).origin) throw new Error("ORIONMCP authorization origin mismatch.");
-    // Non-blocking: `rundll32 url.dll,FileProtocolHandler` opens the default browser without a shell or a PowerShell start-up.
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn("rundll32.exe", ["url.dll,FileProtocolHandler", url.href], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      });
-      child.once("error", () => reject(new Error("Could not open the browser for ORIONMCP login.")));
-      child.once("spawn", () => {
-        child.unref();
-        resolve();
-      });
-    });
-    announce("Se abrió tu navegador: pulsa «Permitir» en OrionBIM para conectar Shelra con tu Revit.");
+    // Non-blocking and without a shell; on a machine with no browser (or SHELRA_NO_BROWSER) the address is printed instead.
+    if (await openWithSystem(url.href)) {
+      announce("Se abrió tu navegador: pulsa «Permitir» en OrionBIM para conectar Shelra con tu Revit.");
+    } else {
+      announce(`Abre esta dirección en tu navegador y pulsa «Permitir» en OrionBIM:\n${url.href}`);
+    }
   });
   await provider.login();
 }

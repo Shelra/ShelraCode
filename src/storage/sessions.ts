@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { AgentMode, SessionInfo, SessionRecap, SessionStatus, WorkspaceInfo } from "../types/index";
 import { getDatabase } from "./db";
+import { sessionOperationStore } from "./tool-operations";
 import { ensureWorkspace } from "./workspaces";
 
 interface SessionRow {
@@ -20,6 +21,10 @@ interface SessionRow {
 }
 
 export class SessionStore {
+  operationStore(sessionId: string) {
+    return sessionOperationStore(sessionId);
+  }
+
   private readonly workspace: WorkspaceInfo;
 
   constructor(cwd: string) {

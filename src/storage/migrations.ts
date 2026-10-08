@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from "./db";
 
-const LATEST_DB_VERSION = 8;
+const LATEST_DB_VERSION = 9;
 
 export function applyMigrations(db: SQLiteDatabase): void {
   const version = Number(db.pragma("user_version", { simple: true })) || 0;
@@ -201,6 +201,30 @@ function ensureLatestSchema(db: SQLiteDatabase): void {
   createSessionRecapSchema(db);
   createBenchmarkSchema(db);
   createSessionImportSchema(db);
+  createToolOperationSchema(db);
+}
+
+/** Intent is committed before a tool can act, independently of the provider's later step acknowledgment. */
+function createToolOperationSchema(db: SQLiteDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tool_operations (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      scope TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      call_id TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('started', 'confirmed', 'ambiguous', 'refused')),
+      acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1)),
+      summary TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    ) STRICT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_operations_pending_identity
+      ON tool_operations(session_id, scope, fingerprint) WHERE acknowledged = 0;
+    CREATE INDEX IF NOT EXISTS idx_tool_operations_session_pending
+      ON tool_operations(session_id, scope, acknowledged);
+  `);
 }
 
 /** Which session a chat imported from another agent (Claude Code, Codex) became, so it is imported once. */

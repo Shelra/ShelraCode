@@ -16,6 +16,14 @@ interface ObservePageOptions {
   measureBlank?: boolean;
 }
 
+/** What to tell a person whose machine has no Chromium for Playwright (it is not shipped with Shelra). */
+export const BROWSER_INSTALL_HINT = "Chromium for Playwright is not installed: run `npx playwright install chromium`";
+
+/** Whether a Playwright error means the browser itself is missing. */
+export function isBrowserMissing(message: string): boolean {
+  return /Executable doesn't exist|playwright install|browserType\.launch: Failed to launch/iu.test(message);
+}
+
 /** Browser observation is deliberately an optional capability: missing Playwright browsers become evidence. */
 export async function observePage(url: string, options: ObservePageOptions): Promise<BrowserObservation> {
   const observation: BrowserObservation = {
@@ -36,7 +44,8 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
     // through paths fixed at build time, so importing it at startup would tie the standalone
     // executable to the machine that built it.
     const { chromium } = await import("playwright");
-    browser = await chromium.launch({ headless: true });
+    // The launch is bounded: a Chromium that hangs would otherwise hold the end of the turn.
+    browser = await chromium.launch({ headless: true, timeout: 30_000 });
     const page = await browser.newPage({ viewport: options.viewport });
     const appOrigin = new URL(url).origin;
     page.on("console", (message) => {
@@ -101,7 +110,11 @@ export async function observePage(url: string, options: ObservePageOptions): Pro
     }
     return observation;
   } catch (error) {
-    observation.error = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    // The install hint comes first: the callers cut the message short, and Playwright puts its own hint last.
+    observation.error = isBrowserMissing(message)
+      ? `${BROWSER_INSTALL_HINT} (${message.split(/\r?\n/u)[0]?.slice(0, 120) ?? "browser missing"})`
+      : message;
     return observation;
   } finally {
     await browser?.close().catch(() => undefined);

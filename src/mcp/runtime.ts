@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { ToolSet } from "ai";
@@ -11,6 +12,42 @@ import { validateMcpServerConfig } from "./validate";
 
 function mcpToolPrefix(server: McpServerConfig): string {
   return `mcp_${server.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+/** The longest tool name providers accept (OpenAI's limit, the strictest in common use). */
+const MAX_TOOL_NAME = 64;
+
+/**
+ * The name the model sees for a server's tool: letters, digits, `_` and `-` only, at most 64 characters. A dotted or
+ * long name from a server made the provider reject the whole request, not just the tool (review 2026-10-07).
+ */
+export function modelToolName(prefix: string, name: string, taken: ReadonlySet<string> = new Set()): string {
+  let full = `${prefix}__${name.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+  if (full.length > MAX_TOOL_NAME) {
+    full = `${full.slice(0, MAX_TOOL_NAME - 9)}_${createHash("sha256").update(full).digest("hex").slice(0, 8)}`;
+  }
+  let unique = full;
+  for (let n = 2; taken.has(unique); n += 1) unique = `${full.slice(0, MAX_TOOL_NAME - 3)}_${n}`;
+  return unique;
+}
+
+/** The most text one MCP tool result may put in front of the model. */
+const MAX_MCP_TEXT = 60_000;
+
+/** Cuts the text parts of an MCP result that are longer than the limit, and says so. */
+export function capMcpResult(result: unknown): unknown {
+  const content = (result as { content?: unknown } | null)?.content;
+  if (!Array.isArray(content)) return result;
+  let cut = false;
+  const capped = content.map((part: unknown) => {
+    const item = part as { type?: unknown; text?: unknown };
+    if (item?.type === "text" && typeof item.text === "string" && item.text.length > MAX_MCP_TEXT) {
+      cut = true;
+      return { ...item, text: `${item.text.slice(0, MAX_MCP_TEXT)}\n[result cut at ${MAX_MCP_TEXT} characters]` };
+    }
+    return part;
+  });
+  return cut ? { ...(result as object), content: capped } : result;
 }
 
 function toTransport(server: McpServerConfig) {
@@ -54,6 +91,24 @@ export interface McpToolBundleOptions {
 }
 
 const DEFAULT_MCP_TIMEOUT_MS = 20_000;
+/** How long a server started through a package runner (npx, bunx, uvx) may take to download and start. */
+const RUNNER_MCP_TIMEOUT_MS = 60_000;
+/** How much of a failing server's stderr is kept to explain the failure. */
+const STDERR_KEPT = 2_000;
+
+function serverTimeoutMs(server: McpServerConfig, base: number): number {
+  const command = (server.command ?? "").split(/[\\/]/u).pop() ?? "";
+  return server.transport === "stdio" && /^(?:npx|bunx|uvx|pnpm|yarn|npm|pipx)(?:\.cmd|\.exe)?$/iu.test(command)
+    ? Math.max(base, RUNNER_MCP_TIMEOUT_MS)
+    : base;
+}
+
+/** The first lines a server wrote to stderr, on one line, without control characters or anything long. */
+export function describeStderr(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: terminal escapes are what is being removed
+  const clean = text.replace(/\u001b\[[0-9;]*[A-Za-z]/gu, "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/gu, " ");
+  return clean.replace(/\s+/gu, " ").trim().slice(0, 300);
+}
 
 /**
  * HTTP MCP connections are reused between turns. Before, every turn opened a new client and asked for the tool list again
@@ -97,13 +152,13 @@ export async function buildMcpToolSet(
   const tools: ToolSet = {};
   const errors: string[] = [];
   const clients: MCPClient[] = [];
-  const timeoutMs = options.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
+  const baseTimeoutMs = options.timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
 
   function register(server: McpServerConfig, mcpTools: Awaited<ReturnType<MCPClient["tools"]>>): void {
     const prefix = mcpToolPrefix(server);
 
     for (const [name, tool] of Object.entries(mcpTools)) {
-      const prefixedName = `${prefix}__${name}`;
+      const prefixedName = modelToolName(prefix, name, new Set(Object.keys(tools)));
       const execute = tool.execute;
       tools[prefixedName] = {
         ...tool,
@@ -112,7 +167,7 @@ export async function buildMcpToolSet(
           ? {
               execute: async (...args: Parameters<typeof execute>) => {
                 try {
-                  return await execute(...args);
+                  return capMcpResult(await execute(...args));
                 } catch (error) {
                   // Revoked or expired mid-session: forget the stale credentials so the next turn offers the one-click
                   // reconnect (connect_revit) instead of failing the same way again.
@@ -133,6 +188,9 @@ export async function buildMcpToolSet(
                       ],
                     };
                   }
+                  // A cached connection that fails is probably dead: forget it, so the next turn connects again instead
+                  // of failing the same way until the cache expires (review 2026-10-07).
+                  dropCached(cacheKeyOf(server));
                   throw error;
                 }
               },
@@ -200,12 +258,17 @@ export async function buildMcpToolSet(
     }
     let abandoned = false;
     let stderrBytes = 0;
+    let stderrText = "";
     if (transport instanceof StdioClientTransport) {
-      // The SDK pipes into a PassThrough. Leaving it unread eventually blocks the server before its reply.
+      // The SDK pipes into a PassThrough. Leaving it unread eventually blocks the server before its reply. The first
+      // part is kept: it is where a server says why it cannot start ("Chromium distribution 'chrome' is not found").
       transport.stderr?.on("data", (chunk: Buffer | string) => {
         stderrBytes += Buffer.byteLength(chunk);
+        if (stderrText.length < STDERR_KEPT) stderrText += chunk.toString();
       });
     }
+    // A server started through a package runner may have to download itself first: it gets longer than a running one.
+    const timeoutMs = serverTimeoutMs(server, baseTimeoutMs);
     const closeClient = (client: MCPClient) => withTimeout(client.close(), timeoutMs, undefined, "client close");
     try {
       const connecting = createMCPClient({
@@ -242,7 +305,10 @@ export async function buildMcpToolSet(
         continue;
       }
       const message = error instanceof Error ? error.message : String(error);
-      errors.push(`${server.label}: ${message}${stderrBytes ? ` (server stderr: ${stderrBytes} bytes)` : ""}`);
+      const said = describeStderr(stderrText);
+      errors.push(
+        `${server.label}: ${message}${said ? ` (the server said: ${said})` : stderrBytes ? ` (server stderr: ${stderrBytes} bytes)` : ""}`,
+      );
       if (transport instanceof StdioClientTransport) {
         try {
           await withTimeout(transport.close(), timeoutMs, undefined, `${server.label} transport close`);
@@ -264,7 +330,7 @@ export async function buildMcpToolSet(
 
   async function closeOwnedClient(client: MCPClient): Promise<void> {
     try {
-      await withTimeout(client.close(), timeoutMs, undefined, "client close");
+      await withTimeout(client.close(), baseTimeoutMs, undefined, "client close");
     } catch (error) {
       errors.push(`MCP client close failed: ${String(error)}`);
       recordSwallowedError("mcp.close", error);

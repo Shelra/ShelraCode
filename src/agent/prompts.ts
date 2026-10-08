@@ -24,10 +24,10 @@ import {
 } from "../memory/retrieval";
 import {
   listArchivedEntries,
-  listMemoryRecords,
-  listUserMemoryRecords,
+  loadMemoryRecords,
   projectMemoryScope,
   readMemoryEntry,
+  userMemoryScope,
 } from "../memory/store";
 import { isContinuationRequest } from "../memory/terms";
 import type { MemoryRecord, MemoryScope } from "../memory/types";
@@ -278,13 +278,23 @@ export function memoryContextFor(
 ): MemoryContext {
   try {
     const scope = projectMemoryScope(cwd);
-    const projectRecords = listMemoryRecords(scope);
-    const context = buildMemoryContext(
-      [...projectRecords, ...listUserMemoryRecords()],
+    const project = loadMemoryRecords(scope);
+    const user = loadMemoryRecords(userMemoryScope());
+    const projectRecords = project.records;
+    const built = buildMemoryContext(
+      [...projectRecords, ...user.records.map((record) => ({ ...record, origin: "user" as const }))],
       { text: query, paths, ...(previous ? { previous } : {}) },
       cwd,
       { archived: listArchivedEntries(scope) },
     );
+    const warnings = [...project.warnings, ...user.warnings.map((warning) => `User-wide: ${warning}`)];
+    const context =
+      warnings.length > 0
+        ? appendSection(built, "MEMORY COVERAGE PARTIAL (unreadable knowledge is unknown, not absent):", [
+            ...warnings.slice(0, 8).map((warning) => `- ${clipLine(warning, 240)}`),
+            ...(warnings.length > 8 ? [`- ${warnings.length - 8} more memory read warnings.`] : []),
+          ])
+        : built;
     // What happened the last times a similar request came in: failures and what got past them (doc 18 §4.3).
     const episodes = readEpisodes(scope, 400);
     const lessons = episodeLessons(episodes, { text: query, ...(previous ? { previous } : {}) });
@@ -329,7 +339,11 @@ export function memoryContextFor(
     return withDocuments(continuation || open.length > 0 ? oriented : noteWhenNothingMatches(oriented), documents);
   } catch (error) {
     recordSwallowedError("memory.retrieve", error);
-    return { text: "", expanded: [], listed: [] };
+    return {
+      text: "MEMORY UNAVAILABLE: retrieval failed; saved knowledge has not been checked.",
+      expanded: [],
+      listed: [],
+    };
   }
 }
 

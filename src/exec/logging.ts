@@ -5,15 +5,14 @@
  * only a clipped head+tail is kept in memory: model context is the scarce resource, disk is not.
  */
 
-import { createReadStream, createWriteStream, existsSync, mkdirSync, type WriteStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 /** Per-stream in-memory budget for a one-shot command. */
 export const DEFAULT_CAPTURE_CHARS = 16_000;
 
-const TAIL_READ_BYTES = 256 * 1024;
+const _TAIL_READ_BYTES = 256 * 1024;
 
 let execLogRoot: string | null = null;
 
@@ -155,27 +154,4 @@ export class RunLog {
       stream.on("error", () => resolve());
     });
   }
-}
-
-/** Reads the last `lines` lines of a log file without loading the whole thing. */
-export async function tailFile(filePath: string, lines = 50): Promise<string> {
-  if (!existsSync(filePath)) return "";
-  let size = 0;
-  try {
-    size = (await stat(filePath)).size;
-  } catch {
-    return "";
-  }
-  const start = Math.max(0, size - TAIL_READ_BYTES);
-  const content = await new Promise<string>((resolve) => {
-    const chunks: Buffer[] = [];
-    const stream = createReadStream(filePath, { start });
-    stream.on("data", (chunk: Buffer | string) => {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-    });
-    stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    stream.on("error", () => resolve(""));
-  });
-  const split = content.split("\n");
-  return split.slice(-lines).join("\n").trimEnd();
 }

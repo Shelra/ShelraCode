@@ -14,7 +14,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { recordSwallowedError } from "../utils/diagnostics";
 import { withRecall } from "./dynamics";
+import { humanTopicDirectory, listHumanTopics, prepareHumanTopic, readHumanTopic } from "./human-files";
 import { withMemoryLock } from "./lock";
+import { normalizeMemorySubject, sameSubject, subjectFor, subjectFromStatement } from "./subjects";
 import {
   MEMORY_TYPES,
   type MemoryDeleteResult,
@@ -115,6 +117,8 @@ export function memoryIndexPath(scope: MemoryScope): string {
 
 export function memoryEntryPath(scope: MemoryScope, slug: string): string {
   validateIdentifier(slug, "slug");
+  const human = join(humanTopicDirectory(memoryDir(scope)), `${slug}.md`);
+  if (existsSync(human)) return human;
   return join(memoryDir(scope), `${slug}.md`);
 }
 
@@ -170,8 +174,17 @@ export function isCurrentMemory(record: MemoryRecord): boolean {
 
 function writeFileAtomic(path: string, content: string): void {
   const tmp = `${path}.tmp-${randomUUID()}`;
-  writeFileSync(tmp, content, "utf8");
-  renameSync(tmp, path);
+  try {
+    writeFileSync(tmp, content, "utf8");
+    renameSync(tmp, path);
+  } catch (error) {
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch (cleanupError) {
+      recordSwallowedError("memory.atomic-cleanup", cleanupError);
+    }
+    throw error;
+  }
 }
 
 function escapeYamlString(value: string): string {
@@ -213,9 +226,20 @@ function serializeEntry(frontmatter: MemoryFrontmatter, body: string): string {
     `  modified: ${meta.modified}`,
   ];
   if (meta.created) lines.push(`  created: ${meta.created}`);
+  if (meta.indexTitle !== undefined) lines.push(`  indexTitle: "${escapeYamlString(meta.indexTitle)}"`);
+  if (meta.indexHook !== undefined) lines.push(`  indexHook: "${escapeYamlString(meta.indexHook)}"`);
   if (meta.source) lines.push(`  source: ${meta.source}`);
   if (meta.confidence !== undefined) lines.push(`  confidence: ${meta.confidence}`);
   if (meta.lastConfirmed) lines.push(`  lastConfirmed: ${meta.lastConfirmed}`);
+  if (meta.subject) {
+    lines.push(`  subjectEntity: "${escapeYamlString(meta.subject.entity)}"`);
+    if (meta.subject.environment) lines.push(`  subjectEnvironment: "${escapeYamlString(meta.subject.environment)}"`);
+  }
+  const conflicts = yamlList(meta.conflictsWith);
+  if (conflicts) lines.push(`  conflictsWith: ${conflicts}`);
+  if (meta.conflictCount) lines.push(`  conflictCount: ${meta.conflictCount}`);
+  if (meta.lastPassedCommand) lines.push(`  lastPassedCommand: "${escapeYamlString(meta.lastPassedCommand)}"`);
+  if (meta.commandObservedAt) lines.push(`  commandObservedAt: ${meta.commandObservedAt}`);
   const related = yamlList(meta.relatedFiles);
   if (related) lines.push(`  relatedFiles: ${related}`);
   const tags = yamlList(meta.tags);
@@ -277,11 +301,26 @@ function parseEntryFile(raw: string): MemoryEntry | null {
       description,
       metadata: {
         type: type as MemoryType,
+        indexTitle: parseYamlList(`[${readScalar(frontmatterBlock, "indexTitle") ?? ""}]`)?.[0],
+        indexHook: parseYamlList(`[${readScalar(frontmatterBlock, "indexHook") ?? ""}]`)?.[0],
         modified,
         created: readScalar(frontmatterBlock, "created"),
         source: isMemorySource(source) ? source : undefined,
         confidence: confidence !== undefined && Number.isFinite(confidence) ? confidence : undefined,
         lastConfirmed: readScalar(frontmatterBlock, "lastConfirmed"),
+        subject:
+          readScalar(frontmatterBlock, "subjectEntity") !== undefined
+            ? normalizeMemorySubject({
+                entity: parseYamlList(`[${readScalar(frontmatterBlock, "subjectEntity")}]`)?.[0],
+                ...(readScalar(frontmatterBlock, "subjectEnvironment") !== undefined
+                  ? { environment: parseYamlList(`[${readScalar(frontmatterBlock, "subjectEnvironment")}]`)?.[0] }
+                  : {}),
+              })
+            : undefined,
+        conflictsWith: parseYamlList(readScalar(frontmatterBlock, "conflictsWith")),
+        conflictCount: Number.parseInt(readScalar(frontmatterBlock, "conflictCount") ?? "0", 10) || undefined,
+        lastPassedCommand: parseYamlList(`[${readScalar(frontmatterBlock, "lastPassedCommand") ?? ""}]`)?.[0],
+        commandObservedAt: readScalar(frontmatterBlock, "commandObservedAt"),
         relatedFiles: parseYamlList(readScalar(frontmatterBlock, "relatedFiles")),
         tags: parseYamlList(readScalar(frontmatterBlock, "tags")),
         uses: uses !== undefined && Number.isFinite(uses) ? uses : undefined,
@@ -376,7 +415,13 @@ export function readMemoryIndex(scope: MemoryScope): MemoryReadIndexResult {
     return { entries: parseIndex(raw), raw, exists: true };
   } catch (error) {
     recordSwallowedError("memory.read", error);
-    return { entries: [], raw: "", exists: false };
+    return {
+      entries: [],
+      raw: "",
+      exists: true,
+      complete: false,
+      warnings: [`Memory projection unavailable: ${error instanceof Error ? error.message : String(error)}`],
+    };
   }
 }
 
@@ -385,7 +430,8 @@ export function readMemoryEntry(scope: MemoryScope, slug: string): MemoryReadEnt
   const path = memoryEntryPath(scope, slug);
   if (!existsSync(path)) return { entry: null, exists: false };
   try {
-    const raw = readFileSync(path, "utf8");
+    const human = join(humanTopicDirectory(memoryDir(scope)), `${slug}.md`);
+    const raw = path === human ? readHumanTopic(memoryDir(scope), `${slug}.md`) : readFileSync(path, "utf8");
     return { entry: parseEntryFile(raw), exists: true };
   } catch (error) {
     recordSwallowedError("memory.read", error);
@@ -394,19 +440,73 @@ export function readMemoryEntry(scope: MemoryScope, slug: string): MemoryReadEnt
 }
 
 export function slugFromIndexFile(file: string): string {
-  return file.replace(/\.md$/u, "");
+  return file.replace(/^human\//u, "").replace(/\.md$/u, "");
 }
 
-/** Every indexed entry with its body loaded. Bounded by the index cap, so at most 200 small files. */
-export function listMemoryRecords(scope: MemoryScope): MemoryRecord[] {
-  const records: MemoryRecord[] = [];
-  for (const index of readMemoryIndex(scope).entries) {
+/** Active topics, including human knowledge omitted by the short projection. */
+export function loadMemoryRecords(scope: MemoryScope): {
+  records: MemoryRecord[];
+  complete: boolean;
+  warnings: string[];
+} {
+  const records = new Map<string, MemoryRecord>();
+  const warnings: string[] = [];
+  const projection = readMemoryIndex(scope);
+  warnings.push(...(projection.warnings ?? []));
+  for (const index of projection.entries) {
     const slug = slugFromIndexFile(index.file);
     if (!IDENTIFIER_PATTERN.test(slug)) continue;
     const { entry } = readMemoryEntry(scope, slug);
-    if (entry) records.push({ slug, index, entry });
+    if (entry) {
+      const record = { slug, index, entry };
+      if (isCurrentMemory(record)) records.set(slug, record);
+    } else warnings.push(`${index.file}: indexed topic unavailable.`);
   }
-  return records;
+  const human = listHumanTopics(memoryDir(scope));
+  warnings.push(...human.warnings);
+  for (const { file, raw } of human.topics) {
+    const slug = slugFromIndexFile(file);
+    const entry = parseEntryFile(raw);
+    const meta = entry?.frontmatter.metadata;
+    if (
+      !entry ||
+      entry.frontmatter.name !== slug ||
+      meta?.source !== "human" ||
+      !isMemoryType(meta.type) ||
+      !meta.indexTitle ||
+      !meta.indexHook
+    ) {
+      records.delete(slug);
+      warnings.push(`${file}: invalid self-indexing human topic.`);
+      continue;
+    }
+    const record = { slug, entry, index: { file: `human/${file}`, title: meta.indexTitle, hook: meta.indexHook } };
+    if (isCurrentMemory(record)) records.set(slug, record);
+    else records.delete(slug);
+  }
+  return { records: [...records.values()], complete: warnings.length === 0, warnings };
+}
+
+export function listMemoryRecords(scope: MemoryScope): MemoryRecord[] {
+  return loadMemoryRecords(scope).records;
+}
+
+export function readActiveMemoryIndex(
+  scope: MemoryScope,
+): MemoryReadIndexResult & { complete: boolean; warnings: string[] } {
+  const loaded = loadMemoryRecords(scope);
+  return {
+    entries: loaded.records.map((record) => ({
+      ...record.index,
+      subject: record.entry.frontmatter.metadata.subject ?? subjectFromStatement(record.index.hook),
+      conflictsWith: record.entry.frontmatter.metadata.conflictsWith,
+      conflictCount: record.entry.frontmatter.metadata.conflictCount,
+    })),
+    raw: readMemoryIndex(scope).raw,
+    exists: loaded.records.length > 0 || existsSync(memoryIndexPath(scope)),
+    complete: loaded.complete,
+    warnings: loaded.warnings,
+  };
 }
 
 /**
@@ -430,13 +530,43 @@ function writeMemoryEntryUnlocked(scope: MemoryScope, input: MemoryWriteInput): 
   const dir = memoryDir(scope);
   const file = `${input.slug}.md`;
   const currentIndex = readMemoryIndex(scope);
-  const withoutExisting = currentIndex.entries.filter((entry) => entry.file !== file);
-  const nextEntries = [...withoutExisting, { title: input.title, file, hook: input.hook }];
-  const nextIndexRaw = `${nextEntries.map(buildIndexLine).join("\n")}\n`;
+  const withoutExisting = currentIndex.entries.filter((entry) => slugFromIndexFile(entry.file) !== input.slug);
+  const previous = readMemoryEntry(scope, input.slug).entry;
+  const human = (input.source ?? previous?.frontmatter.metadata.source) === "human";
+  if (previous?.frontmatter.metadata.source === "human" && !human)
+    throw new Error("A human-stated memory cannot be replaced by a non-human write.");
+  let nextEntries = [
+    ...withoutExisting,
+    { title: input.title, file: human ? `human/${file}` : file, hook: input.hook },
+  ];
+  let nextIndexRaw = `${nextEntries.map(buildIndexLine).join("\n")}\n`;
+  const withinBudget = () =>
+    Buffer.byteLength(nextIndexRaw, "utf8") <= MEMORY_INDEX_MAX_BYTES && nextEntries.length <= MEMORY_INDEX_MAX_LINES;
+  if (!human && currentIndex.complete !== false && !withinBudget()) {
+    for (const pointer of withoutExisting) {
+      const slug = slugFromIndexFile(pointer.file);
+      if (!IDENTIFIER_PATTERN.test(slug) || !existsSync(join(humanTopicDirectory(dir), `${slug}.md`))) continue;
+      const canonical = readMemoryEntry(scope, slug).entry;
+      if (
+        canonical?.frontmatter.metadata.source !== "human" ||
+        !canonical.frontmatter.metadata.indexHook ||
+        !canonical.frontmatter.metadata.indexTitle
+      )
+        continue;
+      nextEntries = nextEntries.filter((entry) => entry.file !== pointer.file);
+      nextIndexRaw = `${nextEntries.map(buildIndexLine).join("\n")}\n`;
+      if (withinBudget()) break;
+    }
+  }
   const indexBytes = Buffer.byteLength(nextIndexRaw, "utf8");
   const indexLines = nextEntries.length;
+  const fitsProjection =
+    currentIndex.complete !== false && indexBytes <= MEMORY_INDEX_MAX_BYTES && indexLines <= MEMORY_INDEX_MAX_LINES;
 
-  if (indexBytes > MEMORY_INDEX_MAX_BYTES || indexLines > MEMORY_INDEX_MAX_LINES) {
+  if (!human && currentIndex.complete === false)
+    throw new Error("Memory projection unavailable; no inference was written.");
+
+  if (!human && !fitsProjection) {
     return {
       ok: false,
       reason: "index_cap_exceeded",
@@ -447,26 +577,53 @@ function writeMemoryEntryUnlocked(scope: MemoryScope, input: MemoryWriteInput): 
     };
   }
 
+  const previousHook =
+    previous?.frontmatter.metadata.indexHook ??
+    currentIndex.entries.find((entry) => slugFromIndexFile(entry.file) === input.slug)?.hook;
+  const relatedFiles = normalizePaths(input.relatedFiles ?? previous?.frontmatter.metadata.relatedFiles);
+  const subject = subjectFor({
+    ...input,
+    source: human ? "human" : (input.source ?? previous?.frontmatter.metadata.source),
+  });
+  const previousSubject =
+    previous?.frontmatter.metadata.subject ?? (previousHook ? subjectFromStatement(previousHook) : undefined);
+  if (previous && !sameSubject(subject, previousSubject)) throw new Error("A memory write cannot change its subject.");
   ensureMemoryDir(scope);
-  const previous = readMemoryEntry(scope, input.slug).entry;
   const now = new Date().toISOString();
   // A rewrite keeps what the entry said before, readable as its history (doc 18 §4.4).
   if (previous && previous.body.trim() !== input.body.trim()) keepVersion(scope, input.slug, previous);
   const revision = (previous?.frontmatter.metadata.revision ?? 0) + 1;
   const confidence =
     input.confidence === undefined ? undefined : Math.max(0, Math.min(1, Math.round(input.confidence * 100) / 100));
+  const sameClaim =
+    previous?.body.trimEnd() === input.body.trimEnd() &&
+    previousHook === oneLine(input.hook) &&
+    JSON.stringify(previous?.frontmatter.metadata.relatedFiles ?? []) === JSON.stringify(relatedFiles ?? []);
 
   const frontmatter: MemoryFrontmatter = {
     name: input.slug,
     description: input.description,
     metadata: {
       type: input.type,
+      indexTitle: human ? oneLine(input.title) : undefined,
+      indexHook: human ? oneLine(input.hook) : undefined,
       modified: now,
       created: previous?.frontmatter.metadata.created ?? now,
       source: input.source ?? previous?.frontmatter.metadata.source ?? "inference",
+      subject,
+      conflictsWith:
+        input.conflictsWith === undefined
+          ? previous?.frontmatter.metadata.conflictsWith
+          : [...new Set(input.conflictsWith)].slice(0, 128),
+      conflictCount:
+        input.conflictCount ??
+        (input.conflictsWith === undefined ? previous?.frontmatter.metadata.conflictCount : input.conflictsWith.length),
       confidence: confidence ?? previous?.frontmatter.metadata.confidence,
-      lastConfirmed: input.confirmed === false ? previous?.frontmatter.metadata.lastConfirmed : now,
-      relatedFiles: normalizePaths(input.relatedFiles ?? previous?.frontmatter.metadata.relatedFiles),
+      lastConfirmed:
+        input.confirmed === true ? now : sameClaim ? previous?.frontmatter.metadata.lastConfirmed : undefined,
+      lastPassedCommand: sameClaim ? previous?.frontmatter.metadata.lastPassedCommand : undefined,
+      commandObservedAt: sameClaim ? previous?.frontmatter.metadata.commandObservedAt : undefined,
+      relatedFiles,
       tags: normalizeTags(input.tags ?? previous?.frontmatter.metadata.tags),
       uses: previous?.frontmatter.metadata.uses ?? 0,
       recalls: previous?.frontmatter.metadata.recalls,
@@ -477,8 +634,29 @@ function writeMemoryEntryUnlocked(scope: MemoryScope, input: MemoryWriteInput): 
       revision,
     },
   };
-  writeFileAtomic(join(dir, file), serializeEntry(frontmatter, input.body));
-  writeFileAtomic(memoryIndexPath(scope), nextIndexRaw);
+  const serialized = serializeEntry(frontmatter, input.body);
+  const topicPath = human ? prepareHumanTopic(dir, file, Buffer.byteLength(serialized, "utf8")) : join(dir, file);
+  writeFileAtomic(topicPath, serialized);
+  let projected = false;
+  let projectionWarning: string | undefined;
+  if (human) {
+    if (fitsProjection) {
+      try {
+        writeFileAtomic(memoryIndexPath(scope), nextIndexRaw);
+        projected = true;
+      } catch (error) {
+        projectionWarning = error instanceof Error ? error.message : String(error);
+        recordSwallowedError("memory.projection", error);
+      }
+    } else
+      projectionWarning =
+        currentIndex.complete === false
+          ? "Short index unavailable; the human topic remains stored and retrievable."
+          : "Short index capacity reached; the human topic remains stored and retrievable.";
+  } else {
+    writeFileAtomic(memoryIndexPath(scope), nextIndexRaw);
+    projected = true;
+  }
   appendHistory(scope, {
     at: now,
     event: previous ? "updated" : "created",
@@ -489,7 +667,13 @@ function writeMemoryEntryUnlocked(scope: MemoryScope, input: MemoryWriteInput): 
     detail: input.hook,
   });
 
-  return { ok: true, indexBytes, indexLines, revision };
+  return {
+    ok: true,
+    indexBytes: projected ? indexBytes : Buffer.byteLength(currentIndex.raw, "utf8"),
+    indexLines: projected ? indexLines : currentIndex.entries.length,
+    revision,
+    ...(human ? { projected, ...(projectionWarning ? { projectionWarning } : {}) } : {}),
+  };
 }
 
 const VERSIONS_DIR = "versions";
@@ -545,7 +729,7 @@ function archiveMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail: st
     const entry = readMemoryEntry(scope, slug).entry;
     if (!entry) return false;
     const now = new Date().toISOString();
-    const line = readMemoryIndex(scope).entries.find((item) => item.file === `${slug}.md`);
+    const line = readMemoryIndex(scope).entries.find((item) => slugFromIndexFile(item.file) === slug);
     writeFileAtomic(
       memoryEntryPath(scope, slug),
       serializeEntry(
@@ -553,7 +737,7 @@ function archiveMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail: st
         entry.body,
       ),
     );
-    const index = readMemoryIndex(scope).entries.filter((item) => item.file !== `${slug}.md`);
+    const index = readMemoryIndex(scope).entries.filter((item) => slugFromIndexFile(item.file) !== slug);
     writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
     // The archive keeps each entry's index line, so a request that matches it can bring it back (recallArchivedEntry).
     const archived: ArchivedEntry = {
@@ -624,10 +808,14 @@ function recallArchivedEntryUnlocked(scope: MemoryScope, slug: string): boolean 
     const entry = readMemoryEntry(scope, slug).entry;
     if (!entry || entry.frontmatter.metadata.status !== "archived") return false;
     const archived = listArchivedEntries(scope).find((item) => item.slug === slug);
-    const index = readMemoryIndex(scope).entries.filter((item) => item.file !== `${slug}.md`);
+    const index = readMemoryIndex(scope).entries.filter((item) => slugFromIndexFile(item.file) !== slug);
     const line = {
       title: archived?.title ?? slug,
-      file: `${slug}.md`,
+      file:
+        entry.frontmatter.metadata.source === "human" &&
+        existsSync(join(humanTopicDirectory(memoryDir(scope)), `${slug}.md`))
+          ? `human/${slug}.md`
+          : `${slug}.md`,
       hook: archived?.hook ?? entry.frontmatter.description,
     };
     const nextIndex = `${[...index, line].map(buildIndexLine).join("\n")}\n`;
@@ -680,7 +868,7 @@ function deliverReminderUnlocked(scope: MemoryScope, slug: string, detail: strin
         entry.body,
       ),
     );
-    const index = readMemoryIndex(scope).entries.filter((item) => item.file !== `${slug}.md`);
+    const index = readMemoryIndex(scope).entries.filter((item) => slugFromIndexFile(item.file) !== slug);
     writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
     appendHistory(scope, { at: now, event: "delivered", slug, detail });
     return true;
@@ -711,10 +899,26 @@ function supersedeMemoryEntryUnlocked(scope: MemoryScope, oldSlug: string, bySlu
     const old = readMemoryEntry(scope, oldSlug).entry;
     const next = readMemoryEntry(scope, bySlug).entry;
     if (!old || !next) return false;
+    if (old.frontmatter.metadata.source === "human" && next.frontmatter.metadata.source !== "human") return false;
+    const oldHookForScope =
+      old.frontmatter.metadata.indexHook ??
+      readMemoryIndex(scope).entries.find((entry) => slugFromIndexFile(entry.file) === oldSlug)?.hook ??
+      "";
+    const nextHookForScope =
+      next.frontmatter.metadata.indexHook ??
+      readMemoryIndex(scope).entries.find((entry) => slugFromIndexFile(entry.file) === bySlug)?.hook ??
+      "";
+    if (
+      !sameSubject(
+        old.frontmatter.metadata.subject ?? subjectFromStatement(oldHookForScope),
+        next.frontmatter.metadata.subject ?? subjectFromStatement(nextHookForScope),
+      )
+    )
+      return false;
     const now = new Date().toISOString();
     const oldFile = memoryEntryPath(scope, oldSlug);
     const oldHook =
-      readMemoryIndex(scope).entries.find((entry) => entry.file === `${oldSlug}.md`)?.hook ??
+      readMemoryIndex(scope).entries.find((entry) => slugFromIndexFile(entry.file) === oldSlug)?.hook ??
       old.frontmatter.description;
     writeFileAtomic(
       oldFile,
@@ -735,7 +939,7 @@ function supersedeMemoryEntryUnlocked(scope: MemoryScope, oldSlug: string, bySlu
         nextBody,
       ),
     );
-    const index = readMemoryIndex(scope).entries.filter((entry) => entry.file !== `${oldSlug}.md`);
+    const index = readMemoryIndex(scope).entries.filter((entry) => slugFromIndexFile(entry.file) !== oldSlug);
     writeFileAtomic(memoryIndexPath(scope), index.length > 0 ? `${index.map(buildIndexLine).join("\n")}\n` : "");
     appendHistory(scope, {
       at: now,
@@ -861,24 +1065,49 @@ function confirmMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail?: s
 }
 
 /**
- * Re-confirms the entries a command that just passed vouches for (audit doc 15, M2 and Phase 4.4): an entry
- * that names that exact command in backticks is current again, whatever its related files did since, so
- * staleness is no longer one-way. Only an exact match counts: `bun test` passing says nothing for an entry
- * that insists on `bun test --preload ./test/setup.ts`, and would rather contradict it.
+ * Observes an exact named command's pass without confirming arbitrary claims in its entry. A command
+ * is a recall signal under the project's standing policy, never confirmation of the entry's claims.
  */
-export function reconfirmByPassingCommands(scope: MemoryScope, commands: readonly string[]): string[] {
+export function recordMemoryCommandEvidence(scope: MemoryScope, commands: readonly string[]): string[] {
   const normalize = (command: string) => command.trim().replace(/\s+/gu, " ");
   const passed = new Set(commands.map(normalize).filter((command) => command.length > 0));
   if (passed.size === 0) return [];
-  const confirmed: string[] = [];
+  const observed: string[] = [];
   for (const record of listMemoryRecords(scope)) {
     const named = namedCommands(`${record.index.hook}\n${record.entry.body}`);
     const command = named.find((candidate) => passed.has(candidate));
-    if (command && confirmMemoryEntry(scope, record.slug, `\`${command}\` passed`)) confirmed.push(record.slug);
+    if (!command) continue;
+    const saved = safeMemoryMutation(
+      scope,
+      "command-evidence",
+      false,
+      () => {
+        const entry = readMemoryEntry(scope, record.slug).entry;
+        if (
+          !entry ||
+          !isCurrentMemory({ ...record, entry }) ||
+          entry.frontmatter.metadata.revision !== record.entry.frontmatter.metadata.revision ||
+          entry.body !== record.entry.body
+        )
+          return false;
+        const now = new Date().toISOString();
+        entry.frontmatter.metadata.lastPassedCommand = normalize(command);
+        entry.frontmatter.metadata.commandObservedAt = now;
+        writeFileAtomic(memoryEntryPath(scope, record.slug), serializeEntry(entry.frontmatter, entry.body));
+        appendHistory(scope, {
+          at: now,
+          event: "command-observed",
+          slug: record.slug,
+          detail: `\`${normalize(command)}\` passed; content not confirmed`,
+        });
+        return true;
+      },
+      BOOKKEEPING_WAIT_MS,
+    );
+    if (saved) observed.push(record.slug);
   }
-  // The turn used what these entries say: that strengthens them (recordRecall).
-  recordRecall(scope, confirmed);
-  return confirmed;
+  recordRecall(scope, observed);
+  return observed;
 }
 
 /**
@@ -898,11 +1127,12 @@ function deleteMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail?: st
 
   const dir = memoryDir(scope);
   const file = `${slug}.md`;
-  const entryPath = join(dir, file);
+  const entryPath = memoryEntryPath(scope, slug);
   const fileExists = existsSync(entryPath);
+  if (fileExists && entryPath === join(humanTopicDirectory(dir), file)) readHumanTopic(dir, file);
 
   const currentIndex = readMemoryIndex(scope);
-  const withoutEntry = currentIndex.entries.filter((entry) => entry.file !== file);
+  const withoutEntry = currentIndex.entries.filter((entry) => slugFromIndexFile(entry.file) !== slug);
   const wasIndexed = withoutEntry.length !== currentIndex.entries.length;
 
   if (!fileExists && !wasIndexed) {
@@ -910,6 +1140,8 @@ function deleteMemoryEntryUnlocked(scope: MemoryScope, slug: string, detail?: st
   }
 
   if (fileExists) unlinkSync(entryPath);
+  const legacyPath = join(dir, file);
+  if (legacyPath !== entryPath && existsSync(legacyPath)) unlinkSync(legacyPath);
   if (wasIndexed) {
     const nextIndexRaw = withoutEntry.length > 0 ? `${withoutEntry.map(buildIndexLine).join("\n")}\n` : "";
     writeFileAtomic(memoryIndexPath(scope), nextIndexRaw);

@@ -37,6 +37,106 @@ afterEach(async () => {
 });
 
 describe("createWorkspaceLspManager", () => {
+  it("reports a transport failure as unavailable rather than a successful empty reference search", async () => {
+    const root = await createTempWorkspace();
+    const filePath = path.join(root, "demo.ts");
+    await writeFile(filePath, "export const demo = 1;\n");
+    const manager = createWorkspaceLspManager(root, BASE_SETTINGS, {
+      createClient: async () =>
+        createFakeClient({
+          sendRequest: async () => {
+            throw new Error("transport disconnected");
+          },
+        }),
+    });
+    const result = await manager.query({ operation: "findReferences", filePath });
+    expect(result).toMatchObject({ success: false, availability: { status: "unavailable", responded: [] } });
+    expect(result.output).toContain("transport disconnected");
+    expect(result.output).not.toContain("No results found");
+    await manager.close();
+  });
+
+  it("reports a failure of the second call-hierarchy request without escaping the query", async () => {
+    const root = await createTempWorkspace();
+    const filePath = path.join(root, "demo.ts");
+    await writeFile(filePath, "export function demo() {}\n");
+    const manager = createWorkspaceLspManager(root, BASE_SETTINGS, {
+      createClient: async () =>
+        createFakeClient({
+          sendRequest: async (method) => {
+            if (method === "textDocument/prepareCallHierarchy") return [{ name: "demo" }];
+            throw new Error("incoming calls timed out");
+          },
+        }),
+    });
+    const result = await manager.query({ operation: "incomingCalls", filePath });
+    expect(result).toMatchObject({ success: false, availability: { status: "unavailable" } });
+    expect(result.output).toContain("incoming calls timed out");
+    await manager.close();
+  });
+
+  it("preserves partial results when one queried server fails and never promotes them to complete", async () => {
+    const root = await createTempWorkspace();
+    const filePath = path.join(root, "demo.ts");
+    await writeFile(filePath, "export const demo = 1;\n");
+    const settings = {
+      ...BASE_SETTINGS,
+      servers: [...BASE_SETTINGS.servers, { ...BASE_SETTINGS.servers[0], id: "broken" }],
+    };
+    const manager = createWorkspaceLspManager(root, settings, {
+      createClient: async ({ serverId }) =>
+        createFakeClient({
+          sendRequest: async () => {
+            if (serverId.includes("broken")) throw new Error("server did not answer");
+            return [{ name: "realReference", uri: "file:///consumer.ts" }];
+          },
+        }),
+    });
+    const result = await manager.query({ operation: "findReferences", filePath });
+    expect(result).toMatchObject({ success: false, availability: { status: "partial" } });
+    expect(result.output).toContain("realReference");
+    expect(result.output).toContain("server did not answer");
+    await manager.close();
+  });
+
+  it("identifies a valid empty response as complete only within the queried servers", async () => {
+    const root = await createTempWorkspace();
+    const filePath = path.join(root, "demo.ts");
+    await writeFile(filePath, "export const demo = 1;\n");
+    const manager = createWorkspaceLspManager(root, BASE_SETTINGS, { createClient: async () => createFakeClient({}) });
+    const result = await manager.query({ operation: "findReferences", filePath });
+    expect(result).toMatchObject({ success: true, availability: { status: "complete", failed: [] } });
+    expect(result.output).toContain("No results found");
+    expect(result.output).toContain("queried LSP");
+    await manager.close();
+  });
+
+  it("does not query stale source after synchronizing the document fails", async () => {
+    const root = await createTempWorkspace();
+    const filePath = path.join(root, "demo.ts");
+    await writeFile(filePath, "export const demo = 1;\n");
+    const sendRequest = vi.fn(async () => []);
+    const client = createFakeClient({ sendRequest });
+    client.openOrChangeFile.mockRejectedValueOnce(new Error("document could not be synchronized"));
+    const manager = createWorkspaceLspManager(root, BASE_SETTINGS, { createClient: async () => client });
+    const result = await manager.query({ operation: "findReferences", filePath });
+    expect(result).toMatchObject({ success: false, availability: { status: "unavailable" } });
+    expect(result.output).toContain("document could not be synchronized");
+    expect(sendRequest).not.toHaveBeenCalled();
+    await manager.close();
+  });
+
+  it("reports a missing query source as unavailable rather than querying a stale LSP document", async () => {
+    const root = await createTempWorkspace();
+    const client = createFakeClient({});
+    const manager = createWorkspaceLspManager(root, BASE_SETTINGS, { createClient: async () => client });
+    const result = await manager.query({ operation: "findReferences", filePath: path.join(root, "missing.ts") });
+    expect(result).toMatchObject({ success: false, availability: { status: "unavailable" } });
+    expect(result.output).toContain("Could not read the file");
+    expect(client.openOrChangeFile).not.toHaveBeenCalled();
+    await manager.close();
+  });
+
   it("routes queries through the matching LSP client", async () => {
     const root = await createTempWorkspace();
     const filePath = path.join(root, "src", "demo.ts");

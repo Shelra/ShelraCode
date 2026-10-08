@@ -115,7 +115,7 @@ describe("memory retrieval", () => {
       maxListed: 5,
     });
     expect(context.listed).toHaveLength(5);
-    expect(context.text).toContain(`… and ${20 - context.expanded.length - 5} more; memory_list shows them all.`);
+    expect(context.text).toContain(`… and ${20 - context.expanded.length - 5} more; memory_list pages through them.`);
     // In a store this size, entries that share nothing with the request are counted, not listed.
     const unrelated = buildMemoryContext(listMemoryRecords(scope), { text: "rename the logo file" }, workspace, {
       maxListed: 5,
@@ -123,7 +123,7 @@ describe("memory retrieval", () => {
     expect(unrelated.expanded).toEqual([]);
     expect(unrelated.listed).toEqual([]);
     expect(unrelated.text).toContain("Other saved entries: none related to this request.");
-    expect(unrelated.text).toContain("… and 20 more; memory_list shows them all.");
+    expect(unrelated.text).toContain("… and 20 more; memory_list pages through them.");
   });
 
   it("returns nothing for an empty store", () => {

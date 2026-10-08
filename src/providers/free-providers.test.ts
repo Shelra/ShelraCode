@@ -81,10 +81,12 @@ describe("free providers, review round 3 (2026-09-24)", () => {
 
   it("refuses --provider outside a headless prompt instead of dropping it", () => {
     expect(freeProviderCliError({ provider: "groq", prompt: true, autonomous: false, verify: false })).toBeNull();
+    expect(freeProviderCliError({ provider: "groq", prompt: true, autonomous: true, verify: false })).toBeNull();
+    expect(freeProviderCliError({ provider: "groq", prompt: false, autonomous: true, verify: false })).toBeNull();
     expect(freeProviderCliError({ prompt: false, autonomous: false, verify: false })).toBeNull();
     for (const mode of [
       { prompt: false, autonomous: false, verify: false },
-      { prompt: true, autonomous: true, verify: false },
+      { prompt: true, autonomous: true, verify: true },
       { prompt: false, autonomous: false, verify: true },
     ]) {
       expect(freeProviderCliError({ provider: "groq", ...mode })).toContain("--provider groq runs a headless prompt");

@@ -76,7 +76,7 @@ export function freeProviderCliError(input: {
   autonomous: boolean;
   verify: boolean;
 }): string | null {
-  if (!input.provider || (input.prompt && !input.autonomous && !input.verify)) return null;
+  if (!input.provider || ((input.prompt || input.autonomous) && !input.verify)) return null;
   return `--provider ${input.provider} runs a headless prompt: pass -p "..." (or use \`shelra bench --provider ${input.provider}\`).`;
 }
 

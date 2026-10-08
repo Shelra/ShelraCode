@@ -798,6 +798,8 @@ interface SessionInspectorProps {
   activeSubagentStartedAt: number | null;
   /** When the host last observed the foreground sub-agent report a new action (§19). */
   lastActivityAt: number | null;
+  /** What the foreground sub-agent has reported so far, oldest first: the answer to "what is it doing?". */
+  subagentFeed?: readonly SubagentFeedEntry[];
   /** Real delegation records — the same `DelegationManager.list()` output `delegation_list` returns. */
   delegations: DelegationRun[];
   activeToolCalls: ToolCall[];
@@ -825,6 +827,7 @@ export function SessionInspector({
   activeSubagent,
   activeSubagentStartedAt,
   lastActivityAt,
+  subagentFeed = [],
   delegations,
   activeToolCalls,
   contextSummary,
@@ -934,6 +937,7 @@ export function SessionInspector({
               activeSubagent={activeSubagent}
               startedAt={activeSubagentStartedAt}
               lastActivityAt={lastActivityAt}
+              feed={subagentFeed}
               delegations={delegations}
               now={now}
             />
@@ -1117,6 +1121,7 @@ function AgentsTab({
   activeSubagent,
   startedAt,
   lastActivityAt,
+  feed,
   delegations,
   now,
 }: {
@@ -1124,13 +1129,14 @@ function AgentsTab({
   activeSubagent: SubagentStatus | null;
   startedAt: number | null;
   lastActivityAt: number | null;
+  feed: readonly SubagentFeedEntry[];
   delegations: DelegationRun[];
   now: number;
 }) {
   const running = delegations.filter((delegation) => delegation.status === "running");
   const finished = delegations.filter((delegation) => delegation.status !== "running");
 
-  if (!activeSubagent && delegations.length === 0) {
+  if (!activeSubagent && delegations.length === 0 && feed.length === 0) {
     return (
       <EmptyState
         t={t}
@@ -1158,6 +1164,26 @@ function AgentsTab({
       ) : (
         <text fg={t.textMuted}>{"No foreground sub-agent is running."}</text>
       )}
+      {feed.length > 0 ? (
+        <>
+          <SectionTitle t={t} title={`What it has reported (${feed.length})`} />
+          {[...feed]
+            .slice(-FEED_ROWS)
+            .reverse()
+            .map((entry, index) => (
+              <text
+                key={`${entry.at}-${entry.detail}`}
+                fg={index === 0 && activeSubagent ? t.text : t.textMuted}
+                wrapMode="word"
+              >
+                {`${formatElapsed(Math.max(0, now - entry.at))} ago  ${entry.detail}`}
+              </text>
+            ))}
+          {feed.length > FEED_ROWS ? (
+            <text fg={t.textDim}>{`+ ${feed.length - FEED_ROWS} earlier reports`}</text>
+          ) : null}
+        </>
+      ) : null}
 
       <SectionTitle t={t} title={`Background delegations running (${running.length})`} />
       {running.length === 0 ? (
@@ -1216,6 +1242,16 @@ function AgentsTab({
       </box>
     </box>
   );
+}
+
+/** How many of a sub-agent's latest reports the Agents view lists. */
+const FEED_ROWS = 14;
+
+/** One thing a sub-agent reported: when, and what (its tool call, a retry, that it finished). */
+export interface SubagentFeedEntry {
+  at: number;
+  agent: string;
+  detail: string;
 }
 
 /** Honest idle wording: says so plainly when the host holds no timestamp, instead of showing 0s. */

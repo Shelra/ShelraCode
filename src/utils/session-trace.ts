@@ -60,10 +60,18 @@ export function traceDir(): string | null {
 
 const SECRET_RE =
   /\b(?:sk-(?:or-(?:v1-)?)?[A-Za-z0-9_-]{16,}|gsk_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abp]-[A-Za-z0-9-]{10,})|(\bBearer\s+)[A-Za-z0-9._~+/-]{16,}=*/gu;
+/** A named query or assignment may carry an opaque credential with no recognizable provider prefix. */
+const NAMED_SECRET_RE =
+  /(\b(?:[a-z][a-z0-9]*_)*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)[ \t]*=[ \t]*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s"'&;,#<>`]+)/giu;
 
-/** Known key and token shapes replaced by `***`. */
+/** Known credentials and explicitly sensitive query/assignment values replaced by `***`. */
 export function redact(text: string): string {
-  return text.replace(SECRET_RE, (_match, bearer: string | undefined) => (bearer ? `${bearer}***` : "***"));
+  return text
+    .replace(SECRET_RE, (_match, bearer: string | undefined) => (bearer ? `${bearer}***` : "***"))
+    .replace(NAMED_SECRET_RE, (_match, name: string, value: string) => {
+      const quote = value[0] === '"' || value[0] === "'" ? value[0] : "";
+      return `${name}${quote}***${quote}`;
+    });
 }
 
 function clip(text: string, max: number): string {

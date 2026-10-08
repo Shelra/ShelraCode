@@ -4,7 +4,7 @@ import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { appendEpisode, episodeFrom } from "../memory/episodes";
-import { projectMemoryScope, writeMemoryEntry } from "../memory/store";
+import { listMemoryRecords, memoryIndexPath, projectMemoryScope, writeMemoryEntry } from "../memory/store";
 import type {
   ProviderAdapter,
   ProviderEvent,
@@ -138,7 +138,75 @@ describe("automatic project memory consultation", () => {
   afterEach(async () => {
     process.chdir(originalCwd);
     executeEventHooksMock.mockReset();
+    vi.unstubAllEnvs();
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  it("captures all eight user rules before the model round and recalls them in a fresh Agent without the projection", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-eight-rules-"));
+    tempDirs.push(cwd);
+    vi.stubEnv("SHELRA_USER_MEMORY_ROOT", path.join(cwd, "user-home"));
+    const statements = [
+      "Always verify billing ownership before changing invoices",
+      "Never expose personal identifiers in telemetry logs",
+      "Always preserve queue ordering across worker restarts",
+      "Never mutate database schemas through the frontend",
+      "Always document rejected architectural alternatives",
+      "Never add a dependency without an existing requirement",
+      "Always validate migrations against current tenant records",
+      "Never bypass authentication for desktop integrations",
+    ];
+    const scope = projectMemoryScope(cwd);
+    const firstProvider = new CapturingProvider();
+    const first = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      cwd,
+      provider: firstProvider,
+      persistSession: false,
+    });
+    for await (const _chunk of first.processMessage(`${statements.join(".\n")}.`)) {
+      /* drain */
+    }
+    expect(
+      listMemoryRecords(scope)
+        .map((record) => record.index.hook)
+        .sort(),
+    ).toEqual([...statements].sort());
+    for (const statement of statements) expect(firstProvider.lastRequest?.system).toContain(statement);
+    await rm(memoryIndexPath(scope));
+    const nextProvider = new CapturingProvider();
+    const next = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      cwd,
+      provider: nextProvider,
+      persistSession: false,
+    });
+    for await (const _chunk of next.processMessage("Continue investigating this project")) {
+      /* drain */
+    }
+    for (const statement of statements) expect(nextProvider.lastRequest?.system).toContain(statement);
+    expect(listMemoryRecords(scope)).toHaveLength(8);
+  });
+
+  it("keeps working but tells the model when a new user rule could not be persisted", async () => {
+    executeEventHooksMock.mockResolvedValue(emptyHookResult);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "agent-rule-capture-failed-"));
+    tempDirs.push(cwd);
+    vi.stubEnv("SHELRA_USER_MEMORY_ROOT", path.join(cwd, "user-home"));
+    await mkdir(path.join(cwd, ".shelra", "memory"), { recursive: true });
+    await writeFile(path.join(cwd, ".shelra", "memory", "human"), "A file blocks the canonical topic directory");
+    const provider = new CapturingProvider();
+    const agent = new Agent(undefined, undefined, "gate-test-model", undefined, {
+      cwd,
+      provider,
+      persistSession: false,
+    });
+    for await (const _chunk of agent.processMessage("Always preserve invoice ownership in the billing domain")) {
+      /* drain */
+    }
+    expect(provider.lastRequest).not.toBeNull();
+    expect(provider.lastRequest?.system).toContain("MEMORY CAPTURE INCOMPLETE");
+    expect(provider.lastRequest?.system).toContain("these declarations were not saved");
+    expect(listMemoryRecords(projectMemoryScope(cwd))).toEqual([]);
   });
 
   it("injects the saved memory index into the system prompt automatically", async () => {

@@ -103,9 +103,13 @@ verification score is the share of the task's own runnable checks (for example
 `bun test`) that the agent executed successfully itself; hidden oracle commands
 are excluded from that denominator.
 
-`--agent shelra-autonomy` runs the older `AutonomyKernel` engine
-(`--autonomous`). It is kept for comparison; its scores do not describe the
-product path.
+`--agent shelra-autonomy` is a compatibility alias of `--agent shelra` and runs
+that same protected product loop. New runs use `harness: agent-chat`. Historical
+runs tagged `autonomy-runtime` used the older separate `AutonomyKernel`; their
+scores remain historical evidence and do not describe the current product path.
+The CLI's `--autonomous` also uses the product loop and exits successfully only
+when its structured host result is `verified`. That host verdict and the
+benchmark's external oracle grade remain separate signals.
 
 `--agent claude-code` and `--agent codex` are reference agents: `claude -p` and
 `codex exec` run headless on the same task workspaces and are graded by the same

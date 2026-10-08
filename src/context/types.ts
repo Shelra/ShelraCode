@@ -15,4 +15,8 @@ export interface ContextPacket {
   promptAppendix: string;
   files: string[];
   truncated: boolean;
+  /** Source-backed package metadata; completeness applies to manifest observation, not semantic architecture. */
+  project?: ProjectStructure;
 }
+
+import type { ProjectStructure } from "./project-model";

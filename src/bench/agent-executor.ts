@@ -20,12 +20,10 @@ import type {
 /**
  * Benchmark executor for Shelra's real product path.
  *
- * `--agent shelra` drives every task through `Agent.processMessage()` — the same turn loop,
- * tool set, completion gate, checkpoints, hooks and memory that an interactive or
- * `--prompt` session uses. The older `shelra-executor.ts` drives `AutonomyKernel` instead, a
- * separate engine that shares none of that hardening, so its scores never described what a
- * user actually gets (research/lanes/15-shelracode-forensic-audit.md, section 5.1). This
- * executor exists so a benchmark number can be attributed to the harness people run.
+ * `--agent shelra` and its `shelra-autonomy` alias drive every task through
+ * `Agent.processMessage()`, the same protected turn loop that interactive, `--prompt`
+ * and `--autonomous` sessions use. Historical `autonomy-runtime` scores came from a
+ * separate engine and do not describe this executor.
  *
  * The agent never sees the benchmark-owned `CheckSpec`s. It must plan, implement, and verify
  * on its own; the host then grades the finished workspace with the external oracle. That
@@ -288,10 +286,14 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
       const { acceptance, failedRequired, coding, intent, report } = grade;
       const benchmarkVerified = grade.verified;
       const verification = verificationScore(task.acceptanceCriteria ?? [], counters, packageScripts(workspace));
+      const hostResult = agent.getLastTurnResult();
       const hostNotes = agent.getTurnEndNotes().join("\n");
       const behavior = toBehavior(counters, hostNotes);
+      const hostReportedCompletion = hostResult
+        ? hostResult.status === "verified" || hostResult.status === "answered"
+        : !HOST_END_NOTE_RE.test(hostNotes);
       behavior.falseCompletion =
-        grade.requiredCount > 0 && !benchmarkVerified && !timedOut && !turnError && !HOST_END_NOTE_RE.test(hostNotes);
+        grade.requiredCount > 0 && !benchmarkVerified && !timedOut && !turnError && hostReportedCompletion;
       const failureType = classifyFailure({ benchmarkVerified, timedOut, turnError, failedRequired, counters });
 
       return {
@@ -310,6 +312,16 @@ export function createAgentBenchmarkExecutor(options: AgentBenchmarkExecutorOpti
           sessionId,
           model: options.modelId,
           verified: benchmarkVerified,
+          evaluation: grade.evaluation ? { ...grade.evaluation } : null,
+          // The external oracle's grade and the product's own verdict are separate evidence.
+          hostResult: hostResult
+            ? {
+                ...hostResult,
+                changedFiles: [...hostResult.changedFiles],
+                checks: hostResult.checks.map((check) => ({ ...check })),
+                limitations: [...hostResult.limitations],
+              }
+            : null,
           completionBlocked: behavior.completionBlocked ?? false,
           timedOut,
           turnError,
@@ -531,7 +543,6 @@ function classifyFailure(input: {
   if (input.timedOut) return "timeout";
   if (input.turnError && input.counters.filesChanged.size === 0) return "model_failure";
   if (input.counters.filesChanged.size === 0) return "implementation_failure";
-  // Mirrors `shelra-executor.ts` so the two harness adapters stay comparable in run history.
   return input.failedRequired.some((criterion) => criterion.status === "failed")
     ? "intent_failure"
     : "verification_failure";

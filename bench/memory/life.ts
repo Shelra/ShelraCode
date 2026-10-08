@@ -1,12 +1,12 @@
 /**
  * A project's life, simulated (docs/architecture/18-MEMORY-V2.md §4.6): does memory behave like a person's? Deterministic,
- * no model, no disk, and faithful to what the product does (review round 3 found an earlier version that handed each
- * recall to the entry the simulation knew was needed, which the product cannot know):
+ * no model and no disk. Retrieval/dynamics use product functions; choosing which shown memory to use is scripted
+ * by this fixture's oracle, not measured agent behavior:
  *
  * - every request goes through the same buildMemoryContext a turn uses; being shown is exposure only;
  * - the agent can use what it needed only when it was shown (in full, or as a pointer it can memory_read); using it
- *   means running the command the entry names, and the entries that name a command that passed are strengthened by
- *   the same rule the store applies (namedCommands, as in reconfirmByPassingCommands);
+ *   means running its named command. The standing product policy rehearses entries naming that command;
+ *   matching it never confirms the truth of the rest of an entry;
  * - once a month, consolidation archives what faded (hasFaded, as in consolidateMemory).
  *
  * The control replays the same days with no strengthening and no fading.
@@ -143,6 +143,8 @@ function run(dynamic: boolean) {
         if (ran && namedCommands(`${item.record.index.hook}\n${item.record.entry.body}`).includes(ran)) {
           const meta = item.record.entry.frontmatter.metadata;
           meta.recalls = withRecall(meta.recalls, new Date(now));
+          meta.lastPassedCommand = ran;
+          meta.commandObservedAt = new Date(now).toISOString();
         }
       }
     }

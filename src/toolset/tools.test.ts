@@ -1,5 +1,5 @@
 import { execFileSync } from "child_process";
-import { mkdtemp, readFile as readFsFile, rm, writeFile as writeFsFile } from "fs/promises";
+import { mkdir, mkdtemp, readdir, readFile as readFsFile, rm, writeFile as writeFsFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
@@ -710,6 +710,180 @@ describe("schedule daemon tools", () => {
 });
 
 describe("memory tools", () => {
+  it("reports a real persistence error without claiming the memory was saved", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-memory-write-error-"));
+    try {
+      await mkdir(path.join(cwd, ".shelra", "memory", "blocked-topic.md"), { recursive: true });
+      const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+        string,
+        { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+      >;
+      const result = (await tools.memory_write.execute(
+        {
+          slug: "blocked-topic",
+          title: "Archive retention",
+          hook: "Archives retain tenant partitions",
+          type: "architecture",
+          description: "Retention contract",
+          body: "Archives retain tenant partitions through a bounded retention window and an audit ledger.",
+        },
+        {},
+      )) as { success: boolean; output: string };
+      expect(result.success).toBe(false);
+      expect(result.output).not.toContain("Saved memory");
+      expect(result.output).not.toContain("already covers");
+      expect(listMemoryRecords(projectMemoryScope(cwd))).toEqual([]);
+      expect((await readdir(path.join(cwd, ".shelra", "memory"))).filter((name) => name.includes(".tmp-"))).toEqual([]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a full category as a failed write, never as an existing covering entry", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-memory-full-type-"));
+    try {
+      const scope = projectMemoryScope(cwd);
+      for (let index = 0; index < 40; index++) {
+        expect(
+          writeMemoryEntry(scope, {
+            slug: `stored-${index}`,
+            title: `Stored ${index}`,
+            hook: `Old ${index}`,
+            type: "architecture",
+            description: "Old information",
+            body: `Existing subsystem ${index}.`,
+          }).ok,
+        ).toBe(true);
+      }
+      const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+        string,
+        { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+      >;
+      const result = (await tools.memory_write.execute(
+        {
+          slug: "novel-storage",
+          title: "Replication topology",
+          hook: "Raft quorum owns shard replication",
+          type: "architecture",
+          description: "Storage topology",
+          body: "Raft quorum owns shard replication; followers persist consensus snapshots on separate volumes.",
+        },
+        {},
+      )) as { success: boolean; output: string };
+      expect(result.success).toBe(false);
+      expect(result.output).toContain("40 entries");
+      expect(result.output).not.toContain("already covers");
+      expect(readMemoryEntry(scope, "novel-storage").exists).toBe(false);
+      expect(listMemoryRecords(scope)).toHaveLength(40);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reports authority refusal without claiming the conflicting proposal is already covered", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-memory-authority-"));
+    try {
+      const scope = projectMemoryScope(cwd);
+      const input = {
+        slug: "billing-storage",
+        title: "Billing storage",
+        hook: "Billing owns invoices in PostgreSQL",
+        type: "architecture" as const,
+        description: "A user's decision",
+        body: "Billing owns invoices in PostgreSQL and never stores them in a frontend database.",
+      };
+      expect(writeMemoryEntry(scope, { ...input, source: "human" }).ok).toBe(true);
+      const before = readMemoryEntry(scope, input.slug).entry;
+      const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+        string,
+        { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+      >;
+      const result = (await tools.memory_write.execute(
+        {
+          ...input,
+          hook: "Frontend owns invoices",
+          body: "Store invoices in browser localStorage instead of PostgreSQL.",
+        },
+        {},
+      )) as { success: boolean; output: string };
+      expect(result.success).toBe(false);
+      expect(result.output).toContain("human");
+      expect(result.output).not.toContain("already covers");
+      expect(readMemoryEntry(scope, input.slug).entry).toEqual(before);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("acknowledges a real duplicate without rewriting its body or revision", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-memory-duplicate-"));
+    try {
+      const scope = projectMemoryScope(cwd);
+      const input = {
+        slug: "queue-order",
+        title: "Queue ordering",
+        hook: "Jobs preserve tenant ordering",
+        type: "architecture" as const,
+        description: "Queue contract",
+        body: "Jobs preserve tenant ordering with a partition key; independent tenants run concurrently.",
+      };
+      const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+        string,
+        { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+      >;
+      const first = (await tools.memory_write.execute(input, {})) as { success: boolean };
+      expect(first.success).toBe(true);
+      const before = readMemoryEntry(scope, input.slug).entry;
+      const second = (await tools.memory_write.execute(input, {})) as { success: boolean; output: string };
+      expect(second.success).toBe(true);
+      expect(second.output).toContain(`existing entry "${input.slug}"`);
+      expect(readMemoryEntry(scope, input.slug).entry).toEqual(before);
+      expect(listMemoryRecords(scope)).toHaveLength(1);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reports an index capacity refusal without claiming storage succeeded", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-memory-full-index-"));
+    try {
+      const scope = projectMemoryScope(cwd);
+      for (let index = 0; index < 200; index++) {
+        expect(
+          writeMemoryEntry(scope, {
+            slug: `stored-${index}`,
+            title: `Old ${index}`,
+            hook: "Old",
+            type: "conventions",
+            description: "Old",
+            body: "Old information",
+          }).ok,
+        ).toBe(true);
+      }
+      const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
+        string,
+        { execute: (input: unknown, context?: unknown) => Promise<unknown> }
+      >;
+      const result = (await tools.memory_write.execute(
+        {
+          slug: "novel-shard",
+          title: "Shard placement",
+          hook: "Zone affinity routes shards",
+          type: "architecture",
+          description: "Routing contract",
+          body: "Zone affinity routes shards by replica location, preserving quorum on zone failure.",
+        },
+        {},
+      )) as { success: boolean; output: string };
+      expect(result.success).toBe(false);
+      expect(result.output).toContain("index is full");
+      expect(readMemoryEntry(scope, "novel-shard").exists).toBe(false);
+      expect(listMemoryRecords(scope)).toHaveLength(200);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  }, 20_000);
+
   it("reports no memory saved yet before anything is written", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-tools-memory-"));
     const tools = createTools(new BashTool(cwd), {} as never, "agent") as Record<
@@ -1042,5 +1216,54 @@ describe("hardenToolSet", () => {
     await expect(
       tools.slow.execute?.({}, { toolCallId: "t", messages: [], abortSignal: controller.signal }),
     ).rejects.toThrow("aborted");
+  });
+});
+
+describe("open_in_browser", () => {
+  type Exec = { execute: (input: unknown, context?: unknown) => Promise<{ success: boolean; output: string }> };
+  const toolsFor = (mode: "agent" | "plan", cwd: string) =>
+    createTools(new BashTool(cwd), {} as never, mode) as Record<string, Exec>;
+
+  it("exists in agent mode only, and says what it is for", () => {
+    expect(toolsFor("agent", "/tmp").open_in_browser).toBeDefined();
+    expect(toolsFor("plan", "/tmp").open_in_browser).toBeUndefined();
+  });
+
+  it("refuses a site that is not on this machine, a scheme that is not a page, and a call with no target or two", async () => {
+    const tool = toolsFor("agent", os.tmpdir()).open_in_browser as Exec;
+    const remote = await tool.execute({ url: "https://example.com" });
+    expect(remote.success).toBe(false);
+    expect(remote.output).toContain("not on this machine");
+    expect((await tool.execute({ url: "file:///C:/Windows/win.ini" })).success).toBe(false);
+    expect((await tool.execute({})).output).toContain("exactly one of url or path");
+    expect((await tool.execute({ url: "http://localhost:3000", path: "index.html" })).output).toContain("exactly one");
+  });
+
+  it("opens nothing, and says what to tell the person, where SHELRA_NO_BROWSER is set", async () => {
+    const previous = process.env.SHELRA_NO_BROWSER;
+    process.env.SHELRA_NO_BROWSER = "1";
+    try {
+      const tool = toolsFor("agent", os.tmpdir()).open_in_browser as Exec;
+      const result = await tool.execute({ url: "http://localhost:5173" });
+      expect(result.success).toBe(false);
+      expect(result.output).toContain("open http://localhost:5173/ themselves");
+    } finally {
+      if (previous === undefined) delete process.env.SHELRA_NO_BROWSER;
+      else process.env.SHELRA_NO_BROWSER = previous;
+    }
+  });
+
+  it("opens only project files of the kinds a browser shows, and not ones outside the project", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "shelra-open-"));
+    try {
+      await writeFsFile(path.join(cwd, "index.html"), "<h1>hi</h1>");
+      await writeFsFile(path.join(cwd, "secrets.env"), "KEY=1");
+      const tool = toolsFor("agent", cwd).open_in_browser as Exec;
+      expect((await tool.execute({ path: "secrets.env" })).output).toContain("Only .html");
+      expect((await tool.execute({ path: "missing.html" })).output).toContain("File not found");
+      expect((await tool.execute({ path: "../../outside.html" })).output).toContain("outside the workspace");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });

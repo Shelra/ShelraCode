@@ -271,20 +271,26 @@ describe("tool policy", () => {
     try {
       writeFileSync(join(dir, "keep.txt"), "original");
       const { spawnSync } = await import("node:child_process");
+      const executed: string[] = [];
       const realBash = tool({
         description: "bash",
         inputSchema: z.object({ command: z.string(), background: z.boolean().optional() }),
         execute: async ({ command }) => {
-          const result = spawnSync("sh", ["-c", command], { cwd: dir, encoding: "utf8" });
+          executed.push(command);
+          const shell = process.platform === "win32" ? "powershell.exe" : "sh";
+          const args =
+            process.platform === "win32" ? ["-NoProfile", "-NonInteractive", "-Command", command] : ["-c", command];
+          const result = spawnSync(shell, args, { cwd: dir, encoding: "utf8" });
           return { success: result.status === 0, output: `${result.stdout}${result.stderr}` };
         },
       });
       const guarded = applyPolicy({ bash: realBash }, makePolicy({ owner: "ro", readOnly: true }), { cwd: () => dir });
       const run = (command: string) =>
-        (guarded.bash as unknown as { execute: (i: unknown, o: unknown) => Promise<{ success: boolean }> }).execute(
-          { command },
-          {},
-        );
+        (
+          guarded.bash as unknown as {
+            execute: (i: unknown, o: unknown) => Promise<{ success: boolean; output?: string }>;
+          }
+        ).execute({ command }, {});
       for (const attack of [
         "echo pwned > made.txt",
         "echo pwned >> keep.txt",
@@ -305,6 +311,7 @@ describe("tool policy", () => {
       ]) {
         expect((await run(attack)).success, attack).toBe(false);
       }
+      expect(executed).toEqual([]);
       expect(readFileSync(join(dir, "keep.txt"), "utf8")).toBe("original");
       for (const made of [
         "made.txt",
@@ -322,7 +329,10 @@ describe("tool policy", () => {
       ]) {
         expect(existsSync(join(dir, made)), made).toBe(false);
       }
-      expect((await run("cat keep.txt")).success).toBe(true);
+      const positive = await run("cat keep.txt");
+      expect(positive.success).toBe(true);
+      expect(positive.output).toContain("original");
+      expect(executed).toEqual(["cat keep.txt"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

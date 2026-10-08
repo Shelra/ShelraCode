@@ -660,6 +660,56 @@ describe("/tasks agents view", () => {
     screen.renderer.destroy();
   });
 
+  it("lists what the foreground sub-agent has reported, newest first, so its work can be followed", async () => {
+    const activeSubagent: SubagentStatus = {
+      agent: "coding-agent-commodity-analyst",
+      description: "Map the 2026 coding-agent frontier",
+      detail: "Model connection interrupted (The stream ended before completion.); retrying in 10s",
+    };
+    const screen = await testRender(
+      <SessionInspector
+        t={dark}
+        width={120}
+        height={60}
+        tab="agents"
+        sessionId="session-feed"
+        cwd="~/projects/shelra"
+        model="openrouter/free"
+        modeLabel="Agent"
+        isProcessing
+        kernel={null}
+        currentActivity="Researching"
+        plan={null}
+        originalIntent="Research"
+        activities={[]}
+        changedFiles={[]}
+        activeSubagent={activeSubagent}
+        activeSubagentStartedAt={NOW - 120_000}
+        lastActivityAt={NOW - 5_000}
+        subagentFeed={[
+          { at: NOW - 90_000, agent: "coding-agent-commodity-analyst", detail: "web_search: Claude Code subagents" },
+          { at: NOW - 40_000, agent: "coding-agent-commodity-analyst", detail: "open_web: code.claude.com/docs" },
+          { at: NOW - 5_000, agent: "coding-agent-commodity-analyst", detail: activeSubagent.detail },
+        ]}
+        delegations={[]}
+        activeToolCalls={[]}
+        contextSummary={null}
+        contextStats={null}
+        now={NOW}
+      />,
+      { width: 120, height: 60 },
+    );
+    await screen.renderOnce();
+    const frame = screen.captureCharFrame();
+    expect(frame).toContain("What it has reported (3)");
+    expect(frame).toContain("web_search: Claude Code subagents");
+    expect(frame).toContain("open_web: code.claude.com/docs");
+    expect(frame).toContain("retrying in 10s");
+    // Newest first: the retry notice is listed above the first search.
+    expect(frame.indexOf("retrying in 10s")).toBeLessThan(frame.indexOf("web_search: Claude Code subagents"));
+    screen.renderer.destroy();
+  });
+
   it("shows an honest empty state instead of inventing agents that never ran", async () => {
     const screen = await testRender(
       <SessionInspector

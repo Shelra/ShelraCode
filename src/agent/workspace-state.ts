@@ -1,6 +1,17 @@
 import { execFile, spawnSync } from "node:child_process";
-import { type Dirent, readdirSync, readFileSync, statSync } from "node:fs";
-import { readdir as readdirAsync, stat as statAsync } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  closeSync,
+  type Dirent,
+  fstatSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  type Stats,
+  statSync,
+} from "node:fs";
+import { open as openAsync, readdir as readdirAsync, stat as statAsync } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import { findGitRoot } from "../utils/git-root";
 import { perfCount, perfTime } from "../utils/perf-probe";
@@ -12,7 +23,7 @@ import { perfCount, perfTime } from "../utils/perf-probe";
  * changed after the last passing check. The audit of 2026-09-23 reproduced both gaps: a change made
  * through the shell never reached the gate, and a check that passed before later edits still counted.
  *
- * In a git repository the reading is `git status` plus the size and modification time of every
+ * In a git repository the reading is `git status` plus a content hash of every
  * changed or untracked file, so ignored output (builds, caches, coverage) never counts. Elsewhere it
  * is a bounded walk that skips the usual generated folders. A reading that could not be made reliably
  * is "unknown", and nothing may be concluded from it.
@@ -54,15 +65,52 @@ const IGNORED_DIRS = new Set([
   "target",
 ]);
 const MAX_WALK_FILES = 20_000;
+const HASH_BUFFER_BYTES = 64 * 1024;
 const GIT_TIMEOUT_MS = 10_000;
 const UNKNOWN: WorkspaceState = { kind: "unknown", files: new Map() };
 
-function signature(path: string): string {
+function sameFileVersion(before: Stats, after: Stats): boolean {
+  return (
+    before.dev === after.dev &&
+    before.ino === after.ino &&
+    before.size === after.size &&
+    before.mtimeMs === after.mtimeMs &&
+    before.ctimeMs === after.ctimeMs
+  );
+}
+
+function missingFile(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+/** Bounded memory, no timestamp cache: a rewrite can preserve both size and mtime. */
+function signature(path: string): string | null {
+  let opened = false;
   try {
-    const stat = statSync(path);
-    return `${stat.size}:${Math.round(stat.mtimeMs)}`;
-  } catch {
-    return "deleted";
+    const file = openSync(path, "r");
+    opened = true;
+    try {
+      const before = fstatSync(file);
+      if (!before.isFile()) return null;
+      const hash = createHash("sha256");
+      const buffer = Buffer.allocUnsafe(HASH_BUFFER_BYTES);
+      let bytes = 0;
+      for (let read = readSync(file, buffer); read > 0; read = readSync(file, buffer)) {
+        hash.update(buffer.subarray(0, read));
+        bytes += read;
+      }
+      if (
+        bytes !== before.size ||
+        !sameFileVersion(before, fstatSync(file)) ||
+        !sameFileVersion(before, statSync(path))
+      )
+        return null;
+      return `sha256:${hash.digest("hex")}`;
+    } finally {
+      closeSync(file);
+    }
+  } catch (error) {
+    return !opened && missingFile(error) ? "deleted" : null;
   }
 }
 
@@ -86,13 +134,14 @@ function captureGit(cwd: string, gitRoot: string): WorkspaceState | null {
     timeout: GIT_TIMEOUT_MS,
     windowsHide: true,
   });
-  const commit = !head.error && head.status === 0 ? head.stdout.trim() : "";
+  if (head.error || (head.status !== 0 && head.status !== 1)) return UNKNOWN;
+  const commit = head.status === 0 ? head.stdout.trim() : "";
   return gitState(cwd, gitRoot, result.stdout, commit);
 }
 
-/** The state `git status -z` describes, plus the commit it was read at. Shared by the blocking and the async reading. */
-function gitState(cwd: string, gitRoot: string, status: string, commit: string): WorkspaceState {
-  const files = new Map<string, string>();
+/** The in-scope paths `git status -z` describes, shared by both readers. */
+function gitPaths(cwd: string, gitRoot: string, status: string): string[] | null {
+  const paths: string[] = [];
   const entries = status.split("\0");
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index] as string;
@@ -108,9 +157,22 @@ function gitState(cwd: string, gitRoot: string, status: string, commit: string):
     // subfolder off to verify and "fix" code it never touched (seen live 2026-09-24).
     if (relativePath === ".." || relativePath.startsWith("../") || isAbsolute(relativePath)) continue;
     if (ignored(relativePath)) continue;
-    files.set(relativePath, signature(full));
+    paths.push(relativePath);
+    if (paths.length > MAX_WALK_FILES) return null;
   }
-  return { kind: "git", files, ...(commit ? { head: { commit, gitRoot, cwd } } : {}) };
+  return paths;
+}
+
+function gitState(cwd: string, gitRoot: string, status: string, commit: string): WorkspaceState {
+  const paths = gitPaths(cwd, gitRoot, status);
+  if (!paths) return UNKNOWN;
+  const files = new Map<string, string>();
+  for (const path of paths) {
+    const value = signature(join(cwd, path));
+    if (value === null) return UNKNOWN;
+    files.set(path, value);
+  }
+  return { kind: "git", files, head: { commit, gitRoot, cwd } };
 }
 
 /** Runs git without holding the event loop; null when it fails, times out or is not there. */
@@ -177,26 +239,35 @@ async function captureGitAsync(cwd: string, gitRoot: string): Promise<WorkspaceS
     gitAsync(gitRoot, STATUS_ARGS, 64 * 1024 * 1024),
     fastHead === null ? gitAsync(gitRoot, HEAD_ARGS, 1024 * 1024) : Promise.resolve(fastHead),
   ]);
-  if (status === null) return null;
-  return gitState(cwd, gitRoot, status, head?.trim() ?? "");
+  if (status === null || head === null) return null;
+  const paths = gitPaths(cwd, gitRoot, status);
+  if (!paths) return UNKNOWN;
+  const files = new Map<string, string>();
+  for (const path of paths) {
+    const value = await signatureAsync(join(cwd, path));
+    if (value === null) return UNKNOWN;
+    files.set(path, value);
+  }
+  return { kind: "git", files, head: { commit: head.trim(), gitRoot, cwd } };
 }
 
 /** Files under the workspace that commits between two readings changed (added, edited, deleted or renamed). */
-function committedBetween(before: WorkspaceState, after: WorkspaceState): string[] {
+function committedBetween(before: WorkspaceState, after: WorkspaceState): string[] | null {
   const from = before.head;
   const to = after.head;
-  if (!from || !to || from.commit === to.commit || from.gitRoot !== to.gitRoot) return [];
-  const result = spawnSync(
-    "git",
-    ["-C", to.gitRoot, "diff", "--name-only", "-z", "--no-renames", from.commit, to.commit],
-    {
-      encoding: "utf8",
-      timeout: GIT_TIMEOUT_MS,
-      windowsHide: true,
-      maxBuffer: 16 * 1024 * 1024,
-    },
-  );
-  if (result.error || result.status !== 0 || typeof result.stdout !== "string") return [];
+  if (!from || !to || from.gitRoot !== to.gitRoot || from.cwd !== to.cwd) return null;
+  if (from.commit === to.commit) return [];
+  if (!to.commit) return null;
+  const args = from.commit
+    ? ["diff", "--name-only", "-z", "--no-renames", from.commit, to.commit]
+    : ["ls-tree", "-r", "--name-only", "-z", to.commit];
+  const result = spawnSync("git", ["-C", to.gitRoot, ...args], {
+    encoding: "utf8",
+    timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error || result.status !== 0 || typeof result.stdout !== "string") return null;
   const paths: string[] = [];
   for (const path of result.stdout.split("\0").filter(Boolean)) {
     const relativePath = relative(to.cwd, join(to.gitRoot, path)).replace(/\\/g, "/");
@@ -215,7 +286,7 @@ function captureWalk(cwd: string): WorkspaceState {
     try {
       entries = readdirSync(directory, { withFileTypes: true });
     } catch {
-      continue;
+      return UNKNOWN;
     }
     for (const entry of entries) {
       if (IGNORED_DIRS.has(entry.name)) continue;
@@ -223,7 +294,9 @@ function captureWalk(cwd: string): WorkspaceState {
       if (entry.isDirectory()) {
         pending.push(full);
       } else if (entry.isFile()) {
-        files.set(relative(cwd, full).replace(/\\/g, "/"), signature(full));
+        const value = signature(full);
+        if (value === null || value === "deleted") return UNKNOWN;
+        files.set(relative(cwd, full).replace(/\\/g, "/"), value);
         if (files.size > MAX_WALK_FILES) return UNKNOWN;
       }
     }
@@ -231,12 +304,33 @@ function captureWalk(cwd: string): WorkspaceState {
   return { kind: "walk", files };
 }
 
-async function signatureAsync(path: string): Promise<string> {
+async function signatureAsync(path: string): Promise<string | null> {
+  let opened = false;
   try {
-    const stat = await statAsync(path);
-    return `${stat.size}:${Math.round(stat.mtimeMs)}`;
-  } catch {
-    return "deleted";
+    const file = await openAsync(path, "r");
+    opened = true;
+    try {
+      const before = await file.stat();
+      if (!before.isFile()) return null;
+      const hash = createHash("sha256");
+      const buffer = Buffer.allocUnsafe(HASH_BUFFER_BYTES);
+      let bytes = 0;
+      for (let read = await file.read(buffer); read.bytesRead > 0; read = await file.read(buffer)) {
+        hash.update(buffer.subarray(0, read.bytesRead));
+        bytes += read.bytesRead;
+      }
+      if (
+        bytes !== before.size ||
+        !sameFileVersion(before, await file.stat()) ||
+        !sameFileVersion(before, await statAsync(path))
+      )
+        return null;
+      return `sha256:${hash.digest("hex")}`;
+    } finally {
+      await file.close();
+    }
+  } catch (error) {
+    return !opened && missingFile(error) ? "deleted" : null;
   }
 }
 
@@ -250,23 +344,20 @@ async function captureWalkAsync(cwd: string): Promise<WorkspaceState> {
     try {
       entries = await readdirAsync(directory, { withFileTypes: true });
     } catch {
-      continue;
+      return UNKNOWN;
     }
-    const found: { path: string; key: string }[] = [];
     for (const entry of entries) {
       if (IGNORED_DIRS.has(entry.name)) continue;
       const full = join(directory, entry.name);
       if (entry.isDirectory()) {
         pending.push(full);
       } else if (entry.isFile()) {
-        found.push({ path: full, key: relative(cwd, full).replace(/\\/g, "/") });
+        const value = await signatureAsync(full);
+        if (value === null || value === "deleted") return UNKNOWN;
+        files.set(relative(cwd, full).replace(/\\/g, "/"), value);
+        if (files.size > MAX_WALK_FILES) return UNKNOWN;
       }
     }
-    const signatures = await Promise.all(found.map((file) => signatureAsync(file.path)));
-    found.forEach((file, index) => {
-      files.set(file.key, signatures[index] as string);
-    });
-    if (files.size > MAX_WALK_FILES) return UNKNOWN;
   }
   return { kind: "walk", files };
 }
@@ -280,8 +371,7 @@ export async function captureWorkspaceStateAsync(cwd: string): Promise<Workspace
   try {
     const gitRoot = findGitRoot(cwd);
     if (gitRoot) {
-      const state = await captureGitAsync(cwd, gitRoot);
-      if (state) return state;
+      return (await captureGitAsync(cwd, gitRoot)) ?? UNKNOWN;
     }
     return await captureWalkAsync(cwd);
   } catch {
@@ -300,8 +390,7 @@ function readWorkspaceState(cwd: string): WorkspaceState {
   try {
     const gitRoot = findGitRoot(cwd);
     if (gitRoot) {
-      const state = captureGit(cwd, gitRoot);
-      if (state) return state;
+      return captureGit(cwd, gitRoot) ?? UNKNOWN;
     }
     return captureWalk(cwd);
   } catch {
@@ -319,7 +408,11 @@ export function changedPaths(before: WorkspaceState, after: WorkspaceState): str
   for (const [path, value] of after.files) if (before.files.get(path) !== value) changed.add(path);
   for (const path of before.files.keys()) if (!after.files.has(path)) changed.add(path);
   // What the turn committed: clean in `git status`, changed all the same.
-  for (const path of committedBetween(before, after)) changed.add(path);
+  if (before.kind === "git") {
+    const committed = committedBetween(before, after);
+    if (committed === null) return null;
+    for (const path of committed) changed.add(path);
+  }
   return [...changed].sort();
 }
 

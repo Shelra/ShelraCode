@@ -47,7 +47,7 @@ export function testRunnerHint(workspace: string, changedFiles: readonly string[
       existsSync(join(workspace, "bun.lock")) ||
       existsSync(join(workspace, "bun.lockb")) ||
       /^\s*bun(?:\s|$)/u.test(test);
-    const runPackage = bun ? "bunx" : "npx";
+    const runPackage = bun ? "bunx --no-install" : "npx --no-install";
     if (/\bvitest\b/u.test(test) || "vitest" in deps) return `Vitest: \`${runPackage} vitest run <file>\``;
     if (/\bjest\b/u.test(test) || "jest" in deps) return `Jest: \`${runPackage} jest <file>\``;
     if (/\bbun test\b/u.test(test) || bun) {
@@ -140,64 +140,119 @@ export function parseVerifierReport(output: string): VerifierReport | null {
   return null;
 }
 
-/** Runners the host will start on the sub-agent's file, as token sequences that must begin the command. */
-const RUNNERS: readonly (readonly string[])[] = [
-  ["bun", "test"],
-  ["bunx", "vitest", "run"],
-  ["npx", "vitest", "run"],
-  ["npx", "--no-install", "vitest", "run"],
-  ["pnpm", "vitest", "run"],
-  ["pnpm", "exec", "vitest", "run"],
-  ["yarn", "vitest", "run"],
-  ["bunx", "jest"],
-  ["npx", "jest"],
-  ["npx", "--no-install", "jest"],
-  ["pnpm", "jest"],
-  ["yarn", "jest"],
-  ["node"],
-  ["deno", "test"],
-  ["python", "-m", "pytest"],
-  ["python3", "-m", "pytest"],
-  ["py", "-m", "pytest"],
-  ["pytest"],
+type RunnerKind = "bun" | "vitest" | "jest" | "node" | "deno" | "pytest" | "python";
+interface VerifierRunner {
+  prefix: readonly string[];
+  kind: RunnerKind;
+}
+
+/** Runners the host will start on the sub-agent's file; package launchers are canonicalized before execution. */
+const RUNNERS: readonly VerifierRunner[] = [
+  { prefix: ["bun", "test"], kind: "bun" },
+  { prefix: ["bunx", "vitest", "run"], kind: "vitest" },
+  { prefix: ["bunx", "--no-install", "vitest", "run"], kind: "vitest" },
+  { prefix: ["npx", "vitest", "run"], kind: "vitest" },
+  { prefix: ["npx", "--no-install", "vitest", "run"], kind: "vitest" },
+  { prefix: ["pnpm", "vitest", "run"], kind: "vitest" },
+  { prefix: ["pnpm", "exec", "vitest", "run"], kind: "vitest" },
+  { prefix: ["yarn", "vitest", "run"], kind: "vitest" },
+  { prefix: ["bunx", "jest"], kind: "jest" },
+  { prefix: ["bunx", "--no-install", "jest"], kind: "jest" },
+  { prefix: ["npx", "jest"], kind: "jest" },
+  { prefix: ["npx", "--no-install", "jest"], kind: "jest" },
+  { prefix: ["pnpm", "jest"], kind: "jest" },
+  { prefix: ["yarn", "jest"], kind: "jest" },
+  { prefix: ["node"], kind: "node" },
+  { prefix: ["deno", "test"], kind: "deno" },
+  { prefix: ["python", "-m", "pytest"], kind: "pytest" },
+  { prefix: ["python3", "-m", "pytest"], kind: "pytest" },
+  { prefix: ["py", "-m", "pytest"], kind: "pytest" },
+  { prefix: ["pytest"], kind: "pytest" },
   // A unittest file run directly: `python -m unittest` cannot import a file in a hidden folder.
-  ["python"],
-  ["python3"],
-  ["py"],
+  { prefix: ["python"], kind: "python" },
+  { prefix: ["python3"], kind: "python" },
+  { prefix: ["py"], kind: "python" },
 ];
 const SHELL_SYNTAX = /[;&|<>`$\r\n()]/u;
-const FLAG = /^--?[A-Za-z][\w.-]*(?:=[\w.:/@,-]+)?$/u;
 const TEST_FILE = /^\.shelra\/verify\/[\w.-]+$/u;
+/** Only output formatting, early failure and bounded timing flags; none may select tests or execute extra code. */
+const RUNNER_FLAGS: Record<RunnerKind, ReadonlySet<string>> = {
+  bun: new Set(["--bail", "--verbose"]),
+  vitest: new Set(["--reporter=default", "--reporter=verbose", "--reporter=basic", "--reporter=dot", "--no-color"]),
+  jest: new Set(["--runInBand", "--verbose", "--ci", "--bail", "--colors", "--no-colors"]),
+  node: new Set(["--test", "--experimental-strip-types", "--test-reporter=tap", "--test-reporter=spec"]),
+  deno: new Set(["--allow-read"]),
+  pytest: new Set(["-q", "-v", "-vv", "-x", "--quiet", "--verbose", "--exitfirst", "--disable-warnings"]),
+  python: new Set(["-B", "-I", "-q", "-v"]),
+};
+
+function allowedRunnerFlag(kind: RunnerKind, flag: string): boolean {
+  if (RUNNER_FLAGS[kind].has(flag)) return true;
+  const timing =
+    kind === "bun"
+      ? /^--timeout=[1-9]\d{0,8}$/u
+      : kind === "vitest" || kind === "jest"
+        ? /^--testTimeout=[1-9]\d{0,8}$/u
+        : kind === "node"
+          ? /^--test-timeout=[1-9]\d{0,8}$/u
+          : null;
+  return timing?.test(flag) ?? false;
+}
+
+function normalizedTestPath(path: string): string {
+  return path.replace(/^\.\//u, "").replaceAll("\\", "/");
+}
+
+/** Find the single test-path token; callers must still validate its command and filesystem location before running it. */
+export function verifierTestFile(command: string): string | null {
+  const files = command
+    .trim()
+    .split(/\s+/u)
+    .map(normalizedTestPath)
+    .filter((path) => TEST_FILE.test(path) && !path.includes(".."));
+  return files.length === 1 ? files[0] : null;
+}
 
 /**
  * Why the host will not run this command, or null when it will: a known test runner started on exactly the
- * sub-agent's file, with flags and nothing else. The host runs it in the user's shell, so nothing chained.
+ * sub-agent's file with approved flags and nothing chained. The caller must execute runnableVerifierCommand's
+ * canonical form, which disables package installation, instead of the model's raw command.
  */
 export function verifierCommandProblem(command: string, testFile: string): string | null {
   if (!TEST_FILE.test(testFile) || testFile.includes("..")) return `the test file is not a file in ${VERIFY_DIR}/`;
   if (SHELL_SYNTAX.test(command)) return "the command chains or redirects";
   const tokens = command.trim().split(/\s+/u);
-  const runner = RUNNERS.filter((prefix) => prefix.every((token, index) => tokens[index] === token)).sort(
-    (a, b) => b.length - a.length,
+  const runner = RUNNERS.filter(({ prefix }) => prefix.every((token, index) => tokens[index] === token)).sort(
+    (a, b) => b.prefix.length - a.prefix.length,
   )[0];
   if (!runner) return "the command does not start a known test runner";
-  const rest = tokens.slice(runner.length);
-  if (runner[0] === "node" && !rest.includes("--test")) return "node runs only with --test";
-  const files = rest.filter((token) => !FLAG.test(token));
-  if (files.length !== 1 || files[0]?.replace(/^\.\//u, "").replaceAll("\\", "/") !== testFile) {
+  const rest = tokens.slice(runner.prefix.length);
+  if (runner.kind === "node" && !rest.includes("--test")) return "node runs only with --test";
+  const files = rest.filter((token) => !token.startsWith("-"));
+  if (files.length !== 1 || normalizedTestPath(files[0]) !== testFile) {
     return "the command does not run exactly the test file";
   }
+  const refused = rest.find((token) => token.startsWith("-") && !allowedRunnerFlag(runner.kind, token));
+  if (refused) return `the runner flag \`${refused}\` is not allowed for an independent check`;
   return null;
 }
 
 /**
  * The command as the host runs it: Bun reads a bare path as a name filter, which never matches a file in a hidden
- * folder, so its file goes as `./<file>`.
+ * folder, so its file goes as `./<file>`. Package launchers use only an already-installed runner.
  */
 export function runnableVerifierCommand(command: string, testFile: string): string {
   const tokens = command.trim().split(/\s+/u);
-  if (tokens[0] !== "bun" || tokens[1] !== "test") return command.trim();
-  return tokens.map((token, index) => (index > 1 && token === testFile ? `./${testFile}` : token)).join(" ");
+  if ((tokens[0] === "npx" || tokens[0] === "bunx") && tokens[1] !== "--no-install") {
+    tokens.splice(1, 0, "--no-install");
+  }
+  return tokens
+    .map((token, index) =>
+      tokens[0] === "bun" && tokens[1] === "test" && index > 1 && normalizedTestPath(token) === testFile
+        ? `./${testFile}`
+        : token,
+    )
+    .join(" ");
 }
 
 /** A host run that ran no test at all: the check could not run here, which says nothing about the code. */
@@ -213,6 +268,7 @@ export function ranNoTest(output: string): boolean {
     /is not recognized as (?:an internal or external command|the name of a cmdlet)/iu,
     /No module named '?pytest/iu,
     /could not determine executable to run/iu,
+    /Could not find an existing '(?:vitest|jest)' binary to run\. Stopping because --no-install was passed/iu,
   ].some((pattern) => pattern.test(output));
 }
 

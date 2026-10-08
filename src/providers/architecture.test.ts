@@ -49,6 +49,15 @@ function filesWith(pattern: RegExp): string[] {
 }
 
 describe("where providers are built and models are called", () => {
+  it("keeps public autonomous paths on the protected product executor", () => {
+    const index = FILES.find((file) => file.path === "index.ts")?.text ?? "";
+    const alias = FILES.find((file) => file.path === "bench/shelra-executor.ts")?.text ?? "";
+    expect(index).not.toContain("runObjective(");
+    expect(index).not.toContain("createOpenRouterIntelligenceProvider(");
+    expect(index).not.toContain('from "./autonomy/runtime"');
+    expect(alias).toContain("createAgentBenchmarkExecutor as createShelraBenchmarkExecutor");
+    expect(alias).not.toContain("autonomy/runtime");
+  });
   it("builds each kind of provider adapter only in the files that were reviewed against Free mode", () => {
     expect(filesWith(/createOpenRouterProvider\(/u)).toEqual([
       "agent/agent.ts", // setApiKey: an agent built from a key and a URL; the adapter enforces Free mode itself

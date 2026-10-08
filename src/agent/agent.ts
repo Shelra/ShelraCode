@@ -1,17 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import {
-  type Dirent,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { APICallError } from "@ai-sdk/provider";
 import type { ModelMessage, ToolSet } from "ai";
 import { compileContextPacket } from "../context/compiler";
@@ -110,6 +100,7 @@ import {
   takePendingReflection,
   turnOutcome,
 } from "../memory/episodes";
+import { privateText } from "../memory/gate";
 import { errorLine } from "../memory/recovery";
 import {
   admitCandidates,
@@ -130,7 +121,7 @@ import {
   deliverReminder,
   listMemoryRecords,
   projectMemoryScope,
-  reconfirmByPassingCommands,
+  recordMemoryCommandEvidence,
   recordMemoryUse,
   userMemoryScope,
 } from "../memory/store";
@@ -237,11 +228,12 @@ import {
   runnableVerifierCommand,
   testRunnerHint,
   VERIFIER_MAX_STEPS,
-  VERIFY_DIR,
   type VerifierReport,
   verifierCommandProblem,
   verifierPrompt,
 } from "./behavior-verifier";
+import { captureCheckerFiles, checkerFilesMatch, clearCheckerFiles, restoreCheckerFiles } from "./checker-files";
+import { guardCheckerTools } from "./checker-tools";
 import { createCircleDetector } from "./circles";
 import { describeUnbackedClaims, unbackedClaims } from "./claim-check";
 import {
@@ -262,6 +254,16 @@ import {
   truncateUserMessageToTokens,
 } from "./compaction";
 import { DelegationManager } from "./delegations";
+import {
+  createHostTurnResult,
+  type HostTurnResult,
+  type HostTurnStatus,
+  observedCheckRuns,
+  serializeCheckReceipts,
+  summarizeCheckReceipts,
+  type WorkspaceCheckReceipt,
+} from "./evidence-core";
+import { type IndependentCandidateRun, IndependentCheckerBash, runIndependentCandidate } from "./independent-runner";
 import { AgentKernel, type KernelPhase, type KernelState } from "./kernel";
 import {
   answered,
@@ -271,7 +273,7 @@ import {
   localUrlsIn,
   urlRepairRequest,
 } from "./local-urls";
-import { DIAGNOSIS_TIMEOUT_MS, diagnosisChecks, diagnosisOutput, wantsDiagnosis } from "./pre-work";
+import { DIAGNOSIS_TIMEOUT_MS, diagnosisChecks, diagnosisOutput, diagnosisReason } from "./pre-work";
 import {
   applyModelConstraints,
   buildConversationSystemPrompt,
@@ -291,6 +293,7 @@ import {
   withoutAnsi,
 } from "./runtime-smoke";
 import { isOutsideProject } from "./scratch";
+import { ToolOperationJournal } from "./tool-operations";
 import { toToolResult } from "./tool-result";
 import {
   describeDelegatedEvidence,
@@ -381,40 +384,17 @@ interface IndependentCheck {
   files: ReadonlyMap<string, string>;
 }
 
-/** Removes the independent check's folder; a failure to do so is recorded, never thrown out of the turn. */
-function clearVerifyDir(workspace: string): void {
-  try {
-    rmSync(join(workspace, VERIFY_DIR), { recursive: true, force: true });
-  } catch (error) {
-    recordSwallowedError("independent-check.cleanup", error);
-  }
+interface IndependentTestRun extends ContractRun {
+  candidate: WorkspaceState | null;
+  unavailable?: string;
+  touched?: string[];
 }
 
-/** The files the checker left in VERIFY_DIR, by workspace-relative path with forward slashes: at most 20, each small. */
-function verifyFiles(workspace: string): Map<string, string> {
-  const files = new Map<string, string>();
-  const walk = (relative: string, depth: number) => {
-    if (depth > 3) return;
-    let entries: Dirent[];
-    try {
-      entries = readdirSync(join(workspace, relative), { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (files.size >= 20) return;
-      const path = `${relative}/${entry.name}`;
-      if (entry.isDirectory()) {
-        if (entry.name !== "__pycache__" && entry.name !== "node_modules") walk(path, depth + 1);
-      } else if (entry.isFile() && statSync(join(workspace, path)).size <= 200_000) {
-        const bytes = readFileSync(join(workspace, path));
-        // Only text: a compiled cache file read as UTF-8 would come back corrupted.
-        if (!bytes.includes(0)) files.set(path, bytes.toString("utf8"));
-      }
-    }
-  };
-  walk(VERIFY_DIR, 0);
-  return files;
+/** Removes the independent check's folder; a failure to do so is recorded, never thrown out of the turn. */
+function clearVerifyDir(workspace: string): ReturnType<typeof clearCheckerFiles> {
+  const result = clearCheckerFiles(workspace);
+  if (!result.ok) recordSwallowedError("independent-check.cleanup", new Error(result.reason));
+  return result;
 }
 /** How long a plan criterion's command may run when the host checks that it fails before the change. */
 const CRITERION_PROBE_TIMEOUT_MS = 2 * 60_000;
@@ -811,6 +791,7 @@ export class Agent {
   private readonly ablations: Ablations;
   /** Runs the project's checks when the host verifies a turn's final code (the task contract). */
   private readonly checkRunner: ContractCheckRunner;
+  private readonly checkRunnerInjected: boolean;
   private readonly webSearch: ((query: string, options: WebSearchOptions) => Promise<WebSearchResult>) | undefined;
   /** Questions to the user (destructive commands, decisions) wait in line, so they see one at a time. */
   private userQuestionQueue: Promise<unknown> = Promise.resolve();
@@ -835,6 +816,19 @@ export class Agent {
   private readonly agentRunWaiters: Array<() => void> = [];
   private recapsEnabled = true;
   private kernel: AgentKernel | null = null;
+  private lastTurnResult: HostTurnResult | null = null;
+  private turnHostTaskId = "";
+  private turnHostStatus: HostTurnStatus = "unverified";
+  private turnCheckReceipts: WorkspaceCheckReceipt[] = [];
+  private turnStartCandidate: WorkspaceState | null = null;
+  private turnVerifiedCandidate: WorkspaceState | null = null;
+  private turnHostMutationEvents = 0;
+  private turnResultLimitations: string[] = [];
+  private turnPassingSummary: string | null = null;
+  private turnMemoryBookkeeping: (() => void) | null = null;
+  private turnEpisodeRecord: ((result: HostTurnResult) => void) | null = null;
+  private turnCheckerInvalidated = false;
+  private turnOperationUncertain = false;
   private contextSummary: AgentContextSummary | null = null;
   /** The prompt already prepared for this session; UI telemetry must not re-read memory and skills each frame. */
   private contextSystemPrompt: string | null = null;
@@ -905,6 +899,7 @@ export class Agent {
     this.ablations = options.ablate?.length ? new Ablations(options.ablate) : NO_ABLATIONS;
     this.webSearch = options.webSearch;
     // Host checks run the way the agent's own commands do: same shell, same sandbox, same workspace.
+    this.checkRunnerInjected = options.checkRunner !== undefined;
     this.checkRunner =
       options.checkRunner ??
       (async (command, { timeoutMs, signal, cwd }) => {
@@ -1222,6 +1217,11 @@ export class Agent {
     return this.kernel?.snapshot() ?? null;
   }
 
+  /** The host's last completed turn, never inferred from model text or a lifecycle phase. */
+  getLastTurnResult(): HostTurnResult | null {
+    return this.lastTurnResult ? createHostTurnResult(this.lastTurnResult) : null;
+  }
+
   /** What retrieval injected into the most recent turn: expanded slugs and listed pointers. */
   getLastMemoryContext(): MemoryContext | null {
     return this.lastMemoryContext;
@@ -1375,7 +1375,7 @@ export class Agent {
    * returns a diff, so it counts as a change and the checks run again.
    */
   private restoreFileFromJournal = async (path: string, to: RestorePoint): Promise<ToolResult> => {
-    const cwd = this.bash.getCwd();
+    const cwd = { root: this.bash.getRootCwd(), base: this.bash.getCwd() };
     try {
       const current = snapshotForCheckpoint(path, cwd);
       const entry = this.attemptJournal.before(current.relativePath, to);
@@ -1822,6 +1822,8 @@ export class Agent {
     const message = limit
       ? `${describeLimit(limit)}${free ? " Free mode does not continue on providers that can bill." : ""} Everything completed so far is saved; send "continue" after the reset${free ? ", or switch to Mixed (ctrl+f) to use paid models" : ", or choose another model with /models"}.`
       : `${cause} Everything completed so far is saved; send "continue" to resume, or choose another model with /models.`;
+    this.turnHostStatus = limit ? "limited" : "paused";
+    this.turnResultLimitations.push(message);
     this.kernel?.recordObservation(message);
     this.kernel?.transition("blocked");
     this.persistKernelIndex(message);
@@ -2045,7 +2047,8 @@ export class Agent {
    * verified. It used to be streamed only, and vanished. It is appended to the reply rather than sent
    * as a separate system message, which some open models' chat templates reject mid-conversation.
    */
-  private recordVerdict(verdict: string): void {
+  private recordVerdict(verdict: string, status: HostTurnStatus = "unverified"): void {
+    this.turnHostStatus = status;
     this.endNote(verdict);
     try {
       let index = this.messages.length - 1;
@@ -2457,13 +2460,23 @@ export class Agent {
       verifyPreparedSettings = prepared.sandboxSettings;
       verifyPreparedRecipe = prepared.profile.recipe;
     }
-    const childBash = new BashTool(this.bash.getCwd(), {
-      root: this.bash.getRootCwd(),
-      sandboxMode: isVerify ? "shuru" : this.bash.getSandboxMode(),
-      sandboxSettings: isVerify
-        ? (verifyPreparedSettings ?? { ...this.bash.getSandboxSettings(), ...verifySandboxOverrides })
-        : this.bash.getSandboxSettings(),
-    });
+    const checkerUnavailable =
+      process.platform !== "win32" && this.bash.getSandboxMode() !== "off"
+        ? "The private independent checker is not available with this sandbox on this platform."
+        : undefined;
+    const childBash = isCheck
+      ? new IndependentCheckerBash(
+          this.bash.getRootCwd(),
+          this.checkRunnerInjected ? this.checkRunner : undefined,
+          checkerUnavailable,
+        )
+      : new BashTool(this.bash.getCwd(), {
+          root: this.bash.getRootCwd(),
+          sandboxMode: isVerify ? "shuru" : this.bash.getSandboxMode(),
+          sandboxSettings: isVerify
+            ? (verifyPreparedSettings ?? { ...this.bash.getSandboxSettings(), ...verifySandboxOverrides })
+            : this.bash.getSandboxSettings(),
+        });
     const childToolGroups = loadToolGroupSettings();
     const childBaseTools = ablateTools(
       createTools(childBash, provider.getToolContext(), childMode, {
@@ -2530,7 +2543,7 @@ export class Agent {
     onActivity?.(initialDetail);
 
     try {
-      if (childMode === "agent" && childRuntime.modelInfo?.supportsClientTools !== false) {
+      if (!isCheck && childMode === "agent" && childRuntime.modelInfo?.supportsClientTools !== false) {
         const mcpBundle = await buildMcpToolSet(loadMcpServers(), {
           signal,
           timeoutMs: this.mcpTimeoutMs,
@@ -2553,7 +2566,16 @@ export class Agent {
       // built-in explore, plan and verify-detect agents, whose shell used to be limited only by their prompt) gets only
       // reading tools and a shell the host proves read-only; every run's file writes are leased. The skill and
       // extension readers join last, so an agent can load a skill whatever its tool list says.
-      if (!isCheck) {
+      if (isCheck) {
+        childTools = guardCheckerTools(
+          applyPolicy(childTools, resolved?.policy ?? null, {
+            cwd: () => childBash.getCwd(),
+            coordinator: this.writeCoordinator,
+            leaseOwner: prepared.owner,
+          }),
+          { root: childBash.getRootCwd(), cwd: () => childBash.getCwd() },
+        );
+      } else {
         const policy =
           resolved?.policy ??
           (isExplore || isPlan || isVerifyDetect ? makePolicy({ owner: prepared.owner, readOnly: true }) : null);
@@ -2594,7 +2616,10 @@ export class Agent {
         total: 0,
         triedModels: new Set([runtime.modelId]),
       };
+      const childOperations = this.createOperationJournal(`child:${prepared.owner}`, () => childBash.getCwd());
+      childTools = childOperations.wrap(childTools);
       while (true) {
+        childOperations.beginRound();
         const attemptModelId = runtime.modelId;
         const childMaxOutputTokens =
           runtime.modelInfo?.supportsMaxOutputTokens === false
@@ -2628,6 +2653,7 @@ export class Agent {
           onStepFinish: (event) => {
             if (event.responseMessages) {
               completedSteps = sanitizeModelMessages(event.responseMessages as ModelMessage[]);
+              childOperations.acknowledge(completedSteps);
             }
             if (event.servedModelId && servedByAnother(event.servedModelId, attemptModelId)) {
               attemptServed = event.servedModelId;
@@ -2643,37 +2669,44 @@ export class Agent {
         // An interrupted attempt never awaits its response; its rejection must not go unhandled.
         childStream.response.catch(() => undefined);
 
-        for await (const part of childStream.events) {
-          if (signal?.aborted) break;
-          if (part.type === "text-delta") {
-            attemptText += part.text;
-          } else if (part.type === "tool-call") {
-            lastActivity = formatSubagentActivity(
-              part.toolCall.function.name,
-              parseToolArgumentsOrRaw(part.toolCall.function.arguments),
-            );
-            onActivity?.(lastActivity);
-          } else if (part.type === "tool-result") {
-            const childResult = toToolResult(part.output);
-            if (childResult.success && childResult.diff?.filePath) childChangedFiles.push(childResult.diff.filePath);
-            const evidence = childResult.success
-              ? describeVerificationEvidence(
-                  part.toolCall.function.name,
-                  part.toolCall.function.arguments,
-                  childChangedFiles,
-                )
-              : null;
-            if (evidence) childEvidence.push(evidence);
-          } else if (part.type === "error") {
-            // A rejected key fails every attempt; the parent turn handles it.
-            if (isRejectedCredentialError(part.error)) throw part.error;
-            interruption = { reason: describeInterruption(part.error), error: part.error };
-            break;
-          } else if (part.type === "abort") {
-            // Not the user: an SDK chunk, step or total timeout aborted the generation.
-            if (!signal?.aborted) interruption = { reason: "no response within the time limit", error: null };
-            break;
+        try {
+          for await (const part of childOperations.observe(childStream.events)) {
+            if (signal?.aborted) break;
+            if (part.type === "text-delta") {
+              attemptText += part.text;
+            } else if (part.type === "tool-call") {
+              lastActivity = formatSubagentActivity(
+                part.toolCall.function.name,
+                parseToolArgumentsOrRaw(part.toolCall.function.arguments),
+              );
+              onActivity?.(lastActivity);
+            } else if (part.type === "tool-result") {
+              const childResult = toToolResult(part.output);
+              if (childResult.success && childResult.diff?.filePath && !childOperations.isReplay(part.toolCall.id))
+                childChangedFiles.push(childResult.diff.filePath);
+              const evidence =
+                childResult.success && !childOperations.isReplay(part.toolCall.id)
+                  ? describeVerificationEvidence(
+                      part.toolCall.function.name,
+                      part.toolCall.function.arguments,
+                      childChangedFiles,
+                    )
+                  : null;
+              if (evidence) childEvidence.push(evidence);
+            } else if (part.type === "error") {
+              // A rejected key fails every attempt; the parent turn handles it.
+              if (isRejectedCredentialError(part.error)) throw part.error;
+              interruption = { reason: describeInterruption(part.error), error: part.error };
+              break;
+            } else if (part.type === "abort") {
+              // Not the user: an SDK chunk, step or total timeout aborted the generation.
+              if (!signal?.aborted) interruption = { reason: "no response within the time limit", error: null };
+              break;
+            }
           }
+        } catch (error) {
+          if (signal?.aborted || isRejectedCredentialError(error)) throw error;
+          interruption = { reason: describeInterruption(error), error };
         }
 
         if (signal?.aborted) {
@@ -2681,7 +2714,8 @@ export class Agent {
         }
         if (!interruption) {
           try {
-            await childStream.response;
+            const response = await childStream.response;
+            childOperations.acknowledge(response.messages as ModelMessage[]);
           } catch (error) {
             if (signal?.aborted || isRejectedCredentialError(error)) throw error;
             interruption = { reason: describeInterruption(error), error };
@@ -2692,6 +2726,7 @@ export class Agent {
           break;
         }
 
+        completedSteps = childOperations.recover(completedSteps);
         // Only a completed step is progress; text streamed before a stall is regenerated.
         if (completedSteps.length > 0) {
           conversation = [
@@ -2851,20 +2886,39 @@ export class Agent {
    * no test); the turn then audits itself as before. `touched` lists project files the sub-agent changed although
    * it was told not to: its check is not used, and the turn is told to review them.
    */
+  private clearVerificationFiles(workspace: string): ReturnType<typeof clearCheckerFiles> {
+    const cleared = clearVerifyDir(workspace);
+    if (!cleared.ok) {
+      this.turnCheckerInvalidated = true;
+      const reason = `Independent check cleanup unavailable: ${cleared.reason}`;
+      if (!this.turnResultLimitations.includes(reason)) this.turnResultLimitations.push(reason);
+    }
+    return cleared;
+  }
+
   private async runIndependentCheck(input: {
     request: string;
     requirements: string[];
     changedFiles: string[];
     workspace: string;
     signal?: AbortSignal;
-  }): Promise<{ check: IndependentCheck; run: ContractRun } | { unavailable: string; touched?: string[] }> {
+    mutationEvents: number;
+  }): Promise<{ check: IndependentCheck; run: IndependentTestRun } | { unavailable: string; touched?: string[] }> {
     const runner = testRunnerHint(input.workspace, input.changedFiles);
     if (!runner) return { unavailable: "no test runner can run a test kept outside the project's packages" };
     // Whatever happens, nothing the checker wrote is left where the project's own runner would find it, and nothing
     // the turn put in its folder (a conftest) becomes part of its check.
     try {
-      clearVerifyDir(input.workspace);
+      const cleared = this.clearVerificationFiles(input.workspace);
+      if (!cleared.ok) {
+        this.turnCheckerInvalidated = true;
+        return { unavailable: cleared.reason };
+      }
       const before = await captureWorkspaceStateAsync(input.workspace);
+      if (before.kind === "unknown") {
+        this.turnCheckerInvalidated = true;
+        return { unavailable: "the checker candidate could not be observed" };
+      }
       const result = await this.runTask(
         {
           agent: "check",
@@ -2874,8 +2928,17 @@ export class Agent {
         },
         input.signal,
       );
-      const touched = changedPaths(before, await captureWorkspaceStateAsync(input.workspace)) ?? [];
-      if (touched.length > 0) return { unavailable: "the checking sub-agent changed project files", touched };
+      const touched = changedPaths(before, await captureWorkspaceStateAsync(input.workspace));
+      if (touched === null || touched.length > 0) {
+        this.turnCheckerInvalidated = true;
+        return {
+          unavailable:
+            touched === null
+              ? "the checker candidate could not be compared"
+              : "the checking sub-agent changed project files",
+          ...(touched ? { touched } : {}),
+        };
+      }
       const report = result.success ? parseVerifierReport(result.output ?? "") : null;
       const problem = !result.success
         ? "the checking sub-agent did not finish"
@@ -2885,7 +2948,12 @@ export class Agent {
             ? "the checking sub-agent could not make its test run"
             : verifierCommandProblem(report.command, report.testFile);
       if (!report || problem) return { unavailable: problem ?? "the checking sub-agent gave no report" };
-      const files = verifyFiles(input.workspace);
+      const captured = captureCheckerFiles(input.workspace);
+      if (!captured.ok) {
+        this.turnCheckerInvalidated = true;
+        return { unavailable: captured.reason };
+      }
+      const files = new Map(captured.files);
       const content = files.get(report.testFile);
       if (content === undefined) return { unavailable: "the checking sub-agent wrote no test file" };
       // A test that names none of the changed files tests something else (review 2026-10-03).
@@ -2900,14 +2968,15 @@ export class Agent {
         content,
         files,
       };
-      const run = await this.runIndependentTest(check, input.workspace, input.signal);
+      const run = await this.runIndependentTest(check, input.workspace, input.signal, input.mutationEvents);
+      if (run.unavailable) return { unavailable: run.unavailable, touched: run.touched };
       // A run that ran no test says nothing either way, whatever its exit code.
       if (ranNoTest(run.output) || run.state === "timed_out") {
         return { unavailable: `\`${check.report.command}\` ran no test here` };
       }
       return { check, run };
     } finally {
-      clearVerifyDir(input.workspace);
+      this.clearVerificationFiles(input.workspace);
     }
   }
 
@@ -2916,20 +2985,93 @@ export class Agent {
    * else (a conftest the turn put there is gone). They are on disk only for the run: a project runner such as Vitest
    * also discovers tests under `.shelra/`.
    */
-  private async runIndependentTest(check: IndependentCheck, workspace: string, signal?: AbortSignal) {
-    clearVerifyDir(workspace);
+  private async runIndependentTest(
+    check: IndependentCheck,
+    workspace: string,
+    signal?: AbortSignal,
+    mutationEvents = 0,
+  ): Promise<IndependentTestRun> {
+    const refuse = (reason: string): IndependentTestRun => {
+      this.turnCheckerInvalidated = true;
+      return { passed: false, output: reason, durationMs: 0, candidate: null, unavailable: reason };
+    };
+    const problem = verifierCommandProblem(check.report.command, check.report.testFile);
+    if (problem) return refuse(problem);
     try {
-      for (const [path, text] of check.files) {
-        mkdirSync(dirname(join(workspace, path)), { recursive: true });
-        writeFileSync(join(workspace, path), text);
+      const restored = restoreCheckerFiles(workspace, check.files);
+      if (!restored.ok) return refuse(restored.reason);
+      const before = await captureWorkspaceStateAsync(workspace);
+      if (before.kind === "unknown") return refuse("the independent check candidate could not be observed");
+      let run: ContractRun;
+      let privateRun: IndependentCandidateRun | undefined;
+      let executionProblem: string | undefined;
+      const started = Date.now();
+      try {
+        if (process.platform !== "win32" && this.bash.getSandboxMode() !== "off")
+          throw new Error("The private independent checker is not available with this sandbox on this platform.");
+        privateRun = await runIndependentCandidate({
+          command: check.report.command,
+          files: check.files,
+          runner: this.checkRunnerInjected ? this.checkRunner : undefined,
+          timeoutMs: INDEPENDENT_CHECK_TIMEOUT_MS,
+          signal,
+          workspace,
+        });
+        run = privateRun.run;
+      } catch (error) {
+        recordSwallowedError("independent-check.run", error);
+        this.turnCheckerInvalidated = true;
+        executionProblem = "the independent check failed before reporting its execution result";
+        run = {
+          passed: false,
+          output: error instanceof Error ? error.message : String(error),
+          durationMs: Date.now() - started,
+        };
       }
-      return await this.checkRunner(check.report.command, {
-        timeoutMs: INDEPENDENT_CHECK_TIMEOUT_MS,
-        signal,
+      const candidate = await captureWorkspaceStateAsync(workspace);
+      const touched = changedPaths(before, candidate);
+      const oracle = checkerFilesMatch(workspace, check.files);
+      const integrityProblem =
+        touched === null
+          ? "the independent check candidate could not be compared"
+          : touched.length > 0
+            ? `the independent check changed project files: ${touched.slice(0, 10).join(", ")}`
+            : !oracle.ok
+              ? `the independent check changed its frozen oracle: ${oracle.reason}`
+              : privateRun?.problem;
+      if (integrityProblem) this.turnCheckerInvalidated = true;
+      const unavailable =
+        integrityProblem ??
+        executionProblem ??
+        (run.state === "timed_out"
+          ? `\`${check.report.command}\` did not finish here`
+          : ranNoTest(run.output)
+            ? `\`${check.report.command}\` ran no test here`
+            : undefined);
+      this.turnCheckReceipts.push({
+        command: check.report.command,
+        passed: run.passed && unavailable === undefined,
+        detail: unavailable ? `${unavailable}\n${run.output.slice(-6_000)}` : run.output.slice(-6_000),
+        mutationEvents,
+        beforeState: before,
+        state: candidate,
         cwd: workspace,
+        finished: run.state === undefined ? (run.passed ? true : undefined) : run.state === "completed",
+        source: "host",
+        ...(privateRun
+          ? { execution: privateRun.execution, candidateFingerprint: privateRun.candidateFingerprint }
+          : {}),
+        ...(unavailable ? { unrunnable: unavailable } : {}),
       });
+      return {
+        ...run,
+        passed: run.passed && unavailable === undefined,
+        candidate,
+        ...(unavailable ? { unavailable } : {}),
+        ...(touched?.length ? { touched } : {}),
+      };
     } finally {
-      clearVerifyDir(workspace);
+      this.clearVerificationFiles(workspace);
     }
   }
 
@@ -3302,8 +3444,6 @@ export class Agent {
   }
 
   private appendCompletedTurn(userMessage: ModelMessage, newMessages: ModelMessage[]): void {
-    if (newMessages.length === 0) return;
-
     const normalizedMessages = normalizeModelMessages(newMessages);
 
     const userIndex = this.messages.lastIndexOf(userMessage);
@@ -3322,6 +3462,7 @@ export class Agent {
       if (this.messageSeqs[index] == null) pendingIndexes.push(index);
     }
     const pending = pendingIndexes.map((index) => this.messages[index] as ModelMessage);
+    if (pending.length === 0 && normalizedMessages.length === 0) return;
     const insertedSeqs = appendMessages(this.session.id, [...pending, ...normalizedMessages]);
     pendingIndexes.forEach((index, offset) => {
       this.messageSeqs[index] = insertedSeqs[offset] ?? null;
@@ -3330,6 +3471,29 @@ export class Agent {
     this.messageSeqs.push(...insertedSeqs.slice(pending.length));
     this.sessionStore.touchSession(this.session.id, this.bash.getCwd());
     this.session = this.sessionStore.getRequiredSession(this.session.id);
+  }
+
+  private createOperationJournal(scope: string, cwd: () => string, beforeStart?: () => void): ToolOperationJournal {
+    const store = this.session ? this.sessionStore?.operationStore?.(this.session.id) : undefined;
+    return new ToolOperationJournal({
+      scope,
+      cwd,
+      ...(store
+        ? {
+            store: {
+              ...store,
+              start: (record) => {
+                beforeStart?.();
+                store.start(record);
+              },
+            },
+          }
+        : {}),
+      onUncertain: (reason) => {
+        this.turnOperationUncertain = true;
+        if (!this.turnResultLimitations.includes(reason)) this.turnResultLimitations.push(reason);
+      },
+    });
   }
 
   /**
@@ -3393,6 +3557,19 @@ export class Agent {
     userMessage: string,
     observer?: ProcessMessageObserver,
   ): AsyncGenerator<StreamChunk, void, unknown> {
+    this.lastTurnResult = null;
+    this.turnHostTaskId = randomUUID();
+    this.turnHostStatus = "unverified";
+    this.turnCheckReceipts = [];
+    this.turnStartCandidate = null;
+    this.turnVerifiedCandidate = null;
+    this.turnHostMutationEvents = 0;
+    this.turnResultLimitations = [];
+    this.turnPassingSummary = null;
+    this.turnMemoryBookkeeping = null;
+    this.turnEpisodeRecord = null;
+    this.turnCheckerInvalidated = false;
+    this.turnOperationUncertain = false;
     const cwd = this.bash.getRootCwd();
     const trace = startTurnTrace({
       sessionId: this.session?.id ?? null,
@@ -3403,20 +3580,106 @@ export class Agent {
       outsideProject: isOutsideProject(cwd),
     });
     try {
+      let done = false;
       for await (const chunk of this.runTurn(userMessage, trace.observe(observer))) {
+        if (chunk.type === "done") {
+          done = true;
+          continue;
+        }
+        trace.chunk(chunk);
+        yield chunk;
+      }
+      const summary = await this.finishHostTurnResult();
+      if (summary) {
+        const chunk: StreamChunk = { type: "content", content: `\n\n${summary}` };
+        trace.chunk(chunk);
+        yield chunk;
+      }
+      if (done) {
+        const chunk: StreamChunk = { type: "done" };
         trace.chunk(chunk);
         yield chunk;
       }
     } catch (error) {
+      this.turnHostStatus = "blocked";
+      this.turnResultLimitations.push(error instanceof Error ? error.message : String(error));
       trace.error(error);
       throw error;
     } finally {
+      if (!this.lastTurnResult) await this.finishHostTurnResult();
       this.deliverDueReminders();
       this.recordUnlearnedTurn();
       // The turn wrote its episode (or had no work to record): its live record is done.
       if (this.liveSavedAt > 0) clearLiveEpisode(projectMemoryScope(this.bash.getRootCwd()), this.liveSession());
       trace.end();
     }
+  }
+
+  private async finishHostTurnResult(): Promise<string> {
+    if (this.abortController?.signal.aborted) this.turnHostStatus = "cancelled";
+    const workspace = this.bash.getRootCwd();
+    const currentState = await captureWorkspaceStateAsync(workspace);
+    const context = {
+      workspace,
+      startState: this.turnStartCandidate,
+      currentState,
+      mutationEvents: this.turnHostMutationEvents,
+    };
+    if (this.turnHostStatus === "verified" && (this.turnCheckerInvalidated || this.turnOperationUncertain)) {
+      this.turnHostStatus = "unverified";
+    }
+    if (this.turnHostStatus === "answered" && this.turnOperationUncertain) this.turnHostStatus = "unverified";
+    if (
+      this.turnHostStatus === "verified" &&
+      (!this.turnVerifiedCandidate || changedPaths(this.turnVerifiedCandidate, currentState)?.length !== 0)
+    ) {
+      this.turnHostStatus = "unverified";
+      this.turnResultLimitations.push("The final candidate differs from the state the host verified, or is unknown.");
+    }
+    if (this.turnHostStatus === "verified" || this.turnHostStatus === "answered") {
+      try {
+        this.turnMemoryBookkeeping?.();
+      } catch (error) {
+        recordSwallowedError("memory.final-bookkeeping", error);
+      }
+    }
+    this.turnMemoryBookkeeping = null;
+    let verdict: string | null = null;
+    if (this.turnPassingSummary !== null) {
+      verdict =
+        this.turnHostStatus === "verified"
+          ? `[Checked by Shelra on the final code: ${this.turnPassingSummary}]`
+          : this.turnHostStatus === "cancelled"
+            ? "[Cancelled]"
+            : "[Not verified — the final turn state has no complete fresh host verification.]";
+      this.recordVerdict(verdict, this.turnHostStatus);
+    } else if (this.turnOperationUncertain && this.turnHostStatus === "unverified") {
+      verdict =
+        "[Not verified — an operation has an uncertain outcome; reconcile the actual state before repeating it.]";
+      this.recordVerdict(verdict, this.turnHostStatus);
+    }
+    this.lastTurnResult = createHostTurnResult({
+      taskId: this.turnHostTaskId,
+      status: this.turnHostStatus,
+      changedFiles: mergeChangedFiles(
+        workspace,
+        this.kernel?.snapshot().mutations ?? [],
+        (this.turnStartCandidate && changedPaths(this.turnStartCandidate, currentState)) ?? [],
+      ),
+      checks: serializeCheckReceipts(this.turnCheckReceipts, context),
+      limitations: this.turnResultLimitations,
+    });
+    try {
+      this.turnEpisodeRecord?.(this.lastTurnResult);
+    } catch (error) {
+      recordSwallowedError("memory.final-episode", error);
+    }
+    this.turnEpisodeRecord = null;
+    recordExtensionEvent(this.session?.id ?? null, "turn.evidence", { ...this.lastTurnResult });
+    const summary = summarizeCheckReceipts(this.turnCheckReceipts, context);
+    return [verdict, summary ? `[Shelra host result: ${this.lastTurnResult.status}]\n${summary}` : null]
+      .filter((part): part is string => part !== null)
+      .join("\n\n");
   }
 
   private async *runTurn(
@@ -3487,7 +3750,7 @@ export class Agent {
         submitted.results.find((result) => result.output?.reason)?.output?.reason ||
         submitted.stopReason ||
         "A UserPromptSubmit hook declined this request.";
-      this.recordVerdict(`[Blocked by a hook — ${reason}]`);
+      this.recordVerdict(`[Blocked by a hook — ${reason}]`, "blocked");
       yield { type: "content", content: `[Blocked by a hook — ${reason}]` };
       yield { type: "done" };
       return;
@@ -3501,7 +3764,7 @@ export class Agent {
     let runtime = provider.resolveModelRuntime(this.modelId);
     // Create the host-owned lifecycle before context compilation and research so
     // observers can answer what is happening during the earliest real phase.
-    this.kernel = new AgentKernel(userMessage);
+    this.kernel = new AgentKernel(userMessage, this.turnHostTaskId);
     // activeAcceptanceCriteria/activePlanSteps are deliberately NOT reset here — session-scoped
     // (§14 Phase 2 item 1), so a plan published in an earlier turn still governs this turn's
     // mutations.
@@ -3568,24 +3831,46 @@ export class Agent {
     // The project's state before the work (src/agent/pre-work.ts): asked to check, fix, continue or test a project
     // that states its checks, the host runs them on the code as the turn found it and hands the model the results as
     // its own run would read, before it changes anything. A check that would do damage is not run.
+    // Observe the candidate before any project check can generate or change source files.
+    const turnStartWorkspace = this.bash.getRootCwd();
+    if (this.mode === "agent") this.clearVerificationFiles(turnStartWorkspace);
+    const turnStartState = this.mode === "agent" ? await captureWorkspaceStateAsync(turnStartWorkspace) : null;
+    this.turnStartCandidate = turnStartState;
     const preWorkRuns: Array<{ command: string; passed: boolean; output: string; finished: boolean }> = [];
     if (
       this.mode === "agent" &&
       !this.ablations.has("gate") &&
       !this.ablations.has("diagnose") &&
-      wantsDiagnosis(userMessage)
+      diagnosisReason(userMessage) !== null
     ) {
       const workspace = this.bash.getRootCwd();
+      const reason = diagnosisReason(userMessage) as string;
       const checks = diagnosisChecks(workspace).filter((check) => !checkDamageReason(check.command, workspace));
       const deadline = AbortSignal.timeout(DIAGNOSIS_TIMEOUT_MS);
+      const startedAt = Date.now();
       for (const check of checks) {
         if (signal.aborted || deadline.aborted) break;
-        reportStatus("checks", `Checking the project before the work: ${check.command}`);
+        // The budget is shared: a check that has no time left to finish is not started, instead of being cut off.
+        const left = DIAGNOSIS_TIMEOUT_MS - (Date.now() - startedAt);
+        if (preWorkRuns.length > 0 && left < 15_000) break;
+        reportStatus("checks", `Checking the project first, since you wrote "${reason}": ${check.command}`);
+        const beforeState = await captureWorkspaceStateAsync(workspace);
         const run = await this.checkRunner(check.command, {
-          timeoutMs: DIAGNOSIS_TIMEOUT_MS,
+          timeoutMs: Math.max(5_000, left),
           signal: combineAbortSignals(signal, deadline),
           cwd: workspace,
         }).catch((error: unknown) => ({ passed: false, output: String(error), durationMs: 0 }));
+        this.turnCheckReceipts.push({
+          command: check.command,
+          passed: run.passed,
+          detail: run.output.slice(-6_000),
+          mutationEvents: 0,
+          beforeState,
+          state: await captureWorkspaceStateAsync(workspace),
+          cwd: workspace,
+          finished: run.passed || ("state" in run && run.state === "completed"),
+          source: "host",
+        });
         if (signal.aborted) break;
         // Whether it reached an end of its own: a suite cut off by the diagnosis budget did not (review 2026-10-03).
         preWorkRuns.push({
@@ -3689,6 +3974,7 @@ export class Agent {
     // A reminder the user asks for now is for a later request: it is kept after this turn's recall, so its own cue
     // in this very message does not give it back at once.
     let remindersAsked: ReturnType<typeof extractUserDirectives> = [];
+    const captureWarnings: string[] = [];
     try {
       const captured = memoryOff ? [] : extractUserDirectives(userMessage);
       remindersAsked = captured.filter((directive) => directive.type === "reminder");
@@ -3701,6 +3987,10 @@ export class Agent {
       for (const [scope, list] of routed) {
         if (list.length === 0) continue;
         const admitted = admitCandidates(scope, list);
+        for (const decision of admitted.decisions) {
+          if (decision.action === "reject" || decision.action === "skip")
+            captureWarnings.push(`${decision.slug}: ${decision.reason}`);
+        }
         appendReflectionAudit(scope, {
           kind: "directive",
           at: new Date().toISOString(),
@@ -3714,6 +4004,7 @@ export class Agent {
     } catch (error) {
       // memory capture must never block a turn
       recordSwallowedError("memory.capture", error);
+      captureWarnings.push("Automatic capture failed; the new standing declarations were not confirmed saved.");
     }
     // Once a day, before recalling anything: recurring failures become lessons, unused inferences fade (doc 18 §4.6).
     if (!memoryOff) consolidateMemory(memoryScope);
@@ -3723,6 +4014,12 @@ export class Agent {
         memoryContextFor(memoryRoot, userMessage, contextPacket.files, this.previousRequest, {
           orientation: this.sessionUserTexts.length === 0,
         });
+    if (captureWarnings.length > 0)
+      memoryContext.text += [
+        "\nMEMORY CAPTURE INCOMPLETE (the current request still applies; these declarations were not saved):",
+        ...captureWarnings.slice(0, 8).map((warning) => `- ${privateText(warning).slice(0, 240)}`),
+        ...(captureWarnings.length > 8 ? [`- ${captureWarnings.length - 8} additional capture warnings.`] : []),
+      ].join("\n");
     // A reminder due now is crossed off when the turn closes, and only if a model answered it (deliverDueReminders): a
     // turn cut Limited never showed it to anyone.
     this.turnDueReminders = { scope: memoryScope, slugs: memoryContext.reminders ?? [] };
@@ -3855,6 +4152,7 @@ export class Agent {
       userTexts: [...this.sessionUserTexts],
     });
     const pendingCommands = new Map<string, string>();
+    const commandCandidates = new Map<string, { beforeState: WorkspaceState; state?: WorkspaceState; cwd: string }>();
     /** Checks this turn ran whose exit status a later command replaced; the gate names them. */
     const maskedChecks = new Set<string>();
     this.contextSummary = {
@@ -3948,10 +4246,6 @@ export class Agent {
     // compares them with the final state, so a change made through the shell counts, and a check that
     // passed before later changes does not vouch for the final code.
     // The turn is judged in the session's workspace, not in whatever folder a `cd` left the shell in.
-    const turnStartWorkspace = this.bash.getRootCwd();
-    // An independent check a process that died left behind is not the project's (src/agent/behavior-verifier.ts).
-    if (this.mode === "agent") clearVerifyDir(turnStartWorkspace);
-    const turnStartState = this.mode === "agent" ? await captureWorkspaceStateAsync(turnStartWorkspace) : null;
     // What the project declared when the turn started, for the dependency guard.
     const turnStartDependencies = this.mode === "agent" ? declaredDependencies(turnStartWorkspace) : null;
     // What counts as the user's permission to add a package: the request, and, when it is a short approval ("yes, go
@@ -4053,6 +4347,8 @@ export class Agent {
     let checkedPasses: string | null = null;
     /** The turn's contract ran and every check passed on the final code. */
     let contractPassed = false;
+    /** The accepted commands, including any scoped replacement of a timed-out full check. */
+    let effectiveContract: readonly ContractCheck[] = [];
     /** Project checks that could not run here in the last contract pass (a missing tool, out of time): no evidence. */
     let contractCouldNotRun: string[] = [];
     /** Checks that could not run, already said once this turn. */
@@ -4061,35 +4357,39 @@ export class Agent {
     let preExistingAsked = false;
     /** Project checks that outlasted the check budget in this turn: one with no scoped form is not waited for again. */
     const slowThisTurn = new Set<string>();
-    const checkRuns: Array<{
-      command: string;
-      passed: boolean;
-      detail: string;
-      mutationEvents: number;
-      state: WorkspaceState | null;
-      /** Where it ran: only a run in the turn's workspace can stand for the project's check. */
-      cwd: string;
-      /** A host run of a decision check that reached no verdict keeps that judgment when it is reused. */
-      unrunnable?: string;
-      /** The run reached an end of its own, not a time limit: known for a passing run and for the host's runs. */
-      finished?: boolean;
-    }> = [];
-    // The checks the host ran before the work are runs on the code as the turn found it: a failure among them
-    // predates the turn, and a pass that fails later is a regression the turn caused.
-    for (const run of preWorkRuns) {
+    const checkRuns = this.turnCheckReceipts;
+    // Each command owns its before/after candidate. A later check must never refresh an earlier pass.
+    const runCheck: ContractCheckRunner = async (command, options) => {
+      const beforeState = await captureWorkspaceStateAsync(turnStartWorkspace);
+      const cwd = options.cwd ?? turnStartWorkspace;
+      const result = await this.checkRunner(command, { ...options, cwd });
       checkRuns.push({
-        command: run.command,
-        passed: run.passed,
-        detail: run.output.slice(-6_000),
-        mutationEvents: 0,
-        state: turnStartState,
-        cwd: turnStartWorkspace,
-        finished: run.finished,
+        command,
+        passed: result.passed,
+        detail: result.output.slice(-6_000),
+        beforeState,
+        state: await captureWorkspaceStateAsync(turnStartWorkspace),
+        mutationEvents: turnMutationEvents,
+        cwd,
+        finished: result.state === "completed" || (result.passed && result.state === undefined),
+        source: "host",
       });
-    }
+      return result;
+    };
 
+    const operations = this.createOperationJournal(
+      "main",
+      () => this.bash.getCwd(),
+      () => this.appendCompletedTurn(userModelMessage, []),
+    );
+    const operationContext = operations.resumeContext();
+    if (operationContext) {
+      this.messages.push({ role: "user", content: operationContext });
+      this.messageSeqs.push(null);
+    }
     try {
       while (true) {
+        operations.beginRound();
         let assistantText = "";
         let reasoningPreview = "";
         let encryptedReasoningHidden = false;
@@ -4170,7 +4470,7 @@ export class Agent {
               if (!turnStartState || turnMutationEvents > 0) return null;
               if (changedPaths(turnStartState, await captureWorkspaceStateAsync(cwd))?.length !== 0) return null;
               if (destructiveCommandReason(command, cwd)) return null;
-              const result = await this.checkRunner(command, {
+              const result = await runCheck(command, {
                 timeoutMs: CRITERION_PROBE_TIMEOUT_MS,
                 signal: combineAbortSignals(signal, abortSignal),
                 cwd,
@@ -4204,7 +4504,33 @@ export class Agent {
             coordinator: this.writeCoordinator,
             leaseOwner: null,
           });
+          const shellTool = tools.bash;
+          const executeShell = shellTool?.execute;
+          if (executeShell) {
+            tools.bash = {
+              ...shellTool,
+              execute: async (input, options) => {
+                const command = (input as { command?: unknown }).command;
+                if (typeof command !== "string" || !isVerificationCommand(command)) return executeShell(input, options);
+                // Capture at actual execution, not when an SDK later reports its tool-call event.
+                const candidate = {
+                  beforeState: await captureWorkspaceStateAsync(turnStartWorkspace),
+                  cwd: this.bash.getCwd(),
+                };
+                commandCandidates.set(options.toolCallId, candidate);
+                try {
+                  return await executeShell(input, options);
+                } finally {
+                  commandCandidates.set(options.toolCallId, {
+                    ...candidate,
+                    state: await captureWorkspaceStateAsync(turnStartWorkspace),
+                  });
+                }
+              },
+            };
+          }
           if (overflowRecoveryLevel > 0) tools = {};
+          tools = operations.wrap(tools);
 
           const maxOutputTokens =
             runtime.modelInfo?.supportsMaxOutputTokens === false
@@ -4267,6 +4593,7 @@ export class Agent {
               lastStepFinishReason = getBatchFinishReason(event.finishReason);
               if (event.responseMessages) {
                 completedStepMessages = sanitizeModelMessages(event.responseMessages as ModelMessage[]);
+                operations.acknowledge(completedStepMessages);
               }
               if (event.servedModelId && servedByAnother(event.servedModelId, runtime.modelId)) {
                 roundServed = event.servedModelId;
@@ -4292,7 +4619,7 @@ export class Agent {
           stream.response.catch(() => undefined);
           this.kernel?.transition("act");
 
-          for await (const part of stream.events) {
+          for await (const part of operations.observe(stream.events)) {
             if (signal.aborted) {
               yield { type: "content", content: `\n\n${this.endNote("[Cancelled]")}` };
               break;
@@ -4355,7 +4682,15 @@ export class Agent {
                 if (tc.function.name === "bash") {
                   try {
                     const command = (JSON.parse(tc.function.arguments) as { command?: string }).command;
-                    if (typeof command === "string") pendingCommands.set(tc.id, command);
+                    if (typeof command === "string") {
+                      pendingCommands.set(tc.id, command);
+                      if (isVerificationCommand(command) && !commandCandidates.has(tc.id)) {
+                        commandCandidates.set(tc.id, {
+                          beforeState: await captureWorkspaceStateAsync(turnStartWorkspace),
+                          cwd: this.bash.getCwd(),
+                        });
+                      }
+                    }
                   } catch {
                     // malformed args; nothing to record
                   }
@@ -4371,7 +4706,12 @@ export class Agent {
               case "tool-result": {
                 const tc = part.toolCall;
                 const tr = toToolResult(part.output);
-                if (tr.success && tr.diff?.filePath) {
+                const replayed = operations.isReplay(tc.id);
+                if (replayed) {
+                  pendingCommands.delete(tc.id);
+                  commandCandidates.delete(tc.id);
+                }
+                if (tr.success && tr.diff?.filePath && !replayed) {
                   this.kernel?.recordMutation(tr.diff.filePath);
                   turnMutationEvents += 1;
                 } else this.kernel?.recordObservation(`${tc.function.name}: ${tr.output}`);
@@ -4397,18 +4737,27 @@ export class Agent {
                     this.turnLinkedCriteriaIds.add(id);
                   }
                 }
-                const described = !tr.success
-                  ? null
-                  : tc.function.name === "task"
-                    ? describeDelegatedEvidence(tr.task?.agent ?? "task", tr.task?.evidence)
-                    : describeVerificationEvidence(
-                        tc.function.name,
-                        tc.function.arguments,
-                        this.kernel?.snapshot().mutations ?? [],
-                      );
+                const described =
+                  !tr.success || replayed
+                    ? null
+                    : tc.function.name === "task"
+                      ? describeDelegatedEvidence(tr.task?.agent ?? "task", tr.task?.evidence)
+                      : describeVerificationEvidence(
+                          tc.function.name,
+                          tc.function.arguments,
+                          this.kernel?.snapshot().mutations ?? [],
+                        );
                 // A check that runs a script or recipe this turn created or changed proves only what the turn
                 // wrote into it (audit doc 17, S10), unless the request asked for that change.
                 const ranCommand = pendingCommands.get(tc.id);
+                const commandCandidate = commandCandidates.get(tc.id);
+                const afterCommand = commandCandidate
+                  ? (commandCandidate.state ?? (await captureWorkspaceStateAsync(turnStartWorkspace)))
+                  : null;
+                const changedDuringCheck =
+                  commandCandidate !== undefined &&
+                  afterCommand !== null &&
+                  changedPaths(commandCandidate.beforeState, afterCommand)?.length !== 0;
                 const ranKind = described !== null && ranCommand ? checkKindOf(ranCommand, turnStartWorkspace) : null;
                 const evidence =
                   described !== null &&
@@ -4427,7 +4776,9 @@ export class Agent {
                     ),
                   )
                     ? null
-                    : described;
+                    : changedDuringCheck
+                      ? null
+                      : described;
                 // A local request counts only when the host sees the page answer too: `curl` exits 0 on a 500 page.
                 const requested = evidence && ranCommand ? localRequestUrls(ranCommand) : [];
                 const unanswered =
@@ -4442,7 +4793,7 @@ export class Agent {
                   this.turnVerificationEvidence.push(evidence);
                   if (turnStartState) {
                     lastPassingCheck = {
-                      state: await captureWorkspaceStateAsync(turnStartWorkspace),
+                      state: afterCommand ?? (await captureWorkspaceStateAsync(turnStartWorkspace)),
                       mutationEvents: turnMutationEvents,
                       evidence,
                     };
@@ -4454,6 +4805,7 @@ export class Agent {
                 const digestCommand = pendingCommands.get(tc.id);
                 if (digestCommand !== undefined) {
                   pendingCommands.delete(tc.id);
+                  commandCandidates.delete(tc.id);
                   turnCommands.push({
                     command: digestCommand,
                     success: tr.success,
@@ -4468,9 +4820,11 @@ export class Agent {
                         (tr.success ? tr.output : (tr.error ?? tr.output)) ?? ""
                       ).slice(-6_000)}`,
                       mutationEvents: turnMutationEvents,
-                      state: await captureWorkspaceStateAsync(turnStartWorkspace),
-                      cwd: this.bash.getCwd(),
-                      finished: tr.success && hostSawFailure === null,
+                      beforeState: commandCandidate?.beforeState ?? null,
+                      state: afterCommand,
+                      cwd: commandCandidate?.cwd ?? this.bash.getCwd(),
+                      ...(tr.success ? { finished: true } : {}),
+                      source: "agent",
                     });
                   }
                 }
@@ -4605,6 +4959,7 @@ export class Agent {
             const response = interruption ? null : ((await stream.response) as { messages: ModelMessage[] });
             if (response && !signal.aborted) {
               const roundMessages = sanitizeModelMessages(response.messages);
+              operations.acknowledge(roundMessages);
               // An assistant step that produced neither text nor a tool call is not a result —
               // it is a provider or model failure (seen live 2026-09-17: an upstream provider
               // consumed 47 completion tokens of a tool call, returned an empty "stop" delta, and
@@ -4681,7 +5036,7 @@ export class Agent {
               provider,
               modelId: runtime.modelId,
               userModelMessage,
-              completedSteps: completedStepMessages,
+              completedSteps: operations.recover(completedStepMessages),
               signal,
             });
             if (outcome.action === "switch") switchModel(outcome.modelId);
@@ -4818,7 +5173,7 @@ export class Agent {
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(turnBlocker);
             const verdict = `[Stopped — ${turnBlocker}]`;
-            this.recordVerdict(verdict);
+            this.recordVerdict(verdict, "blocked");
             yield { type: "content", content: `\n\n${verdict}` };
             yield { type: "done" };
             return;
@@ -4845,7 +5200,7 @@ export class Agent {
             const key = changedTests.map((path) => `${path}:${fileStamp(join(cwd, path))}`).join("|");
             if (originalTestsCache?.key !== key) {
               reportStatus("checks", "Running the tests as they were before this request");
-              clearVerifyDir(turnStartWorkspace);
+              this.clearVerificationFiles(turnStartWorkspace);
               const outcome = await this.originalTestsHold({
                 cwd,
                 paths: changedTests,
@@ -5236,7 +5591,7 @@ export class Agent {
           contractCouldNotRun = [];
           if (contract.length > 0) {
             // The project's checks never pick up an independent check's files (a copy the model wrote there included).
-            clearVerifyDir(turnStartWorkspace);
+            this.clearVerificationFiles(turnStartWorkspace);
             // A project check whose full run outlasts the budget is run again scoped to the files this turn changed
             // (src/contract/scope.ts), and the session remembers it: later passes go straight to the scoped run, or,
             // when none can be told, say once that it could not run instead of waiting for it again.
@@ -5252,29 +5607,16 @@ export class Agent {
             const evaluate = (checks: readonly ContractCheck[]) =>
               evaluateTurnContract({
                 checks,
-                runs: checkRuns.map((run) => ({
-                  command: run.command,
-                  passed: run.passed,
-                  detail: run.detail,
-                  fresh:
-                    foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
-                    run.mutationEvents === turnMutationEvents &&
-                    run.state !== null &&
-                    endState !== null &&
-                    changedPaths(run.state, endState)?.length === 0,
-                  beforeFirstChange:
-                    foldPath(run.cwd) === foldPath(turnStartWorkspace) &&
-                    run.mutationEvents === 0 &&
-                    run.state !== null &&
-                    turnStartState !== null &&
-                    changedPaths(turnStartState, run.state)?.length === 0,
-                  ...(run.unrunnable ? { unrunnable: run.unrunnable } : {}),
-                  ...(run.finished ? { finished: true } : {}),
-                })),
+                runs: observedCheckRuns(checkRuns, {
+                  workspace: turnStartWorkspace,
+                  startState: turnStartState,
+                  currentState: endState,
+                  mutationEvents: turnMutationEvents,
+                }),
                 workspace: turnStartWorkspace,
                 runCheck: (command, options) => {
                   reportStatus("checks", `Running \`${command}\` on the final code`);
-                  return this.checkRunner(command, options);
+                  return runCheck(command, options);
                 },
                 timeoutMs: this.checkTimeoutMs,
                 signal,
@@ -5330,19 +5672,47 @@ export class Agent {
                 unrunnable: `took longer than ${minutes} earlier in this turn`,
               })),
             ];
-            // The host's own runs count as runs: unless something changes, they need not run again.
-            const stateAfterChecks = await captureWorkspaceStateAsync(cwd);
+            // Classification belongs to the command's own receipt; do not replace its observed candidate.
             for (const result of results.filter((item) => item.by === "host")) {
-              checkRuns.push({
-                command: result.check.command,
-                passed: result.passed,
-                detail: result.detail,
-                mutationEvents: turnMutationEvents,
-                state: stateAfterChecks,
-                cwd: turnStartWorkspace,
-                ...(result.unrunnable ? { unrunnable: result.unrunnable } : {}),
-              });
+              const receipt = [...checkRuns]
+                .reverse()
+                .find((run) => run.command === result.check.command && run.source === "host");
+              if (receipt) {
+                receipt.passed = result.passed;
+                receipt.detail = result.detail;
+                if (result.unrunnable) receipt.unrunnable = result.unrunnable;
+              } else if (result.unrunnable) {
+                checkRuns.push({
+                  command: result.check.command,
+                  passed: false,
+                  detail: result.detail,
+                  mutationEvents: turnMutationEvents,
+                  state: null,
+                  cwd: turnStartWorkspace,
+                  finished: false,
+                  unrunnable: result.unrunnable,
+                  source: "host",
+                });
+              }
             }
+            const checkedCandidate = await captureWorkspaceStateAsync(turnStartWorkspace);
+            const observed = observedCheckRuns(checkRuns, {
+              workspace: turnStartWorkspace,
+              startState: turnStartState,
+              currentState: checkedCandidate,
+              mutationEvents: turnMutationEvents,
+            });
+            results = results.map((result) => {
+              if (!result.passed || result.unrunnable) return result;
+              const latest = [...observed].reverse().find((run) => isSameCheck(run.command, result.check));
+              if (latest?.fresh) return result;
+              return {
+                ...result,
+                passed: false,
+                detail:
+                  "The workspace changed during or after this check, or its candidate is unknown. Run the check again on the final code.",
+              };
+            });
             // A project check that could not run here (its tool is missing, it ran out of time, running it would do
             // damage) says nothing either way: it is said once and never sent back for repair. A decision's check that
             // could not run keeps its own message below.
@@ -5391,6 +5761,7 @@ export class Agent {
             const trusted = results.filter(
               (result) => !result.check.source.endsWith(DEFINED_THIS_TURN) && !couldNotRun.includes(result),
             );
+            effectiveContract = trusted.map((result) => result.check);
             contractPassed = failing.length === 0 && trusted.length > 0;
             if (failing.length > 0) checkedNote = null;
             if (failing.length === 0) {
@@ -5427,8 +5798,8 @@ export class Agent {
                 lastContractFailure !== null &&
                 (turnMutationEvents > lastContractFailure.mutationEvents ||
                   (lastContractFailure.state !== null &&
-                    stateAfterChecks.kind !== "unknown" &&
-                    (changedPaths(lastContractFailure.state, stateAfterChecks)?.length ?? 1) > 0));
+                    checkedCandidate.kind !== "unknown" &&
+                    (changedPaths(lastContractFailure.state, checkedCandidate)?.length ?? 1) > 0));
               const repeated = changedSinceLastFailure && lastContractFailure?.signature === signature;
               // An attempt that broke a check which passed before it (audit doc 15, Phase 2.3): say which files
               // it changed and offer restore_file. Nothing is undone unless the model asks (owner, 2026-09-23).
@@ -5445,15 +5816,15 @@ export class Agent {
                 ...new Set([
                   ...byFileTools,
                   ...((attemptStart &&
-                    stateAfterChecks.kind !== "unknown" &&
-                    changedPaths(attemptStart, stateAfterChecks)) ||
+                    checkedCandidate.kind !== "unknown" &&
+                    changedPaths(attemptStart, checkedCandidate)) ||
                     []),
                 ]),
               ].sort();
               const otherwiseChanged = attemptChanged.filter((path) => !byFileTools.includes(path));
               this.attemptJournal.nextAttempt();
               lastContractResults = new Map(results.map((result) => [result.check.command, result.passed]));
-              lastContractFailure = { signature, mutationEvents: turnMutationEvents, state: stateAfterChecks };
+              lastContractFailure = { signature, mutationEvents: turnMutationEvents, state: checkedCandidate };
               if (repeated) repairEscalated = true;
               const fileList = (paths: readonly string[]) =>
                 `${paths
@@ -5848,7 +6219,9 @@ ${verdict}`,
                 changedFiles: mutations,
                 workspace: turnStartWorkspace,
                 signal,
+                mutationEvents: turnMutationEvents,
               }).catch((error: unknown): { unavailable: string; touched?: string[] } => {
+                this.turnCheckerInvalidated = true;
                 recordSwallowedError("independent-check", error);
                 return { unavailable: "the independent check failed to start" };
               });
@@ -5859,7 +6232,7 @@ ${verdict}`,
                   independentPass = {
                     text: "an independent check of the request passed",
                     mutations: turnMutationEvents,
-                    state: endState,
+                    state: run.candidate,
                   };
                   this.kernel?.recordObservation(`Independent check passed: \`${check.report.command}\`.`);
                 } else {
@@ -5892,6 +6265,7 @@ ${verdict}`,
                 }
               } else {
                 touchedByChecker = independent.touched ?? [];
+                this.turnResultLimitations.push(`Independent check unavailable: ${independent.unavailable}`);
                 this.kernel?.recordObservation(`No independent check: ${independent.unavailable}.`);
               }
             }
@@ -5927,23 +6301,31 @@ ${verdict}`,
             const check = independentPending;
             independentPending = null;
             reportStatus("checks", `Running the independent check again: \`${check.report.command}\``);
-            const rerun = await this.runIndependentTest(check, turnStartWorkspace, signal).catch(
-              (error: unknown): ContractRun => {
+            const rerun = await this.runIndependentTest(check, turnStartWorkspace, signal, turnMutationEvents).catch(
+              (error: unknown): IndependentTestRun => {
+                this.turnCheckerInvalidated = true;
                 recordSwallowedError("independent-check", error);
-                return { passed: false, output: "", durationMs: 0, state: "timed_out" };
+                return {
+                  passed: false,
+                  output: "the independent check failed to start",
+                  durationMs: 0,
+                  candidate: null,
+                  unavailable: "the independent check failed to start",
+                };
               },
             );
             if (rerun.passed && !ranNoTest(rerun.output)) {
               independentPass = {
                 text: "an independent check of the request passed after a repair",
                 mutations: turnMutationEvents,
-                state: endState,
+                state: rerun.candidate,
               };
               this.kernel?.recordObservation(`Independent check passed after a repair: \`${check.report.command}\`.`);
             } else if (!signal.aborted) {
               // A check that failed and then could not run again (it timed out, it collected nothing) leaves its failure
               // standing: the repair was never checked (review 2026-10-03).
-              const couldNotRun = ranNoTest(rerun.output) || rerun.state === "timed_out";
+              const couldNotRun =
+                rerun.unavailable !== undefined || ranNoTest(rerun.output) || rerun.state === "timed_out";
               const failing = parseFailures(rerun.output)
                 .map((failure) => failure.name)
                 .filter((name): name is string => Boolean(name));
@@ -6015,10 +6397,9 @@ ${verdict}`,
           }
           const pagesBroken = pagesVerdict !== null;
 
-          const verdict = pagesVerdict ?? (hostPasses ? `[Checked by Shelra on the final code: ${hostPasses}]` : null);
-          if (verdict) {
-            this.recordVerdict(verdict);
-            yield { type: "content", content: `\n\n${verdict}` };
+          if (pagesVerdict) {
+            this.recordVerdict(pagesVerdict);
+            yield { type: "content", content: `\n\n${pagesVerdict}` };
           }
           if (urlNote) yield { type: "content", content: `\n\n${urlNote}` };
 
@@ -6061,22 +6442,79 @@ ${verdict}`,
             this.kernel?.recordObservation(`Stop hook blocked completion: ${reason}`);
             this.kernel?.evaluateCompletion({ verificationPassed: false, reviewPassed: false });
             this.persistKernelIndex(reason);
-            this.recordVerdict(`[Not marked complete — ${reason}]`);
+            this.recordVerdict(`[Not marked complete — ${reason}]`, "blocked");
             yield { type: "content", content: `\n\n[Not marked complete — ${reason}]` };
             yield { type: "done" };
             return;
           }
 
           this.persistKernelIndex();
-          // The memories this turn was given were there when the project's checks passed (audit doc 15, M3).
-          if (contractPassed && !pagesBroken && !this.ablations.has("memory"))
-            creditMemoryUse(memoryScope, memoryContext.expanded, 1);
-          // An entry that names a command which passed in this turn is current again (audit doc 15, M2).
+          const verifiedCandidate = await captureWorkspaceStateAsync(turnStartWorkspace);
+          const matchesCandidate = (state: WorkspaceState | null, events: number) =>
+            state !== null && events === turnMutationEvents && changedPaths(state, verifiedCandidate)?.length === 0;
+          const freshCommandEvidence =
+            lastPassingCheck !== null && matchesCandidate(lastPassingCheck.state, lastPassingCheck.mutationEvents);
+          const freshSmoke =
+            lastSmoke?.result.status === "passed" && matchesCandidate(lastSmoke.state, lastSmoke.mutationEvents);
+          const freshIndependent =
+            independentPass !== null && matchesCandidate(independentPass.state, independentPass.mutations);
+          const finalRuns = observedCheckRuns(checkRuns, {
+            workspace: turnStartWorkspace,
+            startState: turnStartState,
+            currentState: verifiedCandidate,
+            mutationEvents: turnMutationEvents,
+          });
+          const freshContract =
+            contractPassed &&
+            contractCouldNotRun.length === 0 &&
+            effectiveContract.every((check) => {
+              const run = [...finalRuns].reverse().find((item) => isSameCheck(item.command, check));
+              return run?.passed && run.fresh && !run.unrunnable;
+            });
+          this.turnResultLimitations.push(...contractCouldNotRun.map((command) => `Check unavailable: ${command}`));
+          if (lastSmoke?.result.status === "unavailable")
+            this.turnResultLimitations.push(describeSmoke(lastSmoke.result));
+          const verified =
+            !this.ablations.has("gate") &&
+            !this.turnCheckerInvalidated &&
+            !this.turnOperationUncertain &&
+            !pagesBroken &&
+            this.turnVerificationEvidence.length > 0 &&
+            (freshContract || freshCommandEvidence || freshSmoke || freshIndependent) &&
+            (contract.every((check) => check.source.endsWith(DEFINED_THIS_TURN)) || freshContract) &&
+            (lastSmoke?.result.status !== "passed" || freshSmoke) &&
+            (independentPass === null || freshIndependent) &&
+            contractCouldNotRun.length === 0;
+          this.turnHostStatus = verified
+            ? "verified"
+            : mutations.length > 0 || checkRuns.length > 0
+              ? "unverified"
+              : "answered";
+          this.turnVerifiedCandidate = verified ? verifiedCandidate : null;
+          // Hooks and learning can still be interrupted. Publish success after the final host snapshot.
+          if (hostPasses && !pagesBroken) {
+            if (verified) {
+              this.turnPassingSummary = hostPasses;
+            } else {
+              const reason = "The final local candidate has no complete fresh host verification.";
+              const verdict = `[Not verified — ${reason}]`;
+              this.turnResultLimitations.push(reason);
+              this.recordVerdict(verdict, this.turnHostStatus);
+              yield { type: "content", content: `\n\n${verdict}` };
+            }
+          }
+          // Observe named commands only when the final candidate remains backed; this does not confirm claims.
           if (!this.ablations.has("memory")) {
-            reconfirmByPassingCommands(memoryScope, [
-              ...turnCommands.filter((command) => command.success).map((command) => command.command),
-              ...checkRuns.filter((run) => run.passed).map((run) => run.command),
-            ]);
+            const passingCommands = [
+              ...turnCommands
+                .filter((command) => command.success && !isVerificationCommand(command.command))
+                .map((command) => command.command),
+              ...finalRuns.filter((run) => run.passed && run.fresh && !run.unrunnable).map((run) => run.command),
+            ];
+            this.turnMemoryBookkeeping = () => {
+              if (freshContract && !pagesBroken) creditMemoryUse(memoryScope, memoryContext.expanded, 1);
+              recordMemoryCommandEvidence(memoryScope, passingCommands);
+            };
           }
           // Learning after acting: a verified change, a failure that was worked through, or a
           // substantial investigation becomes durable project memory through the write gate.
@@ -6087,13 +6525,17 @@ ${verdict}`,
               assistantText: turnText.slice(-12_000),
               changedFiles: [...mutations],
               commands: turnCommands,
-              verified: this.turnVerificationEvidence.length > 0 && !pagesBroken,
+              verified,
               toolCalls: turnToolCalls,
             },
             runtime.modelId,
             signal,
             observer,
-            pagesBroken ? "unverified" : this.turnVerificationEvidence.length > 0 ? "verified" : "answered",
+            this.turnHostStatus === "verified"
+              ? "verified"
+              : this.turnHostStatus === "answered"
+                ? "answered"
+                : "unverified",
           );
           yield { type: "done" };
           return;
@@ -6129,7 +6571,7 @@ ${verdict}`,
               provider,
               modelId: runtime.modelId,
               userModelMessage,
-              completedSteps: completedStepMessages,
+              completedSteps: operations.recover(completedStepMessages),
               signal,
             });
             if (outcome.action === "switch") switchModel(outcome.modelId);
@@ -6152,7 +6594,7 @@ ${verdict}`,
               error: err,
               modelId: runtime.modelId,
               userModelMessage,
-              completedSteps: completedStepMessages,
+              completedSteps: operations.recover(completedStepMessages),
               signal,
             });
             if (fallback) {
@@ -6203,8 +6645,10 @@ ${verdict}`,
         }
       }
     } finally {
+      this.turnHostMutationEvents = turnMutationEvents;
+      if (signal.aborted) this.turnHostStatus = "cancelled";
       // However the turn ended (a verdict, a hold, Esc), no independent check stays where the project's runner finds it.
-      if (this.mode === "agent") clearVerifyDir(this.bash.getRootCwd());
+      if (this.mode === "agent") this.clearVerificationFiles(this.bash.getRootCwd());
       if (this.abortController?.signal === signal) {
         this.abortController = null;
       }
@@ -6233,12 +6677,19 @@ ${verdict}`,
     };
     const scope = projectMemoryScope(this.bash.getRootCwd());
     if (didWork(digest)) {
-      // The closing note says why a turn that reflects ended unverified (failing checks, or held by test protection).
-      const note = outcome === "unverified" ? this.turnEndNotes.at(-1) : undefined;
-      appendEpisode(
-        scope,
-        episodeFrom(digest, outcome, { session: this.session?.id, model: modelId, ...(note ? { note } : {}) }),
-      );
+      // Reflection can be interrupted or outlast a code change. Record the final host outcome once it is known.
+      this.turnEpisodeRecord = (result) => {
+        const finalOutcome = outcome === "verified" || result.status === "cancelled" ? result.status : outcome;
+        const note = finalOutcome !== "verified" ? this.turnEndNotes.at(-1) : undefined;
+        appendEpisode(
+          scope,
+          episodeFrom({ ...digest, verified: result.verified }, finalOutcome, {
+            session: this.session?.id,
+            model: modelId,
+            ...(note ? { note } : {}),
+          }),
+        );
+      };
     }
     try {
       const report = await reflectOnTurn({

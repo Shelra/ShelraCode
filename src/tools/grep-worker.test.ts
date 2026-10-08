@@ -49,9 +49,12 @@ describe("grep on a worker thread", () => {
     expect(longestGap).toBeLessThan(100);
   });
 
-  it("answers no match and a bad pattern the way the in-process search does", async () => {
+  it("answers no match, and says so when the pattern itself cannot be read", async () => {
     expect((await executeGrep({ pattern: "zzz-not-there-zzz" }, root)).output).toBe("No matches found.");
-    // An unreadable pattern is reported by ripgrep as a failed search, which the tool has always answered as "no matches".
-    expect((await executeGrep({ pattern: "(" }, root)).output).toContain("No matches found.");
+    // An unreadable pattern used to be answered as "no matches", and the model concluded the code was absent (review
+    // 2026-10-07): it is an error that names the pattern problem.
+    const bad = await executeGrep({ pattern: "(" }, root);
+    expect(bad.success).toBe(false);
+    expect(bad.error).toContain("could not run this pattern");
   });
 });

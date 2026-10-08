@@ -166,46 +166,90 @@ export function createWorkspaceLspManager(
       return {
         success: false,
         output: `No LSP server available for ${path.extname(normalizedPath) || "this file type"}.`,
+        availability: { status: "unavailable", responded: [], failed: [] },
       };
     }
 
-    const lspDiagnostics = await touchFile(normalizedPath, true);
+    let content: string;
+    try {
+      content = await readFile(normalizedPath, "utf8");
+    } catch (error) {
+      const reason = `Could not read the file for the LSP query: ${String(error)}`;
+      return {
+        success: false,
+        output: reason,
+        availability: {
+          status: "unavailable",
+          responded: [],
+          failed: records.map(({ definition }) => ({ serverId: definition.id, reason })),
+        },
+      };
+    }
     const params = createOperationParams(input, normalizedPath);
-    const results = (
-      await Promise.all(
-        records.map(async ({ key, client }) => {
+    const extension = path.extname(normalizedPath).toLowerCase();
+    const outcomes = await Promise.all(
+      records.map(async ({ key, definition, client }) => {
+        try {
+          const languageId = definition.languageIds[extension] ?? (extension.slice(1) || "plaintext");
+          await client.openOrChangeFile(normalizedPath, languageId, content);
+          await client.waitForDiagnostics(normalizedPath);
+          let result: unknown;
           if (input.operation === "incomingCalls" || input.operation === "outgoingCalls") {
-            try {
-              const items = await client.sendRequest<unknown[]>("textDocument/prepareCallHierarchy", params);
-              const firstItem = Array.isArray(items) ? items[0] : undefined;
-              if (!firstItem) return [];
-              return client.sendRequest<unknown[]>(
-                input.operation === "incomingCalls" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls",
-                { item: firstItem },
-              );
-            } catch {
-              clients.delete(key);
-              return [];
-            }
-          }
-
-          try {
-            return await client.sendRequest<unknown>(getOperationMethod(input.operation), params);
-          } catch {
-            clients.delete(key);
-            return [];
-          }
-        }),
-      )
-    )
-      .flatMap((result) => (Array.isArray(result) ? result : result ? [result] : []))
+            const items = await client.sendRequest<unknown[]>("textDocument/prepareCallHierarchy", params);
+            const firstItem = Array.isArray(items) ? items[0] : undefined;
+            result = firstItem
+              ? await client.sendRequest<unknown[]>(
+                  input.operation === "incomingCalls" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls",
+                  { item: firstItem },
+                )
+              : [];
+          } else result = await client.sendRequest<unknown>(getOperationMethod(input.operation), params);
+          return {
+            serverId: definition.id,
+            result,
+            diagnostic: {
+              filePath: normalizedPath,
+              serverId: definition.id,
+              diagnostics: client.getDiagnostics(normalizedPath),
+            },
+          };
+        } catch (error) {
+          clients.delete(key);
+          return {
+            serverId: definition.id,
+            result: null,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }),
+    );
+    const failed = outcomes.flatMap((outcome) =>
+      outcome.error === undefined ? [] : [{ serverId: outcome.serverId, reason: outcome.error }],
+    );
+    const responded = outcomes.filter((outcome) => outcome.error === undefined).map((outcome) => outcome.serverId);
+    const results = outcomes
+      .flatMap(({ result }) => (Array.isArray(result) ? result : result ? [result] : []))
       .filter(Boolean);
-
-    const output = results.length > 0 ? JSON.stringify(results, null, 2) : `No results found for ${input.operation}.`;
+    const lspDiagnostics = outcomes.flatMap(({ diagnostic }) =>
+      diagnostic && diagnostic.diagnostics.length > 0 ? [diagnostic] : [],
+    );
+    const status = failed.length === 0 ? "complete" : responded.length === 0 ? "unavailable" : "partial";
+    const output =
+      failed.length > 0
+        ? [
+            `LSP ${input.operation} ${status}:`,
+            ...failed.map(({ serverId, reason }) => `- ${serverId}: ${reason}`),
+            "This incomplete query does not establish absence of callers or references.",
+            ...(results.length > 0 ? ["Results from responding servers:", JSON.stringify(results, null, 2)] : []),
+          ].join("\n")
+        : results.length > 0
+          ? JSON.stringify(results, null, 2)
+          : `No results found for ${input.operation} in the queried LSP server(s): ${responded.join(", ")}. This is not a repository-wide absence proof.`;
     return {
-      success: true,
+      success: failed.length === 0,
       output,
       lspDiagnostics,
+      availability: { status, responded, failed },
     };
   }
 

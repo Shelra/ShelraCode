@@ -47,6 +47,37 @@ const call = (id: string, name: string, args: Record<string, unknown>) => ({
   function: { name, arguments: JSON.stringify(args) },
 });
 
+describe("credential redaction", () => {
+  it.each([
+    "token",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "secret",
+    "password",
+  ])("redacts an opaque %s query value and keeps the surrounding URL and diagnostic", (name) => {
+    const text = `GET http://localhost:3000/api?${name}=opaque%2Bcredential&scope=read#result -> 503 ECONNREFUSED`;
+    expect(redact(text)).toBe(`GET http://localhost:3000/api?${name}=***&scope=read#result -> 503 ECONNREFUSED`);
+  });
+
+  it.each([
+    ["SHELRA_TOKEN=opaque-credential bun test src/slug.test.ts", "SHELRA_TOKEN=*** bun test src/slug.test.ts"],
+    ["OPENROUTER_API_KEY=opaque-credential; exit 1", "OPENROUTER_API_KEY=***; exit 1"],
+    ["password = 'credential with spaces', status=403", "password = '***', status=403"],
+    ['ACCESS_TOKEN="credential with spaces" bun test', 'ACCESS_TOKEN="***" bun test'],
+  ])("redacts sensitive assignments while preserving non-confidential syntax: %s", (text, expected) => {
+    expect(redact(text)).toBe(expected);
+    expect(redact(expected)).toBe(expected);
+  });
+
+  it("preserves ordinary diagnostic values and names that merely contain secret-related words", () => {
+    const diagnostic =
+      "GET /api?scope=read&token_count=3&password_status=missing -> 503; cache_key=slug; tokenizer=ascii; secret unavailable";
+    expect(redact(diagnostic)).toBe(diagnostic);
+    expect(redact("token=\nECONNREFUSED localhost:3000")).toBe("token=\nECONNREFUSED localhost:3000");
+  });
+});
+
 describe("session trace", () => {
   it("distinguishes host content from the first real provider activity", () => {
     const dir = traceHere();

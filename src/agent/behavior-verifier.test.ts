@@ -1,4 +1,5 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -9,6 +10,7 @@ import {
   testRunnerHint,
   verifierCommandProblem,
   verifierPrompt,
+  verifierTestFile,
 } from "./behavior-verifier";
 
 function project(files: Record<string, string>): string {
@@ -83,8 +85,13 @@ describe("the command the host will run", () => {
       `bun test ${file}`,
       `bun test ./${file}`,
       `bunx vitest run ${file}`,
+      `bunx --no-install vitest run ${file}`,
       `npx vitest run ${file} --reporter=verbose`,
+      `npx --no-install vitest run ${file} --reporter=verbose`,
       `npx jest ${file}`,
+      `bunx --no-install jest ${file} --runInBand`,
+      `pnpm exec vitest run ${file}`,
+      `yarn jest ${file} --ci`,
       `node --test ${file}`,
       `node --experimental-strip-types --test ${file}`,
     ]) {
@@ -106,7 +113,108 @@ describe("the command the host will run", () => {
     expect(runnableVerifierCommand(`bun test ${file}`, file)).toBe(`bun test ./${file}`);
     expect(runnableVerifierCommand(`bun test ./${file}`, file)).toBe(`bun test ./${file}`);
     expect(runnableVerifierCommand(`bun test --bail ${file}`, file)).toBe(`bun test --bail ./${file}`);
-    expect(runnableVerifierCommand(`npx vitest run ${file}`, file)).toBe(`npx vitest run ${file}`);
+    expect(runnableVerifierCommand(`bun test .shelra\\verify\\slug.test.ts`, file)).toBe(`bun test ./${file}`);
+    expect(runnableVerifierCommand(`npx vitest run ${file}`, file)).toBe(`npx --no-install vitest run ${file}`);
+    expect(runnableVerifierCommand(`bunx jest ${file}`, file)).toBe(`bunx --no-install jest ${file}`);
+    expect(runnableVerifierCommand(`bunx --no-install vitest run ${file}`, file)).toBe(
+      `bunx --no-install vitest run ${file}`,
+    );
+    expect(runnableVerifierCommand(`npx --no-install jest ${file}`, file)).toBe(`npx --no-install jest ${file}`);
+  });
+
+  it("permits only the explicitly safe flags of the selected runner", () => {
+    for (const command of [
+      `bun test ${file} --timeout=10000 --bail`,
+      `npx vitest run ${file} --reporter=dot --testTimeout=10000`,
+      `bunx jest ${file} --runInBand --verbose --testTimeout=10000`,
+      `node --test ${file} --test-reporter=tap --test-timeout=10000`,
+      `python -m pytest ${file.replace("slug.test.ts", "test_slug.py")} -q -x`,
+      `python -B ${file.replace("slug.test.ts", "test_slug.py")}`,
+    ]) {
+      const testFile = verifierTestFile(command);
+      expect(testFile, command).not.toBeNull();
+      expect(verifierCommandProblem(command, testFile ?? ""), command).toBeNull();
+      const canonical = runnableVerifierCommand(command, testFile ?? "");
+      expect(verifierCommandProblem(canonical, testFile ?? ""), canonical).toBeNull();
+    }
+    expect(verifierCommandProblem(`bun test ${file} --timeout=0`, file)).not.toBeNull();
+    expect(verifierCommandProblem(`python ${file} --runInBand`, file)).not.toBeNull();
+  });
+
+  it.each([
+    ["bun test", "--preload=./.shelra/verify/preload.ts"],
+    ["bun test", "--test-name-pattern=smoke"],
+    ["bun test", "--update-snapshots"],
+    ["node --test", "--require=./.shelra/verify/hook.cjs"],
+    ["node --test", "--import=./.shelra/verify/hook.mjs"],
+    ["node --test", "--loader=./.shelra/verify/hook.mjs"],
+    ["node --test", "--test-name-pattern=smoke"],
+    ["bunx vitest run", "--config=.shelra/verify/config.ts"],
+    ["bunx vitest run", "--testNamePattern=smoke"],
+    ["bunx vitest run", "--passWithNoTests"],
+    ["bunx vitest run", "--update"],
+    ["bunx vitest run", "--reporter=.shelra/verify/reporter.ts"],
+    ["npx jest", "--testNamePattern=smoke"],
+    ["npx jest", "--updateSnapshot"],
+    ["npx jest", "--setupFiles=.shelra/verify/setup.ts"],
+    ["python -m pytest", "--ignore=src/slug.py"],
+    ["python -m pytest", "--override-ini=testpaths:empty"],
+    ["deno test", "--allow-all"],
+    ["bun test", "--arbitrary=anything"],
+  ])("refuses execution or test-selection flags: %s %s", (runner, flag) => {
+    expect(verifierCommandProblem(`${runner} ${file} ${flag}`, file)).toContain("is not allowed");
+  });
+
+  it("cannot request installation through a package launcher or runner flag", () => {
+    for (const command of [
+      `npx --yes vitest run ${file}`,
+      `bunx --install vitest run ${file}`,
+      `bunx -p other-package vitest run ${file}`,
+      `npx vitest run ${file} --install`,
+      `bunx vitest run ${file} --yes`,
+    ]) {
+      expect(verifierCommandProblem(command, file), command).not.toBeNull();
+    }
+    for (const launcher of ["npx", "bunx"]) {
+      const canonical = runnableVerifierCommand(`${launcher} vitest run ${file}`, file);
+      expect(canonical).toBe(`${launcher} --no-install vitest run ${file}`);
+      expect(runnableVerifierCommand(canonical, file)).toBe(canonical);
+    }
+  });
+
+  it("finds a single valid test token without treating it as command authorization", () => {
+    expect(verifierTestFile(`bun test ./${file}`)).toBe(file);
+    expect(verifierTestFile("bun test .shelra\\verify\\slug.test.ts")).toBe(file);
+    expect(verifierTestFile(`bun test ${file} .shelra/verify/other.test.ts`)).toBeNull();
+    expect(verifierTestFile("bun test .shelra/verify/../slug.test.ts")).toBeNull();
+    expect(verifierTestFile("bun test src/slug.test.ts")).toBeNull();
+    const invalid = `bun test ${file} && echo done`;
+    expect(verifierTestFile(invalid)).toBe(file);
+    expect(verifierCommandProblem(invalid, verifierTestFile(invalid) ?? "")).not.toBeNull();
+  });
+
+  it("rejects the filter that hides a required failing behavior in Bun's real runner", () => {
+    const dir = mkdtempSync(join(tmpdir(), "shelra-verifier-filter-"));
+    try {
+      mkdirSync(join(dir, ".shelra", "verify"), { recursive: true });
+      writeFileSync(
+        join(dir, file),
+        "import { test, expect } from 'bun:test';\ntest('smoke', () => expect(1).toBe(1));\ntest('required behavior', () => expect(' A ').toBe('a'));\n",
+      );
+      const full = spawnSync("bun", ["test", `./${file}`], { cwd: dir, encoding: "utf8", windowsHide: true });
+      const filtered = spawnSync("bun", ["test", `./${file}`, "--test-name-pattern=smoke"], {
+        cwd: dir,
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      expect(full.status).toBe(1);
+      expect(filtered.status).toBe(0);
+      expect(`${filtered.stdout}${filtered.stderr}`).toContain("1 filtered out");
+      expect(ranNoTest(`${filtered.stdout}${filtered.stderr}`)).toBe(false);
+      expect(verifierCommandProblem(`bun test ${file} --test-name-pattern=smoke`, file)).toContain("is not allowed");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("refuses a chain, another file, another program or a file outside the check's folder", () => {
@@ -133,11 +241,11 @@ describe("the command the host will run", () => {
 describe("the runner a test outside the packages can use", () => {
   it("follows the project's own runner", () => {
     expect(testRunnerHint(project({ "package.json": '{"scripts":{"test":"vitest run"}}' }), ["src/a.ts"])).toContain(
-      "npx vitest run",
+      "npx --no-install vitest run",
     );
     expect(
       testRunnerHint(project({ "package.json": '{"devDependencies":{"vitest":"^3"}}', "bun.lock": "" }), ["a.ts"]),
-    ).toContain("bunx vitest run");
+    ).toContain("bunx --no-install vitest run");
     expect(testRunnerHint(project({ "package.json": '{"scripts":{"test":"bun test"}}' }), ["a.ts"])).toContain(
       "bun test ./<file>",
     );
@@ -181,6 +289,9 @@ describe("a run that ran no test", () => {
     expect(ranNoTest("collected 0 items\n\n=== no tests ran in 0.01s ===")).toBe(true);
     expect(ranNoTest("/usr/bin/python: No module named pytest")).toBe(true);
     expect(ranNoTest("'bunx' is not recognized as an internal or external command")).toBe(true);
+    expect(
+      ranNoTest("error: Could not find an existing 'vitest' binary to run. Stopping because --no-install was passed."),
+    ).toBe(true);
     expect(ranNoTest("(fail) slugify > removes trailing hyphens\n 2 pass\n 1 fail")).toBe(false);
   });
 });

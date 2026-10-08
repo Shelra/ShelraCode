@@ -132,6 +132,7 @@ const FINAL_RESULT_KEYS = [
   "modelsUsed",
   "reasoningEffort",
   "verified",
+  "evaluation",
   "completionBlocked",
   "timedOut",
   "turnError",

@@ -177,6 +177,7 @@ export function referenceExecution(input: {
       harness: input.harness,
       model: input.model,
       verified: grade.verified,
+      evaluation: grade.evaluation ? { ...grade.evaluation } : null,
       exitCode: run.exitCode,
       timedOut: run.timedOut,
       error: turn.error,

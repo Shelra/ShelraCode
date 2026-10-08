@@ -112,7 +112,7 @@ export async function checkLocalUrls(
       if (observe && response.status < 400 && html && !options.signal?.aborted) {
         const observation = await observe(url);
         if (observation.error && observation.pageErrors.length === 0 && observation.consoleErrors.length === 0) {
-          check.browserNote = `not opened in a browser: ${observation.error.replace(/\s+/gu, " ").slice(0, 160)}`;
+          check.browserNote = `not opened in a browser: ${observation.error.replace(/\s+/gu, " ").slice(0, 260)}`;
         }
         check.problems = pageProblems(observation);
       }

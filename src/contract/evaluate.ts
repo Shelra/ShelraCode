@@ -57,6 +57,8 @@ export interface AcceptanceContext {
   workspace: string;
   /** Repository root used to resolve benchmark-owned external oracle commands. */
   benchmarkRoot?: string;
+  /** The native Windows verification sandbox uses cmd.exe, not the interactive PowerShell. */
+  commandShell?: "cmd";
   /** Base URL of the running app, when one is running. Absent means browser/http checks are blocked. */
   appUrl?: string;
   attempt: number;
@@ -131,7 +133,9 @@ function needsBrowser(criterion: AcceptanceCriterion): ViewportName | null {
 function resolveBenchmarkCommand(command: string, context: AcceptanceContext): string {
   const replaceRoot = (input: string, name: "benchmarkRoot" | "workspace", root: string): string => {
     const token = new RegExp(`\\{\\{${name}\\}\\}([^\\s"']*)`, "gu");
-    return input.replace(token, (_match, suffix: string) => shellQuote(join(root, suffix.replace(/^[/\\]+/u, ""))));
+    return input.replace(token, (_match, suffix: string) =>
+      shellQuote(join(root, suffix.replace(/^[/\\]+/u, "")), context.commandShell),
+    );
   };
   let resolved = command;
   if (context.benchmarkRoot) resolved = replaceRoot(resolved, "benchmarkRoot", context.benchmarkRoot);
@@ -139,7 +143,11 @@ function resolveBenchmarkCommand(command: string, context: AcceptanceContext): s
   return resolved;
 }
 
-function shellQuote(value: string): string {
+function shellQuote(value: string, shell?: "cmd"): string {
+  if (shell === "cmd") {
+    if (/[%!^"\r\n]/u.test(value)) throw new Error("The sandbox cannot safely quote this path for cmd.exe.");
+    return `"${value}"`;
+  }
   if (process.platform === "win32") return `'${value.replace(/'/gu, "''")}'`;
   return `'${value.replace(/'/gu, "'\\''")}'`;
 }
@@ -268,6 +276,7 @@ export async function evaluateAcceptance(
           },
         });
         const expected = check.expectExitCode ?? 0;
+        if (outcome.state === "spawn_error") blocked.push(criterion.id);
         const ok = outcome.state === "completed" && outcome.exitCode === expected;
         const detail = ok
           ? `\`${check.command}\` exited ${outcome.exitCode}`

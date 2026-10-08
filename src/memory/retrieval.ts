@@ -1,6 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { importance, strength, strengthLabel } from "./dynamics";
+import { memorySubjectNote, recordSubject } from "./subjects";
 import { foldText, previousRequestWeight, searchTerms } from "./terms";
 import { MEMORY_SOURCE_WEIGHT, type MemoryRecord } from "./types";
 
@@ -128,8 +129,8 @@ export function detectStaleness(
   now = Date.now(),
 ): { stale: boolean; reason?: string } {
   const meta = record.entry.frontmatter.metadata;
-  const confirmedAt = Date.parse(meta.lastConfirmed ?? meta.modified);
-  if (!Number.isFinite(confirmedAt)) return { stale: false };
+  const confirmedAt = Date.parse(meta.lastConfirmed ?? meta.created ?? meta.modified);
+  if (!Number.isFinite(confirmedAt)) return { stale: true, reason: "recording/confirmation date unavailable" };
   for (const file of meta.relatedFiles ?? []) {
     const full = join(workspace, file);
     if (!existsSync(full)) return { stale: true, reason: `${file} no longer exists` };
@@ -137,7 +138,7 @@ export function detectStaleness(
       if (statSync(full).mtimeMs > confirmedAt + 1_000)
         return { stale: true, reason: `${file} changed after this was last confirmed` };
     } catch {
-      // unreadable: not evidence either way
+      return { stale: true, reason: `${file} cannot be inspected; freshness unknown` };
     }
   }
   if (now - confirmedAt > 180 * DAY_MS) return { stale: true, reason: "not confirmed in six months" };
@@ -435,29 +436,40 @@ export function buildMemoryContext(
   if (rules.length > 0) {
     lines.push("", "Standing rules, in the user's own words (they hold for every request):");
     for (const item of rules) {
-      lines.push(`- ${item.record.index.hook}${item.record.origin === "user" ? " [user-wide]" : ""}`);
+      const subject = memorySubjectNote({
+        ...item.record.entry.frontmatter.metadata,
+        subject: recordSubject(item.record),
+      });
+      lines.push(
+        `- ${item.record.index.hook}${item.record.origin === "user" ? " [user-wide]" : ""}${subject ? ` [${subject}]` : ""}`,
+      );
     }
   }
   for (const { item, body } of expanded) {
     const meta = item.record.entry.frontmatter.metadata;
     const provenance = `${meta.source ?? "inference"}${meta.confidence !== undefined ? ` ${Math.round(meta.confidence * 100)}%` : ""}`;
     const stale = item.stale ? ` — MAY BE STALE: ${item.staleReason}` : "";
+    const subject = memorySubjectNote({ ...meta, subject: recordSubject(item.record) });
     // Metamemory: how sure memory is of this, as a person knows a firm memory from a fading one.
     const label = strengthLabel(meta, now);
     lines.push(
       "",
-      `### ${item.record.index.title} (${item.record.slug}; ${meta.type}; ${provenance}${label ? `; ${label}` : ""}${item.record.origin === "user" ? "; user-wide" : ""}${stale})`,
+      `### ${item.record.index.title} (${item.record.slug}; ${meta.type}; ${provenance}${label ? `; ${label}` : ""}${item.record.origin === "user" ? "; user-wide" : ""}${subject ? `; ${subject}` : ""}${stale})`,
       body,
     );
   }
   if (listed.length > 0 || unlisted > 0) {
     lines.push("", listed.length > 0 ? "Other saved entries:" : "Other saved entries: none related to this request.");
     for (const item of listed) {
+      const subject = memorySubjectNote({
+        ...item.record.entry.frontmatter.metadata,
+        subject: recordSubject(item.record),
+      });
       lines.push(
-        `- ${item.record.index.title} (${item.record.index.file}) — ${item.record.index.hook}${item.record.origin === "user" ? " [user-wide]" : ""}${item.stale ? " [may be stale]" : ""}`,
+        `- ${item.record.index.title} (${item.record.index.file}) — ${item.record.index.hook}${item.record.origin === "user" ? " [user-wide]" : ""}${item.stale ? " [may be stale]" : ""}${subject ? ` [${subject}]` : ""}`,
       );
     }
-    if (unlisted > 0) lines.push(`- … and ${unlisted} more; memory_list shows them all.`);
+    if (unlisted > 0) lines.push(`- … and ${unlisted} more; memory_list pages through them.`);
   }
   if (faded.length > 0) {
     lines.push("", "Faded from disuse but matching this request (memory_read brings one back):");

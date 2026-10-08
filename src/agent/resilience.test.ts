@@ -270,13 +270,17 @@ describe("context telemetry during streaming", () => {
   });
 });
 
+const agents: Agent[] = [];
+
 function agentFor(provider: ScriptedProvider) {
   executeEventHooksMock.mockResolvedValue(emptyHookResult);
-  return new Agent(undefined, undefined, "primary-model", undefined, {
+  const agent = new Agent(undefined, undefined, "primary-model", undefined, {
     cwd: testWorkspace,
     provider,
     interruptionBackoffMs: [0],
   });
+  agents.push(agent);
+  return agent;
 }
 
 async function run(provider: ScriptedProvider, message = "Explain the project", setup?: (agent: Agent) => void) {

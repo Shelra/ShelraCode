@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { listWorkspaceFiles } from "../contract/workspace-files";
 import { classifyTurn, compileContextPacket } from "./compiler";
 
 const roots: string[] = [];
@@ -216,6 +217,47 @@ describe("host context compiler", () => {
       "Tests of the files the request names:\n- src/queue.test.ts\n- test/queue.spec.ts",
     );
     expect(packet.promptAppendix).not.toContain("src/queues.test.ts");
+  });
+
+  it("exposes an incomplete no-Git inventory instead of implying complete project coverage", async () => {
+    const filler = Object.fromEntries(
+      Array.from({ length: 450 }, (_, index) => [
+        `src/f${String(index).padStart(3, "0")}.ts`,
+        `export const f${index} = ${index};\n`,
+      ]),
+    );
+    const root = scratch("shelra-context-incomplete-", { ...filler, "z-target.ts": "export const target = 20;\n" });
+    expect(listWorkspaceFiles(root).files.some((file) => file.path === "z-target.ts")).toBe(false);
+    const packet = await compileContextPacket(root, "investiga el repositorio y sus consumidores");
+    expect(packet.truncated).toBe(true);
+    expect(packet.promptAppendix).toContain("Project file inventory is incomplete");
+    expect(packet.promptAppendix).toContain("grep");
+    expect(packet.promptAppendix).not.toContain("Files in this project");
+  }, 20_000);
+
+  it("hands the model a named package's source, declared consumers and nested documentation", async () => {
+    const root = repository("shelra-context-packages-", {
+      "package.json": JSON.stringify({ name: "root", workspaces: ["packages/*", "apps/*"] }),
+      "packages/auth/package.json": JSON.stringify({ name: "@fixture/auth", scripts: { test: "bun test" } }),
+      "packages/auth/src/login.ts": "export const login = true;\n",
+      "packages/auth/README.md": "# Authentication\n",
+      "packages/auth/docs/adr/001.md": "Why authentication has its own package.\n",
+      "apps/web/package.json": JSON.stringify({ name: "web", dependencies: { "@fixture/auth": "workspace:*" } }),
+    });
+    const packet = await compileContextPacket(root, "Fix packages/auth/src/login.ts");
+    expect(packet.project?.owners).toEqual([
+      { file: "packages/auth/src/login.ts", manifest: "packages/auth/package.json" },
+    ]);
+    expect(packet.promptAppendix).toContain("PROJECT PACKAGE STRUCTURE");
+    expect(packet.promptAppendix).toContain("packages/auth/README.md");
+    expect(packet.promptAppendix).toContain("packages/auth/docs/adr/001.md");
+    expect(packet.promptAppendix).toContain('"manifest":"apps/web/package.json"');
+    expect(packet.promptAppendix).toContain('"resolution":"name-match"');
+  }, 20_000);
+
+  it("does not report a filesystem inventory as complete when its root could not be read", () => {
+    const root = scratch("shelra-context-unreadable-", {});
+    expect(listWorkspaceFiles(join(root, "missing-directory"))).toEqual({ files: [], truncated: true });
   });
 
   it("ignores names outside the workspace and names that do not exist", async () => {

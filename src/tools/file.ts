@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
-import { dirname } from "path";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { basename, dirname } from "path";
 import { summarizeDiagnostics, syncFileWithLsp } from "../lsp/runtime";
 import type { LspDiagnosticFile } from "../lsp/types";
-import { resolveWorkspacePath } from "../security/workspace-guard";
+import { resolveWorkspacePath, viewRoot, type WorkspaceView } from "../security/workspace-guard";
 import { boundedPatch } from "./bounded-diff";
 import { dominantLineEnding, normalizeLineEndings, restoreLineEndings } from "./line-endings";
 
@@ -21,11 +22,56 @@ export interface FileResult {
   lspDiagnostics?: LspDiagnosticFile[];
 }
 
-function resolvePath(filePath: string, cwd: string): string {
+function resolvePath(filePath: string, cwd: WorkspaceView): string {
   return resolveWorkspacePath(filePath, cwd).path;
 }
 
 const BOM = String.fromCharCode(0xfeff);
+
+/**
+ * Writes a file so a crash or a kill halfway leaves the old content, not a truncated file: the text goes to a
+ * sibling temporary file that then replaces the target. Where the replacement is refused (another program holds the
+ * file open, which Windows enforces), the text is written in place as before.
+ */
+function writeFileAtomically(path: string, text: string): void {
+  const temporary = `${path}.shelra-${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, text, "utf-8");
+    try {
+      renameSync(temporary, path);
+      return;
+    } catch {
+      writeFileSync(path, text, "utf-8");
+    }
+  } finally {
+    if (existsSync(temporary)) {
+      try {
+        unlinkSync(temporary);
+      } catch {
+        // Best effort: the target is already written.
+      }
+    }
+  }
+}
+
+/** Names Windows reserves for devices: writing to one succeeds without creating a file. */
+const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
+
+/**
+ * What the file keeps when the model rewrites it whole: its own line endings and byte-order mark. A model sends LF
+ * text, so a rewrite of a CRLF file turned every line into a change (and, in a repo that checks line endings,
+ * every line into a diff); the mark was dropped the same way.
+ */
+function keepFileConventions(before: string, content: string): string {
+  if (before === "") return content;
+  let kept = content;
+  if (dominantLineEnding(before) === "\r\n" && !kept.includes("\r\n")) kept = restoreLineEndings(kept, "\r\n");
+  if (before.startsWith(BOM) && !kept.startsWith(BOM)) kept = `${BOM}${kept}`;
+  return kept;
+}
+
+/** The largest file `read_file` loads whole; a bigger one is read with grep or a shell command instead. */
+const READ_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
  * The text to write: a PowerShell script, module or data file with non-ASCII text gets a UTF-8 byte-order mark.
@@ -50,7 +96,7 @@ function computeDiff(filePath: string, before: string, after: string): FileDiff 
  */
 export function snapshotForCheckpoint(
   filePath: string,
-  cwd: string,
+  cwd: WorkspaceView,
 ): { previousExisted: boolean; previousContent: string | null; relativePath: string } {
   const resolved = resolveWorkspacePath(filePath, cwd);
   const previousExisted = existsSync(resolved.path);
@@ -72,14 +118,30 @@ export const READ_MAX_CHARS = 50_000;
 /** A longer line (minified code, data) is cut rather than spending the budget on one line. */
 export const READ_MAX_LINE_CHARS = 2_000;
 
-export function readFile(filePath: string, cwd: string, startLine?: number, endLine?: number): FileResult {
+export function readFile(filePath: string, cwd: WorkspaceView, startLine?: number, endLine?: number): FileResult {
   try {
     const full = resolvePath(filePath, cwd);
     if (!existsSync(full)) {
       return { success: false, output: `File not found: ${filePath}` };
     }
+    const info = statSync(full);
+    if (info.isDirectory()) {
+      return {
+        success: false,
+        output: `${filePath} is a folder, not a file. List it with bash (ls or Get-ChildItem).`,
+      };
+    }
+    if (info.size > READ_MAX_BYTES) {
+      return {
+        success: false,
+        output: `${filePath} is ${Math.round(info.size / 1_048_576)} MB, too large to read whole. Search it with grep or read part of it with bash (Select-String, head, tail).`,
+      };
+    }
     const content = readFileSync(full, "utf-8");
-    const lines = content.split("\n");
+    // A CRLF file would show a stray \r at the end of every line, and a byte-order mark would sit on line 1.
+    const lines = (content.startsWith(BOM) ? content.slice(BOM.length) : content)
+      .split("\n")
+      .map((line) => line.replace(/\r$/u, ""));
     const totalLines = lines.length;
 
     const start = Math.max(0, (startLine ?? 1) - 1);
@@ -115,20 +177,29 @@ export function readFile(filePath: string, cwd: string, startLine?: number, endL
   }
 }
 
-export async function writeFile(filePath: string, content: string, cwd: string): Promise<FileResult> {
+export async function writeFile(filePath: string, rawContent: string, cwd: WorkspaceView): Promise<FileResult> {
   try {
     const full = resolvePath(filePath, cwd);
+    if (process.platform === "win32" && WINDOWS_DEVICE_NAME.test(basename(full))) {
+      return {
+        success: false,
+        output: `${basename(full)} is a reserved Windows device name: writing to it creates no file. Pick another name.`,
+      };
+    }
     const before = existsSync(full) ? readFileSync(full, "utf-8") : "";
+    const content = keepFileConventions(before, rawContent);
     const dir = dirname(full);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const written = withPowerShellEncoding(full, content);
-    writeFileSync(full, written, "utf-8");
+    writeFileAtomically(full, written);
 
     // The byte-order mark is not part of the change the model asked for.
-    const unmarked = written !== content && before.startsWith(BOM) ? before.slice(BOM.length) : before;
-    const diff = computeDiff(filePath, unmarked, content);
+    const unmarked = before.startsWith(BOM) ? before.slice(BOM.length) : before;
+    const diff = computeDiff(filePath, unmarked, content.startsWith(BOM) ? content.slice(BOM.length) : content);
     const verb = before === "" ? "Created" : "Updated";
-    const lspDiagnostics = await syncFileWithLsp(cwd, full, content, true, true).catch(() => [] as LspDiagnosticFile[]);
+    const lspDiagnostics = await syncFileWithLsp(viewRoot(cwd), full, content, true, true).catch(
+      () => [] as LspDiagnosticFile[],
+    );
     const lspSummary = summarizeDiagnostics(lspDiagnostics);
     return {
       success: true,
@@ -254,7 +325,7 @@ export async function editFile(
   filePath: string,
   oldString: string,
   newString: string,
-  cwd: string,
+  cwd: WorkspaceView,
 ): Promise<FileResult> {
   try {
     const full = resolvePath(filePath, cwd);
@@ -288,9 +359,9 @@ export async function editFile(
             output: `No change to ${filePath}: new_string differs from the matched text only in whitespace, and the file keeps its own. If the code is wrong, change what it says, not its spacing: read the failure again.`,
           };
         }
-        writeFileSync(full, withPowerShellEncoding(full, after), "utf-8");
+        writeFileAtomically(full, withPowerShellEncoding(full, after));
         const diff = computeDiff(filePath, before, after);
-        const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(
+        const lspDiagnostics = await syncFileWithLsp(viewRoot(cwd), full, after, true, true).catch(
           () => [] as LspDiagnosticFile[],
         );
         const lspSummary = summarizeDiagnostics(lspDiagnostics);
@@ -326,14 +397,17 @@ export async function editFile(
           normalizedBefore.replace(normalizedOld, () => normalizeLineEndings(newString)),
           ending,
         )
-      : before.replace(oldString, () => newString);
+      : // A replacement the model wrote with LF lines goes into a CRLF file with CRLF lines, not as a mixed ending.
+        before.replace(oldString, () => (ending === "\r\n" ? restoreLineEndings(newString, "\r\n") : newString));
     if (after === before) {
       return { success: false, output: `No change to ${filePath}: new_string is the same as old_string.` };
     }
-    writeFileSync(full, withPowerShellEncoding(full, after), "utf-8");
+    writeFileAtomically(full, withPowerShellEncoding(full, after));
 
     const diff = computeDiff(filePath, before, after);
-    const lspDiagnostics = await syncFileWithLsp(cwd, full, after, true, true).catch(() => [] as LspDiagnosticFile[]);
+    const lspDiagnostics = await syncFileWithLsp(viewRoot(cwd), full, after, true, true).catch(
+      () => [] as LspDiagnosticFile[],
+    );
     const lspSummary = summarizeDiagnostics(lspDiagnostics);
     return {
       success: true,
@@ -347,7 +421,7 @@ export async function editFile(
   }
 }
 
-export async function deleteFile(filePath: string, cwd: string): Promise<FileResult> {
+export async function deleteFile(filePath: string, cwd: WorkspaceView): Promise<FileResult> {
   try {
     const full = resolvePath(filePath, cwd);
     if (!existsSync(full)) {

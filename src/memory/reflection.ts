@@ -8,9 +8,11 @@ import {
   archiveMemoryEntry,
   isCurrentMemory,
   listMemoryRecords,
+  readMemoryEntry,
   supersedeMemoryEntry,
   writeMemoryEntry,
 } from "./store";
+import { normalizeMemorySubject, recordSubject, sameSubject, subjectFor, subjectFromStatement } from "./subjects";
 import { foldText, rawTerms, searchTerms } from "./terms";
 import { MEMORY_TYPES, type MemoryRecord, type MemoryScope, type MemoryType, type MemoryWriteInput } from "./types";
 
@@ -294,8 +296,8 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
     if (/[:?]$/u.test(sentence) || sentence.length < 8 || sentence.length > 300) continue;
     const reminder = document ? null : reminderOf(sentence, today);
     if (reminder) {
-      if (!seen.has(reminder.slug)) candidates.push(reminder);
-      seen.add(reminder.slug);
+      if (!seen.has(reminder.hook)) candidates.push(reminder);
+      seen.add(reminder.hook);
       continue;
     }
     const marked = document ? null : projectRuleOf(sentence, sentences[index - 1]);
@@ -306,8 +308,8 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
     const statement = directive.statement.charAt(0).toUpperCase() + directive.statement.slice(1);
     const prefix = directive.kind === "rule" ? "user-rule-" : directive.kind === "fact" ? "user-fact-" : "user-fix-";
     const slug = slugify(statement, prefix);
-    if (seen.has(slug)) continue;
-    seen.add(slug);
+    if (seen.has(statement)) continue;
+    seen.add(statement);
     const personal = PERSONAL.test(foldText(sentence));
     candidates.push({
       slug,
@@ -318,6 +320,7 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
       // The statement alone: a shared boilerplate body made unrelated short rules look like duplicates.
       body: `${statement}.\n\n(${directive.kind === "correction" ? "Corrected" : "Stated"} by the user on ${today}.)`,
       source: "human",
+      subject: subjectFromStatement(statement),
       confidence: 1,
       tags: [
         "user-directive",
@@ -326,7 +329,7 @@ export function extractUserDirectives(message: string): ReflectionCandidate[] {
       ],
     });
   }
-  return candidates.slice(0, 5);
+  return candidates;
 }
 
 export function turnQualifiesForReflection(digest: TurnDigest): { qualified: boolean; reason: string } {
@@ -419,6 +422,7 @@ export function buildReflectionPrompt(
       REFLECTION_TYPES.join("|") +
       '>,"slug":<kebab-case>,"title":<short>,"hook":<one line>,"description":<one line>,"body":<markdown, 1-8 lines, exact commands/paths/flags>,"confidence":<0..1>,"relatedFiles":[<workspace-relative paths this depends on>],"tags":[<keywords>],"supersedes":<optional: the slug of an EXISTING entry this turn proved is no longer true>}.',
     "Keep only what is non-obvious, project-specific, and reusable: a command that must be run in a particular way, a trap and its fix, a convention the code enforces, a decision and the alternative rejected, a procedure that took several steps to discover.",
+    'Optionally include "subject":{"entity":<declared component>,"environment":<optional explicit environment>} when the sources establish its scope. Leave unknown scope unset; do not guess aliases or ownership.',
     'When the user stated what the project is for, a constraint it must keep, or something it must not do, keep that too, with "quote": the user\'s exact words from the REQUEST or USER SAID, copied verbatim. A quote Shelra cannot find there is dropped.',
     "Do not store what a fresh reader gets by opening a file (file listings, function signatures), the task itself, credentials, or anything the user only asked once.",
     'If the turn taught nothing durable, return {"memories":[]}.',
@@ -486,6 +490,12 @@ export const REFLECTION_SCHEMA: Record<string, unknown> = {
           tags: { type: "array", items: { type: "string" } },
           supersedes: { type: "string" },
           quote: { type: "string" },
+          subject: {
+            type: "object",
+            properties: { entity: { type: "string", maxLength: 80 }, environment: { type: "string", maxLength: 40 } },
+            required: ["entity"],
+            additionalProperties: false,
+          },
         },
         required: ["type", "slug", "title", "hook", "description", "body", "confidence"],
         additionalProperties: false,
@@ -536,6 +546,12 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
     if (!(REFLECTION_TYPES as readonly string[]).includes(type) || !body || !title) continue;
     const confidence =
       typeof record.confidence === "number" ? record.confidence : Number.parseFloat(asString(record.confidence));
+    let subject: MemoryWriteInput["subject"];
+    try {
+      subject = normalizeMemorySubject(record.subject);
+    } catch {
+      continue;
+    }
     candidates.push({
       slug: slugify(privateText(asString(record.slug) || title)),
       title: title.slice(0, 80),
@@ -544,6 +560,7 @@ export function parseReflectionCandidates(text: string): ReflectionCandidate[] {
       description: (asString(record.description) || hook).slice(0, 200),
       body,
       source: "inference",
+      subject,
       confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.6,
       relatedFiles: asStringArray(record.relatedFiles),
       tags: asStringArray(record.tags),
@@ -567,6 +584,7 @@ export function withQuoteChecked(candidate: ReflectionCandidate, userTexts: read
   const words = quote.replace(/\s+/gu, " ").trim();
   return {
     ...rest,
+    subject: subjectFromStatement(words),
     hook: words.length <= 160 ? words : `${words.slice(0, 159)}…`,
     body: `> ${words}\n\n${rest.body}`,
     source: "human",
@@ -632,7 +650,16 @@ export function adoptedTerms(statement: string): string[] {
 }
 
 export function entriesContradictedBy(correction: MemoryWriteInput, records: readonly MemoryRecord[]): string[] {
-  const statement = correction.hook;
+  return correctionTargets(correction, records).superseded;
+}
+
+export function correctionTargets(
+  correction: MemoryWriteInput,
+  records: readonly MemoryRecord[],
+): { superseded: string[]; conflicts: string[] } {
+  const declared = subjectFor(correction);
+  const hasQualifier = /\s+(?:for|para)\s+.+$/iu.test(correction.hook);
+  const statement = correction.hook.replace(/\s+(?:for|para)\s+.+$/iu, "");
   let subject = "";
   for (const pattern of CORRECTED_SUBJECT) {
     const match = pattern.exec(statement);
@@ -645,28 +672,34 @@ export function entriesContradictedBy(correction: MemoryWriteInput, records: rea
   // The words as written: the lexicon folds "biome" and "eslint" into one term, and then a correction naming one would
   // retire the other (doc 18 review, round 3).
   const subjectTerms = rawTerms(subject);
-  if (subjectTerms.length === 0 || subjectTerms.length > 3) return [];
+  if (subjectTerms.length === 0 || subjectTerms.length > 3) return { superseded: [], conflicts: [] };
   const otherTerms = rawTerms(statement).filter((term) => !subjectTerms.includes(term) && !CORRECTION_FILLER.has(term));
   const dropped = new Set(subjectTerms);
-  return records
-    .filter((record) => {
-      if (record.slug === correction.slug || !isCurrentMemory(record)) return false;
-      const meta = record.entry.frontmatter.metadata;
-      // A chain of the user's own statements (doc 21 §5.6, TEST P5): "Use DuckDB instead of SQLite" retires "Use SQLite
-      // instead of JSON files", the statement whose adopted value it drops, word for word. Without it both stayed
-      // standing rules for the rest of the year.
-      if (meta.source === "human") {
-        const adopted = adoptedTerms(record.index.hook);
-        if (adopted.length > 0 && adopted.length === dropped.size && adopted.every((term) => dropped.has(term))) {
-          return true;
-        }
+  const candidates = records.filter((record) => {
+    if (record.slug === correction.slug || !isCurrentMemory(record)) return false;
+    const meta = record.entry.frontmatter.metadata;
+    // A chain of the user's own statements (doc 21 §5.6, TEST P5): "Use DuckDB instead of SQLite" retires "Use SQLite
+    // instead of JSON files", the statement whose adopted value it drops, word for word. Without it both stayed
+    // standing rules for the rest of the year.
+    if (meta.source === "human") {
+      const adopted = adoptedTerms(record.index.hook);
+      if (adopted.length > 0 && adopted.length === dropped.size && adopted.every((term) => dropped.has(term))) {
+        return true;
       }
-      if (HISTORICAL_TYPES.has(meta.type) || (meta.tags ?? []).includes("correction")) return false;
-      if (DESCRIBES_A_CHANGE.test(`${record.index.title} ${record.index.hook}`)) return false;
-      const head = new Set(rawTerms(`${record.index.title} ${record.index.hook} ${(meta.tags ?? []).join(" ")}`));
-      return subjectTerms.every((term) => head.has(term)) && !otherTerms.some((term) => head.has(term));
-    })
-    .map((record) => record.slug);
+    }
+    if (HISTORICAL_TYPES.has(meta.type) || (meta.tags ?? []).includes("correction")) return false;
+    if (DESCRIBES_A_CHANGE.test(`${record.index.title} ${record.index.hook}`)) return false;
+    const head = new Set(rawTerms(`${record.index.title} ${record.index.hook} ${(meta.tags ?? []).join(" ")}`));
+    return subjectTerms.every((term) => head.has(term)) && !otherTerms.some((term) => head.has(term));
+  });
+  const superseded: string[] = [];
+  const conflicts: string[] = [];
+  for (const record of candidates) {
+    const existing = recordSubject(record);
+    if (sameSubject(declared, existing) && (declared || !hasQualifier)) superseded.push(record.slug);
+    else if (!declared || !existing) conflicts.push(record.slug);
+  }
+  return { superseded, conflicts };
 }
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -731,23 +764,45 @@ export function admitCandidates(
     decisions.push({ slug: decision.slug, action: decision.action, reason: decision.reason });
     if (decision.action !== "create" && decision.action !== "update") continue;
     try {
-      let result = writeMemoryEntry(scope, { ...candidate, slug: decision.slug });
+      const correction =
+        candidate.source === "human" && candidate.tags?.includes("correction")
+          ? correctionTargets({ ...candidate, slug: decision.slug }, current)
+          : { superseded: [], conflicts: [] };
+      const writeInput = {
+        ...candidate,
+        slug: decision.slug,
+        ...(correction.conflicts.length > 0
+          ? { conflictsWith: correction.conflicts, conflictCount: correction.conflicts.length }
+          : {}),
+      };
+      let result = writeMemoryEntry(scope, writeInput);
       if (!result.ok) {
         const pending = decisions.pop();
-        if (makeRoom(undefined, decision.slug)) result = writeMemoryEntry(scope, { ...candidate, slug: decision.slug });
+        if (makeRoom(undefined, decision.slug)) result = writeMemoryEntry(scope, writeInput);
         if (pending) decisions.push(pending);
       }
       if (result.ok) {
+        const entry = readMemoryEntry(scope, decision.slug).entry;
+        if (!entry) throw new Error("Written memory could not be read back.");
         written.push(decision.slug);
-        current = listMemoryRecords(scope);
+        current = current.filter((record) => record.slug !== decision.slug);
+        current.push({
+          slug: decision.slug,
+          entry,
+          index: { title: candidate.title, hook: candidate.hook, file: `${decision.slug}.md` },
+        });
+        if (result.projectionWarning)
+          decisions[decisions.length - 1] = {
+            slug: decision.slug,
+            action: decision.action,
+            reason: `${decision.reason}; ${result.projectionWarning}`,
+          };
         // What this entry makes untrue leaves the index (doc 18 §4.4): a slug the reflection named, or what a user's
         // correction contradicts. An inference never retires what a person stated.
         const targets = new Set<string>([
           ...(candidate.supersedes ? [candidate.supersedes] : []),
           ...(decision.supersedes ? [decision.supersedes] : []),
-          ...(candidate.source === "human" && candidate.tags?.includes("correction")
-            ? entriesContradictedBy({ ...candidate, slug: decision.slug }, current)
-            : []),
+          ...correction.superseded,
         ]);
         let retired = false;
         for (const target of targets) {

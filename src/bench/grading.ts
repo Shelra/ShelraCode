@@ -1,8 +1,13 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { evaluateAcceptance } from "../contract/evaluate";
 import type { AcceptanceCriterion, CheckSpec, CriterionResult, VerificationReport } from "../contract/types";
 import { observePage } from "../exec/browser";
 import { runCommand } from "../exec/command";
+import { type FrozenWorkspace, type FrozenWorkspaceReceipt, freezeWorkspace } from "../exec/frozen-workspace";
 import { probeHttp } from "../exec/http";
+import { gradingEnvironment } from "../exec/verification-environment";
+import { runWindowsVerification } from "../exec/windows-appcontainer";
 import type { BenchmarkExecutionNotice } from "./runner";
 import { calculateIntentScore } from "./scoring";
 import type { BenchmarkAcceptanceResult, BenchmarkJsonObject, BenchmarkTaskDefinition } from "./types";
@@ -22,6 +27,7 @@ export interface WorkspaceGrade {
   coding?: number;
   intent?: number;
   report?: VerificationReport;
+  evaluation?: FrozenWorkspaceReceipt;
 }
 
 export async function gradeWorkspace(
@@ -37,6 +43,7 @@ export async function gradeWorkspace(
 ): Promise<WorkspaceGrade> {
   const criteria = toRuntimeAcceptanceCriteria(task.acceptanceCriteria);
   let report: VerificationReport | undefined;
+  let frozen: FrozenWorkspace | undefined;
   if (criteria) {
     options.emit({
       type: "verification",
@@ -44,22 +51,71 @@ export async function gradeWorkspace(
       message: `Grading workspace against ${criteria.length} benchmark-owned criteria`,
       payload: { harness: options.harness },
     });
-    report = await evaluateAcceptance(
-      criteria,
-      { workspace, benchmarkRoot: options.benchmarkRoot, attempt: 1, signal: options.signal },
-      {
-        runCommand: (command, commandOptions) =>
-          runCommand({
-            command,
-            cwd: commandOptions.cwd,
-            timeoutMs: commandOptions.timeoutMs,
-            signal: commandOptions.signal,
-            env: commandOptions.env,
-          }),
-        probeHttp: (url) => probeHttp(url),
-        observePage: (url, pageOptions) => observePage(url, pageOptions),
-      },
-    );
+    try {
+      const oracleRoots =
+        options.benchmarkRoot && existsSync(join(options.benchmarkRoot, "bench", "oracles"))
+          ? [
+              "bench/oracles",
+              ...(existsSync(join(options.benchmarkRoot, "bench", "fixtures")) ? ["bench/fixtures"] : []),
+            ]
+          : [""];
+      frozen = await freezeWorkspace(workspace, options.benchmarkRoot, { oracleRoots });
+      const environment = gradingEnvironment(frozen);
+      options.emit({
+        type: "verification",
+        taskId: task.id,
+        message:
+          process.platform === "win32"
+            ? "Grading a private candidate copy; commands require Windows AppContainer isolation"
+            : "Grading a private candidate copy; OS process isolation is unavailable in this adapter",
+        payload: { ...frozen.receipt },
+      });
+      report = await evaluateAcceptance(
+        criteria,
+        {
+          workspace: frozen.workspace,
+          benchmarkRoot: frozen.benchmarkRoot,
+          attempt: 1,
+          signal: options.signal,
+          ...(process.platform === "win32" ? { commandShell: "cmd" as const } : {}),
+        },
+        {
+          runCommand: async (command, commandOptions) => {
+            if (process.platform === "win32") {
+              const outcome = await runWindowsVerification(command, frozen as FrozenWorkspace, {
+                env: commandOptions.env,
+                timeoutMs: commandOptions.timeoutMs,
+                signal: commandOptions.signal,
+              });
+              if (outcome.isolated && frozen) frozen.receipt.processIsolation = "windows-appcontainer";
+              return outcome;
+            }
+            return runCommand({
+              command,
+              cwd: commandOptions.cwd,
+              timeoutMs: commandOptions.timeoutMs,
+              signal: commandOptions.signal,
+              env: { ...environment, ...commandOptions.env },
+              inheritEnv: false,
+              logDir: frozen?.temp,
+            });
+          },
+          probeHttp: (url) => probeHttp(url),
+          observePage: (url, pageOptions) => observePage(url, pageOptions),
+        },
+      );
+      await frozen.integrity();
+    } catch (error) {
+      report = blockedReport(criteria, `Benchmark evaluation unavailable or invalid: ${String(error)}`);
+    } finally {
+      if (frozen) {
+        try {
+          await frozen.cleanup();
+        } catch (error) {
+          report = blockedReport(criteria, `Benchmark evaluation cleanup failed: ${String(error)}`);
+        }
+      }
+    }
     options.emit({
       type: "verification",
       taskId: task.id,
@@ -85,6 +141,28 @@ export async function gradeWorkspace(
     ...(required.length > 0 ? { coding: ((required.length - failedRequired.length) / required.length) * 100 } : {}),
     ...(intent === undefined ? {} : { intent }),
     ...(report ? { report } : {}),
+    ...(frozen ? { evaluation: frozen.receipt } : {}),
+  };
+}
+
+function blockedReport(criteria: AcceptanceCriterion[], detail: string): VerificationReport {
+  const now = Date.now();
+  return {
+    attempt: 1,
+    passed: false,
+    startedAt: now,
+    durationMs: 0,
+    blocked: criteria.map((criterion) => criterion.id),
+    results: criteria.map((criterion) => ({
+      id: criterion.id,
+      description: criterion.description,
+      passed: false,
+      kind: criterion.check.kind,
+      modelJudged: false,
+      checkedAt: now,
+      durationMs: 0,
+      detail,
+    })),
   };
 }
 
@@ -103,7 +181,7 @@ function toAcceptanceResults(
     return {
       id: criterion.id,
       description: criterion.description,
-      status: result ? (result.passed ? "passed" : "failed") : "not_run",
+      status: !result || report?.blocked.includes(criterion.id) ? "not_run" : result.passed ? "passed" : "failed",
       required: criterion.required !== false,
       ...(result?.detail ? { detail: result.detail } : {}),
     };

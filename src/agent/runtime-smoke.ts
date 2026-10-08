@@ -172,7 +172,7 @@ function pageOn(base: string, answerUrls: readonly string[]): string {
 
 function judge(url: string, how: string, observation: BrowserObservation): SmokeResult {
   if (!observation.ok && observation.error && observation.pageErrors.length === 0) {
-    const error = observation.error.replace(/\s+/gu, " ").slice(0, 200);
+    const error = observation.error.replace(/\s+/gu, " ").slice(0, 260);
     // A browser that is not installed, or cannot start, observed nothing.
     if (/Executable doesn't exist|Cannot find module|browserType\.launch|playwright/iu.test(error)) {
       return { status: "unavailable", url, how, problems: [], note: `no headless browser: ${error}` };

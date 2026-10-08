@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "fs";
 import { dirname } from "path";
-import { resolveWorkspacePath } from "../security/workspace-guard";
+import { resolveWorkspacePath, type WorkspaceView } from "../security/workspace-guard";
 import { getLatestCheckpoint } from "../storage/objectives";
 
 export interface RevertResult {
@@ -15,7 +15,7 @@ export interface RevertResult {
  * deletes it instead of writing empty content — matching the checkpoint's own
  * `previousExisted` record.
  */
-export function revertLatestCheckpoint(filePath: string, cwd: string, workspaceId: string): RevertResult {
+export function revertLatestCheckpoint(filePath: string, cwd: WorkspaceView, workspaceId: string): RevertResult {
   const resolved = resolveWorkspacePath(filePath, cwd);
   const checkpoint = getLatestCheckpoint(workspaceId, resolved.relativePath);
   if (!checkpoint) {

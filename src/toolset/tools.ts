@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import { type ToolSet, tool } from "ai";
 import { z } from "zod";
 import type { RestorePoint } from "../agent/attempt-journal";
 import { isVerificationCommand } from "../agent/verification-evidence";
+import { checkOpenableUrl, NO_BROWSER_ENV, openWithSystem } from "../exec/open-url";
 import { listAgents } from "../extend/agents";
 import { executePostToolFailureHooks, executePostToolHooks, executePreToolHooks } from "../hooks/index";
 import type { DecisionProposal } from "../ledger/types";
@@ -13,18 +15,21 @@ import {
   deleteMemoryEntry,
   listMemoryRecords,
   projectMemoryScope,
+  readActiveMemoryIndex,
   readMemoryEntry,
-  readMemoryIndex,
   recallArchivedEntry,
   recordMemoryUse,
   recordRecall,
+  slugFromIndexFile,
   userMemoryScope,
   writeMemoryEntry,
 } from "../memory/store";
+import { memorySubjectNote } from "../memory/subjects";
 import { MEMORY_TYPES, type MemoryType } from "../memory/types";
 import type { ProviderToolContext } from "../providers/types";
 import { openWebPage, searchWeb } from "../research/web";
 import { destructiveCommandReason } from "../security/destructive";
+import { resolveWorkspacePath } from "../security/workspace-guard";
 import { type BashTool, isShuruSupported } from "../tools/bash";
 import {
   computerClick,
@@ -199,6 +204,9 @@ export function createTools(
   options: CreateToolsOptions = {},
 ) {
   const cwd = () => bash.getCwd();
+  // The file tools read relative paths against the shell's folder but keep every path inside the session's root: after
+  // `cd sub`, `../a.txt` is still the project's (review 2026-10-07: it was refused as "outside the workspace").
+  const view = () => ({ root: bash.getRootCwd(), base: bash.getCwd() });
   // Project memory belongs to the session's root folder, wherever a `cd` moved the shell (doc 18 §2.2 R4).
   const memoryRoot = () => bash.getRootCwd();
   const groups = options.toolGroups ?? {};
@@ -212,7 +220,7 @@ export function createTools(
   const checkpointBeforeMutation = (filePath: string, reason: "pre-write" | "pre-edit" | "pre-delete") => {
     if (!options.onCheckpoint) return;
     try {
-      const snapshot = snapshotForCheckpoint(filePath, cwd());
+      const snapshot = snapshotForCheckpoint(filePath, view());
       options.onCheckpoint({
         filePath: snapshot.relativePath,
         previousContent: snapshot.previousContent,
@@ -308,7 +316,7 @@ export function createTools(
           .describe(`Last line to read (inclusive, default: ${READ_DEFAULT_LINES} lines after start_line)`),
       }),
       execute: async ({ path, start_line, end_line }) => {
-        return readFile(path, cwd(), start_line, end_line);
+        return readFile(path, view(), start_line, end_line);
       },
     }),
 
@@ -324,7 +332,7 @@ export function createTools(
         include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
       }),
       execute: async ({ pattern, path, include }) => {
-        return executeGrep({ pattern, path, include }, cwd());
+        return executeGrep({ pattern, path, include }, view());
       },
     }),
 
@@ -417,8 +425,12 @@ export function createTools(
         path: z.string().describe("Absolute or cwd-relative path to the local file to send"),
       }),
       execute: async ({ path: filePath }) => {
-        const resolved = filePath.startsWith("/") ? filePath : `${cwd()}/${filePath}`;
-        return sendFile(resolved);
+        // Only files of the project (or Shelra's scratch folder) leave the machine: ../../.shelra/auth.json must not.
+        try {
+          return await sendFile(resolveWorkspacePath(filePath, view()).path);
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : String(error) };
+        }
       },
     });
   }
@@ -496,6 +508,54 @@ export function createTools(
   }
 
   if (mode === "agent") {
+    // The product's only way to put something in front of the person's own eyes: every other browser use is a hidden
+    // Chromium that checks a page (owner, 2026-10-07: "no abre navegador").
+    tools.open_in_browser = tool({
+      description:
+        "Open a page in the person's own browser so they can look at it: the dev server you started (http://localhost:5173) or an HTML or image file of the project. Use it when the result is something to look at (a web app, a page, a game) and it is running, after the check that it answers. Only addresses on this machine and project files are opened; for any other site, give the address in your answer.",
+      inputSchema: z.object({
+        url: z.string().optional().describe("A local address such as http://localhost:3000"),
+        path: z
+          .string()
+          .optional()
+          .describe("Or a file of the project to open from disk (.html, .svg, .png, .jpg, .gif, .pdf)"),
+      }),
+      execute: async ({ url, path: filePath }) => {
+        if ((url ? 1 : 0) + (filePath ? 1 : 0) !== 1) {
+          return { success: false, output: "Give exactly one of url or path." };
+        }
+        let target: string;
+        if (url) {
+          const checked = checkOpenableUrl(url);
+          if (!checked.ok) return { success: false, output: checked.reason };
+          target = checked.url;
+        } else {
+          try {
+            target = resolveWorkspacePath(filePath as string, view()).path;
+          } catch (error) {
+            return { success: false, output: error instanceof Error ? error.message : String(error) };
+          }
+          if (!/\.(?:html?|svg|png|jpe?g|gif|pdf)$/iu.test(target)) {
+            return { success: false, output: "Only .html, .svg, .png, .jpg, .gif and .pdf files are opened." };
+          }
+          if (!existsSync(target)) return { success: false, output: `File not found: ${filePath}` };
+        }
+        if (process.env[NO_BROWSER_ENV]) {
+          return {
+            success: false,
+            output: `No browser is opened on this machine (${NO_BROWSER_ENV} is set). Tell the person to open ${target} themselves.`,
+          };
+        }
+        const opened = await openWithSystem(target);
+        return opened
+          ? { success: true, output: `Opened ${target} in the person's browser.` }
+          : {
+              success: false,
+              output: `This machine could not open a browser. Tell the person to open ${target} themselves.`,
+            };
+      },
+    });
+
     if (groups.desktop) {
       tools.computer_snapshot = tool({
         description:
@@ -695,7 +755,7 @@ export function createTools(
       }),
       execute: async ({ path, content }) => {
         checkpointBeforeMutation(path, "pre-write");
-        return writeFile(path, content, cwd());
+        return writeFile(path, content, view());
       },
     });
 
@@ -709,7 +769,7 @@ export function createTools(
       }),
       execute: async ({ path, old_string, new_string }) => {
         checkpointBeforeMutation(path, "pre-edit");
-        return editFile(path, old_string, new_string, cwd());
+        return editFile(path, old_string, new_string, view());
       },
     });
 
@@ -721,7 +781,7 @@ export function createTools(
       }),
       execute: async ({ path }) => {
         checkpointBeforeMutation(path, "pre-delete");
-        return deleteFile(path, cwd());
+        return deleteFile(path, view());
       },
     });
 
@@ -764,25 +824,55 @@ export function createTools(
 
     tools.memory_list = tool({
       description:
-        "List this project's saved persistent memory (research findings, architecture decisions, known problems, conventions from earlier turns/sessions), its most recent work and any turn in progress in another session. Cheap — an index only. Check this before researching something that may already be answered.",
-      inputSchema: z.object({}),
-      execute: async () => {
+        "List a page of saved project and user-wide memory pointers, recent work and turns in progress. Check this before researching something already answered. Use offset for the next page; at most 200 entries per page.",
+      inputSchema: z.object({
+        offset: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      }),
+      execute: async ({ offset = 0, limit = 100 }) => {
         const scope = projectMemoryScope(memoryRoot());
-        const result = readMemoryIndex(scope);
-        const userEntries = readMemoryIndex(userMemoryScope()).entries;
+        const result = readActiveMemoryIndex(scope);
+        const user = readActiveMemoryIndex(userMemoryScope());
+        const userEntries = user.entries;
+        const total = result.entries.length + userEntries.length;
+        const warnings = [...result.warnings, ...user.warnings.map((warning) => `User-wide: ${warning}`)];
         // What the project did lately is memory too (doc 18 §4.2a): the owner asked "what do you have in memory?"
         // while another session worked, and heard "nothing".
         const recent = readEpisodes(scope, 3).reverse();
         const live = liveEpisodes(scope);
-        if (result.entries.length === 0 && userEntries.length === 0 && recent.length === 0 && live.length === 0) {
+        if (total === 0 && recent.length === 0 && live.length === 0 && warnings.length === 0) {
           return { success: true, output: "No project memory saved yet." };
         }
-        const lines = result.entries.map((entry) => `- ${entry.title} (${entry.file}) — ${entry.hook}`);
-        if (lines.length === 0) lines.push("No saved entries yet.");
-        if (userEntries.length > 0) {
+        const lines = result.entries
+          .slice(offset, offset + limit)
+          .map(
+            (entry) =>
+              `- ${entry.title} (${entry.file}${entry.file.startsWith("human/") ? `; slug: ${slugFromIndexFile(entry.file)}` : ""}) — ${entry.hook}${memorySubjectNote(entry) ? ` [${memorySubjectNote(entry)}]` : ""}`,
+          );
+        const userStart = Math.max(0, offset - result.entries.length);
+        const userLimit = Math.max(0, offset + limit - Math.max(result.entries.length, offset));
+        const userPage = userEntries.slice(userStart, userStart + userLimit);
+        if (total === 0 && warnings.length === 0) lines.push("No saved entries yet.");
+        if (userPage.length > 0) {
           lines.push("", "User-wide (holds in every project; read with memory_read scope=user):");
-          for (const entry of userEntries) lines.push(`- ${entry.title} (${entry.file}) — ${entry.hook}`);
+          for (const entry of userPage)
+            lines.push(
+              `- ${entry.title} (${entry.file}${entry.file.startsWith("human/") ? `; slug: ${slugFromIndexFile(entry.file)}` : ""}) — ${entry.hook}${memorySubjectNote(entry) ? ` [${memorySubjectNote(entry)}]` : ""}`,
+            );
         }
+        if (total > limit || offset > 0) {
+          const end = Math.min(offset + limit, total);
+          lines.push(
+            `Memory page: ${Math.min(offset, total)}–${end} of ${total}.${end < total ? ` Next: memory_list offset=${end} limit=${limit}.` : ""}`,
+          );
+        }
+        if (warnings.length > 0)
+          lines.push(
+            "",
+            "Memory coverage partial; missing knowledge is unknown:",
+            ...warnings.slice(0, 8),
+            ...(warnings.length > 8 ? [`${warnings.length - 8} more warnings.`] : []),
+          );
         if (live.length > 0) {
           lines.push("", "In progress in another session now:");
           for (const turn of live) lines.push(describeLiveEpisode(turn));
@@ -791,13 +881,13 @@ export function createTools(
           lines.push("", "Recent work in this project, newest first:");
           for (const episode of recent) lines.push(describeEpisode(episode));
         }
-        return { success: true, output: lines.join("\n") };
+        return { success: result.complete && user.complete, output: lines.join("\n") };
       },
     });
 
     tools.memory_read = tool({
       description:
-        "Read one saved project memory entry in full, by its slug from memory_list's file name (without .md).",
+        "Read a saved memory entry by its logical slug: the topic basename without directory or .md, shown by memory_list.",
       inputSchema: z.object({
         slug: z.string().describe("Memory entry slug, e.g. 'better-auth-organization-plugin'"),
         scope: z
@@ -839,7 +929,7 @@ export function createTools(
                 : "";
         return {
           success: true,
-          output: `${entry.frontmatter.description}\n\n${entry.body}${note}`,
+          output: `${entry.frontmatter.description}\n\n${entry.body}${note}${memorySubjectNote(meta) ? `\n\n[${memorySubjectNote(meta)}]` : ""}`,
         };
       },
     });
@@ -863,6 +953,15 @@ export function createTools(
             "Workspace-relative files this fact depends on; a later change to one marks the entry as possibly stale",
           ),
         confidence: z.number().min(0).max(1).optional().describe("How sure you are, 0-1 (default 0.7)"),
+        subject: z
+          .object({
+            entity: z.string().trim().min(1).max(80),
+            environment: z.string().trim().min(1).max(40).optional(),
+          })
+          .optional()
+          .describe(
+            "Component and optional environment established by sources; omit unknown scope. Names do not prove ownership or aliases.",
+          ),
         scope: z
           .enum(["project", "user"])
           .optional()
@@ -870,7 +969,18 @@ export function createTools(
             "'user' for a preference or standing rule the user wants in every project (language, tone, style, tooling habits); 'project' (default) for everything tied to this codebase",
           ),
       }),
-      execute: async ({ slug, title, hook, type, description, body, related_files, confidence, scope: scopeName }) => {
+      execute: async ({
+        slug,
+        title,
+        hook,
+        type,
+        description,
+        body,
+        related_files,
+        confidence,
+        subject,
+        scope: scopeName,
+      }) => {
         try {
           // The user-wide store reaches every project: only a preference about working with this user belongs there.
           // A fact the model saved with scope "user" used to appear in every other repository (doc 20, TEST P7).
@@ -886,6 +996,7 @@ export function createTools(
             body,
             relatedFiles: related_files,
             confidence: confidence ?? 0.7,
+            subject,
             // Provenance is the host's to assign (audit doc 15, M1): what the model writes is its inference.
             // "human" comes only from the user's own words, "observed" only from what the host saw run.
             source: "inference" as const,
@@ -895,6 +1006,9 @@ export function createTools(
           const decision = decideMemoryWrite(candidate, listMemoryRecords(scope), { workspace: memoryRoot() });
           if (decision.action === "reject") return { success: false, output: `Not saved: ${decision.reason}.` };
           if (decision.action === "skip") {
+            if (decision.skipKind !== "duplicate" || !decision.existing) {
+              return { success: false, output: `Not saved: ${decision.reason}.` };
+            }
             return {
               success: true,
               output: `Not saved: ${decision.reason}. The existing entry "${decision.slug}" already covers this.`,
@@ -1527,6 +1641,9 @@ export interface ToolHookContext {
   sessionId?: string;
 }
 
+/** The longest a command may be given: setTimeout treats anything past 2^31 ms as 1 ms. */
+const MAX_COMMAND_TIMEOUT_MS = 2 * 60 * 60 * 1_000;
+
 /**
  * A bash timeout as the model meant it. Models often give seconds where the tool takes milliseconds (seen live
  * 2026-09-24: `"timeout": 10` killed `ls` after 10 ms), and no command is meant to get less than a second, so a value
@@ -1534,7 +1651,8 @@ export interface ToolHookContext {
  */
 export function commandTimeoutMs(timeout: number | undefined): number | undefined {
   if (timeout === undefined || !Number.isFinite(timeout) || timeout <= 0) return undefined;
-  return timeout < 1_000 ? timeout * 1_000 : timeout;
+  // setTimeout fires at once for anything past 2^31 ms: a "very long" timeout killed the command after 1 ms.
+  return Math.min(timeout < 1_000 ? timeout * 1_000 : timeout, MAX_COMMAND_TIMEOUT_MS);
 }
 
 /**

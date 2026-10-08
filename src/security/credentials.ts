@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getProductUserDir } from "../product/identity";
 
@@ -122,8 +122,4 @@ export function clearAccount(): void {
   if (!auth.account) return;
   delete auth.account;
   writeAuth(auth);
-}
-
-export function hasStoredCredentials(): boolean {
-  return existsSync(authPath());
 }

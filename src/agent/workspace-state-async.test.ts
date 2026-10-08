@@ -1,5 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -75,6 +85,68 @@ describe("captureWorkspaceStateAsync", () => {
     }
     // A blocking reading would let none of them run.
     expect(ticks).toBeGreaterThan(2);
+  });
+
+  it("detects same-size rewrites with restored timestamps outside git", async () => {
+    const root = workspace();
+    const path = join(root, "a.ts");
+    writeFileSync(path, "export const a = 1;\n");
+    const stat = statSync(path);
+    const before = await captureWorkspaceStateAsync(root);
+    writeFileSync(path, "export const a = 2;\n");
+    utimesSync(path, stat.atime, stat.mtime);
+
+    expect(changedPaths(before, await captureWorkspaceStateAsync(root))).toEqual(["a.ts"]);
+  });
+
+  it.skipIf(!hasGit)("detects same-size rewrites of dirty git files with restored timestamps", async () => {
+    const root = repo();
+    const path = join(root, "a.ts");
+    writeFileSync(path, "export const a = 2;\n");
+    const stat = statSync(path);
+    const before = await captureWorkspaceStateAsync(root);
+    writeFileSync(path, "export const a = 3;\n");
+    utimesSync(path, stat.atime, stat.mtime);
+
+    expect(changedPaths(before, await captureWorkspaceStateAsync(root))).toEqual(["a.ts"]);
+  });
+
+  it("yields the event loop while hashing file content without allocating the whole file", async () => {
+    const root = workspace();
+    const path = join(root, "large.txt");
+    const file = openSync(path, "w");
+    try {
+      const chunk = Buffer.alloc(64 * 1024, "a");
+      for (let index = 0; index < 512; index += 1) writeSync(file, chunk);
+    } finally {
+      closeSync(file);
+    }
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+    }, 1);
+    try {
+      const state = await captureWorkspaceStateAsync(root);
+      expect(state.kind).toBe("walk");
+      expect(state.files.get("large.txt")).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    } finally {
+      clearInterval(timer);
+    }
+
+    expect(ticks).toBeGreaterThan(2);
+  });
+
+  it("returns unknown for a workspace it cannot enumerate", async () => {
+    const root = workspace();
+
+    expect((await captureWorkspaceStateAsync(join(root, "missing"))).kind).toBe("unknown");
+  });
+
+  it.skipIf(!hasGit)("keeps a failed git reading unknown instead of dropping HEAD in a walk", async () => {
+    const root = repo();
+    writeFileSync(join(root, ".git", "HEAD"), "invalid head\n");
+
+    expect((await captureWorkspaceStateAsync(root)).kind).toBe("unknown");
   });
 });
 

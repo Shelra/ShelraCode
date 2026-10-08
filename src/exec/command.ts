@@ -59,6 +59,8 @@ export interface RunCommandOptions {
   timeoutMs?: number;
   /** Extra environment entries, merged over the parent environment. */
   env?: Record<string, string>;
+  /** Set false for host-owned evaluation with a complete, explicit environment allowlist. */
+  inheritEnv?: boolean;
   /** Shell override. Defaults to PowerShell on Windows, `sh` elsewhere. */
   shell?: ShellPreference;
   signal?: AbortSignal;
@@ -76,13 +78,13 @@ export interface RunCommandOptions {
   memoryPollMs?: number;
 }
 
-function buildEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
+function buildEnv(extra?: Record<string, string>, inherit = true): NodeJS.ProcessEnv {
   return {
-    ...process.env,
+    ...(inherit ? process.env : {}),
     // Deterministic output: colour escape codes are noise the runtime would have to strip.
     FORCE_COLOR: "0",
     NO_COLOR: "1",
-    CI: process.env.CI ?? "1",
+    CI: inherit ? (process.env.CI ?? "1") : "1",
     ...extra,
   };
 }
@@ -184,7 +186,7 @@ export async function runCommand(options: RunCommandOptions): Promise<CommandOut
 
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(invocation.file, invocation.args, spawnOptions(cwd, buildEnv(options.env)));
+      child = spawn(invocation.file, invocation.args, spawnOptions(cwd, buildEnv(options.env, options.inheritEnv)));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       void finish("spawn_error", null, false, `Failed to start shell: ${message}`).then(resolve);

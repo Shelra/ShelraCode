@@ -44,3 +44,40 @@ jobs:
       run: bun run build:binary
 
   # The website (Shelra/Shelracode-frontend) and the account service (Shelra/Shelracode-backend) have their own CI.
+
+  engineering-evidence:
+    name: Engineering evidence (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.3.11
+
+    - name: Install Dependencies
+      run: bun install --frozen-lockfile
+
+    # All providers are scripted or local fixtures; this job needs no account/provider secrets.
+    # Windows runs native AppContainer probes; their omission on Linux confers no OS-isolation guarantee.
+    - name: Host evidence, recovery, checker, context and memory regressions
+      run: >-
+        bunx vitest run --pool=forks --exclude ".shelra/**" --exclude "ShelraCode/**"
+        src/agent/evidence-core.test.ts src/agent/checker-files.test.ts src/agent/checker-tools.test.ts
+        src/agent/independent-runner.test.ts src/agent/tool-operations.test.ts src/agent/tool-operations-runtime.test.ts
+        src/agent/completion-gate.test.ts src/agent/workspace-state.test.ts src/agent/workspace-state-async.test.ts
+        src/exec/windows-appcontainer.test.ts src/bench/frozen-workspace.test.ts src/bench/grading.test.ts
+        src/lsp/manager.test.ts src/context/compiler.test.ts src/context/project-model.test.ts
+        src/memory/gate.test.ts src/memory/store.test.ts src/memory/reflection.test.ts src/memory/retrieval.test.ts
+        src/memory/durable-human.test.ts
+        src/memory/command-evidence.test.ts
+        src/memory/subjects.test.ts
+        src/cli/autonomous-cli.test.ts src/cli/autonomous-result.test.ts
+
+    - name: Actual autonomous CLI and persistent session regressions
+      run: bun test src/storage/sessions.test.ts

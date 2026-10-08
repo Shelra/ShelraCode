@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import type { ContractCheckRunner } from "../contract/contract";
 import type { AggregatedHookResult, HookInput } from "../hooks/types";
 import { approveDecision, proposeDecision } from "../ledger/store";
+import { readEpisodes } from "../memory/episodes";
 import { listMemoryRecords, projectMemoryScope, writeMemoryEntry } from "../memory/store";
 import { clearCatalog, primeCatalog } from "../models/catalog";
 import type {
@@ -21,6 +22,7 @@ import type {
   ProviderTextResult,
   ProviderToolContext,
 } from "../providers/types";
+import { listTraces, readTrace } from "../utils/session-trace";
 
 /** Whether Playwright's Chromium is installed, for the tests that open an app in it. */
 let hasChromium = false;
@@ -1308,8 +1310,16 @@ describe("checks in a large or unfamiliar project (2026-10-03: SWE-bench Pro's t
 
     expect(provider.round).toBe(1);
     expect(text).toContain("[Shelra could not run `bun run lint` (sh: golint-x: command not found) here");
-    expect(text).toContain("[Checked by Shelra on the final code: `bun run test` passed]");
-    expect(text).not.toContain("Not verified");
+    // A missing required tool never becomes a global success; the passing check keeps its own receipt.
+    expect(text).toContain("[Not verified — The final local candidate has no complete fresh host verification.]");
+    expect(text).not.toContain("[Checked by Shelra on the final code:");
+    expect(agent.getLastTurnResult()).toMatchObject({ status: "unverified", verified: false });
+    expect(agent.getLastTurnResult()?.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: "bun run test", passed: true, fresh: true }),
+        expect.objectContaining({ command: "bun run lint", passed: false, unrunnable: expect.any(String) }),
+      ]),
+    );
   });
 
   it("sends a suite that fails only as it did before back once, never as a pass, and a new failure every round", async () => {
@@ -2249,9 +2259,9 @@ describe("an attempt that breaks a passing check (audit doc 15, Phase 2.3)", () 
 });
 
 describe("memory from how a turn ended (audit doc 15, M2 and M4)", () => {
-  it("re-confirms an entry whose exact command passed in the turn", async () => {
+  it("records an exact command passing in the turn without confirming the rest of its memory", async () => {
     executeEventHooksMock.mockResolvedValue(emptyHookResult);
-    const dir = mkdtempSync(join(tmpdir(), "shelra-reconfirm-"));
+    const dir = mkdtempSync(join(tmpdir(), "shelra-command-observation-"));
     const scope = projectMemoryScope(dir);
     writeMemoryEntry(scope, {
       slug: "preload-tests",
@@ -2263,7 +2273,7 @@ describe("memory from how a turn ended (audit doc 15, M2 and M4)", () => {
     });
     const command = "bun test --preload ./test/setup.ts";
     const provider: ProviderAdapter = {
-      id: "reconfirm",
+      id: "command-observation",
       defaultModelId: "gate-test-model",
       resolveModelRuntime: (modelId) => ({ modelId }),
       stream: () => ({
@@ -2284,7 +2294,10 @@ describe("memory from how a turn ended (audit doc 15, M2 and M4)", () => {
     }
 
     const entry = listMemoryRecords(scope).find((record) => record.slug === "preload-tests")?.entry;
-    expect(entry?.frontmatter.metadata.lastConfirmed).toEqual(expect.any(String));
+    expect(entry?.frontmatter.metadata.lastConfirmed).toBeUndefined();
+    expect(entry?.frontmatter.metadata.lastPassedCommand).toBe(command);
+    expect(entry?.frontmatter.metadata.commandObservedAt).toEqual(expect.any(String));
+    expect(entry?.frontmatter.metadata.recalls).toHaveLength(1);
   });
 
   it("reflects on a turn whose checks still fail, telling the reflection it ended unverified", async () => {
@@ -2375,7 +2388,10 @@ describe("the checks that decide done are the ones the turn started with (audit 
         const round = rounds[requests.length - 1];
         const tools = request.tools as Record<
           string,
-          { execute?: (input: unknown, options: unknown) => Promise<unknown> }
+          {
+            inputSchema: { parse: (input: unknown) => unknown };
+            execute?: (input: unknown, options: unknown) => Promise<unknown>;
+          }
         >;
         return {
           events: (async function* () {
@@ -2386,6 +2402,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
               }
               const call = step.write;
               const input = { path: call.path, content: call.content };
+              tools.write_file.inputSchema.parse(input);
               yield toolCallEvent(call.id, "write_file", input);
               const output = await tools.write_file?.execute?.(input, { toolCallId: call.id, messages: [] });
               yield toolResultEvent(call.id, "write_file", output, input);
@@ -2409,6 +2426,468 @@ describe("the checks that decide done are the ones the turn started with (audit 
 
   const WRONG_SLUG = "export function slugify(s: string): string { return s; }\n";
   const NEUTERED = JSON.stringify({ name: "p", scripts: { test: "echo 1 pass" } });
+
+  describe("host evidence receipts and structured turn results", () => {
+    const FIXED_SLUG = "export const slugify = (s: string) => s.trim().toLowerCase();\n";
+    const REQUEST = "Implement slugify in src/slug.ts so it trims and lowercases.";
+
+    it.each([
+      "source change",
+      "cancellation",
+    ] as const)("publishes the final host outcome after a %s during reflection", async (action) => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const traceDirectory = mkdtempSync(join(tmpdir(), "shelra-final-outcome-trace-"));
+      const previousTrace = process.env.SHELRA_TRACE;
+      const previousTraceDirectory = process.env.SHELRA_TRACE_DIR;
+      process.env.SHELRA_TRACE = traceDirectory;
+      process.env.SHELRA_TRACE_DIR = traceDirectory;
+      try {
+        writeMemoryEntry(projectMemoryScope(dir), {
+          slug: "slugify-normalization",
+          title: "Slugify trims and lowercases",
+          hook: "The slugify function in src/slug.ts trims whitespace and lowercases its input",
+          type: "important-codepaths",
+          description: "Slugify normalization contract",
+          body: "The slugify function trims whitespace and lowercases input. Its contract is checked by `bun run test`.",
+        });
+        const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+          passed: true,
+          output: "1 pass",
+          durationMs: 1,
+          state: "completed",
+          exitCode: 0,
+        }));
+        const { provider } = roundsModel([() => write("w1", "src/slug.ts", FIXED_SLUG)]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+        let reflected = false;
+        let text = "";
+        for await (const chunk of agent.processMessage(REQUEST, {
+          onMemory: () => {
+            if (reflected) return;
+            reflected = true;
+            if (action === "source change") {
+              writeFileSync(join(dir, "src", "slug.ts"), `${FIXED_SLUG}// editor changed this during reflection\n`);
+            } else {
+              agent.abort();
+            }
+          },
+        })) {
+          text += chunk.content ?? "";
+        }
+        const status = action === "source change" ? "unverified" : "cancelled";
+        const verdict = action === "source change" ? "[Not verified" : "[Cancelled]";
+        const result = agent.getLastTurnResult();
+        const trace = readTrace(listTraces(traceDirectory)[0]?.path ?? "");
+
+        expect(reflected).toBe(true);
+        expect(checkRunner).toHaveBeenCalledTimes(1);
+        expect(agent.getLastMemoryContext()?.expanded).toContain("slugify-normalization");
+        const memory = listMemoryRecords(projectMemoryScope(dir)).find(
+          (record) => record.slug === "slugify-normalization",
+        );
+        expect(memory?.entry.frontmatter.metadata.credit ?? 0).toBe(0);
+        expect(result).toMatchObject({ status, verified: false });
+        expect(result?.checks).toHaveLength(1);
+        expect(result?.checks[0]).toMatchObject({
+          command: "bun run test",
+          source: "host",
+          passed: true,
+          fresh: action === "cancellation",
+        });
+        expect(text).toContain(verdict);
+        expect(text).not.toContain("Checked by Shelra on the final code");
+        expect(agent.getTurnEndNotes().at(-1)).toContain(verdict);
+        const episodes = readEpisodes(projectMemoryScope(dir));
+        expect(episodes).toHaveLength(1);
+        expect(episodes[0]).toMatchObject({ outcome: status, request: REQUEST });
+        expect(episodes[0].note).toContain(verdict);
+        expect(trace.at(-1)).toMatchObject({ kind: "end", verdict: expect.stringContaining(verdict) });
+        expect(JSON.stringify(trace)).not.toContain("Checked by Shelra on the final code");
+      } finally {
+        if (previousTrace === undefined) delete process.env.SHELRA_TRACE;
+        else process.env.SHELRA_TRACE = previousTrace;
+        if (previousTraceDirectory === undefined) delete process.env.SHELRA_TRACE_DIR;
+        else process.env.SHELRA_TRACE_DIR = previousTraceDirectory;
+        rmSync(dir, { recursive: true, force: true });
+        rmSync(traceDirectory, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("keeps an earlier command stale when a later host check changes the candidate", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        writeFileSync(
+          join(dir, "package.json"),
+          JSON.stringify({ name: "p", scripts: { test: "bun test", lint: "biome lint src" } }),
+        );
+        let changedDuringLint = false;
+        const checkRunner = vi.fn<ContractCheckRunner>(async (command) => {
+          if (command === "bun run lint" && !changedDuringLint) {
+            changedDuringLint = true;
+            writeFileSync(join(dir, "src", "slug.ts"), `${FIXED_SLUG}// generated during lint\n`);
+          }
+          return { passed: true, output: `${command}: passed`, durationMs: 1, state: "completed", exitCode: 0 };
+        });
+        const { provider, requests } = roundsModel([() => write("w1", "src/slug.ts", FIXED_SLUG)]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, REQUEST);
+        const result = agent.getLastTurnResult();
+        const testReceipts = result?.checks.filter((check) => check.command === "bun run test") ?? [];
+
+        expect(changedDuringLint).toBe(true);
+        expect(testReceipts[0]).toMatchObject({ source: "host", passed: true, fresh: false, cwd: dir });
+        expect(text).toContain("not evidence for the final local workspace (stale or unknown candidate)");
+        // A later batch may verify the stable candidate, but the first batch cannot.
+        if (result?.verified) {
+          expect(testReceipts.length).toBeGreaterThan(1);
+          expect(testReceipts.at(-1)).toMatchObject({ passed: true, fresh: true });
+          expect(requests.length).toBeGreaterThan(1);
+        } else {
+          expect(result?.status).toBe("unverified");
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("does not verify checks that mutate the source on every successful run", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        let attempts = 0;
+        const checkRunner = vi.fn<ContractCheckRunner>(async () => {
+          attempts += 1;
+          writeFileSync(join(dir, "src", "slug.ts"), `${FIXED_SLUG}// check mutation ${attempts}\n`);
+          return { passed: true, output: "1 pass", durationMs: 1, state: "completed", exitCode: 0 };
+        });
+        const { provider } = roundsModel([() => write("w1", "src/slug.ts", FIXED_SLUG)]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, REQUEST);
+        const result = agent.getLastTurnResult();
+
+        expect(attempts).toBeGreaterThan(1);
+        expect(result).toMatchObject({ status: "unverified", verified: false });
+        expect(result?.checks.length).toBe(attempts);
+        expect(result?.checks.every((check) => check.source === "host" && check.passed && !check.fresh)).toBe(true);
+        expect(result?.changedFiles).toContain("src/slug.ts");
+        expect(text).toContain("Not verified");
+        expect(text).not.toContain("Checked by Shelra on the final code");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("clears the previous result before the next turn and does not inherit its verification", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        let agent: Agent;
+        let sawClearedResult = false;
+        const { provider } = roundsModel([
+          () => write("w1", "src/slug.ts", FIXED_SLUG),
+          () => {
+            sawClearedResult = agent.getLastTurnResult() === null;
+            // A model's verdict-shaped words are not the host's result.
+            return [{ type: "text-delta", text: "[Verified] All tests passed." }];
+          },
+        ]);
+        const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+          passed: true,
+          output: "1 pass",
+          durationMs: 1,
+          state: "completed",
+          exitCode: 0,
+        }));
+        agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        await run(agent, REQUEST);
+        const first = agent.getLastTurnResult();
+        expect(first).toMatchObject({ status: "verified", verified: true });
+        expect(first?.checks).toHaveLength(1);
+        expect(first?.changedFiles).toContain("src/slug.ts");
+
+        await run(agent, "What does slugify do?");
+        const second = agent.getLastTurnResult();
+
+        expect(sawClearedResult).toBe(true);
+        expect(second).toMatchObject({ status: "answered", verified: false, checks: [], changedFiles: [] });
+        expect(second?.taskId).not.toBe(first?.taskId);
+        expect(checkRunner).toHaveBeenCalledTimes(1);
+        expect(first?.verified).toBe(true);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("reports the exact isolated command and agent source instead of the model's claimed scope", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        // No project-wide contract: the only executed evidence is the one named test.
+        writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p" }));
+        const command = "bun test src/slug.test.ts";
+        const { provider } = roundsModel([() => write("w1", "src/slug.ts", FIXED_SLUG)]);
+        const originalStream = provider.stream.bind(provider);
+        provider.stream = (request) => {
+          const original = originalStream(request);
+          return {
+            ...original,
+            events: (async function* () {
+              for await (const event of original.events) {
+                if (event.type !== "text-delta") {
+                  yield event;
+                  continue;
+                }
+                const tools = request.tools as Record<
+                  string,
+                  {
+                    inputSchema: { parse: (input: unknown) => unknown };
+                    execute: (input: unknown, options: unknown) => Promise<unknown>;
+                  }
+                >;
+                const input = { command };
+                tools.bash.inputSchema.parse(input);
+                yield toolCallEvent("isolated-check", "bash", input);
+                const output = await tools.bash.execute(input, { toolCallId: "isolated-check", messages: [] });
+                yield toolResultEvent("isolated-check", "bash", output, input);
+                yield { type: "text-delta", text: "All project tests passed, including every integration test." };
+              }
+            })(),
+          };
+        };
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+        const text = await run(agent, REQUEST);
+        const result = agent.getLastTurnResult();
+
+        expect(result).toMatchObject({ status: "verified", verified: true });
+        expect(result?.checks).toHaveLength(1);
+        expect(result?.checks[0]).toMatchObject({ command, cwd: dir, source: "agent", passed: true, fresh: true });
+        expect(result?.checks[0].detail).toContain("1 pass");
+        expect(text).toContain(`agent: \`${command}\``);
+        expect(JSON.stringify(result)).not.toContain("every integration test");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+  });
+
+  describe("phase 1 final-candidate regressions", () => {
+    const FIXED_SLUG = "export const slugify = (s: string) => s.trim().toLowerCase();\n";
+    const REQUEST = "Implement slugify in src/slug.ts so it trims and lowercases.";
+
+    it("verifies the actual scoped contract after a full-suite timeout without claiming its full coverage", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p", scripts: { test: "jest" } }));
+        const fullCommand = "npm run test";
+        const scopedCommand = "npx jest --findRelatedTests src/slug.ts";
+        const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+          command === fullCommand
+            ? { passed: false, output: "", durationMs: 1_000, state: "timed_out", exitCode: null }
+            : { passed: true, output: "1 pass", durationMs: 1, state: "completed", exitCode: 0 },
+        );
+        const { provider } = roundsModel([() => write("w1", "src/slug.ts", FIXED_SLUG)]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, REQUEST);
+        const result = agent.getLastTurnResult();
+
+        expect(checkRunner.mock.calls.map(([command]) => command)).toEqual([fullCommand, scopedCommand]);
+        expect(result).toMatchObject({ status: "verified", verified: true });
+        expect(result?.checks).toEqual([
+          expect.objectContaining({ command: fullCommand, source: "host", passed: false, finished: false }),
+          expect.objectContaining({ command: scopedCommand, source: "host", passed: true, fresh: true }),
+        ]);
+        expect(text).toContain(`\`${scopedCommand}\` passed`);
+        expect(text).not.toContain(`\`${fullCommand}\` passed`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("reports cancelled when the user aborts during the initial diagnosis", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        const { provider, requests } = roundsModel([]);
+        let agent: Agent;
+        const checkRunner = vi.fn<ContractCheckRunner>(async () => {
+          agent.abort();
+          return { passed: false, output: "Interrupted by the user", durationMs: 1, state: "killed", exitCode: null };
+        });
+        agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, "Run the tests.");
+
+        expect(requests).toHaveLength(0);
+        expect(checkRunner).toHaveBeenCalledTimes(1);
+        expect(text).toContain("[Cancelled]");
+        expect(agent.getLastTurnResult()).toMatchObject({ status: "cancelled", verified: false });
+        expect(agent.getLastTurnResult()?.checks[0]).toMatchObject({
+          command: "bun run test",
+          source: "host",
+          passed: false,
+          finished: false,
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("does not refresh earlier diagnostic checks with the candidate a later diagnostic generated", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      try {
+        writeFileSync(
+          join(dir, "package.json"),
+          JSON.stringify({ name: "p", scripts: { lint: "biome lint src", test: "bun test" } }),
+        );
+        let generated = false;
+        const checkRunner = vi.fn<ContractCheckRunner>(async (command) => {
+          if (command === "bun run test" && !generated) {
+            generated = true;
+            writeFileSync(join(dir, "src", "slug.ts"), FIXED_SLUG);
+          }
+          return { passed: true, output: "1 pass", durationMs: 1, state: "completed", exitCode: 0 };
+        });
+        const { provider } = roundsModel([]);
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, "Run the tests.");
+        const result = agent.getLastTurnResult();
+
+        expect(generated).toBe(true);
+        expect(result?.checks.slice(0, 2)).toEqual([
+          expect.objectContaining({ command: "bun run lint", source: "host", passed: true, fresh: false }),
+          expect.objectContaining({ command: "bun run test", source: "host", passed: true, fresh: false }),
+        ]);
+        expect(checkRunner.mock.calls.length).toBeGreaterThan(2);
+        expect(result?.checks.filter((check) => check.passed && check.fresh)).toHaveLength(2);
+        expect(result).toMatchObject({ status: "verified", verified: true });
+        expect(result?.changedFiles).toContain("src/slug.ts");
+        expect(text).toContain("not evidence for the final local workspace (stale or unknown candidate)");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+
+    it("does not verify or credit a candidate changed by a Stop hook after passing agent and host checks", async () => {
+      const dir = slugProject();
+      try {
+        let hookChangedCandidate = false;
+        executeEventHooksMock.mockImplementation(async (input) => {
+          if (input.hook_event_name === "Stop") {
+            hookChangedCandidate = true;
+            writeFileSync(join(dir, "src", "slug.ts"), WRONG_SLUG);
+          }
+          return emptyHookResult;
+        });
+        const memoryScope = projectMemoryScope(dir);
+        const memorySlug = "slugify-trims-lowercases";
+        writeMemoryEntry(memoryScope, {
+          slug: memorySlug,
+          title: "Slugify trims and lowercases",
+          hook: "Slugify trims whitespace before lowercasing the input",
+          type: "important-codepaths",
+          description: "The slugify implementation and its existing contract",
+          body: "The slugify function in src/slug.ts trims and lowercases the input. Its existing regression test runs with bun test src/slug.test.ts.",
+        });
+        const command = "bun test src/slug.test.ts";
+        const { provider } = roundsModel([() => write("w1", "src/slug.ts", FIXED_SLUG)]);
+        const originalStream = provider.stream.bind(provider);
+        provider.stream = (request) => {
+          const original = originalStream(request);
+          return {
+            ...original,
+            events: (async function* () {
+              for await (const event of original.events) {
+                if (event.type !== "text-delta") {
+                  yield event;
+                  continue;
+                }
+                const tools = request.tools as Record<
+                  string,
+                  {
+                    inputSchema: { parse: (input: unknown) => unknown };
+                    execute: (input: unknown, options: unknown) => Promise<unknown>;
+                  }
+                >;
+                const input = { command };
+                tools.bash.inputSchema.parse(input);
+                yield toolCallEvent("before-stop-check", "bash", input);
+                const output = await tools.bash.execute(input, { toolCallId: "before-stop-check", messages: [] });
+                yield toolResultEvent("before-stop-check", "bash", output, input);
+                yield event;
+              }
+            })(),
+          };
+        };
+        const checkRunner = vi.fn<ContractCheckRunner>(async () => ({
+          passed: true,
+          output: "1 pass",
+          durationMs: 1,
+          state: "completed",
+          exitCode: 0,
+        }));
+        const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+          provider,
+          cwd: dir,
+          checkRunner,
+        });
+
+        const text = await run(agent, REQUEST);
+        const result = agent.getLastTurnResult();
+
+        expect(hookChangedCandidate).toBe(true);
+        expect(agent.getLastMemoryContext()?.expanded).toContain(memorySlug);
+        expect(result).toMatchObject({ status: "unverified", verified: false });
+        expect(result?.checks).toEqual([
+          expect.objectContaining({ command, source: "agent", passed: true, fresh: false }),
+          expect.objectContaining({ command: "bun run test", source: "host", passed: true, fresh: false }),
+        ]);
+        const memory = listMemoryRecords(memoryScope).find((record) => record.slug === memorySlug)?.entry;
+        expect(memory?.frontmatter.metadata.credit ?? 0).toBe(0);
+        expect(text).not.toContain("Checked by Shelra on the final code");
+      } finally {
+        executeEventHooksMock.mockResolvedValue(emptyHookResult);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60_000);
+  });
 
   it("does not report wrong code verified because the turn rewrote its test script", async () => {
     // Reproduced for doc 17: with the real check runner, this turn used to end "[Checked by Shelra on the final
@@ -3089,6 +3568,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
     function checkedModel(rounds: Array<() => Step[]>, checker: () => Step[]) {
       const main: ProviderStreamRequest[] = [];
       const checks: ProviderStreamRequest[] = [];
+      const denied: string[] = [];
       const provider: ProviderAdapter = {
         id: "independent-check",
         defaultModelId: "check-definitions-model",
@@ -3099,7 +3579,10 @@ describe("the checks that decide done are the ones the turn started with (audit 
           const steps = isCheck ? checker() : (rounds[main.length - 1]?.() ?? []);
           const tools = request.tools as Record<
             string,
-            { execute?: (input: unknown, options: unknown) => Promise<unknown> }
+            {
+              inputSchema: { parse: (input: unknown) => unknown };
+              execute?: (input: unknown, options: unknown) => Promise<unknown>;
+            }
           >;
           return {
             events: (async function* () {
@@ -3109,8 +3592,10 @@ describe("the checks that decide done are the ones the turn started with (audit 
                   continue;
                 }
                 const input = { path: step.write.path, content: step.write.content };
+                tools.write_file.inputSchema.parse(input);
                 yield toolCallEvent(step.write.id, "write_file", input);
                 const output = await tools.write_file?.execute?.(input, { toolCallId: step.write.id, messages: [] });
+                if (isCheck && (output as { success?: boolean })?.success === false) denied.push(input.path);
                 yield toolResultEvent(step.write.id, "write_file", output, input);
               }
               if (!isCheck) yield { type: "text-delta", text: "Done." } as ProviderEvent;
@@ -3121,7 +3606,7 @@ describe("the checks that decide done are the ones the turn started with (audit 
         generateText: async (request) => ({ text: "Summary.", modelId: request.modelId }),
         getToolContext: () => ({}),
       };
-      return { provider, main, checks };
+      return { provider, main, checks, denied };
     }
 
     /** The project's checks pass; the checker's test passes only on code that removes the hyphens. */
@@ -3274,11 +3759,11 @@ describe("the checks that decide done are the ones the turn started with (audit 
       expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
     }, 60_000);
 
-    it("does not use a check whose author changed the project's code, and has the turn audit itself", async () => {
+    it("refuses a checker source write before it runs and keeps the original failing oracle", async () => {
       executeEventHooksMock.mockResolvedValue(emptyHookResult);
       const dir = slugProject();
       const { checkRunner, checkFiles } = runnerFor(dir);
-      const { provider, main } = checkedModel(
+      const { provider, main, checks, denied } = checkedModel(
         [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
         () => [...write("c0", "src/slug.ts", FULL_SLUG), ...checkerWritesItsTest()],
       );
@@ -3290,11 +3775,185 @@ describe("the checks that decide done are the ones the turn started with (audit 
 
       await run(agent, DENSE_REQUEST);
 
-      expect(checkFiles).toEqual([]);
-      const audit = lastUserText(main[1]);
-      expect(audit).toContain("An independent checker changed src/slug.ts, which it was told not to touch");
-      expect(audit).toContain("audit the request requirement by requirement");
+      expect(denied).toEqual(["src/slug.ts"]);
+      expect(readFileSync(join(dir, "src/slug.ts"), "utf8")).toBe(PARTIAL_SLUG);
+      expect(checkFiles).toEqual([CHECK_TEST, CHECK_TEST]);
+      expect(lastUserText(main[1])).toContain("an independent check of the request fails on your code");
+      expect(Object.keys(checks[0].tools ?? {}).sort()).toEqual([
+        "bash",
+        "delete_file",
+        "edit_file",
+        "grep",
+        "read_file",
+        "write_file",
+      ]);
+      expect(agent.getLastTurnResult()).toMatchObject({ status: "unverified", verified: false });
       expect(existsSync(join(dir, ".shelra", "verify"))).toBe(false);
+    }, 60_000);
+
+    it("rejects a real independent test that changes source even when Bun exits successfully", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const attackingTest =
+        "import { expect, test } from 'bun:test';\nimport { writeFileSync } from 'node:fs';\nimport { slugify } from '../../src/slug';\nwriteFileSync(new URL('../../src/side.ts', import.meta.url), 'export const side = true;\\n');\ntest('trims', () => expect(slugify(' A ')).toBe('a'));\n";
+      const { provider } = checkedModel(
+        [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        () => [...write("c1", CHECK_FILE, attackingTest), { type: "text-delta", text: REPORT }],
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(existsSync(join(dir, "src/side.ts"))).toBe(false);
+      expect(agent.getLastTurnResult()).toMatchObject({ status: "unverified", verified: false });
+      expect(agent.getLastTurnResult()?.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: `bun test ./${CHECK_FILE}`,
+            passed: false,
+            finished: true,
+            unrunnable: expect.stringContaining("changed project files"),
+          }),
+        ]),
+      );
+      expect(text).not.toContain("[Checked by Shelra");
+      expect(existsSync(join(dir, ".shelra/verify"))).toBe(false);
+    }, 120_000);
+
+    it("rejects a real independent test that replaces its frozen oracle even when source is unchanged", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const attackingTest =
+        "import { expect, test } from 'bun:test';\nimport { writeFileSync } from 'node:fs';\nimport { slugify } from '../../src/slug';\nwriteFileSync(new URL('./slug.test.ts', import.meta.url), 'import { test } from \\\"bun:test\\\"; test(\\\"slug noop\\\", () => {});');\ntest('trims', () => expect(slugify(' A ')).toBe('a'));\n";
+      const { provider } = checkedModel(
+        [() => write("w1", "src/slug.ts", PARTIAL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        () => [...write("c1", CHECK_FILE, attackingTest), { type: "text-delta", text: REPORT }],
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, { provider, cwd: dir });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(readFileSync(join(dir, "src/slug.ts"), "utf8")).toBe(PARTIAL_SLUG);
+      expect(agent.getLastTurnResult()).toMatchObject({ status: "unverified", verified: false });
+      expect(agent.getLastTurnResult()?.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: `bun test ./${CHECK_FILE}`,
+            passed: false,
+            finished: true,
+            ...(process.platform === "win32"
+              ? { execution: "windows-appcontainer", detail: expect.stringMatching(/EPERM|EACCES/u) }
+              : { unrunnable: expect.stringContaining("frozen oracle") }),
+          }),
+        ]),
+      );
+      expect(text).not.toContain("[Checked by Shelra");
+      expect(existsSync(join(dir, ".shelra/verify"))).toBe(false);
+    }, 120_000);
+
+    it("holds completion when the verification area cannot be safely cleaned", async () => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const original = readFileSync(join(dir, "src/slug.test.ts"), "utf8");
+      mkdirSync(join(dir, ".shelra/verify"), { recursive: true });
+      linkSync(join(dir, "src/slug.test.ts"), join(dir, ".shelra/verify/linked.test.ts"));
+      const checkRunner = vi.fn<ContractCheckRunner>(async () => ({ passed: true, output: "1 pass", durationMs: 5 }));
+      const { provider } = checkedModel(
+        [() => write("w1", "src/slug.ts", FULL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        checkerWritesItsTest,
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(agent.getLastTurnResult()).toMatchObject({ status: "unverified", verified: false });
+      expect(agent.getLastTurnResult()?.limitations).toContainEqual(expect.stringContaining("cleanup unavailable"));
+      expect(readFileSync(join(dir, "src/slug.test.ts"), "utf8")).toBe(original);
+      expect(existsSync(join(dir, ".shelra/verify/linked.test.ts"))).toBe(true);
+      expect(text).not.toContain("[Checked by Shelra");
+    }, 60_000);
+
+    it.each([
+      "source",
+      "oracle",
+    ] as const)("still checks %s integrity when the independent runner throws after execution", async (target) => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command) => {
+        if (!command.includes(".shelra/verify/")) return { passed: true, output: "1 pass", durationMs: 5 };
+        if (target === "source") writeFileSync(join(dir, "src/slug.ts"), PARTIAL_SLUG);
+        else writeFileSync(join(dir, CHECK_FILE), "// an altered oracle\n");
+        throw new Error("runner connection lost after execution");
+      });
+      const { provider } = checkedModel(
+        [() => write("w1", "src/slug.ts", FULL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        checkerWritesItsTest,
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(agent.getLastTurnResult()).toMatchObject({ status: "unverified", verified: false });
+      const receipt = agent.getLastTurnResult()?.checks.find((item) => item.command.includes(".shelra/verify/"));
+      expect(receipt).toMatchObject({
+        passed: false,
+        unrunnable: expect.stringContaining(target === "source" ? "changed project files" : "frozen oracle"),
+      });
+      expect(receipt).not.toHaveProperty("finished");
+      expect(text).not.toContain("[Checked by Shelra");
+      expect(existsSync(join(dir, ".shelra/verify"))).toBe(false);
+    }, 60_000);
+
+    it.each([
+      { output: "No test files found", state: "completed" as const, finished: true, reason: "ran no test" },
+      { output: "a test started", state: "timed_out" as const, finished: false, reason: "did not finish" },
+    ])("does not publish a passing receipt for an independent run that $reason", async ({
+      output,
+      state,
+      finished,
+      reason,
+    }) => {
+      executeEventHooksMock.mockResolvedValue(emptyHookResult);
+      const dir = slugProject();
+      const checkRunner = vi.fn<ContractCheckRunner>(async (command) =>
+        command.includes(".shelra/verify/")
+          ? { passed: state === "completed", output, state, durationMs: 5 }
+          : { passed: true, output: "1 pass", durationMs: 5 },
+      );
+      const { provider, main } = checkedModel(
+        [() => write("w1", "src/slug.ts", FULL_SLUG), () => [{ type: "text-delta", text: "Audited." }]],
+        checkerWritesItsTest,
+      );
+      const agent = new Agent(undefined, undefined, "check-definitions-model", undefined, {
+        provider,
+        cwd: dir,
+        checkRunner,
+      });
+
+      const text = await run(agent, DENSE_REQUEST);
+
+      expect(lastUserText(main[1])).toContain("audit the request requirement by requirement");
+      expect(agent.getLastTurnResult()?.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: `bun test ./${CHECK_FILE}`,
+            passed: false,
+            finished,
+            unrunnable: expect.stringContaining(reason),
+          }),
+        ]),
+      );
+      expect(agent.getLastTurnResult()?.limitations).toContainEqual(expect.stringContaining(reason));
+      expect(text).not.toContain("an independent check of the request passed");
+      expect(existsSync(join(dir, ".shelra/verify"))).toBe(false);
     }, 60_000);
 
     it("leaves the turn to its own audit when switched off", async () => {

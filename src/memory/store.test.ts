@@ -14,7 +14,7 @@ import {
   readMemoryHistory,
   readMemoryIndex,
   readMemoryVersions,
-  reconfirmByPassingCommands,
+  recordMemoryCommandEvidence,
   recordMemoryUse,
   supersedeMemoryEntry,
   writeMemoryEntry,
@@ -353,12 +353,12 @@ describe("memory store: delete (the 'forget' operation)", () => {
   });
 });
 
-describe("memory store: re-confirmation by a passing command (audit doc 15, M2)", () => {
+describe("memory store: observation of a passing command", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("re-confirms only entries that name the exact command, which clears staleness from a later file change", () => {
+  it("records only an exact named command without clearing source staleness", () => {
     const scope = projectMemoryScope(workspace);
     const write = (slug: string, body: string) =>
       writeMemoryEntry(scope, {
@@ -384,13 +384,15 @@ describe("memory store: re-confirmation by a passing command (audit doc 15, M2)"
 
     vi.useFakeTimers();
     vi.setSystemTime(afterChange);
-    const confirmed = reconfirmByPassingCommands(scope, ["bun  test --preload ./test/setup.ts", "ls -la"]);
+    const observed = recordMemoryCommandEvidence(scope, ["bun  test --preload ./test/setup.ts", "ls -la"]);
 
-    expect(confirmed).toEqual(["preload-tests"]);
-    expect(detectStaleness(workspace, record() as MemoryRecord, afterChange.getTime()).stale).toBe(false);
+    expect(observed).toEqual(["preload-tests"]);
+    expect(record()?.entry.frontmatter.metadata.lastPassedCommand).toBe("bun test --preload ./test/setup.ts");
+    expect(record()?.entry.frontmatter.metadata.commandObservedAt).toBe(afterChange.toISOString());
+    expect(detectStaleness(workspace, record() as MemoryRecord, afterChange.getTime()).stale).toBe(true);
     // `bun test` passing says nothing for the entry that insists on the preload flag, and the reverse.
-    expect(reconfirmByPassingCommands(scope, ["bun test"])).toEqual(["plain-tests"]);
-    expect(reconfirmByPassingCommands(scope, [])).toEqual([]);
+    expect(recordMemoryCommandEvidence(scope, ["bun test"])).toEqual(["plain-tests"]);
+    expect(recordMemoryCommandEvidence(scope, [])).toEqual([]);
   });
 });
 
@@ -443,7 +445,7 @@ describe("memory store: time (doc 18 §4.4)", () => {
 });
 
 describe("memory store: what strengthens a memory (review round 3)", () => {
-  it("counts being shown as exposure, and using what an entry says as a recall", () => {
+  it("keeps exposure separate from recall through a named command, without confirming content", () => {
     const scope = projectMemoryScope(workspace);
     writeMemoryEntry(scope, {
       slug: "seed-first",
@@ -457,7 +459,8 @@ describe("memory store: what strengthens a memory (review round 3)", () => {
     recordMemoryUse(scope, ["seed-first"]);
     expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata).toMatchObject({ uses: 1 });
     expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata.recalls).toBeUndefined();
-    expect(reconfirmByPassingCommands(scope, ["make seed"])).toEqual(["seed-first"]);
+    expect(recordMemoryCommandEvidence(scope, ["make seed"])).toEqual(["seed-first"]);
+    expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata.lastPassedCommand).toBe("make seed");
     expect(readMemoryEntry(scope, "seed-first").entry?.frontmatter.metadata.recalls).toHaveLength(1);
   });
 });

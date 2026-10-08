@@ -37,6 +37,7 @@ export {
   upsertObjectiveTask,
 } from "./objectives";
 export { SessionStore } from "./sessions";
+export { sessionOperationStore } from "./tool-operations";
 export {
   appendCompaction,
   appendMessages,

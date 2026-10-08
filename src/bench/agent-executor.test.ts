@@ -70,6 +70,7 @@ vi.mock("../exec/browser", () => ({
 import { listDecisions } from "../ledger/store";
 import type { Decision } from "../ledger/types";
 import { createAgentBenchmarkExecutor, simulatedDecisionApproval } from "./agent-executor";
+import { createShelraBenchmarkExecutor } from "./shelra-executor";
 import type { BenchmarkTaskDefinition } from "./types";
 
 const emptyHookResult: AggregatedHookResult = {
@@ -203,6 +204,9 @@ function task(overrides: Partial<BenchmarkTaskDefinition> = {}): BenchmarkTaskDe
 }
 
 describe("agent benchmark executor", () => {
+  it("keeps shelra-autonomy on exactly the same executor, with no separate kernel adapter", () => {
+    expect(createShelraBenchmarkExecutor).toBe(createAgentBenchmarkExecutor);
+  });
   async function verificationAfter(commands: string[]): Promise<number | undefined> {
     writeFileSync(join(workspace, "src", "slug.ts"), "export function slugify() {}\n");
     writeFileSync(
@@ -385,13 +389,21 @@ describe("agent benchmark executor", () => {
       }
       override stream(request: ProviderStreamRequest): ProviderStream {
         this.rounds += 1;
-        const tools = request.tools as Record<string, { execute: (input: unknown, options: unknown) => unknown }>;
+        const tools = request.tools as Record<
+          string,
+          {
+            inputSchema: { parse: (input: unknown) => unknown };
+            execute: (input: unknown, options: unknown) => unknown;
+          }
+        >;
         const proposals = this.proposals;
         return {
           events: (async function* () {
             request.onStepStart?.(1);
-            for (const proposal of proposals) {
-              await tools.propose_decision?.execute(proposal, { toolCallId: "p", messages: [] });
+            for (const [index, proposal] of proposals.entries()) {
+              // Real SDK calls validate input and use a distinct identity for each proposal.
+              tools.propose_decision.inputSchema.parse(proposal);
+              await tools.propose_decision.execute(proposal, { toolCallId: `p${index}`, messages: [] });
             }
             yield { type: "text-delta", text: "Recorded." } as ProviderEvent;
             request.onStepFinish?.({ stepNumber: 1, finishReason: "stop", usage: { inputTokens: 1, outputTokens: 1 } });

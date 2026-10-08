@@ -121,8 +121,3 @@ export function dpapiUnprotect(data: Buffer): Buffer {
   }
   return powershell(data, false);
 }
-
-/** True when credentials are handled without starting a process. */
-export function dpapiIsNative(): boolean {
-  return loadNative() !== null;
-}

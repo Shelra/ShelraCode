@@ -131,7 +131,3 @@ export async function stopStaticServer(id: string): Promise<void> {
 export function isStaticServer(id: string): boolean {
   return servers.has(id);
 }
-
-export async function stopAllStaticServers(): Promise<void> {
-  await Promise.all([...servers.keys()].map((id) => stopStaticServer(id)));
-}
